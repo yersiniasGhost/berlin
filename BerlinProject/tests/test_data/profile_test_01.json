@@ -1,0 +1,18 @@
+[
+  {
+    "trend": [
+      0.5,
+      0.0
+    ],
+    "price_variation": 0,
+    "length_fraction": [0.2, 0.0]
+  },
+  {
+    "trend": [
+      0.0,
+      0.0
+    ],
+        "price_variation": 0,
+    "length_fraction": [0.8, 0.0]
+  }
+]

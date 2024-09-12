@@ -1,0 +1,7 @@
+{
+    "name": "JSONTEST01",
+    "definition": {
+        "MACD": 0.8,
+        "do_nothing": 0.2
+    }
+}

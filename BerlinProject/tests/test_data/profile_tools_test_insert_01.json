@@ -1,0 +1,29 @@
+{
+  "name": "MACD12_TEST",
+  "definition": [
+  {
+    "trend": [
+      2.5,
+      0.3
+    ],
+        "price_variation": 0.5,
+    "length_fraction": [0.25, 0.05]
+  },
+  {
+    "trend": [
+      0.0,
+      0.02
+    ],
+        "price_variation": 0,
+    "length_fraction": [0.4, 0.0]
+  },
+    {
+    "trend": [
+      -0.1,
+      0.02
+    ],
+          "price_variation": 0.05,
+    "length_fraction": [0.4, 0.0]
+  }
+]
+}

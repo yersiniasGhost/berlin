@@ -1,0 +1,60 @@
+{
+  "name": "COMPLEX_TEST_01",
+  "definition": [
+    {
+      "trend": [
+        2.5,
+        0.3
+      ],
+      "price_variation": 0.3,
+      "length_fraction": [
+        0.15,
+        0.05
+      ]
+    },
+    {
+      "trend": [
+        -1.0,
+        0.05
+      ],
+      "price_variation": 0.05,
+      "length_fraction": [
+        0.1,
+        0.0
+      ]
+    },
+    {
+      "trend": [
+        0.3,
+        0.2
+      ],
+      "price_variation": 0.2,
+      "length_fraction": [
+        0.1,
+        0.0
+      ]
+    },
+    {
+      "trend": [
+        1.25,
+        0.1
+      ],
+      "price_variation": 0.1,
+      "length_fraction": [
+        0.2,
+        0.02
+      ]
+    },
+    {
+      "trend": [
+        0,
+        0.5
+      ],
+      "price_variation": 0.1,
+      "length_fraction": [
+        0.45,
+        0.0
+      ]
+    }
+  ]
+}
