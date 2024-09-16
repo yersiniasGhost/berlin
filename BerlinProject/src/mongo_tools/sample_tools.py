@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Union
 from bson import ObjectId
 from config.types import PYMONGO_ID, SAMPLE_COLLECTION
+from data_preprocessor.data_preprocessor import TickData
 from models.profile import Profile
 from pymongo.collection import Collection
 from mongo_tools.mongo import Mongo
@@ -10,6 +11,10 @@ import logging
 
 
 class SampleTools:
+
+    def __init__(self, samples: List):
+        self.samples = samples
+
     @classmethod
     def get_collection(cls) -> Collection:
         return Mongo().database[SAMPLE_COLLECTION]
@@ -49,6 +54,12 @@ class SampleTools:
             collection.bulk_write(operations, ordered=False)
 
     @classmethod
+    def get_tools(cls, profiles: dict) -> "SampleTools":
+        samples = cls.get_samples(profiles)
+        return SampleTools(samples)
+
+
+    @classmethod
     def get_samples(cls, profile_ids: Union[str, List[str]], num_samples: Union[int, List[int]]) -> List[Dict]:
         """
         Retrieves a specified number of random samples from the collection for one or multiple profile IDs.
@@ -58,12 +69,6 @@ class SampleTools:
         returns: List of sample documents
         """
         collection = cls.get_collection()
-
-        # Convert inputs to lists if they're not already
-        if isinstance(profile_ids, str):
-            profile_ids = [profile_ids]
-        if isinstance(num_samples, int):
-            num_samples = [num_samples]
 
         # Ensure profile_ids and num_samples have the same length
         if len(profile_ids) != len(num_samples):
@@ -88,4 +93,14 @@ class SampleTools:
             samples.extend(list(collection.aggregate(pipeline)))
 
         return samples
+
+    def serve_next_tick(self):
+        for tick_data in self.samples['data']:
+            tick = TickData(
+                open=tick_data['open'],
+                high=tick_data['high'],
+                low=tick_data['low'],
+                close=tick_data['close']
+            )
+            yield tick
 

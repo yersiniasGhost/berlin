@@ -7,20 +7,38 @@ def calculate_sma_tick(period: int, data: np.array, history: int = 0) -> float:
     return sma[-(history+1):]
 
 
+# def calculate_macd_tick(data: np.array, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9,
+#                         history: int = 0) -> tuple:
+#     macd, signal, hist = talib.MACD(data, fastperiod=fast_period, slowperiod=slow_period, signalperiod=signal_period)
 #
-# def calculate_sma(data: dict, timeperiods, price_type='close'):
-#     prices = np.array([d[price_type] for d in data])
+#     macd_values = macd[-(history + 1):]
+#     signal_values = signal[-(history + 1):]
+#     hist_values = hist[-(history + 1):]
 #
-#     result = [d.copy() for d in data]
-#
-#     for period in timeperiods:
-#         # Calculate SMA using TA-Lib
-#         sma = talib.SMA(prices, timeperiod=period)
-#
-#         # Add SMA values to the result
-#         for i, sma_value in enumerate(sma):
-#             result[i][f'SMA_{period}'] = sma_value if not np.isnan(sma_value) else None
-#
-#     return result
+#     return macd_values, signal_values, hist_values
 
+
+def calculate_macd_tick(data: np.array, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9,
+                        history: int = 0) -> tuple:
+    macd, signal, hist = talib.MACD(data, fastperiod=fast_period, slowperiod=slow_period, signalperiod=signal_period)
+
+    print(f"MACD: {macd}")
+    print(f"Signal: {signal}")
+    print(f"Histogram: {hist}")
+
+    if history == 0:
+        last_macd = macd[-1]
+        last_signal = signal[-1]
+        last_hist = hist[-1]
+        return last_macd, last_signal, last_hist
+    else:
+        macd_values = macd[-(history + 1):]
+        signal_values = signal[-(history + 1):]
+        hist_values = hist[-(history + 1):]
+        return macd_values, signal_values, hist_values
+
+
+# data = np.arange(1, 31, dtype=float)
+# # Calculate MACD values for the last value in the array
+# macd, signal, hist = calculate_macd_tick(data, fast_period=8, slow_period=20, signal_period=5)
 #

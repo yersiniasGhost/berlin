@@ -2,7 +2,7 @@
   "preprocess_config": "close_open_sma",
   "feature_vector": [
     {
-      "name": "close",
+      "name": "close"
     },
     {
       "name": "open"
