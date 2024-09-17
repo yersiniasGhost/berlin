@@ -1,0 +1,70 @@
+@startuml
+skinparam linetype ortho
+skinparam packageStyle rectangle
+top to bottom direction
+
+cloud "Financial Institution" {
+}
+
+database MTADatabase  {
+    artifact SampleData
+}
+
+package DataStreamer  {
+    NextTick - [DataPreprocessor]
+    [SampleTools]
+    [InstitutionLlink]
+    component DataPreprocessor {
+    }
+    
+    [DataStream]
+    DataStream *== [DataPreprocessor]
+    DataStream *== [DataLink]
+
+    SampleTools -[hidden]-> [DataPreprocessor]
+    InstitutionLlink -[hidden]-> [DataPreprocessor]
+
+    [DataLink]
+    [InstitutionLlink] -up-|> [DataLink]
+    [SampleTools] -up-|> [DataLink]
+    [DataLink] -> NextTick
+}
+
+
+note right of DataStreamer
+    The DataStreamer is configured with
+    "Data Configuration" and "Model Configuration".
+    The extrenal tool is "connected" to the data streamer
+end note
+
+"Financial Institution" --> InstitutionLlink
+SampleTools <--> MTADatabase
+
+artifact "Feature Vector" as fv
+DataStream -down-> fv : "run() to serve_feature_vector"
+
+component "External Tool"
+
+DataStreamer --> "External Tool"
+
+package "Model Trainer" {
+    [RL Learner]
+}
+package "Runtime Analytics" {
+    [Agent Aggregator]
+}
+package Backtest
+
+
+"Runtime Analytics" -up-|> [External Tool]
+"Model Trainer" -up-|> [External Tool]
+fv -down-> [External Tool]
+
+"Runtime Analytics" -down-> Backtest
+
+database ModelDatabase {
+    artifact ModelParameters
+}
+[RL Learner] -down-> ModelDatabase
+ModelDatabase -up-> [Agent Aggregator]
+@end
