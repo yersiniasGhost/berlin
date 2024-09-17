@@ -5,23 +5,38 @@ from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
 
 
 class DataStreamer:
-
-    def __init__(self, data_configuration: dict, model_configuration: dict):
+    def __init__(self, data_configuration: Union[Dict, List[Dict]], model_configuration: Dict):
         self.preprocessor = DataPreprocessor(model_configuration)
-        self.data_link = Optional[SampleTools] = None
-        self.data_configuration(data_configuration)
+        self.data_link: Optional[SampleTools] = None
+        self.external_tool = None
+        self.samples: List[List[TickData]] = []
+        self.configure_data(data_configuration)
 
-    def data_configuration(self, data_config: dict) -> None:
-        if "SampleTools" in data_config.keys():
-            profiles = data_config["SampleTools"]['Profiles']
-            self.data_link = SampleTools.get_tools(profiles)
+    def configure_data(self, data_config: Union[Dict, List[Dict]]) -> None:
+        if isinstance(data_config, dict):
+            profiles = [data_config]
+        elif isinstance(data_config, list):
+            profiles = data_config
+        else:
+            raise ValueError("data_config must be either a dictionary or a list of dictionaries.")
+
+        for profile in profiles:
+            if not isinstance(profile, dict) or 'profile_id' not in profile or 'number' not in profile:
+                raise ValueError("Each profile must be a dictionary with 'profile_id' and 'number' keys.")
+
+        self.data_link = SampleTools.get_tools(profiles)
+        self.samples = self.data_link.samples
 
     def run(self):
-        # Get the feature vector
+        if not self.data_link:
+            raise ValueError("Data link not configured. Call configure_data first.")
+
         for tick in self.data_link.serve_next_tick():
             fv = self.preprocessor.next_tick(tick)
-            # Send feature vector to the external tool
-            self.external_tool.feature_vector(fv)
+            if self.external_tool:
+                self.external_tool.feature_vector(fv)
+            else:
+                print(f"Feature vector: {fv}")  # For debugging
 
     def connect_tool(self, external_tool) -> None:
         self.external_tool = external_tool
@@ -46,35 +61,35 @@ class DataStreamer:
     # }
     # }
 
-    def data_configuration(self, data_config: dict) -> None:
-        if "SampleTools" in data_config.keys():
-            profiles = data_config["SampleTools"]['Profiles']
-            self.data_link = SampleTools.get_tools(profiles)
-
-
-    # Run will use the data source (SampleData or DataLink)
-    # and forward pre-calculated feature vectors to the external tool
-    def run(self):
-        # Get the feature vector
-        for tick in self.data_link.serve_next_tick():
-            fv = self.preprocessor.next_tick(tick)
-            # Send feature vector to the external tool
-            self.external_tool.feature_vector(fv)
-
-    # def stream(self):
-    #     for sample in self.samples:
-    #         # Reset the preprocessor's state for each new sample
-    #         self.preprocessor.reset_state()
+    # def data_configuration(self, data_config: dict) -> None:
+    #     if "SampleTools" in data_config.keys():
+    #         profiles = data_config["SampleTools"]['Profiles']
+    #         self.data_link = SampleTools.get_tools(profiles)
     #
-    #         for tick_data in sample['data']:
-    #             tick = TickData(
-    #                 open=tick_data['open'],
-    #                 high=tick_data['high'],
-    #                 low=tick_data['low'],
-    #                 close=tick_data['close']
-    #             )
-    #             yield self.preprocessor.next_tick(tick)
     #
-    def connect_tool(self, external_tool) -> None:
-        self.external_tool = external_tool
+    # # Run will use the data source (SampleData or DataLink)
+    # # and forward pre-calculated feature vectors to the external tool
+    # def run(self):
+    #     # Get the feature vector
+    #     for tick in self.data_link.serve_next_tick():
+    #         fv = self.preprocessor.next_tick(tick)
+    #         # Send feature vector to the external tool
+    #         self.external_tool.feature_vector(fv)
+    #
+    # # def stream(self):
+    # #     for sample in self.samples:
+    # #         # Reset the preprocessor's state for each new sample
+    # #         self.preprocessor.reset_state()
+    # #
+    # #         for tick_data in sample['data']:
+    # #             tick = TickData(
+    # #                 open=tick_data['open'],
+    # #                 high=tick_data['high'],
+    # #                 low=tick_data['low'],
+    # #                 close=tick_data['close']
+    # #             )
+    # #             yield self.preprocessor.next_tick(tick)
+    # #
+    # def connect_tool(self, external_tool) -> None:
+    #     self.external_tool = external_tool
 

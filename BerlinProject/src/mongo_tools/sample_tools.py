@@ -54,28 +54,26 @@ class SampleTools:
             collection.bulk_write(operations, ordered=False)
 
     @classmethod
-    def get_tools(cls, profiles: dict) -> "SampleTools":
+    def get_tools(cls, profiles: List[dict]) -> "SampleTools":
         samples = cls.get_samples(profiles)
         return SampleTools(samples)
 
-
     @classmethod
-    def get_samples(cls, profile_ids: Union[str, List[str]], num_samples: Union[int, List[int]]) -> List[Dict]:
+    def get_samples(cls, profiles: List[Dict]) -> List[Dict]:
         """
-        Retrieves a specified number of random samples from the collection for one or multiple profile IDs.
+        Retrieves a specified number of random samples from the collection for multiple profiles,
+        returning only the OHLC data from the nested 'data' array.
 
-        profile_ids: A single profile ID string or a list of profile ID strings
-        num_samples: A single integer or a list of integers specifying the number of samples for each profile ID
-        returns: List of sample documents
+        profiles: A list of dictionaries, each containing 'profile_id' and 'number' keys
+        returns: List of OHLC data dictionaries
         """
         collection = cls.get_collection()
 
-        # Ensure profile_ids and num_samples have the same length
-        if len(profile_ids) != len(num_samples):
-            raise ValueError("The number of profile IDs must match the number of sample sizes")
+        all_samples = []
+        for profile in profiles:
+            profile_id = profile['profile_id']
+            sample_size = profile['number']
 
-        samples = []
-        for profile_id, sample_size in zip(profile_ids, num_samples):
             query = {"profile_id": ObjectId(profile_id)}
 
             # Get the total count of matching documents
@@ -84,18 +82,27 @@ class SampleTools:
             # Ensure we don't try to sample more documents than exist
             sample_size = min(sample_size, total_docs)
 
-            # Randomly sample the documents
+            # Randomly sample the documents and extract OHLC data
             pipeline = [
                 {"$match": query},
-                {"$sample": {"size": sample_size}}
+                {"$sample": {"size": sample_size}},
+                {"$unwind": "$data"},
+                {"$project": {
+                    "_id": 0,
+                    "open": "$data.open",
+                    "high": "$data.high",
+                    "low": "$data.low",
+                    "close": "$data.close"
+                }}
             ]
 
-            samples.extend(list(collection.aggregate(pipeline)))
+            samples = list(collection.aggregate(pipeline))
+            all_samples.extend(samples)
 
-        return samples
+        return all_samples
 
     def serve_next_tick(self):
-        for tick_data in self.samples['data']:
+        for tick_data in self.samples:
             tick = TickData(
                 open=tick_data['open'],
                 high=tick_data['high'],
