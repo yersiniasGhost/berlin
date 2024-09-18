@@ -18,7 +18,7 @@ class Backtester:
         self.position: int = 0
 
         self.random_trade = random_trade
-        self.cash = 100.0
+        self.cash = 100000.0
         self.trade_size = 10
         self.portfolio = [self.cash]
 
@@ -26,7 +26,7 @@ class Backtester:
     def agent_actions(self, actions: List[AgentActions], tick: TickData):
         if self.mode == RANDOM_TRADER:
             if random.random() < self.random_trade:
-                action = BUY if self.position > 0 else SELL
+                action = BUY if self.position == 0 else SELL
                 self.make_trade(action, tick)
 
         self.update_portfolio(tick)

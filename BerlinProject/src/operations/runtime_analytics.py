@@ -3,7 +3,7 @@ import numpy as np
 
 from src.models.agent_model import AgentModel
 from src.data_streamer import ExternalTool, TickData
-from backtester import Backtester
+from operations import Backtester
 
 
 # This is the object that will contain a group of pretrained models and be associated with a DataStremer

@@ -1,1 +1,1 @@
-from sample_tools import SampleTools
+from .sample_tools import SampleTools

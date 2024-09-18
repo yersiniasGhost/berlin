@@ -3,6 +3,7 @@ from pathlib import Path
 from pymongo import MongoClient
 from bson import ObjectId
 
+
 class Profile:
     def __init__(self, sections):
         self.sections = sections

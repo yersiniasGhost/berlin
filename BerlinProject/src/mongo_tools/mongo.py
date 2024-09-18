@@ -20,7 +20,8 @@ def get_info_from_url(url: str) -> Tuple[str, str, str]:
 
 
 DATABASE = "MTA_devel"
-MONGOCLIENT = "localhost"
+# MONGOCLIENT = "localhost"
+MONGOCLIENT = "192.168.1.155"
 
 class Mongo(metaclass=Singleton):
 

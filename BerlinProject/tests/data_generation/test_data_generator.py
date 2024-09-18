@@ -35,8 +35,8 @@ class TestDataGenerator(unittest.TestCase):
         generator.generate_data(number_of_profiles, length, start_price)
         self.assertTrue(len(generator.data_profiles) == number_of_profiles)
         for p in generator.get_profiles():
-            self.assertEquals(len(p), length)
-            self.assertAlmostEquals(p[0], start_price)
+            self.assertEqual(len(p), length)
+            self.assertAlmostEqual(p[0], start_price)
 
 
     def test_generate_next_simple_case(self):
@@ -72,5 +72,5 @@ class TestDataGenerator(unittest.TestCase):
         # Now you can call generate_data
         generator.generate_data(number_of_profiles, length, start_price)
         for p in generator.get_profiles():
-            self.assertEquals(len(p), length)
+            self.assertEqual(len(p), length)
 

@@ -22,14 +22,14 @@ class TestProfile(unittest.TestCase):
         profile = Profile.from_json(data_file)
 
         # test profile data
-        self.assertIsNotNone(profile.profile_definition)
-        self.assertIsInstance(profile.profile_definition, list)
+        self.assertIsNotNone(profile.sections)
+        self.assertIsInstance(profile.sections, list)
 
     def test_get_sections(self):
         data_file = self.get_data_file("profile_test_01.json")
         profile = Profile.from_json(data_file)
         number_of_sections = 2
-        self.assertTrue(len(profile.profile_definition) == number_of_sections)
+        self.assertTrue(len(profile.sections) == number_of_sections)
 
         cnt = 0
         for section in profile.get_sections():

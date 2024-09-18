@@ -89,5 +89,5 @@ class TestDataGenerator(unittest.TestCase):
         # Now you can call generate_data
         generator.generate_data(number_of_profiles, length, start_price, open_factor, high_factor, low_factor)
         for p in generator.get_profiles():
-            self.assertEquals(len(p), length)
+            self.assertEqual(len(p), length)
 
