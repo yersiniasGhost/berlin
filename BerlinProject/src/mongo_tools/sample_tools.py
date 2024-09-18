@@ -111,3 +111,37 @@ class SampleTools:
             )
             yield tick
 
+    # Returns one specific sample given a pymongo id
+
+    @classmethod
+    def get_specific_sample(cls, sample_id: PYMONGO_ID) -> Optional["SampleTools"]:
+        """
+        Retrieves a specific sample from the collection based on its ObjectId,
+        and returns a SampleTools instance with this sample's OHLC data.
+
+        :param sample_id: The ObjectId of the specific sample to fetch
+        :return: A SampleTools instance containing the sample's OHLC data, or None if no sample is found
+        """
+        collection = cls.get_collection()
+
+        query = {"_id": ObjectId(sample_id)}
+
+        # Fetch the specific document and project only the 'data' field
+        sample = collection.find_one(
+            query,
+            projection={
+                "_id": 0,
+                "data": 1
+            }
+        )
+
+        if sample and 'data' in sample:
+            formatted_sample = [{
+                "open": candle["open"],
+                "high": candle["high"],
+                "low": candle["low"],
+                "close": candle["close"]
+            } for candle in sample["data"]]
+
+            return SampleTools(formatted_sample)
+        return None
