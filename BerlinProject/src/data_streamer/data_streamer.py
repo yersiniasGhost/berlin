@@ -1,7 +1,9 @@
 import json
 from typing import List, Dict, Optional, Union
 from mongo_tools.sample_tools import SampleTools
-from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
+from data_preprocessor.data_preprocessor import DataPreprocessor
+from tick_data import TickData
+from external_tool import ExternalTool
 
 
 class DataStreamer:
@@ -10,6 +12,7 @@ class DataStreamer:
         self.preprocessor = DataPreprocessor(model_configuration)
         self.data_link = Optional[SampleTools] = None
         self.data_configuration(data_configuration)
+        self.external_tool: Optional[ExternalTool] = None
 
     def data_configuration(self, data_config: dict) -> None:
         if "SampleTools" in data_config.keys():
@@ -23,8 +26,9 @@ class DataStreamer:
             # Send feature vector to the external tool
             self.external_tool.feature_vector(fv)
 
-    def connect_tool(self, external_tool) -> None:
+    def connect_tool(self, external_tool: ExternalTool) -> None:
         self.external_tool = external_tool
+
 
     # def __init__(self, config_path: str):
     #     with open(config_path, 'r') as file:

@@ -1,5 +1,5 @@
 @startuml
-skinparam linetype ortho
+'skinparam linetype ortho
 skinparam packageStyle rectangle
 top to bottom direction
 
@@ -13,7 +13,7 @@ database MTADatabase  {
 package DataStreamer  {
     NextTick - [DataPreprocessor]
     [SampleTools]
-    [InstitutionLlink]
+    [InstitutionLink]
     component DataPreprocessor {
     }
     
@@ -22,10 +22,10 @@ package DataStreamer  {
     DataStream *== [DataLink]
 
     SampleTools -[hidden]-> [DataPreprocessor]
-    InstitutionLlink -[hidden]-> [DataPreprocessor]
+    InstitutionLink -[hidden]-> [DataPreprocessor]
 
     [DataLink]
-    [InstitutionLlink] -up-|> [DataLink]
+    [InstitutionLink] -up-|> [DataLink]
     [SampleTools] -up-|> [DataLink]
     [DataLink] -> NextTick
 }
@@ -34,10 +34,10 @@ package DataStreamer  {
 note right of DataStreamer
     The DataStreamer is configured with
     "Data Configuration" and "Model Configuration".
-    The extrenal tool is "connected" to the data streamer
+    The external tool is "connected" to the data streamer
 end note
 
-"Financial Institution" --> InstitutionLlink
+"Financial Institution" --> InstitutionLink
 SampleTools <--> MTADatabase
 
 artifact "Feature Vector" as fv
@@ -58,7 +58,8 @@ package Backtest
 
 "Runtime Analytics" -up-|> [External Tool]
 "Model Trainer" -up-|> [External Tool]
-fv -down-> [External Tool]
+ServeNextVector - [External Tool]
+fv -down-> ServeNextVector
 
 "Runtime Analytics" -down-> Backtest
 

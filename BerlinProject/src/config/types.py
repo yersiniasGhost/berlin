@@ -10,3 +10,5 @@ DATETIME = str
 # Add collection names here
 PROFILE_COLLECTION = ("Profiles")
 SAMPLE_COLLECTION = ("Samples")
+
+AgentActions = float
