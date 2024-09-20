@@ -36,3 +36,25 @@ class TestSampleTools(unittest.TestCase):
             self.assertTrue(hasattr(tick, 'high'))
             self.assertTrue(hasattr(tick, 'low'))
             self.assertTrue(hasattr(tick, 'close'))
+
+
+    def test_get_specific_sample(self):
+
+        data = SampleTools.get_specific_sample("66e1f09f7c6789752c190ca0")
+        samples = data.samples
+        self.assertEqual(len(samples), 100)
+
+    def test_get_next(self):
+
+        data = SampleTools.get_specific_sample("66e1f09f7c6789752c190ca0")
+        tick = data.get_next()
+        cnt = 0
+        while (tick):
+            cnt += 1
+            tick = data.get_next()
+        self.assertEqual(cnt, len(data.samples))
+
+
+
+
+

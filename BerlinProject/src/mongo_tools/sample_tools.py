@@ -14,6 +14,7 @@ class SampleTools:
 
     def __init__(self, samples: List):
         self.samples = samples
+        self.index: int = 0
 
     @classmethod
     def get_collection(cls) -> Collection:
@@ -100,6 +101,23 @@ class SampleTools:
             all_samples.extend(samples)
 
         return all_samples
+
+    def reset_index(self):
+        self.index=0
+
+    def get_next(self) -> Optional[TickData]:
+        if self.index < len(self.samples):
+            tick_data = self.samples[self.index]
+            tick = TickData(
+                open=tick_data['open'],
+                high=tick_data['high'],
+                low=tick_data['low'],
+                close=tick_data['close']
+            )
+            self.index += 1
+            return tick
+        else:
+            return None
 
     def serve_next_tick(self):
         for tick_data in self.samples:
