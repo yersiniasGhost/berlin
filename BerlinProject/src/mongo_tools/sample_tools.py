@@ -11,14 +11,75 @@ import logging
 
 
 class SampleTools:
-
-    def __init__(self, samples: List):
-        self.samples = samples
-        self.index: int = 0
+    def __init__(self, samples: List[List[Dict]] = None):
+        self.samples = samples or []
+        self.tick_index: int = 0
+        self.sample_index: int = 0
 
     @classmethod
     def get_collection(cls) -> Collection:
         return Mongo().database[SAMPLE_COLLECTION]
+
+    def reset_index(self):
+        self.tick_index = 0
+        # MODE:  iterate sequentially through all samples
+        self.sample_index += 1
+        if self.sample_index == len(self.samples):
+            self.sample_index = 0
+
+        # if self.mode = RANDOMIZE_SAMPLES:
+        #     ...
+        # # get another random sample_index unless we served max_samples
+
+
+    @classmethod
+    def get_samples2(cls, profile: Dict) -> 'SampleTools':
+        collection = cls.get_collection()
+
+        profile_id = profile['profile_id']
+        sample_size = profile['number']
+
+        query = {"profile_id": ObjectId(profile_id)}
+
+        pipeline = [
+            {"$match": query},
+            {"$sample": {"size": sample_size}},
+            {"$project": {
+                "_id": 0,
+                "data": 1
+            }}
+        ]
+
+        samples = list(collection.aggregate(pipeline))
+
+        processed_samples = [
+            [
+                TickData(
+                    open=tick['open'],
+                    high=tick['high'],
+                    low=tick['low'],
+                    close=tick['close'],
+                    volume=tick.get('volume')
+                )
+                for tick in sample["data"]
+            ]
+            for sample in samples
+        ]
+
+        return cls(processed_samples)
+
+
+
+    def get_next2(self) -> Optional[TickData]:
+
+        current_sample = self.samples[self.sample_index]
+
+        if self.tick_index < len(current_sample):
+            tick_data = current_sample[self.tick_index]
+            self.tick_index += 1
+            return tick_data
+        return None
+
 
     @classmethod
     def save_candle_data(cls, profile_id: PYMONGO_ID, candle_data: List[List[tuple]]) -> None:
@@ -58,6 +119,7 @@ class SampleTools:
     def get_tools(cls, profiles: List[dict]) -> "SampleTools":
         samples = cls.get_samples(profiles)
         return SampleTools(samples)
+
 
     @classmethod
     def get_samples(cls, profiles: List[Dict]) -> List[Dict]:
@@ -102,19 +164,16 @@ class SampleTools:
 
         return all_samples
 
-    def reset_index(self):
-        self.index=0
-
     def get_next(self) -> Optional[TickData]:
-        if self.index < len(self.samples):
-            tick_data = self.samples[self.index]
+        if self.tick_index < len(self.samples):
+            tick_data = self.samples[self.tick_index]
             tick = TickData(
                 open=tick_data['open'],
                 high=tick_data['high'],
                 low=tick_data['low'],
                 close=tick_data['close']
             )
-            self.index += 1
+            self.tick_index += 1
             return tick
         else:
             return None

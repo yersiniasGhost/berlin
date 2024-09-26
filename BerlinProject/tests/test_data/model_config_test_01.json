@@ -1,5 +1,5 @@
 {
-  "preprocess_config": "close_open_sma",
+  "preprocess_config": "close_open_sma5",
   "feature_vector": [
     {
       "name": "close"

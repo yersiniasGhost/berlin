@@ -36,7 +36,7 @@ class DataPreprocessor:
 
         output_vector = []
         for feature in self.feature_vector:
-            feature_data = self.calculate(feature)
+            feature_data = self._calculate(feature)
             output_vector.append(feature_data)
 
         return output_vector
@@ -45,11 +45,11 @@ class DataPreprocessor:
         self.history = []
         self.tick = None
 
-    def calculate(self, feature: dict) -> float:
+    def _calculate(self, feature: dict) -> float:
         name = feature['name']
         if name in ['open', 'close', 'high', 'low']:
             if 'history' in feature:
-                pass
+                raise ValueError("History on high low close now implemented yet")
             else:
                 return getattr(self.tick, name)
 

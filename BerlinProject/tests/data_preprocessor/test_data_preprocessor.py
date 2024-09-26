@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
 
+
 #Should test that it can use the sample tools to retrieve a given number of samples given an ID
 #Check that the list is the same length as we specify
 #Set up JSON model configs that takes close or moving averages for example
@@ -78,9 +79,9 @@ class TestDataPreprocessor(unittest.TestCase):
             self.preprocessor.next_tick(tick)
 
         close_feature = {"name": "close"}
-        self.assertEqual(self.preprocessor.calculate(close_feature), 12.0)
+        self.assertEqual(self.preprocessor._calculate(close_feature), 12.0)
 
         sma_feature = {"name": "SMA", "parameters": {"sma": 3}}
-        self.assertAlmostEqual(self.preprocessor.calculate(sma_feature), 11.0)
+        self.assertAlmostEqual(self.preprocessor._calculate(sma_feature), 11.0)
 
 
