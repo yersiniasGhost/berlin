@@ -8,3 +8,4 @@ class Sample(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     profile_id: PyObjectId
     data: list
+    stats: dict

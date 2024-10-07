@@ -1,5 +1,7 @@
 {
   "preprocess_config": "close_open_sma5",
+  "normalization":  "min_max",
+
   "feature_vector": [
     {
       "name": "close"

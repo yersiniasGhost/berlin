@@ -3,9 +3,9 @@ import numpy as np
 from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
 
 
-#Should test that it can use the sample tools to retrieve a given number of samples given an ID
-#Check that the list is the same length as we specify
-#Set up JSON model configs that takes close or moving averages for example
+# Should test that it can use the sample tools to retrieve a given number of samples given an ID
+# Check that the list is the same length as we specify
+# Set up JSON model configs that takes close or moving averages for example
 
 class TestDataPreprocessor(unittest.TestCase):
     def setUp(self):
@@ -83,5 +83,77 @@ class TestDataPreprocessor(unittest.TestCase):
 
         sma_feature = {"name": "SMA", "parameters": {"sma": 3}}
         self.assertAlmostEqual(self.preprocessor._calculate(sma_feature), 11.0)
+
+
+class TestDataPreprocessorNormalization(unittest.TestCase):
+    def setUp(self):
+        self.model_config = {
+            "normalization": "min_max",
+            "feature_vector": [
+                {"name": "close"},
+                {"name": "SMA", "parameters": {"sma": 3}}
+            ]
+        }
+        self.sample_stats = {
+            'open': {'min': 50.0, 'max': 100.0, 'sd': 10.0},
+            'high': {'min': 55.0, 'max': 105.0, 'sd': 10.0},
+            'low': {'min': 45.0, 'max': 95.0, 'sd': 10.0},
+            'close': {'min': 50.0, 'max': 100.0, 'sd': 10.0}
+        }
+
+    def test_initialization(self):
+        preprocessor = DataPreprocessor(self.model_config)
+        self.assertEqual(preprocessor.model_config, self.model_config)
+        self.assertEqual(preprocessor.normalized_data, [])
+        self.assertIsNone(preprocessor.tick)
+        self.assertIsNone(preprocessor.sample_stats)
+
+
+    def test_reset(self):
+        preprocessor = DataPreprocessor(self.model_config)
+        preprocessor.reset_state(self.sample_stats)
+        self.assertEqual(preprocessor.sample_stats, self.sample_stats)
+        self.assertEqual(preprocessor.normalized_data, [])
+        self.assertIsNone(preprocessor.tick)
+
+    def test_normalize_close_min_value(self):
+        preprocessor = DataPreprocessor(self.model_config)
+        preprocessor.reset_state(self.sample_stats)
+
+        tick = TickData(open=50.0, high=55.0, low=45.0, close=50.0)
+        preprocessor.normalize_data(tick)
+
+        # Check the normalized_data list
+        self.assertEqual(len(preprocessor.normalized_data), 1)
+        normalized_tick = preprocessor.normalized_data[0]
+        self.assertAlmostEqual(normalized_tick.close, 0.0)
+        self.assertEqual(normalized_tick.open, 0.0)
+        self.assertEqual(normalized_tick.high, 0.1)
+        self.assertEqual(normalized_tick.low, -0.1)
+
+    def test_normalize_close_max_value(self):
+        preprocessor = DataPreprocessor(self.model_config)
+        preprocessor.reset_state(self.sample_stats)
+
+        tick = TickData(open=100.0, high=105.0, low=95.0, close=100.0)
+        preprocessor.normalize_data(tick)
+
+        self.assertAlmostEqual(preprocessor.tick.close, 1.0)
+        self.assertEqual(preprocessor.tick.open, 1.0)
+        self.assertEqual(preprocessor.tick.high, 1.1)
+        self.assertEqual(preprocessor.tick.low, .9)
+
+    def test_normalize_close_mid_value(self):
+        preprocessor = DataPreprocessor(self.model_config)
+        preprocessor.reset_state(self.sample_stats)
+
+        tick = TickData(open=75.0, high=80.0, low=70.0, close=75.0)
+        preprocessor.normalize_data(tick)
+
+        self.assertAlmostEqual(preprocessor.tick.close, 0.5)
+        self.assertEqual(preprocessor.tick.open, 0.5)
+        self.assertEqual(preprocessor.tick.high, 0.6)
+        self.assertEqual(preprocessor.tick.low, 0.4)
+
 
 

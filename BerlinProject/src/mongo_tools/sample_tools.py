@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from bson import ObjectId
 from config.types import PYMONGO_ID, SAMPLE_COLLECTION
 from data_preprocessor.data_preprocessor import TickData
@@ -16,13 +16,15 @@ class SampleTools:
         self.tick_index: int = 0
         self.sample_index: int = 0
 
+
     @classmethod
     def get_collection(cls) -> Collection:
         return Mongo().database[SAMPLE_COLLECTION]
 
     def reset_index(self):
         self.tick_index = 0
-        # MODE:  iterate sequentially through all samples
+
+        # MODE: iterate sequentially through all samples
         self.sample_index += 1
         if self.sample_index == len(self.samples):
             self.sample_index = 0
@@ -31,6 +33,9 @@ class SampleTools:
         #     ...
         # # get another random sample_index unless we served max_samples
 
+
+    def get_stats(self):
+        current_sample = self.samples[self.sample_index]
 
     @classmethod
     def get_samples2(cls, profile: Dict) -> 'SampleTools':
@@ -69,7 +74,6 @@ class SampleTools:
         return cls(processed_samples)
 
 
-
     def get_next2(self) -> Optional[TickData]:
 
         current_sample = self.samples[self.sample_index]
@@ -80,14 +84,13 @@ class SampleTools:
             return tick_data
         return None
 
-
     @classmethod
-    def save_candle_data(cls, profile_id: PYMONGO_ID, candle_data: List[List[tuple]]) -> None:
+    def save_candle_data(cls, profile_id: str, candle_data: List[Dict[str, Any]]) -> None:
         """
-        Saves the generated candle data into the Samples collection.
+        Saves the generated candle data and stats into the Samples collection.
 
         :param profile_id: The ID of the profile used to generate this data
-        :param candle_data: A list of candle data lists, where each inner list represents a profile
+        :param candle_data: A list of dictionaries, each containing 'data' and 'stats' for a profile
         """
         collection = cls.get_collection()
 
@@ -106,8 +109,9 @@ class SampleTools:
                         "low": candle[2],
                         "close": candle[3]
                     }
-                    for candle in profile_sample
-                ]
+                    for candle in profile_sample['data']
+                ],
+                "stats": profile_sample['stats']
             }
             operations.append(InsertOne(doc))
 
@@ -115,68 +119,68 @@ class SampleTools:
         if operations:
             collection.bulk_write(operations, ordered=False)
 
-    @classmethod
-    def get_tools(cls, profiles: List[dict]) -> "SampleTools":
-        samples = cls.get_samples(profiles)
-        return SampleTools(samples)
+    # @classmethod
+    # def get_tools(cls, profiles: List[dict]) -> "SampleTools":
+    #     samples = cls.get_samples(profiles)
+    #     return SampleTools(samples)
 
 
-    @classmethod
-    def get_samples(cls, profiles: List[Dict]) -> List[Dict]:
-        """
-        Retrieves a specified number of random samples from the collection for multiple profiles,
-        returning only the OHLC data from the nested 'data' array.
-
-        profiles: A list of dictionaries, each containing 'profile_id' and 'number' keys
-        returns: List of OHLC data dictionaries
-        """
-        collection = cls.get_collection()
-
-        all_samples = []
-        for profile in profiles:
-            profile_id = profile['profile_id']
-            sample_size = profile['number']
-
-            query = {"profile_id": ObjectId(profile_id)}
-
-            # Get the total count of matching documents
-            total_docs = collection.count_documents(query)
-
-            # Ensure we don't try to sample more documents than exist
-            sample_size = min(sample_size, total_docs)
-
-            # Randomly sample the documents and extract OHLC data
-            pipeline = [
-                {"$match": query},
-                {"$sample": {"size": sample_size}},
-                {"$unwind": "$data"},
-                {"$project": {
-                    "_id": 0,
-                    "open": "$data.open",
-                    "high": "$data.high",
-                    "low": "$data.low",
-                    "close": "$data.close"
-                }}
-            ]
-
-            samples = list(collection.aggregate(pipeline))
-            all_samples.extend(samples)
-
-        return all_samples
-
-    def get_next(self) -> Optional[TickData]:
-        if self.tick_index < len(self.samples):
-            tick_data = self.samples[self.tick_index]
-            tick = TickData(
-                open=tick_data['open'],
-                high=tick_data['high'],
-                low=tick_data['low'],
-                close=tick_data['close']
-            )
-            self.tick_index += 1
-            return tick
-        else:
-            return None
+    # @classmethod
+    # def get_samples(cls, profiles: List[Dict]) -> List[Dict]:
+    #     """
+    #     Retrieves a specified number of random samples from the collection for multiple profiles,
+    #     returning only the OHLC data from the nested 'data' array.
+    #
+    #     profiles: A list of dictionaries, each containing 'profile_id' and 'number' keys
+    #     returns: List of OHLC data dictionaries
+    #     """
+    #     collection = cls.get_collection()
+    #
+    #     all_samples = []
+    #     for profile in profiles:
+    #         profile_id = profile['profile_id']
+    #         sample_size = profile['number']
+    #
+    #         query = {"profile_id": ObjectId(profile_id)}
+    #
+    #         # Get the total count of matching documents
+    #         total_docs = collection.count_documents(query)
+    #
+    #         # Ensure we don't try to sample more documents than exist
+    #         sample_size = min(sample_size, total_docs)
+    #
+    #         # Randomly sample the documents and extract OHLC data
+    #         pipeline = [
+    #             {"$match": query},
+    #             {"$sample": {"size": sample_size}},
+    #             {"$unwind": "$data"},
+    #             {"$project": {
+    #                 "_id": 0,
+    #                 "open": "$data.open",
+    #                 "high": "$data.high",
+    #                 "low": "$data.low",
+    #                 "close": "$data.close"
+    #             }}
+    #         ]
+    #
+    #         samples = list(collection.aggregate(pipeline))
+    #         all_samples.extend(samples)
+    #
+    #     return all_samples
+    #
+    # def get_next(self) -> Optional[TickData]:
+    #     if self.tick_index < len(self.samples):
+    #         tick_data = self.samples[self.tick_index]
+    #         tick = TickData(
+    #             open=tick_data['open'],
+    #             high=tick_data['high'],
+    #             low=tick_data['low'],
+    #             close=tick_data['close']
+    #         )
+    #         self.tick_index += 1
+    #         return tick
+    #     else:
+    #         return None
 
     def serve_next_tick(self):
         for tick_data in self.samples:

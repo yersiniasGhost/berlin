@@ -27,6 +27,8 @@ class DataStreamer:
 
     def reset(self):
         self.data_link.reset_index()
+        stats = self.data_link.get_stats()
+        self.preprocessor.reset_state(stats)
 
     def get_next(self):
         if self.data_link is None:
@@ -40,42 +42,3 @@ class DataStreamer:
     def connect_tool(self, external_tool: ExternalTool) -> None:
         self.external_tool = external_tool
 
-    # def __init__(self, config_path: str):
-    #     with open(config_path, 'r') as file:
-    #         self.config = json.load(file)
-    #     self.preprocessor = DataPreprocessor(self.config["ModelConfiguration"])
-    #     self.data_link = Optional[SampleTools] = None
-    #     self.load_configuration()
-    #
-
-    # config = {
-    #     "SampleTools": {
-    #         "Profiles": [ {"id": 12323, "number": 10, "randomize": True},
-    #                       {"id": 123, "number": 230, "randomize": True}
-    #                       ]
-    #     },
-    # "ModelConfiguration": {
-    #
-    # }
-    # }
-
-
-    # Run will use the data source (SampleData or DataLink)
-    # and forward pre-calculated feature vectors to the external tool
-
-    # def stream(self):
-    #     for sample in self.samples:
-    #         # Reset the preprocessor's state for each new sample
-    #         self.preprocessor.reset_state()
-    #
-    #         for tick_data in sample['data']:
-    #             tick = TickData(
-    #                 open=tick_data['open'],
-    #                 high=tick_data['high'],
-    #                 low=tick_data['low'],
-    #                 close=tick_data['close']
-    #             )
-    #             yield self.preprocessor.next_tick(tick)
-    #
-    def connect_tool(self, external_tool) -> None:
-        self.external_tool = external_tool
