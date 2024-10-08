@@ -45,7 +45,9 @@ class DataPreprocessor:
 
     def normalize_data(self, tick: TickData):
         norm_method = self.model_config.get("normalization", None)
-        if norm_method == "min_max" and self.sample_stats:
+        if norm_method == "min_max":
+            if not self.sample_stats:
+                raise ValueError("Do not have sample stats in normalize data.")
             close_stats = self.sample_stats['close']
             min_close = close_stats['min']
             max_close = close_stats['max']

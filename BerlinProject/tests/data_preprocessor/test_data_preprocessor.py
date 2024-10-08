@@ -1,4 +1,7 @@
 import unittest
+from dataclasses import dataclass
+from typing import Optional
+
 import numpy as np
 from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
 
@@ -154,6 +157,94 @@ class TestDataPreprocessorNormalization(unittest.TestCase):
         self.assertEqual(preprocessor.tick.open, 0.5)
         self.assertEqual(preprocessor.tick.high, 0.6)
         self.assertEqual(preprocessor.tick.low, 0.4)
+
+
+@dataclass
+class TickData:
+    close: float
+    open: float
+    high: float
+    low: float
+    volume: Optional[int] = None
+
+
+@dataclass
+class TickData:
+    close: float
+    open: float
+    high: float
+    low: float
+    volume: Optional[int] = None
+
+
+class TestDataPreprocessorSMA(unittest.TestCase):
+    def setUp(self):
+        self.model_config = {
+            "normalization": "min_max",
+            "feature_vector": [
+                {"name": "close"},
+                {"name": "SMA", "parameters": {"sma": 3}}
+            ]
+        }
+        self.sample_stats = {
+            'open': {'min': 0.0, 'max': 10.0, 'sd': 2.0},
+            'high': {'min': 0.0, 'max': 10.0, 'sd': 2.0},
+            'low': {'min': 0.0, 'max': 10.0, 'sd': 2.0},
+            'close': {'min': 0.0, 'max': 10.0, 'sd': 2.0}
+        }
+        self.preprocessor = DataPreprocessor(self.model_config)
+        self.preprocessor.reset_state(self.sample_stats)
+
+    def test_sma_calculation(self):
+        # Test SMA calculation over multiple ticks
+        ticks = [
+            TickData(open=1.0, high=2.0, low=0.0, close=1.0),
+            TickData(open=2.0, high=3.0, low=1.0, close=2.0),
+            TickData(open=3.0, high=4.0, low=2.0, close=3.0),
+            TickData(open=4.0, high=5.0, low=3.0, close=4.0),
+            TickData(open=5.0, high=6.0, low=4.0, close=5.0)
+        ]
+
+        expected_close_values = [0.1, 0.2, 0.3, 0.4, 0.5]
+        expected_sma_values = [None, None, 0.2, 0.3, 0.4]
+
+        for tick, expected_close, expected_sma in zip(ticks, expected_close_values, expected_sma_values):
+            output_vector = self.preprocessor.next_tick(tick)
+
+            # Check that the output vector has the expected length
+            self.assertEqual(len(output_vector), 2)
+
+            # Check the close price (should be normalized)
+            self.assertAlmostEqual(output_vector[0], expected_close, places=6)
+
+            # Check the SMA value
+            if expected_sma is None:
+                self.assertIsNone(output_vector[1])
+            else:
+                self.assertAlmostEqual(output_vector[1], expected_sma, places=6)
+
+    def test_sma_calculation_edge_cases(self):
+        # Test SMA calculation with edge cases (min, mid, and max values)
+        ticks = [
+            TickData(open=0.0, high=1.0, low=0.0, close=0.0),  # min value
+            TickData(open=5.0, high=6.0, low=4.0, close=5.0),  # mid value
+            TickData(open=10.0, high=10.0, low=9.0, close=10.0),  # max value
+        ]
+
+        expected_close_values = [0.0, 0.5, 1.0]
+        expected_sma_values = [None, None, 0.5]
+
+        for tick, expected_close, expected_sma in zip(ticks, expected_close_values, expected_sma_values):
+            output_vector = self.preprocessor.next_tick(tick)
+
+            # Check the close price (should be normalized)
+            self.assertAlmostEqual(output_vector[0], expected_close, places=6)
+
+            # Check the SMA value
+            if expected_sma is None:
+                self.assertIsNone(output_vector[1])
+            else:
+                self.assertAlmostEqual(output_vector[1], expected_sma, places=6)
 
 
 

@@ -97,7 +97,7 @@ class MTAEnv(Env):
             "episode_reward": self.episode_reward,
             "step_count": self.step_count
         }
-        #
+
         # # Print step information
         # print(f"Step: {self.step_count}")
         # print(f"Action: {self.action_names[action]}")
