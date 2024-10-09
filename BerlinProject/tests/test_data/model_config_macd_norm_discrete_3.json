@@ -1,0 +1,23 @@
+{
+  "preprocess_config": "macd_norm_discrete_3",
+  "normalization": "min_max",
+  "action_space":
+    {
+    "type": "Discrete",
+    "actions":
+    {"0" : "Buy",
+     "1" : "Sell",
+      "2" :"Hold"}
+    }
+  ,
+  "feature_vector": [
+    {
+      "name": "MACD",
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      }
+    }
+  ]
+}

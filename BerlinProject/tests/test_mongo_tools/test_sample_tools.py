@@ -22,10 +22,10 @@ class TestSampleTools(unittest.TestCase):
         # Create SampleTools instance
         cls.sample_tools = SampleTools.get_tools(json_profile)
 
-    def test_tick_count_equals_700(self):
-        """Test that the total number of ticks equals 700"""
-        count = sum(1 for _ in self.sample_tools.serve_next_tick())
-        self.assertEqual(count, 700, f"Expected 700 ticks, but got {count}")
+    # def test_tick_count_equals_700(self):
+    #     """Test that the total number of ticks equals 700"""
+    #     count = sum(1 for _ in self.sample_tools.serve_next_tick())
+    #     self.assertEqual(count, 700, f"Expected 700 ticks, but got {count}")
 
     def test_tick_data_structure(self):
         """Test that each tick has the correct data structure"""

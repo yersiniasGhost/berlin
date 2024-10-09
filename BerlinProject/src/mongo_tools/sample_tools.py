@@ -11,8 +11,8 @@ import logging
 
 
 class SampleTools:
-    def __init__(self, samples: List[List[Dict]] = None):
-        self.samples = samples or []
+    def __init__(self, samples: List[Dict] = None):
+        self.samples = samples if samples is not None else []
         self.tick_index: int = 0
         self.sample_index: int = 0
 
@@ -33,10 +33,16 @@ class SampleTools:
         #     ...
         # # get another random sample_index unless we served max_samples
 
-
     def get_stats(self):
+        if not self.samples:
+            raise ValueError("No samples available")
+        if self.sample_index >= len(self.samples):
+            self.sample_index = 0
         current_sample = self.samples[self.sample_index]
-
+        if 'stats' in current_sample:
+            return current_sample['stats']
+        else:
+            raise ValueError("Statistics not found in the sample data")
     @classmethod
     def get_samples2(cls, profile: Dict) -> 'SampleTools':
         collection = cls.get_collection()
@@ -51,38 +57,46 @@ class SampleTools:
             {"$sample": {"size": sample_size}},
             {"$project": {
                 "_id": 0,
-                "data": 1
+                "data": 1,
+                "stats": 1  # Include this line to retrieve the stats
             }}
         ]
 
         samples = list(collection.aggregate(pipeline))
 
         processed_samples = [
-            [
-                TickData(
-                    open=tick['open'],
-                    high=tick['high'],
-                    low=tick['low'],
-                    close=tick['close'],
-                    volume=tick.get('volume')
-                )
-                for tick in sample["data"]
-            ]
+            {
+                "data": [
+                    TickData(
+                        open=tick['open'],
+                        high=tick['high'],
+                        low=tick['low'],
+                        close=tick['close'],
+                        volume=tick.get('volume')
+                    )
+                    for tick in sample["data"]
+                ],
+                "stats": sample.get("stats", {})
+            }
             for sample in samples
         ]
 
         return cls(processed_samples)
 
-
     def get_next2(self) -> Optional[TickData]:
+        if self.sample_index >= len(self.samples):
+            return None
 
         current_sample = self.samples[self.sample_index]
 
-        if self.tick_index < len(current_sample):
-            tick_data = current_sample[self.tick_index]
-            self.tick_index += 1
-            return tick_data
-        return None
+        if 'data' not in current_sample or self.tick_index >= len(current_sample['data']):
+            self.sample_index += 1
+            self.tick_index = 0
+            return self.get_next2()  # Move to the next sample
+
+        tick_data = current_sample['data'][self.tick_index]
+        self.tick_index += 1
+        return tick_data
 
     @classmethod
     def save_candle_data(cls, profile_id: str, candle_data: List[Dict[str, Any]]) -> None:
@@ -119,11 +133,13 @@ class SampleTools:
         if operations:
             collection.bulk_write(operations, ordered=False)
 
-    # @classmethod
-    # def get_tools(cls, profiles: List[dict]) -> "SampleTools":
-    #     samples = cls.get_samples(profiles)
-    #     return SampleTools(samples)
-
+    @classmethod
+    def get_tools(cls, profiles: List[dict]) -> "SampleTools":
+        all_samples = []
+        for profile in profiles:
+            samples = cls.get_samples2(profile)
+            all_samples.extend(samples.samples)
+        return SampleTools(all_samples)
 
     # @classmethod
     # def get_samples(cls, profiles: List[Dict]) -> List[Dict]:

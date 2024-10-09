@@ -25,6 +25,6 @@ class RuntimeAnalytics(ExternalTool):
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         # For each of our models, calculate their actions and send off
         # to the UI (websocket) or backtester or other.
-
+        # fv below is wrong should be results from the model, the actions.
         if self.backtest:
             self.backtest.agent_actions(fv, tick)

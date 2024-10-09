@@ -1,11 +1,14 @@
-def reward_model_x(position, action, tick, buy_price):
+from data_streamer  import TickData
+
+
+def reward_model_x(position: int, action: str, tick: TickData, buy_price:float) -> float:
     step_reward = 0
-    if action == 0:  # Buy
+    if action == "Buy":  # Buy
         if position == 0:
             step_reward = 0
         else:
             step_reward = -2
-    elif action == 1:  # Sell
+    elif action == "Sell":  # Sell
         if position == 1:
             step_reward = tick.close - buy_price
         else:
