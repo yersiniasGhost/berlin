@@ -10,6 +10,11 @@
       "2" :"Hold"}
     }
   ,
+  "state": {
+    "klass": "SimplePosition",
+    "parameters": { "reward_type":  "x"}
+  },
+
   "feature_vector": [
     {
       "name": "MACD",

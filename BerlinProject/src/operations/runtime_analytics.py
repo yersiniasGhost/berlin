@@ -13,9 +13,9 @@ from operations import Backtester
 # to a back testing suite.
 class RuntimeAnalytics(ExternalTool):
 
-    def __init__(self, agents: List[AgentModel]):
+    def __init__(self, agents: List[RLAgent]):
         self.backtest: Optional[Backtester] = None
-        ...
+        self.agents = agents
 
 
     def connect_backtest(self, backtest: Backtester):
@@ -26,5 +26,10 @@ class RuntimeAnalytics(ExternalTool):
         # For each of our models, calculate their actions and send off
         # to the UI (websocket) or backtester or other.
         # fv below is wrong should be results from the model, the actions.
+
+        for model in self.agents
+            model.
+
         if self.backtest:
             self.backtest.agent_actions(fv, tick)
+

@@ -6,7 +6,7 @@ from data_streamer.data_streamer import DataStreamer
 from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
 from environments.reward_models import *
-
+from environments.simple_position import SimplePosition
 
 # Figure out how many episodes are in an epoch. Maybe for each full 390 days it goes through or Trade it makes and gets
 # out of is an episode. batches of 1000. update the average or total reward and keep going?
@@ -35,20 +35,17 @@ class MTAEnv(Env):
             raise ValueError(f"Unsupported action type: {action_type}")
         # This is where we add more supported action types (continuous, one hot)
 
-        obs_dim = self.feature_dim + 1
+        # Get the name of the state class in the model configuration
+        # for now using SimplePosition
+        self.state = SimplePosition()
+        obs_dim = self.feature_dim + self.state.size()
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
 
-        self.position = 0
-        self.buy_price = 0
         self.episode_reward = 0
         self.episode_count = 0
         self.step_count = 0
-
-        # Set the reward model
-        self.set_reward_model(reward_model)
-
         self.reset()
 
     def _calculate_feature_dim(self):
@@ -80,21 +77,14 @@ class MTAEnv(Env):
 
         return handled_vector
 
-    def set_reward_model(self, reward_model):
-        if reward_model == 'x':
-            self.reward_model = reward_model_x
-        elif reward_model == 'y':
-            self.reward_model = reward_model_y
-        else:
-            raise ValueError(f"Unknown reward model: {reward_model}")
+
 
     def reset(self, seed=None, options=None):
         self.streamer.reset()
         self.fv, self.tick = self.streamer.get_next()
         self.fv = self._handle_none_values(self.fv)
 
-        self.position = 0
-        self.buy_price = 0
+        self.state.reset()
         self.episode_reward = 0
         self.step_count = 0
 
@@ -103,7 +93,7 @@ class MTAEnv(Env):
         return self._get_observation(), {}
 
 
-    # TO be refeactored for backtest use etc.
+
     def get_trade_action(self, action: Union[float, np.array]) -> str:
         # For the given configuration, determine the Bue/Sell/Hold trade action
         # for the given model action space
@@ -112,25 +102,15 @@ class MTAEnv(Env):
 
         raise ValueError(f"Undefined trade action configuration {action}")
 
-
     def step(self, action: Union[float, np.array]):
-        old_position = self.position
-        old_buy_price = self.buy_price
-        old_close = self.tick.close if self.tick else None
+        # old_position = self.position
+        # old_buy_price = self.buy_price
+        # old_close = self.tick.close if self.tick else None
 
         trade_action = self.get_trade_action(action)
         # Calculate reward using the selected reward model
-        step_reward = self.reward_model(self.position, action, self.tick, self.buy_price)
-
-        # Update position and buy price
-        if trade_action == "Buy":
-            if self.position == 0:
-                self.position = 1
-                self.buy_price = self.tick.close
-        elif trade_action == "Sell":  # Sell
-            if self.position == 1:
-                self.position = 0
-
+        step_reward = self.state.update_and_calculate_reward(trade_action, self.tick)
+#        step_reward = self.reward_model(self.position, action, self.tick, self.buy_price)
         self.episode_reward += step_reward
         self.step_count += 1
 
@@ -142,8 +122,8 @@ class MTAEnv(Env):
             self.fv = self._handle_none_values(self.fv)
 
         info = {
-            "position": self.position,
-            "buy_price": self.buy_price,
+            "position": self.state.position,
+            "buy_price": self.state.buy_price,
             "episode_reward": self.episode_reward,
             "step_count": self.step_count
         }
@@ -153,9 +133,9 @@ class MTAEnv(Env):
         # Print step information
         print(f"Step: {self.step_count}")
         print(f"Action: {trade_action}")
-        print(f"Old Position: {old_position}, New Position: {self.position}")
-        print(f"Old Close: {old_close}, New Close: {self.tick.close if self.tick else None}")
-        print(f"Old Buy Price: {old_buy_price}, New Buy Price: {self.buy_price}")
+        # print(f"Old Position: {old_position}, New Position: {self.position}")
+        # print(f"Old Close: {old_close}, New Close: {self.tick.close if self.tick else None}")
+        # print(f"Old Buy Price: {old_buy_price}, New Buy Price: {self.buy_price}")
         print(f"Step Reward: {step_reward}")
         print(f"Episode Reward: {self.episode_reward}")
         print(f"Feature Vector: {self.fv}")
@@ -169,14 +149,16 @@ class MTAEnv(Env):
 
     def _get_observation(self):
         if self.fv is None:
-            return np.append(np.zeros(self.feature_dim), float(self.position)).astype(np.float32)
-        handled_fv = self._handle_none_values(self.fv)
-        return np.append(handled_fv, float(self.position)).astype(np.float32)
+            handled_fv = np.zeros(self.feature_dim)
+        else:
+            handled_fv = self._handle_none_values(self.fv)
+        return self.state.append_state_to_fv(handled_fv)
+        # return np.append(handled_fv, float(self.position)).astype(np.float32)
 
     def render(self):
         print(f"Close: {self.tick.close if self.tick else None}, "
-              f"Position: {self.position}, "
-              f"Buy Price: {self.buy_price:.2f}, Episode Reward: {self.episode_reward:.2f}")
+              f"Position: {self.state.position}, "
+              f"Buy Price: {self.state.buy_price:.2f}, Episode Reward: {self.episode_reward:.2f}")
 
     #  For action space, probably still buy sell hold to start
     # Observation space will be streaming in the feature vectors we calculate e.g. [sma,high,low,close,open]

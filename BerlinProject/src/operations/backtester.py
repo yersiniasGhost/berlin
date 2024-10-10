@@ -5,29 +5,36 @@ from src.config.types import AgentActions
 from src.data_streamer.tick_data import TickData
 
 RANDOM_TRADER = "random"
-BUY = 1
-SELL = -1
+MODEL_AGENT = "rl_agent"
+BUY = 0, 'buy'
+SELL = 1, 'sell'
+HOLD = 2, 'hold'
 ACTION = int
+
 
 
 class Backtester:
 
-    def __init__(self, mode: str = RANDOM_TRADER, random_trade: float = 0.01):
-        self.mode: str = mode
+    def __init__(self, ):
         self.tick_count: int = 0
         self.position: int = 0
 
-        self.random_trade = random_trade
+        self.random_trade = 0.1
         self.cash = 100000.0
         self.trade_size = 10
         self.portfolio = [self.cash]
 
 
     def agent_actions(self, actions: List[AgentActions], tick: TickData):
-        if self.mode == RANDOM_TRADER:
-            if random.random() < self.random_trade:
-                action = BUY if self.position == 0 else SELL
-                self.make_trade(action, tick)
+        # This is the entry point that the
+        # if self.mode == RANDOM_TRADER:
+        #     if random.random() < self.random_trade:
+        #         action = BUY if self.position == 0 else SELL
+        #         self.make_trade(action, tick)
+
+        # elif self.mode == MODEL_AGENT:
+        #     action = actions  # Assuming single agent for simplicity
+        #     self.make_trade(action, tick)
 
         self.update_portfolio(tick)
 

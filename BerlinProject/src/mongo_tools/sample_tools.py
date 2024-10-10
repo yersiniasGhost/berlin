@@ -141,6 +141,52 @@ class SampleTools:
             all_samples.extend(samples.samples)
         return SampleTools(all_samples)
 
+    def serve_next_tick(self):
+        for tick_data in self.samples:
+            tick = TickData(
+                open=tick_data['open'],
+                high=tick_data['high'],
+                low=tick_data['low'],
+                close=tick_data['close']
+            )
+            yield tick
+
+    # Returns one specific sample given a pymongo id
+
+    @classmethod
+    def get_specific_sample(cls, sample_id: PYMONGO_ID) -> Optional["SampleTools"]:
+        """
+        Retrieves a specific sample from the collection based on its ObjectId,
+        and returns a SampleTools instance with this sample's OHLC data.
+
+        :param sample_id: The ObjectId of the specific sample to fetch
+        :return: A SampleTools instance containing the sample's OHLC data, or None if no sample is found
+        """
+        collection = cls.get_collection()
+
+        query = {"_id": ObjectId(sample_id)}
+
+        # Fetch the specific document and project only the 'data' field
+        sample = collection.find_one(
+            query,
+            projection={
+                "_id": 0,
+                "data": 1
+            }
+        )
+
+        if sample and 'data' in sample:
+            formatted_sample = [{
+                "open": candle["open"],
+                "high": candle["high"],
+                "low": candle["low"],
+                "close": candle["close"]
+            } for candle in sample["data"]]
+
+            return SampleTools(formatted_sample)
+        return None
+
+
     # @classmethod
     # def get_samples(cls, profiles: List[Dict]) -> List[Dict]:
     #     """
@@ -198,47 +244,3 @@ class SampleTools:
     #     else:
     #         return None
 
-    def serve_next_tick(self):
-        for tick_data in self.samples:
-            tick = TickData(
-                open=tick_data['open'],
-                high=tick_data['high'],
-                low=tick_data['low'],
-                close=tick_data['close']
-            )
-            yield tick
-
-    # Returns one specific sample given a pymongo id
-
-    @classmethod
-    def get_specific_sample(cls, sample_id: PYMONGO_ID) -> Optional["SampleTools"]:
-        """
-        Retrieves a specific sample from the collection based on its ObjectId,
-        and returns a SampleTools instance with this sample's OHLC data.
-
-        :param sample_id: The ObjectId of the specific sample to fetch
-        :return: A SampleTools instance containing the sample's OHLC data, or None if no sample is found
-        """
-        collection = cls.get_collection()
-
-        query = {"_id": ObjectId(sample_id)}
-
-        # Fetch the specific document and project only the 'data' field
-        sample = collection.find_one(
-            query,
-            projection={
-                "_id": 0,
-                "data": 1
-            }
-        )
-
-        if sample and 'data' in sample:
-            formatted_sample = [{
-                "open": candle["open"],
-                "high": candle["high"],
-                "low": candle["low"],
-                "close": candle["close"]
-            } for candle in sample["data"]]
-
-            return SampleTools(formatted_sample)
-        return None
