@@ -39,7 +39,7 @@ class DataPreprocessor:
         output_vector = []
         for feature in self.feature_vector:
             feature_data = self._calculate(feature)
-            output_vector.append(feature_data)
+            output_vector =output_vector+ feature_data
 
         return output_vector
 
@@ -76,35 +76,43 @@ class DataPreprocessor:
         self.sample_stats = stats
         self.normalized_data = []
 
-    def _calculate(self, feature: dict) -> Any:
+    def _calculate(self, feature: dict) -> list:
         name = feature['name']
         if name in ['open', 'close', 'high', 'low']:
             if 'history' in feature:
-                raise ValueError("History on high low close not implemented yet")
+                h = feature['history']
+                if len(self.normalized_data) < h:
+                    return [None] * h
+                return [getattr(tick, name) for tick in self.normalized_data[-h:]]
+                # raise ValueError("History on high low close not implemented yet")
             else:
-                return getattr(self.tick, name)
+                return [getattr(self.tick, name)]
 
         elif name == 'SMA':
             period = feature['parameters']['sma']
             price_data = self.get_price_array('close')
             if len(price_data) >= period:
                 sma_value = calculate_sma_tick(period, price_data)
-                return sma_value[-1]
+                return [sma_value[-1]]
             else:
-                return None
+                return [None]
 
         elif name == 'MACD':
             fast_period = feature['parameters']['fast_period']
             slow_period = feature['parameters']['slow_period']
             signal_period = feature['parameters']['signal_period']
             price_data = self.get_price_array('close')
-            window_size = slow_period + signal_period
+            h = feature['history'] if 'history' in feature else 0
+            window_size = slow_period + signal_period + h
             if len(price_data) >= window_size:
                 try:
-                    macd, signal, hist = calculate_macd_tick(price_data, fast_period, slow_period, signal_period)
-                    return macd[-1], signal[-1], hist[-1]
+                    macd, signal, hist = calculate_macd_tick(price_data, fast_period, slow_period, signal_period, h)
+                    nested_list = [macd[-h-1:], signal[-h-1:], hist[-h-1:]]
+                    out = np.array(nested_list).flatten().tolist()
+                    return out
+
                 except ValueError:
-                    return None, None, None
-            return None, None, None
+                    return [None] * (3 * (h+1))
+            return [None, None, None]
 
 

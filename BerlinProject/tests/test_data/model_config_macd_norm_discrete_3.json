@@ -15,6 +15,7 @@
     "parameters": { "reward_type":  "x"}
   },
 
+  "feature_vector_dim": 3,
   "feature_vector": [
     {
       "name": "MACD",

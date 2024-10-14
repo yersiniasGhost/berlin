@@ -21,9 +21,14 @@ class DataStreamer:
         if self.external_tool is None:
             raise ValueError("External tool is not connected")
 
+        # Set the sample state on the data preprocessor so it can
+        # normalize the data.
+        sample_stats = self.data_link.get_stats()
+        self.preprocessor.reset_state(sample_stats)
         for tick in self.data_link.serve_next_tick():
             fv = self.preprocessor.next_tick(tick)
-            self.external_tool.feature_vector(fv)
+            if not None in fv:
+                self.external_tool.feature_vector(fv, tick)
 
     def reset(self):
         self.data_link.reset_index()
@@ -33,10 +38,14 @@ class DataStreamer:
     def get_next(self):
         if self.data_link is None:
             raise ValueError("Data link is not initialized")
-        tick = self.data_link.get_next2()
-        if tick is None:
-            return None, None
-        fv = self.preprocessor.next_tick(tick)
+        bad_fv = True
+        while bad_fv:
+            tick = self.data_link.get_next2()
+            if tick is None:
+                return [None], None
+            fv = self.preprocessor.next_tick(tick)
+            bad_fv = None in fv
+
         return fv, tick
 
     def connect_tool(self, external_tool: ExternalTool) -> None:

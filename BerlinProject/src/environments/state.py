@@ -1,6 +1,8 @@
-
 from abc import ABC, abstractmethod
 import numpy as np
+from data_streamer import TickData
+
+
 class State(ABC):
     def __init__(self):
         ...
@@ -18,8 +20,9 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def update_and_calculate_reward(self, trade_action: str):
+    def update_and_calculate_reward(self, action: str, tick: TickData):
         ...
+
     @abstractmethod
     def get_state(self) -> np.array:
         ...

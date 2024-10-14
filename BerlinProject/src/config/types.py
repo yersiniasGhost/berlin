@@ -12,3 +12,11 @@ PROFILE_COLLECTION = ("Profiles")
 SAMPLE_COLLECTION = ("Samples")
 
 AgentActions = float
+RANDOM_TRADER = "random"
+MODEL_AGENT = "rl_agent"
+BUY = 'Buy'
+SELL = 'Sell'
+IN = "In"
+OUT = "Out"
+HOLD = 'Hold'
+ACTION = str

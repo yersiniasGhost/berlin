@@ -90,9 +90,10 @@ class SampleTools:
         current_sample = self.samples[self.sample_index]
 
         if 'data' not in current_sample or self.tick_index >= len(current_sample['data']):
-            self.sample_index += 1
-            self.tick_index = 0
-            return self.get_next2()  # Move to the next sample
+            return None
+            # self.sample_index += 1
+            # self.tick_index = 0
+            # return self.get_next2()  # Move to the next sample
 
         tick_data = current_sample['data'][self.tick_index]
         self.tick_index += 1
@@ -142,14 +143,10 @@ class SampleTools:
         return SampleTools(all_samples)
 
     def serve_next_tick(self):
-        for tick_data in self.samples:
-            tick = TickData(
-                open=tick_data['open'],
-                high=tick_data['high'],
-                low=tick_data['low'],
-                close=tick_data['close']
-            )
-            yield tick
+        for sample in self.samples:
+            data = sample['data']
+            for tick in data:
+                yield tick
 
     # Returns one specific sample given a pymongo id
 

@@ -1,5 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 import numpy as np
+from stable_baselines3 import PPO
+from environments.simple_position import SimplePosition
 
 from src.models.agent_model import AgentModel
 from src.data_streamer import ExternalTool, TickData
@@ -13,23 +15,52 @@ from operations import Backtester
 # to a back testing suite.
 class RuntimeAnalytics(ExternalTool):
 
-    def __init__(self, agents: List[RLAgent]):
+    def __init__(self, model_config: dict, path: str):
         self.backtest: Optional[Backtester] = None
-        self.agents = agents
+        self.action_space_def = model_config["action_space"]
+        self.action_defs = self.action_space_def['actions']
+        self.feature_dim = model_config["feature_vector_dim"]
+        self.feature_vector_def= model_config["feature_vector"]
+        # From the model configuration, create the following:  State, PPO (or whaterver)
 
+        # TODO:  Make the state init dynamic (see the environment code) refactor the creating into common code
+        self.state = SimplePosition()
+        self.model = PPO.load(path)
 
     def connect_backtest(self, backtest: Backtester):
         self.backtest = backtest
+        self.backtest.state = self.state
 
+    # TODO: REFACTORING See the Environment for reuse
+    def _handle_none_values(self, feature_vector) -> np.array:
+        output = []
+        for f in feature_vector:
+            if f is None:
+                output.append(0.0)
+            else:
+                output.append(f)
+        return np.array(output)
+
+
+    # TODO Refactor into the State object
+    def get_trade_action(self, action: Union[float, np.array]) -> str:
+        # For the given configuration, determine the Bue/Sell/Hold trade action
+        # for the given model action space
+        if self.action_space_def['type'] == "Discrete":
+            return self.action_defs[str(action)]
+
+        raise ValueError(f"Undefined trade action configuration {action}")
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         # For each of our models, calculate their actions and send off
         # to the UI (websocket) or backtester or other.
         # fv below is wrong should be results from the model, the actions.
 
-        for model in self.agents
-            model.
-
+        handle_fv = self._handle_none_values(fv)
+        observations = self.state.append_state_to_fv(handle_fv, tick)
+        actions, _ = self.model.predict(observations, deterministic=True)
+        trade_action = self.get_trade_action(actions)
+        print(handle_fv, trade_action)
+        # convert actions to "BUY" "SELL "HOLD"
         if self.backtest:
-            self.backtest.agent_actions(fv, tick)
-
+            self.backtest.agent_actions(trade_action, tick)
