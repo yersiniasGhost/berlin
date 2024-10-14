@@ -5,6 +5,7 @@ from gymnasium import spaces
 from data_streamer.data_streamer import DataStreamer
 from environments.simple_position import SimplePosition
 from environments.inout_position import InoutPosition, IN, OUT
+from environments.get_state_class import get_state_class
 
 # Figure out how many episodes are in an epoch. Maybe for each full 390 days it goes through or Trade it makes and gets
 # out of is an episode. batches of 1000. update the average or total reward and keep going?
@@ -42,7 +43,7 @@ class MTAEnv(Env):
         # Get the name of the state class in the model configuration
         # for now using SimplePosition
         # TODO:  Make this dynamic.  Move to common code so Runtime analytics can use it
-        self.state = InoutPosition()
+        self.state = get_state_class(model_config)
         # self.state = SimplePosition()
         obs_dim = self.feature_dim + self.state.size()
         self.observation_space = spaces.Box(
@@ -79,8 +80,6 @@ class MTAEnv(Env):
         self.episode_count += 1
         print(f"*****************\nStarting new episode {self.episode_count}")
         return self._get_observation(), {}
-
-
 
     # TODO:  Refactor this code into the State?
     def get_trade_action(self, action: Union[float, np.array]) -> str:

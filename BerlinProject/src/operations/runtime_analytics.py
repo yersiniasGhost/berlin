@@ -3,9 +3,11 @@ import numpy as np
 from stable_baselines3 import PPO
 from environments.simple_position import SimplePosition
 
+from environments.inout_position import InoutPosition, IN, OUT
 from src.models.agent_model import AgentModel
 from src.data_streamer import ExternalTool, TickData
 from operations import Backtester
+from environments.get_state_class import get_state_class
 
 
 # This is the object that will contain a group of pretrained models and be associated with a DataStremer
@@ -24,7 +26,7 @@ class RuntimeAnalytics(ExternalTool):
         # From the model configuration, create the following:  State, PPO (or whaterver)
 
         # TODO:  Make the state init dynamic (see the environment code) refactor the creating into common code
-        self.state = SimplePosition()
+        self.state = get_state_class(model_config)
         self.model = PPO.load(path)
 
     def connect_backtest(self, backtest: Backtester):
@@ -47,8 +49,9 @@ class RuntimeAnalytics(ExternalTool):
         # For the given configuration, determine the Bue/Sell/Hold trade action
         # for the given model action space
         if self.action_space_def['type'] == "Discrete":
-            return self.action_defs[str(action)]
-
+            return self.action_defs[str(int(action[0]))]
+        elif self.action_space_def['type'] == "NormalBox":
+            return IN if action <= 0.5 else OUT
         raise ValueError(f"Undefined trade action configuration {action}")
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:

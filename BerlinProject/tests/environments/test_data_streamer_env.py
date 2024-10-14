@@ -1,6 +1,6 @@
 from stable_baselines3 import PPO
 import time
-from environments.data_streamer_handles_macd_env import *
+from environments.mta_env import *
 from environments.custom_networks import CustomNetwork
 
 num_samples = 10
@@ -95,8 +95,7 @@ new_model_config_macd_norm_d3 = {
         }
     ,
     "state": {
-        "klass": "SimplePosition",
-        "parameters": {"reward_type": "x"}
+        "klass": "SimplePosition"
     },
     "feature_vector_dim": 12,
     "feature_vector": [
@@ -128,7 +127,7 @@ in_out_model = {
         }
     ,
     "state": {
-        "klass": "Irrelavant right now",
+        "klass": "InoutPosition",
         "parameters": {"reward_type": "x"}
     },
     "feature_vector_dim": 12,
@@ -151,7 +150,7 @@ in_out_model = {
 current_time = time.strftime("%Y%m%d-%H%M%S")
 log_dir = f"./tensorboard_logs/new_model_config_macd_norm_d3{current_time}"
 
-env = MTAEnv(in_out_model, profile_data, reward_model='x')
+env = MTAEnv(new_model_config_macd_norm_d3, profile_data, reward_model='x')
 
 
 
