@@ -26,9 +26,16 @@ class DataStreamer:
         sample_stats = self.data_link.get_stats()
         self.preprocessor.reset_state(sample_stats)
         for tick in self.data_link.serve_next_tick():
-            fv = self.preprocessor.next_tick(tick)
-            if not None in fv:
-                self.external_tool.feature_vector(fv, tick)
+            if tick:
+                fv = self.preprocessor.next_tick(tick)
+                if not None in fv:
+                    send_sample = self.external_tool.feature_vector(fv, tick)
+                    if send_sample:
+                        s, i = self.get_present_sample()
+                        self.external_tool.present_sample(s,i)
+            else:
+                self.external_tool.reset_next_sample()
+                self.preprocessor.reset_state(sample_stats)
 
     def reset(self):
         self.data_link.reset_index()
@@ -51,3 +58,7 @@ class DataStreamer:
     def connect_tool(self, external_tool: ExternalTool) -> None:
         self.external_tool = external_tool
 
+    def get_present_sample(self) -> Tuple[dict, int]:
+        if not isinstance(self.data_link, SampleTools):
+            raise ValueError("Data link in data streamer is not SampleTools")
+        return self.data_link.get_present_sample_and_index()

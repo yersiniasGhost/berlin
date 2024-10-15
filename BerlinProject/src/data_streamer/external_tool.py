@@ -8,3 +8,11 @@ class ExternalTool(ABC):
     @abstractmethod
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         raise NotImplemented
+
+    # Not required to be implemented
+    def present_sample(self, sample: dict, index: int):
+        pass
+
+    # Not required to be implemented
+    def reset_next_sample(self):
+        pass

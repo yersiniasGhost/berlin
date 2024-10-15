@@ -1,11 +1,9 @@
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Tuple, Any, Iterable
 from bson import ObjectId
 from config.types import PYMONGO_ID, SAMPLE_COLLECTION
 from data_preprocessor.data_preprocessor import TickData
-from models.profile import Profile
 from pymongo.collection import Collection
 from mongo_tools.mongo import Mongo
-import json
 from pymongo import InsertOne
 import logging
 
@@ -142,14 +140,20 @@ class SampleTools:
             all_samples.extend(samples.samples)
         return SampleTools(all_samples)
 
-    def serve_next_tick(self):
+    def serve_next_tick(self) -> Iterable[TickData]:
         for sample in self.samples:
+            self.tick_index = 0
             data = sample['data']
             for tick in data:
                 yield tick
+                self.tick_index += 1
+            yield None  # Send back a None if at the end of the sample
+
+
+    def get_present_sample_and_index(self) -> Tuple[dict, int]:
+        return self.samples[self.sample_index], self.tick_index
 
     # Returns one specific sample given a pymongo id
-
     @classmethod
     def get_specific_sample(cls, sample_id: PYMONGO_ID) -> Optional["SampleTools"]:
         """

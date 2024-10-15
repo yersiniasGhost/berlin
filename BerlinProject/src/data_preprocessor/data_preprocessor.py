@@ -88,6 +88,20 @@ class DataPreprocessor:
             else:
                 return [getattr(self.tick, name)]
 
+        # TODO: Add history
+        elif name == "SMADiff":
+            period_fast = feature['parameters']['fast_period']
+            period_slow = feature['parameters']['slow_period']
+            price_data = self.get_price_array('close')
+            if len(price_data) >= period_slow:
+                sma_slow = calculate_sma_tick(period_slow, price_data)
+                sma_fast = calculate_sma_tick(period_fast, price_data)
+                d = sma_fast[-1] - sma_slow[-1]
+                return [sma_fast[-1] - sma_slow[-1]]
+            else:
+                return [None]
+
+        # TODO:  Add history
         elif name == 'SMA':
             period = feature['parameters']['sma']
             price_data = self.get_price_array('close')

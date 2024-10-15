@@ -1,10 +1,9 @@
 from typing import List, Dict, Any
-
 import numpy as np
 from bson import ObjectId
 from pymongo import MongoClient
 
-from .profile import Profile
+from models.profile import Profile
 
 
 class CandleDataGenerator:
@@ -17,21 +16,18 @@ class CandleDataGenerator:
         for _ in range(number_of_profiles):
             b = start_value
             profile_data = []
-            for idx, section in enumerate(self.profile.get_sections()):
-                if "trend" not in section:
-                    raise ValueError("Section doesn't have a trend")
-
-                lf_var = section['length_fraction'][1]
-                section_length = section['length_fraction'][0] + np.random.uniform(-lf_var, lf_var)
+            for idx, section in enumerate(self.profile.definition):
+                lf_var = section.length_fraction[1]
+                section_length = section.length_fraction[0] + np.random.uniform(-lf_var, lf_var)
                 number_of_candles = int(length * section_length)
-
-                if idx == self.profile.number_of_sections() - 1:
+                number_of_sections = len(self.profile.definition)
+                if idx == number_of_sections - 1:
                     number_of_candles = length - len(profile_data)
 
-                m_delta = section['trend'][1]
-                delta = section['trend'][0] + np.random.uniform(-m_delta, m_delta)
+                m_delta = section.trend[1]
+                delta = section.trend[0] + np.random.uniform(-m_delta, m_delta)
                 m = delta / (number_of_candles - 1)
-                price_variability = section["price_variation"]
+                price_variability = section.price_variation
 
                 for n in range(number_of_candles):
                     if n >= number_of_candles:
@@ -67,6 +63,7 @@ class CandleDataGenerator:
         return self.data_profiles
 
     def save_to_database(self):
+        raise ValueError("THIS SHOULD NOT BE USED... TODO: delete this methos and save from ProfileTools")
         client = MongoClient('mongodb://localhost:27017/')
         db = client['MTA_devel']
         collection = db['Samples']

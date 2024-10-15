@@ -8,10 +8,19 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v):
+    def validateold(cls, v):
         if not isinstance(v, ObjectId):
             raise TypeError('ObjectId required')
         return v
+
+    @classmethod
+    def validate(cls, v, field=None, config=None):
+        if isinstance(v, ObjectId):
+            return v
+        elif isinstance(v, str) and ObjectId.is_valid(v):
+            return ObjectId(v)
+        else:
+            raise ValueError("Invalid ObjectId")
 
     @classmethod
     def __modify_schema__(cls, field_schema):
