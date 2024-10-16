@@ -12,7 +12,7 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def append_state_to_fv(self, fv: np.array) -> np.array:
+    def append_state_to_fv(self, fv: np.array, tick: TickData) -> np.array:
         ...
 
     @abstractmethod

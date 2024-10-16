@@ -1,10 +1,11 @@
 import numpy as np
 from typing import List
-from .state import State
+from environments.state import State
 from environments.tick_data import TickData
 from config import BUY, SELL, ACTION
 
 HOLD_TIME_LIMIT = 20
+
 
 class SimplePosition(State):
     def __init__(self, cash_position: float = 100000):
@@ -87,8 +88,8 @@ class SimplePosition(State):
 
     def make_trade(self, action: ACTION, tick: TickData):
         if action == BUY:
-            self.position += self.trade_size
-            self.cash -= self.trade_size * tick.close
+            self.position += self.lot_size
+            self.cash -= self.lot_size * tick.close
         elif action == SELL:
-            self.position -= self.trade_size
-            self.cash += self.trade_size * tick.close
+            self.position -= self.lot_size
+            self.cash += self.lot_size * tick.close
