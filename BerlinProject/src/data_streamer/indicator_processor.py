@@ -1,8 +1,9 @@
 from typing import List
 import numpy as np
 from environments.tick_data import TickData
+from features.indicators import sma_trigger_crossover
 from models import IndicatorConfiguration
-from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH
+from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
 from features.candle_patterns import CandlePatterns
 
 
@@ -29,6 +30,9 @@ class IndicatorProcessor:
 
             # Pattern matching is using Eamonn's DTW
             elif indicator.type == PATTERN_MATCH:
+                pass
+
+            elif indicator.type == INDICATOR_TYPE:
                 pass
 
         return np.array(output)
