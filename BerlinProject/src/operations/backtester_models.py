@@ -1,8 +1,7 @@
-from typing import List, Optional, Union
+from typing import List, Union
 import random
-import numpy as np
 from src.config.types import AgentActions
-from src.data_streamer.tick_data import TickData
+from environments.tick_data import TickData
 
 
 class Backtester:

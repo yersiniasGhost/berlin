@@ -1,4 +1,4 @@
-from data_streamer  import TickData
+from environments.tick_data import TickData
 
 
 def reward_model_x(position: int, action: str, tick: TickData, buy_price:float) -> float:

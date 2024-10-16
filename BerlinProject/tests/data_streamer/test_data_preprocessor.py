@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-from data_preprocessor.data_preprocessor import DataPreprocessor, TickData
+from data_streamer.data_preprocessor import DataPreprocessor
+from environments.tick_data import TickData
+
 import talib
 
 

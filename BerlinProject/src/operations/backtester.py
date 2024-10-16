@@ -1,9 +1,8 @@
-from typing import List, Optional
-import random
+from typing import Optional
 
-from src.data_streamer.tick_data import TickData
+from environments.tick_data import TickData
 from environments.state import State
-from config import RANDOM_TRADER, MODEL_AGENT, BUY, SELL, HOLD, ACTION
+from config import ACTION
 
 
 class Backtester:

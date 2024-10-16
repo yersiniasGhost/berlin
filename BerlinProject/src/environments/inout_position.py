@@ -2,7 +2,7 @@ from typing import Optional
 import numpy as np
 from typing import List
 from .state import State
-from data_streamer import TickData
+from environments.tick_data import TickData
 from config import IN, OUT, ACTION
 
 HOLD_TIME_LIMIT = 20

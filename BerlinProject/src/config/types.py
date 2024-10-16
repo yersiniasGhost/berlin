@@ -20,3 +20,8 @@ IN = "In"
 OUT = "Out"
 HOLD = 'Hold'
 ACTION = str
+
+PATTERN_MATCH = "Pattern"
+CANDLE_STICK_PATTERN = "CDL"
+INDICATOR_TYPE = "IND"
+

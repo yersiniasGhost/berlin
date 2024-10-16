@@ -1,7 +1,7 @@
 import numpy as np
 from typing import List
 from .state import State
-from data_streamer import TickData
+from environments.tick_data import TickData
 from config import BUY, SELL, ACTION
 
 HOLD_TIME_LIMIT = 20

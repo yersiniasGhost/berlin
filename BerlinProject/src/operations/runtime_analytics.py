@@ -1,13 +1,12 @@
 from typing import List, Optional, Union
 import numpy as np
 from stable_baselines3 import PPO
-from environments.simple_position import SimplePosition
 
-from environments.inout_position import InoutPosition, IN, OUT
-from src.models.agent_model import AgentModel
-from src.data_streamer import ExternalTool, TickData
+from environments.inout_position import IN, OUT
+from data_streamer.external_tool import ExternalTool
 from operations import Backtester
 from environments.get_state_class import get_state_class
+from environments.tick_data import TickData
 
 
 # This is the object that will contain a group of pretrained models and be associated with a DataStremer

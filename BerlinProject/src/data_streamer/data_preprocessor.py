@@ -1,18 +1,7 @@
-from typing import Optional, List, Dict, Any, Tuple
-from dataclasses import dataclass
-import json
+from typing import Optional, List, Dict
+from environments.tick_data import TickData
 import numpy as np
 from features.features import calculate_sma_tick, calculate_macd_tick
-
-
-# next tick
-@dataclass
-class TickData:
-    close: float
-    open: float
-    high: float
-    low: float
-    volume: Optional[int] = None
 
 
 class DataPreprocessor:
@@ -39,7 +28,7 @@ class DataPreprocessor:
         output_vector = []
         for feature in self.feature_vector:
             feature_data = self._calculate(feature)
-            output_vector =output_vector+ feature_data
+            output_vector = output_vector + feature_data
 
         return output_vector
 

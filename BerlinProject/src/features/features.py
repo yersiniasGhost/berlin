@@ -8,7 +8,6 @@ def calculate_sma_tick(period: int, data: np.array, history: int = 0) -> float:
     return sma[-(history + 1):]
 
 
-
 def calculate_macd_tick(data: np.array, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9,
                         history: int = 0) -> tuple:
     window_size = slow_period + signal_period + history

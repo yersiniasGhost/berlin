@@ -3,31 +3,35 @@
 skinparam packageStyle rectangle
 top to bottom direction
 
-cloud "Financial Institution" {
-}
 
-database MTADatabase  {
-    artifact SampleData
-}
 
 package DataStreamer  {
-    NextTick - [DataPreprocessor]
     [SampleTools]
     [InstitutionLink]
     component DataPreprocessor {
     }
-    
+    component IndicatorProcessor {
+    }
+    NextTick - [DataPreprocessor]
+    NextTick - [IndicatorProcessor]
+
     [DataStream]
     DataStream *== [DataPreprocessor]
+    DataStream *== [IndicatorProcessor]
     DataStream *== [DataLink]
 
     SampleTools -[hidden]-> [DataPreprocessor]
+    SampleTools -[hidden]-> [IndicatorProcessor]
     InstitutionLink -[hidden]-> [DataPreprocessor]
 
     [DataLink]
     [InstitutionLink] -up-|> [DataLink]
     [SampleTools] -up-|> [DataLink]
     [DataLink] -> NextTick
+    cloud "Financial Institution" {
+    }
+    "Financial Institution" --> InstitutionLink
+
 }
 
 
@@ -37,11 +41,12 @@ note right of DataStreamer
     The external tool is "connected" to the data streamer
 end note
 
-"Financial Institution" --> InstitutionLink
-SampleTools <--> MTADatabase
 
 artifact "Feature Vector" as fv
-DataStream -down-> fv : "run() to serve_feature_vector"
+DataStream -down-> fv : "run() to serve_feature_vector and indicator_vector"
+
+artifact "Indicator Vector" as iv
+DataStream -down-> iv
 
 component "External Tool"
 
@@ -54,17 +59,19 @@ package "Runtime Analytics" {
     [Agent Aggregator]
 }
 package Backtest
+package UserInterface
 
-
-"Runtime Analytics" -up-|> [External Tool]
-"Model Trainer" -up-|> [External Tool]
-ServeNextVector - [External Tool]
+"Runtime Analytics" -up-|> "External Tool"
+"Model Trainer" -up-|> "External Tool"
+ServeNextVector - "External Tool"
+ServeNextIndicator -down- "External Tool"
 fv -down-> ServeNextVector
+iv -down-> ServeNextIndicator
 
 "Runtime Analytics" -down-> Backtest
+"Runtime Analytics" -down-> UserInterface
 
 database ModelDatabase {
-    artifact ModelParameters
 }
 [RL Learner] -down-> ModelDatabase
 ModelDatabase -up-> [Agent Aggregator]

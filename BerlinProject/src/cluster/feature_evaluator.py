@@ -2,7 +2,8 @@
 # resulting reward.  This is aggregated into a set of points in FV + R dimensional space.
 import numpy as np
 
-from data_streamer import TickData, ExternalTool
+from data_streamer import ExternalTool
+from environments.tick_data import TickData
 
 
 class FeatureEvaluator(ExternalTool):

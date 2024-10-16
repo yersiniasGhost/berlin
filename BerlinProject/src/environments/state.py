@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any
 import numpy as np
-from data_streamer import TickData
+from .tick_data import TickData
 
 
 class State(ABC):

@@ -1,9 +1,7 @@
 import unittest
-import json
-from pathlib import Path
-import numpy as np
 
-from data_preprocessor.data_preprocessor import TickData
+from environments.tick_data import TickData
+
 from mongo_tools.sample_tools import SampleTools
 
 

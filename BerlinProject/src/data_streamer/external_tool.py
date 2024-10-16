@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-
-from data_streamer import TickData
+from environments.tick_data import TickData
 
 
 class ExternalTool(ABC):
