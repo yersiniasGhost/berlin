@@ -6,6 +6,8 @@ from data_streamer.data_streamer import DataStreamer
 from environments.simple_position import SimplePosition
 from environments.inout_position import InoutPosition, IN, OUT
 from environments.get_state_class import get_state_class
+from config import BUY, SELL, HOLD
+
 
 # Figure out how many episodes are in an epoch. Maybe for each full 390 days it goes through or Trade it makes and gets
 # out of is an episode. batches of 1000. update the average or total reward and keep going?
@@ -95,8 +97,11 @@ class MTAEnv(Env):
         # old_position = self.position
         # old_buy_price = self.buy_price
         # old_close = self.tick.close if self.tick else None
-
         trade_action = self.get_trade_action(action)
+
+        # if not self.state.is_action_valid(trade_action):
+        #     # If the action is invalid, convert it to HOLD
+        #     trade_action = HOLD
         # Calculate reward using the selected reward model
         step_reward = self.state.update_and_calculate_reward(trade_action, self.tick)
 #        step_reward = self.reward_model(self.position, action, self.tick, self.buy_price)
@@ -114,14 +119,15 @@ class MTAEnv(Env):
             "position": self.state.position,
             "buy_price": self.state.buy_price,
             "episode_reward": self.episode_reward,
-            "step_count": self.step_count
+            "step_count": self.step_count,
+            "action": trade_action
         }
 
 
         #
         # Print step information
         print(f"{self.episode_count}\t{self.step_count}\t{self.episode_reward:.3f}\t{step_reward:.4f}\t{trade_action}")
-        # print(f"Step Reward: {step_reward}")
+        print(f"info dump: {info}")
         # print(f"Episode Reward: {self.episode_reward}")
         # print("-------------------")
 

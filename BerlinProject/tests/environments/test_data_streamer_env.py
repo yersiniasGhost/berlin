@@ -1,9 +1,9 @@
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 import time
 from environments.mta_env import *
 from environments.custom_networks import CustomNetwork
 
-num_samples = 10
+num_samples = 2
 
 
 # Defining models
@@ -12,6 +12,18 @@ profile_data = [{
     "profile_id": "6701cbcfbed728701fa3b767",
     "number": num_samples
 }]
+
+
+prof_data_2 = [
+  {
+    "profile_id": "670d98445c9ef9a75c7281d9",
+    "number": num_samples
+  },
+  {
+    "profile_id": "670d98f95c9ef9a75c7281de",
+    "number": num_samples
+  }
+]
 
 model_config_norm = {"normalization": "min_max",
 
@@ -119,7 +131,7 @@ in_out_model = {
     "normalization": "min_max",
     "action_space":
         {
-            "type": "NormalBox",
+            "type": "Discrete",
             "actions":
                 {"1": "In",
                  "0": "Out"
@@ -146,11 +158,11 @@ in_out_model = {
         }
     ]
 }
-
+#
 current_time = time.strftime("%Y%m%d-%H%M%S")
-log_dir = f"./tensorboard_logs/new_model_config_macd_norm_d3{current_time}"
+log_dir = f"./tensorboard_logs/in_out_model{current_time}"
 
-env = MTAEnv(new_model_config_macd_norm_d3, profile_data, reward_model='x')
+env = MTAEnv(in_out_model, prof_data_2, reward_model='x')
 
 
 
@@ -158,7 +170,7 @@ env = MTAEnv(new_model_config_macd_norm_d3, profile_data, reward_model='x')
 policy_kwargs = dict(
     features_extractor_class=CustomNetwork,
     features_extractor_kwargs=dict(features_dim=3),
-    net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+    net_arch=[dict(pi=[32, 32, 32], vf=[32, 32, 32])]
 )
 
 
@@ -172,10 +184,34 @@ print(model.policy)
 for name, param in model.policy.named_parameters():
     print(name, param.shape)
 
-num_episodes = 2000
+num_episodes = 100
 total_timesteps = num_episodes * 390 * num_samples
 
 model.learn(total_timesteps=total_timesteps)
 
-model.save('/home/warnd/devel/berlin/BerlinProject/labs/saved_models/macd_model2')
+model.save('/home/warnd/devel/berlin/BerlinProject/labs/saved_models/in_out_model')
+
+
+
+# current_time = time.strftime("%Y%m%d-%H%M%S")
+# log_dir = f"./tensorboard_logs/new_model_config_macd_norm_d3{current_time}_DQN"
+#
+# env = MTAEnv(new_model_config_macd_norm_d3, profile_data, reward_model='x')
+#
+#
+# # Create and train the PPO model
+# model = DQN('MlpPolicy', env, verbose=1, tensorboard_log=log_dir,
+#              device='cuda') # , policy_kwargs=policy_kwargs,)
+# print(model.policy)
+#
+# # If you want to see the specific parameters:
+# for name, param in model.policy.named_parameters():
+#     print(name, param.shape)
+#
+# num_episodes = 100
+# total_timesteps = num_episodes * 390 * num_samples
+#
+# model.learn(total_timesteps=total_timesteps)
+#
+# model.save('/home/warnd/devel/berlin/BerlinProject/labs/saved_models/macd_model2')
 
