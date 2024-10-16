@@ -31,13 +31,19 @@ class DataStreamer:
         for tick in self.data_link.serve_next_tick():
             if tick:
                 fv = self.preprocessor.next_tick(tick)
-                self.indicators.calculate_vector(tick, self.preprocessor.history)
+                indicator_results = {}
+                if self.indicators:
+                    indicator_results = self.indicators.next_tick(tick, self.preprocessor.history)
+
 
                 if None not in fv:
                     send_sample = self.external_tool.feature_vector(fv, tick)
                     if send_sample:
                         s, i = self.get_present_sample()
                         self.external_tool.present_sample(s, i)
+                    if indicator_results:
+                        self.external_tool.indicator_vector(indicator_results, tick)
+
             else:
                 self.external_tool.reset_next_sample()
                 self.preprocessor.reset_state(sample_stats)

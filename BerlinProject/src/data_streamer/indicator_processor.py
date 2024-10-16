@@ -22,10 +22,9 @@ class IndicatorProcessor:
 
         return metric
 
-
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
-    def calculate_vector(self, tick: TickData, history: List[TickData]) -> Dict[str, float]:
+    def next_tick(self, tick: TickData, history: List[TickData]) -> Dict[str, float]:
 
         output = {}
         for indicator in self.config.indicators:
@@ -50,5 +49,3 @@ class IndicatorProcessor:
                 pass
 
         return output
-
-
