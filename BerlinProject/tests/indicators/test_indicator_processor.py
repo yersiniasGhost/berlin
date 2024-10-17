@@ -25,7 +25,7 @@ class TestIndicatorProcessor(unittest.TestCase):
         TESTS_DATA_DIR = os.path.join(os.path.dirname(__file__), '../test_data')
         data.to_csv(f'{TESTS_DATA_DIR}/btc.csv', index=False)
 
-    def test_data(self):
+    def test_candles(self):
         TESTS_DATA_DIR = os.path.join(os.path.dirname(__file__), '../test_data')
 
         data = pd.read_csv(f'{TESTS_DATA_DIR}/btc.csv')
@@ -52,9 +52,10 @@ class TestIndicatorProcessor(unittest.TestCase):
             TickData(row['Close'], row['Open'], row['High'], row['Low'])
             for _, row in data.iterrows()
         ]
-        result = processor.calculate_vector(tick, history)
+        result = processor.next_tick(tick, history)
         self.assertAlmostEqual(0.82, result['Hammer pattern'])
         self.assertAlmostEqual(0.925, result['Hammer'])
+        self.assertAlmostEqual(-0.658333333, result['Dark Cloud Cover'])
 
 
 
@@ -84,19 +85,9 @@ class TestIndicatorProcessor(unittest.TestCase):
             lows.append(history_tick.low)
             closes.append(history_tick.close)
 
-        result = processor.calculate_vector(tick, history)
+        result = processor.next_tick(tick, history)
         import talib
         import numpy as np
         hammer = talib.CDLHAMMER(np.array(opens), np.array(highs), np.array(lows), np.array(closes))
         print(hammer)
         # test result
-
-
-
-    # def test_model_trainer(self):
-    #     st = SampleTools.get_specific_sample("6701d819886b1284b27f3d6c")
-    #     bt = Backtester()
-    #
-    #     for tick in st.serve_next_tick():
-    #         bt.agent_actions([], tick)
-    #
