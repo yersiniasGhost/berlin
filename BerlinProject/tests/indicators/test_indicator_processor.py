@@ -25,6 +25,10 @@ class TestIndicatorProcessor(unittest.TestCase):
         TESTS_DATA_DIR = os.path.join(os.path.dirname(__file__), '../test_data')
         data.to_csv(f'{TESTS_DATA_DIR}/btc.csv', index=False)
 
+    def test_indicator_sma_cross(self):
+        pass
+
+
     def test_candles(self):
         TESTS_DATA_DIR = os.path.join(os.path.dirname(__file__), '../test_data')
 
