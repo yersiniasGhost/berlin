@@ -1,3 +1,4 @@
+from typing import Dict
 from abc import ABC, abstractmethod
 import numpy as np
 from environments.tick_data import TickData
@@ -6,6 +7,9 @@ from environments.tick_data import TickData
 class ExternalTool(ABC):
     @abstractmethod
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
+        raise NotImplemented
+
+    def indicator_vector(self, indicators: Dict[str, float], tick: TickData) -> None:
         raise NotImplemented
 
     # Not required to be implemented

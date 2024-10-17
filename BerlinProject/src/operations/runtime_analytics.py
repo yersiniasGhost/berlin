@@ -33,7 +33,8 @@ class RuntimeAnalytics(ExternalTool):
         self.backtest.state = self.state
 
     # TODO: REFACTORING See the Environment for reuse
-    def _handle_none_values(self, feature_vector) -> np.array:
+    @staticmethod
+    def _handle_none_values(feature_vector: np.array) -> np.array:
         output = []
         for f in feature_vector:
             if f is None:
@@ -41,7 +42,6 @@ class RuntimeAnalytics(ExternalTool):
             else:
                 output.append(f)
         return np.array(output)
-
 
     # TODO Refactor into the State object
     def get_trade_action(self, action: Union[float, np.array]) -> str:
@@ -62,7 +62,6 @@ class RuntimeAnalytics(ExternalTool):
         observations = self.state.append_state_to_fv(handle_fv, tick)
         actions, _ = self.model.predict(observations, deterministic=True)
         trade_action = self.get_trade_action(actions)
-        print(handle_fv, trade_action)
         # convert actions to "BUY" "SELL "HOLD"
         if self.backtest:
             self.backtest.agent_actions(trade_action, tick)
