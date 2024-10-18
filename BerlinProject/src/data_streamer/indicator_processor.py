@@ -12,8 +12,8 @@ class IndicatorProcessor:
         self.config: IndicatorConfiguration = configuration
 
     @staticmethod
-    def calculate_time_based_metric(talib_data: np.ndarray, lookback: int) -> float:
-        search = talib_data[-lookback-1:]
+    def calculate_time_based_metric(indicator_data: np.ndarray, lookback: int) -> float:
+        search = indicator_data[-lookback - 1:]
         non_zero_indices = np.nonzero(search)[0]
         if non_zero_indices.size == 0:
             return 0.0
