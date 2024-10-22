@@ -9,6 +9,7 @@ class ExternalTool(ABC):
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         raise NotImplemented
 
+    @abstractmethod
     def indicator_vector(self, indicators: Dict[str, float], tick: TickData) -> None:
         raise NotImplemented
 

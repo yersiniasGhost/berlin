@@ -1,3 +1,4 @@
+from .feature_vector_calculator import FeatureVectorCalculator
 from typing import List, Dict, Optional, Tuple
 from mongo_tools.sample_tools import SampleTools
 from .data_preprocessor import DataPreprocessor
@@ -10,13 +11,18 @@ class DataStreamer:
     def __init__(self, data_configuration: List[Dict], model_configuration: dict,
                  indicator_configuration: Optional[IndicatorConfiguration] = None):
         self.preprocessor = DataPreprocessor(model_configuration)
+        self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
         self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
         self.data_link: Optional[SampleTools] = None
         self.configure_data(data_configuration)
         self.external_tool: Optional[ExternalTool] = None
 
     def configure_data(self, data_config: List[Dict]) -> None:
-        self.data_link = SampleTools.get_samples2(data_config[0])
+        # TODO finish testing:
+        if data_config.get('type', None) == "TickHistory":
+            self.data_link = TickHistoryTools.get_history_data()
+        else:
+            self.data_link = SampleTools.get_samples2(data_config[0])
 
     def run(self):
         if self.data_link is None:
@@ -27,14 +33,15 @@ class DataStreamer:
         # Set the sample state on the data preprocessor so it can
         # normalize the data.
         sample_stats = self.data_link.get_stats()
+
         self.preprocessor.reset_state(sample_stats)
         for tick in self.data_link.serve_next_tick():
             if tick:
-                fv = self.preprocessor.next_tick(tick)
+                self.preprocessor.next_tick(tick)
+                fv = self.feature_vector_calculator.next_tick(self.preprocessor)
                 indicator_results = {}
                 if self.indicators:
-                    indicator_results = self.indicators.next_tick(tick, self.preprocessor.history)
-
+                    indicator_results = self.indicators.next_tick(self.preprocessor)
 
                 if None not in fv:
                     send_sample = self.external_tool.feature_vector(fv, tick)
@@ -53,6 +60,8 @@ class DataStreamer:
         stats = self.data_link.get_stats()
         self.preprocessor.reset_state(stats)
 
+
+    # Used for training of the RL Agents
     def get_next(self):
         if self.data_link is None:
             raise ValueError("Data link is not initialized")
@@ -61,7 +70,8 @@ class DataStreamer:
             tick = self.data_link.get_next2()
             if tick is None:
                 return [None], None
-            fv = self.preprocessor.next_tick(tick)
+            self.preprocessor.next_tick(tick)
+            fv = self.feature_vector_calculator.next_tick(self.preprocessor)
             bad_fv = None in fv
 
         return fv, tick

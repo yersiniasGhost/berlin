@@ -1,9 +1,13 @@
 from typing import List, Dict
 import numpy as np
 from environments.tick_data import TickData
+from .data_preprocessor import DataPreprocessor
 from models import IndicatorConfiguration
 from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
 from features.candle_patterns import CandlePatterns
+from models import IndicatorDefinition
+from environments.tick_data import TickData
+from src.features.indicators import *
 
 
 class IndicatorProcessor:
@@ -24,7 +28,8 @@ class IndicatorProcessor:
 
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
-    def next_tick(self, tick: TickData, history: List[TickData]) -> Dict[str, float]:
+    def next_tick(self, data_preprocessor: DataPreprocessor) -> Dict[str, float]:
+        tick, history = data_preprocessor.get_data()  # get non-normalized data
 
         output = {}
         for indicator in self.config.indicators:
@@ -44,8 +49,7 @@ class IndicatorProcessor:
                 output[indicator.name] = metric
 
             elif indicator.type == INDICATOR_TYPE:
-                indicator_calculator = IndicatorCalculator()
-                result = indicator_calculator.process_tick_data(tick, history, indicator)
+                result = self.calculate_indicator(tick, history, indicator)
                 metric = self.calculate_time_based_metric(result[indicator.name], look_back)
 
                 output[indicator.name] = metric
@@ -55,3 +59,17 @@ class IndicatorProcessor:
                 pass
 
         return output
+
+    @staticmethod
+    def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
+        if indicator.name == 'sma_crossover':
+            return {indicator['name']: sma_crossover(history, indicator['parameters'])}
+
+        elif indicator.name == 'macd_histogram_crossover':
+            return {indicator['name']: macd_histogram_crossover(history, indicator['parameters'])}
+
+        elif indicator.name == 'bol_bands_lower_band_bounce':
+            return {indicator['name']: sma_crossover(history, indicator['parameters'])}
+
+        else:
+            raise ValueError(f"Unknown indicator: {indicator['name']}")
