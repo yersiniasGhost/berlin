@@ -28,7 +28,7 @@ class TestSMATriggerCrossover(unittest.TestCase):
             TickData(close=90.0, open=95.0, high=97.0, low=94.0),
             TickData(close=125.0, open=101.0, high=102.0, low=94.0),
         ]
-        result = sma_crossover(tick_data, parameters, lookback=10)
+        result = sma_crossover(tick_data, parameters)
         expected = np.array([0, 0, 0, 1, 0, 0, 0, 0, 1])
         np.testing.assert_array_equal(result, expected)
 
@@ -104,4 +104,4 @@ class TestSMATriggerCrossover(unittest.TestCase):
         ]
 
         sap = bol_bands_lower_band_bounce(history, parameters)
-        x
+

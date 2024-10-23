@@ -4,6 +4,7 @@ from typing import Optional
 
 import numpy as np
 from data_streamer.data_preprocessor import DataPreprocessor
+from data_streamer.feature_vector_calculator import FeatureVectorCalculator
 from environments.tick_data import TickData
 
 import talib
@@ -22,9 +23,10 @@ class TestDataPreprocessor(unittest.TestCase):
             ]
         }
         self.preprocessor = DataPreprocessor(self.model_config)
+        self.feature_vector_calculator = FeatureVectorCalculator(self.model_config)
 
     def test_initialization(self):
-        self.assertEqual(self.preprocessor.feature_vector, self.model_config["feature_vector"])
+        self.assertEqual(self.feature_vector_calculator.feature_vector, self.model_config["feature_vector"])
         self.assertEqual(len(self.preprocessor.history), 0)
         self.assertIsNone(self.preprocessor.tick)
 
@@ -47,16 +49,19 @@ class TestDataPreprocessor(unittest.TestCase):
             TickData(close=11.0, open=10.0, high=12.0, low=9.0),
             TickData(close=12.0, open=11.0, high=13.0, low=10.0)
         ]
-        for tick in ticks:
-            self.preprocessor.next_tick(tick)
 
-        close_array = self.preprocessor.get_price_array('close')
+        self.feature_vector_calculator.tick = ticks[-1]  # Current tick
+        self.feature_vector_calculator.history = ticks  # History of ticks
+
+        # Test get_price_array
+        close_array = self.feature_vector_calculator.get_price_array('close')
         expected_close = np.array([10.0, 11.0, 12.0])
         np.testing.assert_array_equal(close_array, expected_close)
 
     def test_next_tick_simple_feature(self):
         tick = TickData(close=10.0, open=9.0, high=11.0, low=8.0)
-        output = self.preprocessor.next_tick(tick)
+        self.preprocessor.next_tick(tick)
+        output = self.feature_vector_calculator.next_tick(self.preprocessor)
         self.assertEqual(output[0], 10.0)  # Check if close price is correctly returned
 
     def test_next_tick_sma_feature(self):

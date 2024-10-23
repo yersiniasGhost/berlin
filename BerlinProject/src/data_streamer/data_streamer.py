@@ -1,3 +1,4 @@
+from mongo_tools.tick_history_tools import TickHistoryTools
 from .feature_vector_calculator import FeatureVectorCalculator
 from typing import List, Dict, Optional, Tuple
 from mongo_tools.sample_tools import SampleTools
@@ -15,7 +16,7 @@ class DataStreamer:
         self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
         self.data_link: Optional[SampleTools] = None
         self.configure_data(data_configuration)
-        self.external_tool: Optional[ExternalTool] = None
+        self.external_tool: List[ExternalTool] = []
 
     def configure_data(self, data_config: List[Dict]) -> None:
         # TODO finish testing:
@@ -35,6 +36,7 @@ class DataStreamer:
         sample_stats = self.data_link.get_stats()
 
         self.preprocessor.reset_state(sample_stats)
+        index=0
         for tick in self.data_link.serve_next_tick():
             if tick:
                 self.preprocessor.next_tick(tick)
@@ -44,15 +46,20 @@ class DataStreamer:
                     indicator_results = self.indicators.next_tick(self.preprocessor)
 
                 if None not in fv:
-                    send_sample = self.external_tool.feature_vector(fv, tick)
-                    if send_sample:
-                        s, i = self.get_present_sample()
-                        self.external_tool.present_sample(s, i)
-                    if indicator_results:
-                        self.external_tool.indicator_vector(indicator_results, tick)
+                    for et in self.external_tool:
+                        et.feature_vector(fv, tick)
 
+                    s, i = self.get_present_sample()
+                    for et in self.external_tool:
+                        et.present_sample(s, i)
+                    if indicator_results:
+                        for et in self.external_tool:
+                            et.indicator_vector(indicator_results, tick, index)
+                index += 1
             else:
-                self.external_tool.reset_next_sample()
+                index = 0
+                for et in self.external_tool:
+                    et.reset_next_sample()
                 self.preprocessor.reset_state(sample_stats)
 
     def reset(self):
@@ -77,7 +84,8 @@ class DataStreamer:
         return fv, tick
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
-        self.external_tool = external_tool
+        self.external_tool.append(external_tool)
+
 
     def get_present_sample(self) -> Tuple[dict, int]:
         if not isinstance(self.data_link, SampleTools):

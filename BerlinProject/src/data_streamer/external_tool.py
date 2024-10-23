@@ -10,7 +10,7 @@ class ExternalTool(ABC):
         raise NotImplemented
 
     @abstractmethod
-    def indicator_vector(self, indicators: Dict[str, float], tick: TickData) -> None:
+    def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int) -> None:
         raise NotImplemented
 
     # Not required to be implemented

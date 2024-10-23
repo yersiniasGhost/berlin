@@ -109,4 +109,5 @@ class TestSampleTools(unittest.TestCase):
         self.assertGreater(total_ticks, 5, "Should have processed more than 5 ticks in total")
         self.assertIsNone(sample_tools.get_next2(), "Should return None after processing all ticks")
 
+    def test_serve_next_tick(self):
 

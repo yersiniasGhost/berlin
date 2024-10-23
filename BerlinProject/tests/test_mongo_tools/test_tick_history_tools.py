@@ -42,19 +42,18 @@ class TestTickHistory(unittest.TestCase):
 
     def test_multi_day_tick_count_5m(self):
         """Test that a single trading day returns exactly 390 ticks (6.5 hours of trading)"""
-        # Create tools instance for a single day (April 2, 2024)
         tools = TickHistoryTools.get_tools(
             ticker="AMD",
-            start_date=datetime(2024, 10, 2),
-            end_date=datetime(2024, 10, 2),
+            start_date=datetime(2024, 10, 1),
+            end_date=datetime(2024, 10, 4),
             time_increments=5
         )
 
         # Collect all ticks for the day
-        ticks = list(tools.serve_next_tick())
+        ticks = list(tools.serve_next_day())
 
         # Assert we get exactly 390 ticks (one trading day)
-        self.assertEqual(len(ticks), 78,
+        self.assertEqual(len(ticks), 78*4,
                          f"Expected 78*4 ticks for one trading day, got {len(ticks)}")
 
         # Verify each tick has the required data
@@ -63,3 +62,25 @@ class TestTickHistory(unittest.TestCase):
             self.assertIsNotNone(tick.close)
             self.assertIsNotNone(tick.high)
             self.assertIsNotNone(tick.low)
+
+    def test_daily_backtest(self):
+        tools = TickHistoryTools.get_tools(
+            ticker="NVDA",
+            start_date=datetime(2024, 10, 14),
+            end_date=datetime(2024, 10, 18),
+            time_increments=5
+        )
+
+        # Iterate through days
+        while True:
+            day_data = tools.serve_next_day()
+            if not day_data:
+                break
+
+            print(f"\nProcessing day: {day_data.date}")
+            print(f"Number of ticks: {len(day_data.ticks)}")
+
+            # Process each tick in the day
+            for tick in day_data.ticks:
+                # Process tick data
+                print(f"Tick: {tick}")
