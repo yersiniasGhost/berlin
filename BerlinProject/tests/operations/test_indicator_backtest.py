@@ -1,27 +1,12 @@
 import unittest
+from datetime import datetime
 
 from environments.tick_data import TickData
+from mongo_tools.tick_history_tools import TickHistoryTools
 from operations.indicator_backtest import IndicatorBacktest, Trade
 
 
 class TestIndicatorBackTest(unittest.TestCase):
-
-    # def test_sma_backtest(self):
-    #     tools = TickHistoryTools.get_tools(
-    #         ticker="NVDA",
-    #         start_date=datetime(2024, 10, 14),
-    #         end_date=datetime(2024, 10, 18),
-    #         time_increments=5
-    #     )
-    #
-    #     ticks = list(tools.serve_next_tick())
-    #
-    #     parameters = {
-    #         'period': 10,
-    #         'crossover_value': .005
-    #     }
-    #
-    #     indicators= sma_crossover(ticks, parameters)
 
     def test_indicator_vector(self):
         backtest = IndicatorBacktest('CDL')
@@ -64,3 +49,16 @@ class TestIndicatorBackTest(unittest.TestCase):
 
 #  Call multiple indicators and use them with real data from the data history tool.
 #  See if it properly identifies the triggers and buys and sells appropriately.
+
+class TestIndicatorBackTestRealData(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        tools = TickHistoryTools.get_tools(
+            ticker="AAPL",
+            start_date=datetime(2024, 10, 15),
+            end_date=datetime(2024, 10, 20),
+            time_increments=1
+        )
+
+        x

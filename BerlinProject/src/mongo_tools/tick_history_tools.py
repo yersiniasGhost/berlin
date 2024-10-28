@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
 from bson import ObjectId
@@ -13,14 +12,9 @@ from pymongo import InsertOne
 import logging
 
 
-@dataclass
-class DayData:
-    date: datetime
-    ticks: List[TickData]
-
-
 class TickHistoryTools:
-    def __init__(self, history: Optional[TickHistory] = None, start_date: datetime = None, end_date: datetime = None):
+    def __init__(self, history: Optional[TickHistory] = None, start_date: datetime = None,
+                 end_date: datetime = None):
         self.history = history
         self.start_date = start_date
         self.end_date = end_date
@@ -29,6 +23,31 @@ class TickHistoryTools:
         self.current_day_times = None
         self.tick_index = 0
         self.current_month_data = None
+
+    def get_stats(self):
+        stats = {
+            'open': {
+                'min': 99.15896984401,
+                'max': 105.30305284485804,
+                'sd': 1.2180969988222845
+            },
+            'high': {
+                'min': 100.54738434516165,
+                'max': 106.15452024531899,
+                'sd': 1.1511031022346536
+            },
+            'low': {
+                'min': 98.60951743684032,
+                'max': 104.2451994302003,
+                'sd': 1.1300040109322043
+            },
+            'close': {
+                'min': 99.87850316060282,
+                'max': 104.37585767144925,
+                'sd': 1.077354096304813
+            }
+        }
+        return stats
 
     @classmethod
     def get_collection(cls) -> Collection:
@@ -53,65 +72,28 @@ class TickHistoryTools:
 
     @classmethod
     def get_tools(cls, ticker: str, start_date: datetime, end_date: datetime,
-                  time_increments: int = 1) -> 'TickHistoryTools':
+                  time_increments) -> 'TickHistoryTools':
         # Get first month's data
+        # to my future self.. .ha ha. told you you'd be back
         history = cls.get_history_data(ticker, start_date, time_increments)
         return cls(history, start_date, end_date)
 
-    def serve_next_day(self) -> Optional[DayData]:
-        """Iterate through data one day at a time"""
-        if not self.history:
-            return None
-
-        while self.current_date <= self.end_date:
-            # Get data for current month if needed
-            if (not self.history or
-                    self.history.month != self.current_date.month or
-                    self.history.year != self.current_date.year):
-                self.history = self.get_history_data(
-                    self.history.ticker,
-                    self.current_date,
-                    self.history.time_increments
-                )
-                if not self.history:
-                    self.current_date = (self.current_date.replace(day=1) + timedelta(days=32)).replace(day=1)
-                    continue
-
-            # Get data for current day
-            day_str = str(self.current_date.day)
-            if day_str in self.history.data:
-                day_data = self.history.data[day_str]
-                times = sorted([int(t) for t in day_data.keys()])
-
-                # Collect all ticks for the day
-                day_ticks = []
-                for time_str in [str(t) for t in times]:
-                    tick_data = day_data[time_str]
-                    day_ticks.append(TickData(
-                        open=tick_data.open,
-                        high=tick_data.high,
-                        low=tick_data.low,
-                        close=tick_data.close
-                    ))
-
-                # Store current date before incrementing
-                current_date = self.current_date
-                # Move to next day
-                self.current_date += timedelta(days=1)
-
-                # Return the day's data
-                return DayData(date=current_date, ticks=day_ticks)
-
-            # Move to next day if no data found
-            self.current_date += timedelta(days=1)
-
-        return None
-
     def serve_next_tick(self) -> Iterable[TickData]:
-        """Original method that serves all ticks sequentially"""
-        while True:
-            day_data = self.serve_next_day()
-            if not day_data:
-                break
-            for tick in day_data.ticks:
+        """Iterate through tick data chronologically within date range"""
+        if not self.history:
+            return
+
+        current_date = self.start_date
+        while current_date <= self.end_date:
+            day = current_date.day
+
+            day_data = self.history.data[str(day)]
+            times = sorted([int(t) for t in day_data.keys()])
+
+            for time_str in [str(t) for t in times]:
+                tick = day_data[time_str]
                 yield tick
+
+            # Move to next day
+            current_date += timedelta(days=1)
+

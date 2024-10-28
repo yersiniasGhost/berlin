@@ -22,7 +22,7 @@ class IndicatorBacktest(ExternalTool):
         self.position = []
         self.target_profit = 1.5
         self.stop_loss = 0.5
-        self.threshold = 0.9
+        self.threshold = 1.0
         self.name = name
         self.trade: Optional[Trade] = None
         self.trade_history = []
@@ -35,7 +35,7 @@ class IndicatorBacktest(ExternalTool):
         if value is None:
             raise ValueError('You fucked up')
 
-        if value == 1.0:
+        if value >= self.threshold:
             if self.trade is None:
                 self.trade = Trade(size=1, entry_price=tick.close, entry_index=index)
 
@@ -48,7 +48,6 @@ class IndicatorBacktest(ExternalTool):
                 self.trade.exit_index = index
                 self.trade_history.append(self.trade)
                 self.trade = None
-
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         pass

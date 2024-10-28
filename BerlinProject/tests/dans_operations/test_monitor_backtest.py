@@ -1,0 +1,93 @@
+import unittest
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+from bson import ObjectId
+
+from config.types import INDICATOR_TYPE, CANDLE_STICK_PATTERN
+from data_streamer import DataStreamer
+from environments.tick_data import TickData
+from models import IndicatorDefinition, IndicatorConfiguration
+from models.monitor_model import Monitor
+from mongo_tools.tick_history_tools import TickHistoryTools
+from operations.indicator_backtest import IndicatorBacktest, Trade
+from operations.monitor_backtest import MonitorBacktest
+
+
+class TestMonitorBackTest(unittest.TestCase):
+
+    def test_1(self):
+        data_config = {
+            'type': 'TickHistory',
+            'ticker': "NVDA",
+            'start_date': datetime(2024, 10, 23),
+            'end_date': datetime(2024, 10, 24),
+            'time_increment': 1
+
+        }
+
+        engulf_config = {
+            'name': 'martins engulf',
+            'type': CANDLE_STICK_PATTERN,
+            'function': '',
+            'parameters': {
+                'talib': 'CDLENGULFING',
+
+            }
+        }
+        engulf = IndicatorDefinition(**engulf_config)
+
+        indicator_config_sma = {
+            'name': 'my_silly_sma_cross',
+            'function': 'sma_crossover',
+            'type': INDICATOR_TYPE,
+            'parameters': {
+                'period': 10,
+                'crossover_value': .0005,
+                "lookback": 25
+            }
+        }
+        sma = IndicatorDefinition(**indicator_config_sma)
+
+        indicator_config_bol = {
+            'name': 'my_silly_bol_bounce',
+            'function': 'bol_bands_lower_band_bounce',
+            'type': INDICATOR_TYPE,
+            'parameters': {
+                'period': 10,
+                'sd': 2,
+                'candle_bounce_number': 5,
+                'bounce_trigger': .2}
+
+        }
+        bol = IndicatorDefinition(**indicator_config_bol)
+
+        # Fake monitor configuration
+        test_monitor = {
+            "_id": ObjectId("65f2d5555555555555555555"),
+            "user_id": ObjectId("65f2d6666666666666666666"),
+            "name": "My Test Strategy",
+            "description": "A test monitor using SMA and MACD",
+            "threshold": 0.2,
+            "triggers": {
+                "my_silly_sma_cross": 2.0,  # SMA with weight 8
+                "my_silly_bol_bounce": 2.0,
+                "martins engulf": 2.0
+
+            }  # MACD with weight 2
+        }
+
+        model_config = {
+            "preprocess_config": "test_ds",
+        }
+
+        # Create Monitor instance
+        monitor = Monitor(**test_monitor)
+        ic = IndicatorConfiguration(name='my test', indicators=[bol, sma, engulf])
+        bt = MonitorBacktest('My Test Strategy', monitor)
+
+        streamer = DataStreamer(data_config, model_config, ic)
+        streamer.connect_tool(bt)
+        streamer.run()
+        print()

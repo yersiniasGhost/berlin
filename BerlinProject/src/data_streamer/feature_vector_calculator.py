@@ -9,7 +9,7 @@ class FeatureVectorCalculator:
 
     def __init__(self, model_config: dict):
         self.model_config = model_config
-        self.feature_vector = model_config["feature_vector"]
+        self.feature_vector = model_config.get("feature_vector", [])
         self.tick: Optional[TickData] = None
         self.history: Optional[List[TickData]] = None
 

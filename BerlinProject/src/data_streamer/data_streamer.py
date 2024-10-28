@@ -9,7 +9,7 @@ from data_streamer.external_tool import ExternalTool
 
 
 class DataStreamer:
-    def __init__(self, data_configuration: List[Dict], model_configuration: dict,
+    def __init__(self, data_configuration: dict, model_configuration: dict,
                  indicator_configuration: Optional[IndicatorConfiguration] = None):
         self.preprocessor = DataPreprocessor(model_configuration)
         self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
@@ -18,10 +18,14 @@ class DataStreamer:
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
 
-    def configure_data(self, data_config: List[Dict]) -> None:
+    def configure_data(self, data_config: dict) -> None:
         # TODO finish testing:
         if data_config.get('type', None) == "TickHistory":
-            self.data_link = TickHistoryTools.get_history_data()
+            ticker = data_config.get('ticker')
+            start_date = data_config.get('start_date')
+            end_date = data_config.get('end_date')
+            time_increments = data_config.get('time_increment')
+            self.data_link = TickHistoryTools.get_tools(ticker, start_date, end_date, time_increments)
         else:
             self.data_link = SampleTools.get_samples2(data_config[0])
 
@@ -89,5 +93,5 @@ class DataStreamer:
 
     def get_present_sample(self) -> Tuple[dict, int]:
         if not isinstance(self.data_link, SampleTools):
-            raise ValueError("Data link in data streamer is not SampleTools")
+            return None, None
         return self.data_link.get_present_sample_and_index()

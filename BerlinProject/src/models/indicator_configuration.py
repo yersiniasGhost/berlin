@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field as PydanticField, model_validator
 class IndicatorDefinition(BaseModel):
     name: str
     type: Literal[CANDLE_STICK_PATTERN, INDICATOR_TYPE]
+    function: str
     parameters: dict
 
 

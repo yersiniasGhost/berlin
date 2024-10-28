@@ -23,7 +23,6 @@ class ProfileTools:
         except json.JSONDecodeError:
             raise ValueError(f"Invalid JSON in file: {json_file_path}")
 
-
     @classmethod
     def create_profile(cls, profile_data: dict) -> Optional[str]:
         """
@@ -47,7 +46,6 @@ class ProfileTools:
         # If no existing profile found, insert the new one
         result = collection.insert_one(profile_data)
         return str(result.inserted_id)
-
 
     @classmethod
     def get_profile(cls, profile_id: PYMONGO_ID) -> Profile:

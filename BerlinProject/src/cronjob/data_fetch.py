@@ -114,7 +114,7 @@ def main() -> None:
     # MongoDB connection
     client = MongoClient('mongodb://localhost:27017/')
     db = client['MTA_devel']
-    collection = db['tick_history_duplicate']
+    collection = db['tick_history']
 
     # Initialize loader
     loader: DataFetch = DataFetch(collection)

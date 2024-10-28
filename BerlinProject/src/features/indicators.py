@@ -47,7 +47,7 @@ def macd_calculation(tick_data: List[TickData], fast, slow, signal) -> np.ndarra
 
 def macd_histogram_crossover(tick_data: List[TickData], parameters: Dict[str, float]) -> np.ndarray:
     if len(tick_data) < parameters['slow'] + parameters['signal']:
-        raise ValueError("Not long enough tickdata for macd parameters to calculate")
+        return np.array([math.nan] * len(tick_data))
 
     macd, signal, histogram = macd_calculation(tick_data, parameters['fast'], parameters['slow'], parameters['signal'])
 
@@ -78,7 +78,7 @@ def create_bol_bands(tick_data: List[TickData], parameters: Dict[str, float]) ->
 
 def bol_bands_lower_band_bounce(tick_data: List[TickData], parameters: Dict[str, float]) -> np.ndarray:
     if len(tick_data) < parameters['period']:
-        raise ValueError("Not enough tickdata for Bollinger Bands calculation")
+        return np.array([math.nan] * len(tick_data))
 
     array = create_bol_bands(tick_data, parameters)
     lower = array[2]
@@ -89,7 +89,7 @@ def bol_bands_lower_band_bounce(tick_data: List[TickData], parameters: Dict[str,
 
     signals = np.zeros(len(closes))
 
-    candle_bounce_number = parameters['candle_bounce_number']
+    candle_bounce_number = int(parameters['candle_bounce_number'])
 
     for i in range(candle_bounce_number, len(closes)):
         # Check if price touched or went below the lower band in the last 'candle_bounce_number' candles

@@ -110,4 +110,24 @@ class TestSampleTools(unittest.TestCase):
         self.assertIsNone(sample_tools.get_next2(), "Should return None after processing all ticks")
 
     def test_serve_next_tick(self):
+        """Test that a single trading day returns exactly 390 ticks (6.5 hours of trading)"""
+        data = [{
+            "profile_id": "670d98445c9ef9a75c7281d9",
+            "number": 5
+        }]
+
+        tools = SampleTools.get_tools(data)
+
+        sample=tools.samples
+
+        # Assert we get exactly 390 ticks (one trading day)
+        self.assertEqual(len(ticks), 390,
+                         f"Expected 390 ticks for one trading day, got {len(ticks)}")
+
+        # Verify each tick has the required data
+        for tick in ticks:
+            self.assertIsNotNone(tick.open)
+            self.assertIsNotNone(tick.close)
+            self.assertIsNotNone(tick.high)
+            self.assertIsNotNone(tick.low)
 
