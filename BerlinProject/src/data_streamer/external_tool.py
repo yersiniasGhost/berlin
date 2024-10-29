@@ -9,7 +9,8 @@ class ExternalTool(ABC):
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         raise NotImplemented
 
-    def indicator_vector(self, indicators: Dict[str, float], tick: TickData) -> None:
+    @abstractmethod
+    def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int) -> None:
         raise NotImplemented
 
     # Not required to be implemented

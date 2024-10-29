@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from environments.tick_data import TickData
 import numpy as np
 from features.features import calculate_sma_tick, calculate_macd_tick
@@ -8,29 +8,25 @@ class DataPreprocessor:
 
     def __init__(self, model_config: dict):
         self.model_config = model_config
-        self.feature_vector = model_config["feature_vector"]
         self.history: List[TickData] = []
         self.normalized_data: List[TickData] = []
         self.tick: Optional[TickData] = None
+        self.normalized_tick: Optional[TickData] = None
         self.sample_stats = None
 
-    def get_price_array(self, price_type: str) -> np.array:
-        output = [getattr(tick, price_type) for tick in self.normalized_data]
-        return np.array(output)
+    def get_normalized_data(self) -> Tuple[TickData, List[TickData]]:
+        return self.normalized_tick, self.normalized_data
 
-    def next_tick(self, tick: TickData) -> List:
-        self.history.append(tick)
+    def get_data(self) -> Tuple[TickData, List[TickData]]:
+        return self.tick, self.history
 
+
+    def next_tick(self, tick: TickData):
         # Perform any required normalization on historical data
         # If no normalization use raw tick
+        self.history.append(tick)
         self.normalize_data(tick)
-
-        output_vector = []
-        for feature in self.feature_vector:
-            feature_data = self._calculate(feature)
-            output_vector = output_vector + feature_data
-
-        return output_vector
+        self.tick = tick
 
     def normalize_data(self, tick: TickData):
         norm_method = self.model_config.get("normalization", None)
@@ -57,65 +53,11 @@ class DataPreprocessor:
             normalized_tick = tick
 
         self.normalized_data.append(normalized_tick)
-        self.tick = normalized_tick
+        self.normalized_tick = normalized_tick
 
     def reset_state(self, stats: Dict):
         self.history = []
         self.tick = None
+        self.normalized_tick = None
         self.sample_stats = stats
         self.normalized_data = []
-
-    def _calculate(self, feature: dict) -> list:
-        name = feature['name']
-        if name in ['open', 'close', 'high', 'low']:
-            if 'history' in feature:
-                h = feature['history']
-                if len(self.normalized_data) < h:
-                    return [None] * h
-                return [getattr(tick, name) for tick in self.normalized_data[-h:]]
-                # raise ValueError("History on high low close not implemented yet")
-            else:
-                return [getattr(self.tick, name)]
-
-        # TODO: Add history
-        elif name == "SMADiff":
-            period_fast = feature['parameters']['fast_period']
-            period_slow = feature['parameters']['slow_period']
-            price_data = self.get_price_array('close')
-            if len(price_data) >= period_slow:
-                sma_slow = calculate_sma_tick(period_slow, price_data)
-                sma_fast = calculate_sma_tick(period_fast, price_data)
-                d = sma_fast[-1] - sma_slow[-1]
-                return [sma_fast[-1] - sma_slow[-1]]
-            else:
-                return [None]
-
-        # TODO:  Add history
-        elif name == 'SMA':
-            period = feature['parameters']['sma']
-            price_data = self.get_price_array('close')
-            if len(price_data) >= period:
-                sma_value = calculate_sma_tick(period, price_data)
-                return [sma_value[-1]]
-            else:
-                return [None]
-
-        elif name == 'MACD':
-            fast_period = feature['parameters']['fast_period']
-            slow_period = feature['parameters']['slow_period']
-            signal_period = feature['parameters']['signal_period']
-            price_data = self.get_price_array('close')
-            h = feature['history'] if 'history' in feature else 0
-            window_size = slow_period + signal_period + h
-            if len(price_data) >= window_size:
-                try:
-                    macd, signal, hist = calculate_macd_tick(price_data, fast_period, slow_period, signal_period, h)
-                    nested_list = [macd[-h-1:], signal[-h-1:], hist[-h-1:]]
-                    out = np.array(nested_list).flatten().tolist()
-                    return out
-
-                except ValueError:
-                    return [None] * (3 * (h+1))
-            return [None, None, None]
-
-

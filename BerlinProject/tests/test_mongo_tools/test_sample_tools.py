@@ -9,17 +9,14 @@ class TestSampleTools(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         json_profile = [{
-            "profile_id": "66e3499280c8e93a7756fbd1",
+            "profile_id": "670d98445c9ef9a75c7281d9",
             "number": 5
-        },
-            {
-                "profile_id": "66e34a036bf640360fdd7326",
-                "number": 2
-            }]
+        }]
+
 
         # Create SampleTools instance
-        cls.sample_tools = SampleTools.get_tools(json_profile)
-
+        check = SampleTools.get_tools(json_profile)
+        x
     # def test_tick_count_equals_700(self):
     #     """Test that the total number of ticks equals 700"""
     #     count = sum(1 for _ in self.sample_tools.serve_next_tick())
@@ -109,4 +106,25 @@ class TestSampleTools(unittest.TestCase):
         self.assertGreater(total_ticks, 5, "Should have processed more than 5 ticks in total")
         self.assertIsNone(sample_tools.get_next2(), "Should return None after processing all ticks")
 
+    def test_serve_next_tick(self):
+        """Test that a single trading day returns exactly 390 ticks (6.5 hours of trading)"""
+        data = [{
+            "profile_id": "670d98445c9ef9a75c7281d9",
+            "number": 5
+        }]
+
+        tools = SampleTools.get_tools(data)
+
+        sample=tools.samples
+
+        # Assert we get exactly 390 ticks (one trading day)
+        self.assertEqual(len(ticks), 390,
+                         f"Expected 390 ticks for one trading day, got {len(ticks)}")
+
+        # Verify each tick has the required data
+        for tick in ticks:
+            self.assertIsNotNone(tick.open)
+            self.assertIsNotNone(tick.close)
+            self.assertIsNotNone(tick.high)
+            self.assertIsNotNone(tick.low)
 

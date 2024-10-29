@@ -58,6 +58,9 @@ class RuntimeAnalytics(ExternalTool):
         # to the UI (websocket) or backtester or other.
         # fv below is wrong should be results from the model, the actions.
 
+        if not fv:
+            return
+
         handle_fv = self._handle_none_values(fv)
         observations = self.state.append_state_to_fv(handle_fv, tick)
         actions, _ = self.model.predict(observations, deterministic=True)
@@ -65,3 +68,6 @@ class RuntimeAnalytics(ExternalTool):
         # convert actions to "BUY" "SELL "HOLD"
         if self.backtest:
             self.backtest.agent_actions(trade_action, tick)
+
+    def indicator_vector(self, indicator_results: dict, tick: TickData):
+        pass

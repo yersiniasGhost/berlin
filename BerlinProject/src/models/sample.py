@@ -7,5 +7,5 @@ from pydantic import BaseModel, Field as PydanticField
 class Sample(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     profile_id: PyObjectId
-    data: list
+    data: list  # This is a list of TickData
     stats: dict

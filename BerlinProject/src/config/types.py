@@ -10,6 +10,9 @@ DATETIME = str
 # Add collection names here
 PROFILE_COLLECTION = ("Profiles")
 SAMPLE_COLLECTION = ("Samples")
+TICK_HISTORY_COLLECTION = ("tick_history")
+MONITOR_COLLECTION = ('monitors')
+INDICATOR_COLLECTION = ('indicators')
 
 AgentActions = float
 RANDOM_TRADER = "random"
