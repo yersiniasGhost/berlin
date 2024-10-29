@@ -5,19 +5,22 @@ from pathlib import Path
 import random
 import argparse
 
-from utils import output_task_spreadsheet
-from GeneticOptimizer.obm_optimizer.visualization import plot_combined_results
-from GeneticOptimizer.obm_optimizer.json_parser.payload_parser import InspectionOptimizer
-from GeneticOptimizer.obm_optimizer.obm_individual import OBMIndividual
+from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
+from optimization.mlf_optimizer import MlfIndividual
 
 MAX_STALLED_METRIC = 200
 
+
+def output_best_monitor(individual: MlfIndividual):
+    print("BEST Result")
+    print(individual)
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Inspection Optimizer Application.')
-    parser.add_argument('payload', type=str, nargs='+',
-                        help='Relative path to the input payloads')
+    parser = argparse.ArgumentParser(description='MTA Optimizer Application.')
+    parser.add_argument('payload', type=str, nargs='+', help='JSON file of the optimization configuration')
+    
     # parser.add_argument('name', type=str, nargs='+', help="Base name of the output files.")
-    parser.add_argument('-n', "--name", type=str, help="Override the payload file's test name", default="")
     parser.add_argument('-g', "--config", type=str, help="Specify the GA configuration file (if separate)", default="")
     parser.add_argument('-o', '--output', type=str, help="Specify output path (default: output).", default="output")
     parser.add_argument("-s", '--seed', type=int, help="Set the numpy random number seed.", default=996942)
@@ -27,8 +30,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     np.random.seed(args.seed)
     random.seed(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
     input_path = Path('.') / args.payload[0]
-    cmd_test_name = args.name
+
     output_path = Path('.') / args.output
     output_path.mkdir(exist_ok=True, parents=True)
     log_path = output_path / 'logs'
@@ -38,33 +43,24 @@ if __name__ == "__main__":
 
     show_graphs = args.visualize
 
-    if not input_path.exists():
-        print(f"Cannot locate payload path: {input_path}")
-        exit(1)
+    ga_config = None
+    if args.config:
+        ga_config = Path('.') / args.config
 
     with open(input_path) as f:
         input_json = json.load(f)
         test_name = input_json.get('test_name', "NoNAME")
-        if cmd_test_name != "":
-            test_name = cmd_test_name
         max_stalled_metric = input_json.get('stalled_counter', MAX_STALLED_METRIC)
 
     tn = test_name.replace(' ', '-')
     tn = tn.replace('/', '-')
     copy_payload = output_path / f"{tn}_payload.json"
-    ga_config = None
-    if args.config:
-        ga_config = Path('.') / args.config
-
     with open(log_path / f'{tn}.csv', 'w') as f:
         f.write(f"Random Seed: {args.seed}\n")
 
-    io = InspectionOptimizer.from_file(input_path, ga_config)
+    io = MlfOptimizerConfig.from_file(input_path, ga_config)
     io.write_configuration(copy_payload)
     genetic_algorithm = io.create_project()
-    # plot_pof_curves(io, plots_path, test_name)
-    initial_individual: OBMIndividual = genetic_algorithm.problem_domain.create_initial_population(1)[0]
-    # plot_tasks(initial_individual, io, plots_path, f"{test_name}_init_individual", show_graphs, io.start_date, io.time_frame)
 
     s = time.time_ns()
     start = s
@@ -108,6 +104,7 @@ if __name__ == "__main__":
         if stalled_metric == MAX_STALLED_METRIC or stats[0].iteration == genetic_algorithm.number_of_generations - 1:
             # plot_optimized_curves(io, best.individual, plots_path, tn, show_graphs, io.start_date)
             # plot_tasks(best.individual, io, plots_path, tn, show_graphs, io.start_date, io.time_frame)
+
             output_task_spreadsheet(io, best.individual, plots_path, tn, io.start_date)
             plot_combined_results(io, best.individual, plots_path, tn, show_graphs, io.start_date, io.time_frame)
             break

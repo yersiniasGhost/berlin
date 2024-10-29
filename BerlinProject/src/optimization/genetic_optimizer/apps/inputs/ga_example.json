@@ -1,0 +1,27 @@
+{
+  "monitor": "BSONID",
+  "data": [{
+    "profile_id": "6701cbcfbed728701fa3b767",
+    "number": 2
+}],
+    "objectives": [
+    {
+      "objective": "MaximizeProfit",
+      "weight": 1.0
+    },
+    {
+      "objective": "MinimizeLosingTrades",
+      "weight": 1.0,
+      "parameters": {
+      }
+    }
+  ],
+  "ga_hyperparameters": {
+    "number_of_iterations": 500,
+    "population_size": 200,
+    "propagation_fraction": 0.1,
+    "elite_size": 5,
+    "chance_of_mutation": 0.015,
+    "chance_of_crossover": 0.015
+  }
+}

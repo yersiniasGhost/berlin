@@ -18,6 +18,9 @@ class MlfIndividual(IndividualBase):
         return MlfIndividual(monitor=new_monitor)
 
 
+    '''
+    Iterate through the Indicator definitions and apply mutations to their 
+    '''
     def mutate_function(self, mutate_probability: float):
         pass
 
