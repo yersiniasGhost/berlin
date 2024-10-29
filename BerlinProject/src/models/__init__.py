@@ -1,2 +1,3 @@
-from .monitor_configuration import IndicatorDefinition, MonitorConfiguration
+from .monitor_configuration import MonitorConfiguration
+from .indicator_definition import IndicatorDefinition
 from .profile import Profile
