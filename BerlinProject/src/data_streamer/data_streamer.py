@@ -17,6 +17,7 @@ class DataStreamer:
         self.data_link: Optional[SampleTools] = None
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
+        self.reset_after_sample : bool = False
 
     def configure_data(self, data_config: dict) -> None:
         # TODO finish testing:
@@ -61,10 +62,11 @@ class DataStreamer:
                             et.indicator_vector(indicator_results, tick, index)
                 index += 1
             else:
-                index = 0
-                for et in self.external_tool:
-                    et.reset_next_sample()
-                self.preprocessor.reset_state(sample_stats)
+                if self.reset_after_sample:
+                    index = 0
+                    for et in self.external_tool:
+                        et.reset_next_sample()
+                    self.preprocessor.reset_state(sample_stats)
 
     def reset(self):
         self.data_link.reset_index()

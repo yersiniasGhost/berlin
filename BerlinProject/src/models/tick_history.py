@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field as PydanticField, model_validator
 from environments.tick_data import TickData
 
 
+
+
 class TickHistory(BaseModel):
     id: Optional[ObjectId] = PydanticField(default_factory=ObjectId, alias="_id")
     month: int

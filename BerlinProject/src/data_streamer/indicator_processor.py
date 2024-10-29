@@ -64,6 +64,7 @@ class IndicatorProcessor:
 
     @staticmethod
     def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
+        history= history[-100:]
         if indicator.function == 'sma_crossover':
             return {indicator.name: sma_crossover(history, indicator.parameters)}
 

@@ -1,3 +1,4 @@
+import datetime
 from typing import Optional
 from dataclasses import dataclass
 
@@ -9,4 +10,4 @@ class TickData:
     high: float
     low: float
     volume: Optional[int] = None
-    day: Optional[int] = None
+    timestamp: Optional[datetime.datetime] = None

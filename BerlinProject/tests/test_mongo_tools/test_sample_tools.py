@@ -9,17 +9,14 @@ class TestSampleTools(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         json_profile = [{
-            "profile_id": "66e3499280c8e93a7756fbd1",
+            "profile_id": "670d98445c9ef9a75c7281d9",
             "number": 5
-        },
-            {
-                "profile_id": "66e34a036bf640360fdd7326",
-                "number": 2
-            }]
+        }]
+
 
         # Create SampleTools instance
-        cls.sample_tools = SampleTools.get_tools(json_profile)
-
+        check = SampleTools.get_tools(json_profile)
+        x
     # def test_tick_count_equals_700(self):
     #     """Test that the total number of ticks equals 700"""
     #     count = sum(1 for _ in self.sample_tools.serve_next_tick())

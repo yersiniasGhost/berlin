@@ -13,6 +13,7 @@ from models.monitor_model import Monitor
 from mongo_tools.tick_history_tools import TickHistoryTools
 from operations.indicator_backtest import IndicatorBacktest, Trade
 from operations.monitor_backtest import MonitorBacktest
+from operations.monitor_backtest_results import MonitorResultsBacktest
 
 
 class TestMonitorBackTest(unittest.TestCase):
@@ -21,8 +22,8 @@ class TestMonitorBackTest(unittest.TestCase):
         data_config = {
             'type': 'TickHistory',
             'ticker': "NVDA",
-            'start_date': datetime(2024, 10, 23),
-            'end_date': datetime(2024, 10, 24),
+            'start_date': datetime(2024, 5,1 ),
+            'end_date': datetime(2024, 5, 30),
             'time_increment': 1
 
         }
@@ -69,11 +70,10 @@ class TestMonitorBackTest(unittest.TestCase):
             "user_id": ObjectId("65f2d6666666666666666666"),
             "name": "My Test Strategy",
             "description": "A test monitor using SMA and MACD",
-            "threshold": 0.2,
+            "threshold": 0.5,
             "triggers": {
-                "my_silly_sma_cross": 2.0,  # SMA with weight 8
-                "my_silly_bol_bounce": 2.0,
-                "martins engulf": 2.0
+                "my_silly_sma_cross": 1.0,  # SMA with weight 8
+                "my_silly_bol_bounce": 1.0
 
             }  # MACD with weight 2
         }
@@ -84,8 +84,8 @@ class TestMonitorBackTest(unittest.TestCase):
 
         # Create Monitor instance
         monitor = Monitor(**test_monitor)
-        ic = IndicatorConfiguration(name='my test', indicators=[bol, sma, engulf])
-        bt = MonitorBacktest('My Test Strategy', monitor)
+        ic = IndicatorConfiguration(name='my test', indicators=[bol, sma])
+        bt = MonitorResultsBacktest('My Test Strategy', monitor)
 
         streamer = DataStreamer(data_config, model_config, ic)
         streamer.connect_tool(bt)
