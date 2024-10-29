@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import unittest
-from models import IndicatorConfiguration
+from models import MonitorConfiguration
 from data_streamer.indicator_processor import IndicatorProcessor
 from config.types import CANDLE_STICK_PATTERN
 from environments.tick_data import TickData
@@ -48,7 +48,7 @@ class TestIndicatorProcessor(unittest.TestCase):
             {"name": "Hammer pattern", "parameters": {"talib": "CDLHAMMER", "lookback": 50}, "type": CANDLE_STICK_PATTERN}
         ]
         config = {"name": "CDL Test", "indicators": indicators}
-        config = IndicatorConfiguration(**config)
+        config = MonitorConfiguration(**config)
 
         processor = IndicatorProcessor(config)
         tick = TickData(open=62589, high=62597, low=62550, close=62557)
@@ -68,7 +68,7 @@ class TestIndicatorProcessor(unittest.TestCase):
             {"name": "Three Black Crows", "parameters": {"talib": "CDL3BLACKCROWS"},"type": CANDLE_STICK_PATTERN},
         {"name": "Hammer pattern", "parameters": {"talib": "CDLHAMMER"}, "type": CANDLE_STICK_PATTERN}]
         config = {"name": "CDL Test", "indicators": indicators}
-        config = IndicatorConfiguration(**config)
+        config = MonitorConfiguration(**config)
 
         processor = IndicatorProcessor(config)
 

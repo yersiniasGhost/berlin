@@ -1,15 +1,15 @@
 from typing import List, Dict
 import numpy as np
 from environments.tick_data import TickData
-from models import IndicatorConfiguration
+from models import MonitorConfiguration
 from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
 from features.candle_patterns import CandlePatterns
 
 
 class IndicatorProcessor:
 
-    def __init__(self, configuration: IndicatorConfiguration):
-        self.config: IndicatorConfiguration = configuration
+    def __init__(self, configuration: MonitorConfiguration):
+        self.config: MonitorConfiguration = configuration
 
     @staticmethod
     def calculate_time_based_metric(talib_data: np.ndarray, lookback: int) -> float:

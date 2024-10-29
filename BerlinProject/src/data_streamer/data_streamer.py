@@ -2,13 +2,13 @@ from typing import List, Dict, Optional, Tuple
 from mongo_tools.sample_tools import SampleTools
 from .data_preprocessor import DataPreprocessor
 from .indicator_processor import IndicatorProcessor
-from models.indicator_configuration import IndicatorConfiguration
+from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
 
 
 class DataStreamer:
     def __init__(self, data_configuration: List[Dict], model_configuration: dict,
-                 indicator_configuration: Optional[IndicatorConfiguration] = None):
+                 indicator_configuration: Optional[MonitorConfiguration] = None):
         self.preprocessor = DataPreprocessor(model_configuration)
         self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
         self.data_link: Optional[SampleTools] = None

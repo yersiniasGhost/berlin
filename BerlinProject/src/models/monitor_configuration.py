@@ -1,15 +1,10 @@
-from typing import List, Literal
-from config.types import PyObjectId, CANDLE_STICK_PATTERN, INDICATOR_TYPE
+from typing import List
+from config.types import PyObjectId
 from pydantic import BaseModel, Field as PydanticField, model_validator
+from models.indicator_definition import IndicatorDefinition
 
 
-class IndicatorDefinition(BaseModel):
-    name: str
-    type: Literal[CANDLE_STICK_PATTERN, INDICATOR_TYPE]
-    parameters: dict
-
-
-class IndicatorConfiguration(BaseModel):
+class MonitorConfiguration(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     name: str
     indicators: List[IndicatorDefinition]
