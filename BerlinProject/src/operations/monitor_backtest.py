@@ -8,7 +8,7 @@ from config.pyobject_id import PyObjectId
 from config.types import INDICATOR_COLLECTION
 from data_streamer.external_tool import ExternalTool
 from environments.tick_data import TickData
-from models import IndicatorConfiguration
+from models import MonitorConfiguration
 from models.monitor_model import Monitor
 from mongo_tools.mongo import Mongo
 
@@ -35,13 +35,13 @@ class MonitorBacktest(ExternalTool):
         self.monitor_value = []
 
     @classmethod
-    def get_indicator_config(cls, indicator_id: PyObjectId) -> IndicatorConfiguration:
+    def get_indicator_config(cls, indicator_id: PyObjectId) -> MonitorConfiguration:
         """Get indicator config from MongoDB"""
         collection = Mongo().database[INDICATOR_COLLECTION]
         data = collection.find_one({"_id": indicator_id})
         if not data:
             raise ValueError(f"Indicator not found: {indicator_id}")
-        return IndicatorConfiguration(**data)
+        return MonitorConfiguration(**data)
 
     def indicator_vector(self, indicator_results: Dict[str, float], tick: TickData, index: int) -> None:
 

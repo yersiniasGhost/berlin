@@ -6,7 +6,7 @@ import talib
 import talib as ta
 import numpy as np
 from environments.tick_data import TickData
-from models.indicator_configuration import *
+from models.monitor_configuration import MonitorConfiguration
 
 
 

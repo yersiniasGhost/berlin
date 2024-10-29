@@ -111,9 +111,9 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
 
         }
 
-        from models.indicator_configuration import IndicatorDefinition, IndicatorConfiguration
+        from models.monitor_configuration import IndicatorDefinition, MonitorConfiguration
         sma = IndicatorDefinition(**indicator_config_macd)
-        ind_config = IndicatorConfiguration(name="test", indicators=[sma])
+        ind_config = MonitorConfiguration(name="test", indicators=[sma])
 
         model_config = {
             "preprocess_config": "test_ds",

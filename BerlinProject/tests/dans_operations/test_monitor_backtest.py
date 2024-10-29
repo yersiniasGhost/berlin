@@ -8,7 +8,7 @@ from bson import ObjectId
 from config.types import INDICATOR_TYPE, CANDLE_STICK_PATTERN
 from data_streamer import DataStreamer
 from environments.tick_data import TickData
-from models import IndicatorDefinition, IndicatorConfiguration
+from models import IndicatorDefinition, MonitorConfiguration
 from models.monitor_model import Monitor
 from mongo_tools.tick_history_tools import TickHistoryTools
 from operations.indicator_backtest import IndicatorBacktest, Trade
@@ -84,7 +84,7 @@ class TestMonitorBackTest(unittest.TestCase):
 
         # Create Monitor instance
         monitor = Monitor(**test_monitor)
-        ic = IndicatorConfiguration(name='my test', indicators=[bol, sma])
+        ic = MonitorConfiguration(name='my test', indicators=[bol, sma])
         bt = MonitorResultsBacktest('My Test Strategy', monitor)
 
         streamer = DataStreamer(data_config, model_config, ic)
