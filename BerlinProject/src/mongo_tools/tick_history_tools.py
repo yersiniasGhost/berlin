@@ -68,7 +68,6 @@ class TickHistoryTools:
         """Fetch tick history data for given parameters"""
 
         collection = cls.get_collection()
-
         query = {
             "ticker": ticker,
             "time_increments": time_increments,

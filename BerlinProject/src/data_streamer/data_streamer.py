@@ -1,6 +1,8 @@
+from datetime import datetime
+from typing import List, Dict, Optional, Tuple, Union
+
 from mongo_tools.tick_history_tools import TickHistoryTools
 from .feature_vector_calculator import FeatureVectorCalculator
-from typing import List, Dict, Optional, Tuple
 from mongo_tools.sample_tools import SampleTools
 from .data_preprocessor import DataPreprocessor
 from .indicator_processor import IndicatorProcessor
@@ -14,21 +16,33 @@ class DataStreamer:
         self.preprocessor = DataPreprocessor(model_configuration)
         self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
         self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
-        self.data_link: Optional[SampleTools] = None
+        self.data_link: Optional[Union[TickHistoryTools, SampleTools]] = None
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample : bool = False
+
+    def replace_monitor_configuration(self, monitor: MonitorConfiguration):
+        self.indicators = IndicatorProcessor(monitor)
 
     def configure_data(self, data_config: dict) -> None:
         # TODO finish testing:
         if data_config.get('type', None) == "TickHistory":
             ticker = data_config.get('ticker')
-            start_date = data_config.get('start_date')
-            end_date = data_config.get('end_date')
+            start_date_str = data_config.get('start_date')
+            end_date_str = data_config.get('end_date')
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+
             time_increments = data_config.get('time_increment')
             self.data_link = TickHistoryTools.get_tools(ticker, start_date, end_date, time_increments)
         else:
             self.data_link = SampleTools.get_samples2(data_config[0])
+
+    def prepare_historical_processors(self):
+        # for indicator in self.indicators:
+        #     indicator.prepare_historical_processor(self.data_link)
+        self.indicators.prepare_historical_processor(self.data_link)
+
 
     def run(self):
         if self.data_link is None:
@@ -39,7 +53,6 @@ class DataStreamer:
         # Set the sample state on the data preprocessor so it can
         # normalize the data.
         sample_stats = self.data_link.get_stats()
-
         self.preprocessor.reset_state(sample_stats)
         index=0
         for tick in self.data_link.serve_next_tick():
@@ -50,16 +63,16 @@ class DataStreamer:
                 if self.indicators:
                     indicator_results = self.indicators.next_tick(self.preprocessor)
 
-                if None not in fv:
+                if None not in fv and fv:
                     for et in self.external_tool:
                         et.feature_vector(fv, tick)
 
                     s, i = self.get_present_sample()
                     for et in self.external_tool:
                         et.present_sample(s, i)
-                    if indicator_results:
-                        for et in self.external_tool:
-                            et.indicator_vector(indicator_results, tick, index)
+                if indicator_results:
+                    for et in self.external_tool:
+                        et.indicator_vector(indicator_results, tick, index)
                 index += 1
             else:
                 if self.reset_after_sample:
@@ -86,12 +99,13 @@ class DataStreamer:
             self.preprocessor.next_tick(tick)
             fv = self.feature_vector_calculator.next_tick(self.preprocessor)
             bad_fv = None in fv
-
         return fv, tick
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
         self.external_tool.append(external_tool)
 
+    def replace_external_tools(self, et: ExternalTool) -> None:
+        self.external_tool = [et]
 
     def get_present_sample(self) -> Tuple[dict, int]:
         if not isinstance(self.data_link, SampleTools):

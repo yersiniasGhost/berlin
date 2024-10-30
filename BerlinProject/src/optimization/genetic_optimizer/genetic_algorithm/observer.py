@@ -4,7 +4,7 @@ from typing import List, Dict
 import time
 import copy
 
-from optimization.genetic_optimizer.genetic_algorithm import IndividualStats
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator
 
 

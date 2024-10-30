@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Dict
 from optimization.genetic_optimizer.support.types import Json
 
-from optimization.mlf_optimizer.mlf_objectives import MaximizeProfit, MinimizeLosingTrades
+from optimization.mlf_optimizer.mlf_objectives import MaximizeProfit, MinimizeLosingTrades, MinimizeLoss
 
 
 @dataclass
@@ -22,5 +22,7 @@ class Objective:
             return MaximizeProfit(weight=self.weight)
         if self.name == "MinimizeLosingTrades":
             return MinimizeLosingTrades(weight=self.weight)
+        elif self.name == "MinimizeLoss":
+            return MinimizeLoss(weight=self.weight)
         raise ValueError(f"NO such objective {self.name}")
 

@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 from dataclasses import dataclass, field
 from optimization.genetic_optimizer.abstractions.individual_base import IndividualBase
-from optimization.genetic_optimizer.genetic_algorithm.individual_stats import IndividualStats
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from optimization.genetic_optimizer.abstractions.objective_function_base import ObjectiveFunctionBase
 
 

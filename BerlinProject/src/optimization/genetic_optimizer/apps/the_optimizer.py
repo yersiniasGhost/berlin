@@ -6,14 +6,20 @@ import random
 import argparse
 
 from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
-from optimization.mlf_optimizer import MlfIndividual
+from optimization.mlf_optimizer.mlf_individual import MlfIndividual
+import logging
+
+# Set pymongo logger level to WARNING
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 MAX_STALLED_METRIC = 200
 
 
-def output_best_monitor(individual: MlfIndividual):
+def output_best_monitor(individual: MlfIndividual, output_path: Path):
     print("BEST Result")
-    print(individual)
+    print(individual.monitor.triggers)
+    for indicator in individual.monitor_configuration.indicators:
+        print(indicator.name, indicator.parameters)
 
 
 if __name__ == "__main__":
@@ -23,7 +29,7 @@ if __name__ == "__main__":
     # parser.add_argument('name', type=str, nargs='+', help="Base name of the output files.")
     parser.add_argument('-g', "--config", type=str, help="Specify the GA configuration file (if separate)", default="")
     parser.add_argument('-o', '--output', type=str, help="Specify output path (default: output).", default="output")
-    parser.add_argument("-s", '--seed', type=int, help="Set the numpy random number seed.", default=996942)
+    parser.add_argument("-s", '--seed', type=int, help="Set the numpy random number seed.", default=426999)
     parser.add_argument("-v", '--visualize', action='store_true', default=False,
                         help='Pop up the graphs for run-time visualization.')
 
@@ -55,16 +61,16 @@ if __name__ == "__main__":
     tn = test_name.replace(' ', '-')
     tn = tn.replace('/', '-')
     copy_payload = output_path / f"{tn}_payload.json"
-    with open(log_path / f'{tn}.csv', 'w') as f:
-        f.write(f"Random Seed: {args.seed}\n")
+    # with open(log_path / f'{tn}.csv', 'w') as f:
+    #     f.write(f"Random Seed: {args.seed}\n")
 
     io = MlfOptimizerConfig.from_file(input_path, ga_config)
-    io.write_configuration(copy_payload)
+    # io.write_configuration(copy_payload)
     genetic_algorithm = io.create_project()
 
     s = time.time_ns()
     start = s
-    skip = 5
+    skip = 1
     stalled_metric = 0
     last_metric = 0
     sum_dt = 0
@@ -96,18 +102,20 @@ if __name__ == "__main__":
         best = stats[1].best_front[0]
         last_metric = metric_out
 
-        if stats[0].iteration % 50 == 0:
-            tn_iter = f"{tn}--{stats[0].iteration}"
-            plot_combined_results(io, best.individual, plots_path, tn_iter, show_graphs, io.start_date, io.time_frame)
-
-
-        if stalled_metric == MAX_STALLED_METRIC or stats[0].iteration == genetic_algorithm.number_of_generations - 1:
-            # plot_optimized_curves(io, best.individual, plots_path, tn, show_graphs, io.start_date)
-            # plot_tasks(best.individual, io, plots_path, tn, show_graphs, io.start_date, io.time_frame)
-
-            output_task_spreadsheet(io, best.individual, plots_path, tn, io.start_date)
-            plot_combined_results(io, best.individual, plots_path, tn, show_graphs, io.start_date, io.time_frame)
-            break
+        if stats[0].iteration % skip == 0:
+            output_best_monitor(best.individual, plots_path)
+        # if stats[0].iteration % 50 == 0:
+        #     tn_iter = f"{tn}--{stats[0].iteration}"
+        #     plot_combined_results(io, best.individual, plots_path, tn_iter, show_graphs, io.start_date, io.time_frame)
+        #
+        #
+        # if stalled_metric == MAX_STALLED_METRIC or stats[0].iteration == genetic_algorithm.number_of_generations - 1:
+        #     # plot_optimized_curves(io, best.individual, plots_path, tn, show_graphs, io.start_date)
+        #     # plot_tasks(best.individual, io, plots_path, tn, show_graphs, io.start_date, io.time_frame)
+        #
+        #     output_task_spreadsheet(io, best.individual, plots_path, tn, io.start_date)
+        #     plot_combined_results(io, best.individual, plots_path, tn, show_graphs, io.start_date, io.time_frame)
+        #     break
 
     print(f"Run took {(time.time_ns() - start)/1e9} seconds")
 

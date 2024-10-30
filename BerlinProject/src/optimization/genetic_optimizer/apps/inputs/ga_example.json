@@ -1,27 +1,108 @@
 {
-  "monitor": "BSONID",
-  "data": [{
-    "profile_id": "6701cbcfbed728701fa3b767",
-    "number": 2
-}],
-    "objectives": [
-    {
-      "objective": "MaximizeProfit",
-      "weight": 1.0
-    },
-    {
-      "objective": "MinimizeLosingTrades",
-      "weight": 1.0,
-      "parameters": {
-      }
-    }
+  "test_name": "VFO",
+  "stalled_counter": 10,
+  "monitor": {
+	"_id": "65f2d5555555555555555555",
+	"user_id": "65f2d6666666666666666666",
+	"name": "My Test Strategy",
+	"description": "A test monitor using SMA and MACD",
+	"threshold": 0.5,
+	"triggers": {
+	  "my_silly_sma_cross": 1.0,
+	  "my_silly_bol_bounce": 1.0
+	}
+  },
+  "indicators": [
+	{
+	  "name": "my_silly_sma_cross",
+	  "function": "sma_crossover",
+	  "type": "Indicator",
+	  "parameters": {
+		"period": 10,
+		"crossover_value": 0.0005,
+		"lookback": 25
+	  },
+	  "ranges": {
+		"period": {
+		  "t": "int",
+		  "r": [
+			5,
+			25
+		  ]
+		},
+		"crossover_value": {
+		"t":  "float",
+		"r":  [0.0001, 0.001]},
+		"lookback": {
+		  "t": "int",
+		  "r": [5, 25]
+		}
+	  }
+	  },
+	{
+	  "name": "my_silly_bol_bounce",
+	  "function": "bol_bands_lower_band_bounce",
+	  "type": "Indicator",
+	  "parameters": {
+		"period": 10,
+		"sd": 2,
+		"candle_bounce_number": 5,
+		"bounce_trigger": 0.2,
+		"lookback": 10
+	  },
+	  "ranges": {
+		"bounce_trigger": {
+		  "t": "skip"
+		},
+		"lookback": {
+		  "t": "int",
+		  "r": [5, 25]
+		},
+		"candle_bounce_number": {
+		  "t": "int",
+		  "r": [2, 10]
+		},
+		"period": {
+		  "t": "int",
+		  "r": [
+			5,
+			25
+		  ]
+		},
+		"sd": {
+		  "t": "float",
+		  "r": [
+			1.5,
+			2.5
+		  ]
+		}
+	  }
+	}
+  ],
+  "data": {
+	"type": "TickHistory",
+	"ticker": "NVDA",
+	"start_date": "2024-05-01",
+	"end_date": "2024-05-30",
+	"time_increment": 1
+  },
+  "objectives": [
+	{
+	  "objective": "MaximizeProfit",
+	  "weight": 1.0
+	},
+	{
+	  "objective": "MinimizeLosingTrades",
+	  "weight": 1.0
+	},
+	{ "objective":  "MinimizeLoss", "weight":  1.0}
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 500,
-    "population_size": 200,
-    "propagation_fraction": 0.1,
-    "elite_size": 5,
-    "chance_of_mutation": 0.015,
-    "chance_of_crossover": 0.015
+	"number_of_iterations": 50,
+	"population_size": 200,
+	"propagation_fraction": 0.4,
+	"elite_size": 5,
+	"chance_of_mutation": 0.05,
+	"chance_of_crossover": 0.05
   }
 }

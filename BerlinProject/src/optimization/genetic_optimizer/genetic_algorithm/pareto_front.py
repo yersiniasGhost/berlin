@@ -1,7 +1,7 @@
 from typing import Tuple, List, Dict
 import numpy as np
 
-from optimization.genetic_optimizer.genetic_algorithm import IndividualStats
+from optimization.genetic_optimizer.abstractions.individual_stats import  IndividualStats
 
 
 # Non-dominating sorting:

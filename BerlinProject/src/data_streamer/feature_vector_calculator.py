@@ -18,12 +18,12 @@ class FeatureVectorCalculator:
         return np.array(output)
 
     def next_tick(self, data_preprocessor: DataPreprocessor) -> List:
-
-        self.tick, self.history = data_preprocessor.get_normalized_data()
         output_vector = []
-        for feature in self.feature_vector:
-            feature_data = self._calculate(feature)
-            output_vector = output_vector + feature_data
+        if self.feature_vector:
+            self.tick, self.history = data_preprocessor.get_normalized_data()
+            for feature in self.feature_vector:
+                feature_data = self._calculate(feature)
+                output_vector = output_vector + feature_data
 
         return output_vector
 

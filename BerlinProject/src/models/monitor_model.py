@@ -1,8 +1,6 @@
-from typing import Dict, List, Optional
-
+from typing import Dict, Optional
 from config.pyobject_id import PyObjectId
-from bson import ObjectId
-from pydantic import BaseModel, Field as PydanticField, model_validator
+from pydantic import BaseModel, Field as PydanticField
 
 
 class Monitor(BaseModel):

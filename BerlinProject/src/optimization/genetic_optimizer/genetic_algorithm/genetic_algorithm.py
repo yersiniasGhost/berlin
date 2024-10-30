@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional
 import random
 
-from optimization.genetic_optimizer.genetic_algorithm import StatisticsObserver, Observer, IndividualStats
+from .observer import StatisticsObserver, Observer
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+
 from optimization.genetic_optimizer.abstractions import ProblemDomain, IndividualBase
 from optimization.genetic_optimizer.genetic_algorithm import collect_fronts, crowd_sort, collect_domination_statistics
 from optimization.genetic_optimizer.support.types import Json
@@ -68,7 +70,7 @@ class GeneticAlgorithm:
                 # plot_combined_results(io, best.individual, plots_path, tn, show_graphs, io.start_date, io.time_frame)
                 break
 
-    def run_ga_iterations(self, show_step: int) ->Iterable[Tuple[Observer, StatisticsObserver]]:
+    def run_ga_iterations(self, show_step: int) -> Iterable[Tuple[Observer, StatisticsObserver]]:
         population = self.__initial_generation()
         for iteration in range(0, self.number_of_generations):
             self.iteration_index = iteration

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from optimization.genetic_optimizer.abstractions.individual_base import IndividualBase
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator
-from optimization.genetic_optimizer.genetic_algorithm.individual_stats import IndividualStats
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 
 
 @dataclass
@@ -28,8 +28,8 @@ class ProblemDomain(ABC):
     def optimizer_results(self, best_individual: IndividualBase, metrics: List[float]):
         raise NotImplementedError
 
-    def calculate_fitness_functions(self, iteration: int, population: List[IndividualBase]) -> List[IndividualStats]:
-        return self.fitness_calculator.calculate_fitness_functions(iteration, population)
+    def calculate_fitness_functions(self, iteration_key: int, population: List[IndividualBase]) -> List[IndividualStats]:
+        return self.fitness_calculator.calculate_fitness_functions(iteration_key, population)
 
     def get_sorted_fitness_stats(self, stats: List[float]) -> np.array:
         return self.fitness_calculator.get_sorted_fitness_stats(stats)

@@ -1,16 +1,16 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from dataclasses import dataclass
 
 import numpy as np
-import talib
 
 from config.pyobject_id import PyObjectId
 from config.types import INDICATOR_COLLECTION
 from data_streamer.external_tool import ExternalTool
 from environments.tick_data import TickData
-from models import MonitorConfiguration
+from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor
 from mongo_tools.mongo import Mongo
+
 
 # TODO: Add day to tickdata so it can query and know what day it is on for backtesting and resetting indicator values
 @dataclass
@@ -30,13 +30,30 @@ class MonitorResultsBacktest(ExternalTool):
         self.stop_loss = 1
         self.name = name
         self.trade: Optional[Trade] = None
-        self.trade_history = []
+        self.trade_history: List[Trade] = []
         self.monitor = monitor
         self.monitor_value = []
         self.cash = 100000
         self.size = float
         self.results = {"success": 0, "fail": 0}
 
+    def get_total_percent_profits(self) -> float:
+        pct = 0.0
+        for trade in self.trade_history:
+            if trade.exit_price:
+                profit = (trade.exit_price - trade.entry_price) / trade.entry_price
+                if profit > 0:
+                    pct += profit
+        return pct
+
+    def get_total_percent_losses(self) -> float:
+        pct = 0.0
+        for trade in self.trade_history:
+            if trade.exit_price:
+                loss = -(trade.exit_price - trade.entry_price) / trade.entry_price
+                if loss > 0:
+                    pct += loss
+        return pct
 
     @classmethod
     def get_indicator_config(cls, indicator_id: PyObjectId) -> MonitorConfiguration:
@@ -88,11 +105,11 @@ class MonitorResultsBacktest(ExternalTool):
                 self.results['fail'] += 1
 
 
-            #     make it a choice if you want to end position at end of day
-            if self.trade:
-                if tick.close is None:
-                    self.trade.exit_price = tick.close
-                    self.trade.exit_index = index
+        #     make it a choice if you want to end position at end of day
+        if self.trade:
+            if tick.close is None:
+                self.trade.exit_price = tick.close
+                self.trade.exit_index = index
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         pass

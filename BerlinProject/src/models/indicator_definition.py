@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 from config.types import CANDLE_STICK_PATTERN, INDICATOR_TYPE, PyObjectId
 from pydantic import BaseModel, Field as PydanticField
 
@@ -9,4 +9,5 @@ class IndicatorDefinition(BaseModel):
     function: str
     type: Literal[CANDLE_STICK_PATTERN, INDICATOR_TYPE]
     parameters: dict
+    ranges: Optional[dict] = None
     description: str = "NA"
