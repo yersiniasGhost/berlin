@@ -11,6 +11,7 @@ class Monitor(BaseModel):
     threshold: float
     # triggers are Custom IndicatorDefintion IDs (later, for now we are using the names)
     triggers: Dict[str, float]
+    bear_triggers: Optional[Dict[str, float]] = None
     candles: Optional[Dict[str, float]] = None
 
 

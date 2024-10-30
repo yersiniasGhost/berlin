@@ -19,7 +19,7 @@ class DataStreamer:
         self.data_link: Optional[Union[TickHistoryTools, SampleTools]] = None
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
-        self.reset_after_sample : bool = False
+        self.reset_after_sample : bool = True
 
     def replace_monitor_configuration(self, monitor: MonitorConfiguration):
         self.indicators = IndicatorProcessor(monitor)
