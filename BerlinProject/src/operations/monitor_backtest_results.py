@@ -20,22 +20,24 @@ class Trade:
     entry_index: int
     exit_price: Optional[float] = None
     exit_index: Optional[int] = None
+    exit_type: Optional[str] = None
 
 
 class MonitorResultsBacktest(ExternalTool):
 
     def __init__(self, name: str, monitor: Monitor):
         self.position = []
-        self.target_profit = 1
+        self.target_profit = 2
         self.stop_loss = 1
         self.name = name
         self.trade: Optional[Trade] = None
         self.trade_history: List[Trade] = []
         self.monitor = monitor
         self.monitor_value = []
+        self.monitor_value_bear = []
         self.cash = 100000
         self.size = float
-        self.results = {"success": 0, "fail": 0}
+        self.results = {"success": 0, "fail": 0, "bearish_signal": 0}
 
     def get_total_percent_profits(self) -> float:
         pct = 0.0
@@ -64,32 +66,42 @@ class MonitorResultsBacktest(ExternalTool):
             raise ValueError(f"Indicator not found: {indicator_id}")
         return MonitorConfiguration(**data)
 
-    def indicator_vector(self, indicator_results: Dict[str, float], tick: TickData, index: int) -> None:
-
+    def calculate_trigger(self, indicator_results: Dict[str, float], weights: Dict[str, float]) -> float:
         # indicator results is a dict of (for now) indicator name to the trigger value
         total_weight = 0.0
         trigger = 0.0
-        for t_name, t_value in indicator_results.items():
-            # find our trigger in our monitor:
-            weight = self.monitor.triggers[t_name]
-            trigger += weight * t_value
+        for name, weight in weights.items():
+            indicator_value = indicator_results[name]
+            trigger += weight * indicator_value
             total_weight += weight
-        normalized_trigger = trigger / total_weight
-        self.monitor_value.append(normalized_trigger)
 
-        if normalized_trigger >= self.monitor.threshold:
+        if total_weight == 0.0:
+            return 0.0
+        normalized_trigger = trigger / total_weight
+        return normalized_trigger
+
+    def indicator_vector(self, indicator_results: Dict[str, float], tick: TickData, index: int) -> None:
+
+        bull_trigger = self.calculate_trigger(indicator_results, self.monitor.triggers)
+        self.monitor_value.append(bull_trigger)
+        bear_trigger = self.calculate_trigger(indicator_results, self.monitor.bear_triggers)
+        self.monitor_value_bear.append(bear_trigger)
+
+        if bull_trigger >= self.monitor.threshold:
             if self.trade is None:
                 self.trade = Trade(size=1, entry_price=tick.close, entry_index=index)
                 self.size = self.cash / tick.close
                 self.cash = 0
 
-        # Hits reward
+        # Hits reward or has bear signals
         if self.trade:
+
             exit_profit = self.trade.entry_price + ((self.target_profit / 100) * self.trade.entry_price)
             exit_loss = self.trade.entry_price - ((self.stop_loss / 100) * self.trade.entry_price)
             if tick.close >= exit_profit:
                 self.trade.exit_price = tick.close
                 self.trade.exit_index = index
+                self.trade.exit_type = 'success'
                 self.trade_history.append(self.trade)
                 self.trade = None
                 self.cash = self.size * tick.close
@@ -98,11 +110,21 @@ class MonitorResultsBacktest(ExternalTool):
             elif tick.close <= exit_loss:
                 self.trade.exit_price = tick.close
                 self.trade.exit_index = index
+                self.trade.exit_type = 'fail'
                 self.trade_history.append(self.trade)
                 self.trade = None
                 self.cash = self.size * tick.close
                 self.size = 0
                 self.results['fail'] += 1
+            elif bear_trigger >= self.monitor.threshold:
+                self.trade.exit_price = tick.close
+                self.trade.exit_index = index
+                self.trade.exit_type = 'bearish_signal'
+                self.trade_history.append(self.trade)
+                self.trade = None
+                self.cash = self.size * tick.close
+                self.size = 0
+                self.results['bearish_signal'] += 1
 
 
         #     make it a choice if you want to end position at end of day
