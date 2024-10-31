@@ -4,8 +4,7 @@ from models.monitor_configuration import MonitorConfiguration
 from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
 from features.candle_patterns import CandlePatterns
 from models.indicator_definition import IndicatorDefinition
-from mongo_tools.sample_tools import SampleTools
-from mongo_tools.tick_history_tools import TickHistoryTools
+
 from features.indicators import *
 
 
@@ -13,18 +12,6 @@ class IndicatorProcessor:
 
     def __init__(self, configuration: MonitorConfiguration):
         self.config: MonitorConfiguration = configuration
-        self.using_historical: bool = False
-        self.precalculated_indicators: Optional[dict] = None
-
-    def prepare_historical_processor(self, data_link: Union[SampleTools, TickHistoryTools]):
-        self.using_historical = True
-        history = data_link.get_total_history()
-
-        for indicator in self.config.indicators:
-            look_back = indicator.parameters.get('lookback', 10)
-            if indicator.type == INDICATOR_TYPE:
-                result = self.calculate_indicator(None, history, indicator)
-
 
     @staticmethod
     def calculate_time_based_metric(indicator_data: np.ndarray, lookback: int) -> float:

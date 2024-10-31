@@ -23,18 +23,8 @@ class TickHistoryTools:
         self.daily_data = daily_data
         self.tick_index = 0
 
-    # def __init__(self, history: Optional[TickHistory] = None, start_date: datetime = None,
-    #              end_date: datetime = None):
-    #     self.history = history
-    #     self.start_date = start_date
-    #     self.end_date = end_date
-    #     self.current_date = start_date
-    #     self.current_day = None
-    #     self.current_day_times = None
-    #     self.tick_index = 0
-    #     self.current_month_data = None
 
-    def get_stats(self):
+    def get_stats(self) -> dict:
         stats = {
             'open': {
                 'min': 99.15896984401,
@@ -81,40 +71,6 @@ class TickHistoryTools:
             return TickHistory(**retrieved_data)
         return None
 
-    # @classmethod
-    # def get_tools(cls, ticker: str, start_date: datetime, end_date: datetime,
-    #               time_increments):
-    #     # For each month in start to finish:
-    #     #     Retrieve the monthly document
-    #     #     For each day in start to finish for this month:
-    #     #         Convert the day-data to a DailyTickHistoyr object containing TickData
-    #     #           Add timestamp based on yera, month, day, seconds from midnight(convert to hour, minute)
-    #     #         Hold those in an array
-    #     history = cls.get_history_data(ticker, start_date, time_increments)
-    #
-    #     for TickHistory.month in history:
-    #         month_data = TickHistory.data
-    #         days = list(month_data.keys())
-    #         for day in days:  # iterates through days
-    #             day_ticks = list(month_data[day].values())  # gets list of TickData for this day
-    #             return day_ticks
-
-    # processed_day = [
-    #     TickData(
-    #         open=tick['open'],
-    #         high=tick['high'],
-    #         low=tick['low'],
-    #         close=tick['close'],
-    #         volume=tick.get('volume', None),
-    #         timestamp=tick.get('timestamp', None)
-    #     )
-    #     for tick in day
-    # ]
-    #
-    #     return cls(processed_day)
-
-    # Get first month's data
-    # to my future self.. .ha ha. told you you'd be back
 
     @classmethod
     def get_tools(cls, ticker: str, start_date: datetime, end_date: datetime, time_increments):
@@ -153,19 +109,8 @@ class TickHistoryTools:
                 self.tick_index += 1
             yield None
 
-        # if not self.history:
-        #     return
-        #
-        # current_date = self.start_date
-        # while current_date <= self.end_date:
-        #     day = current_date.day
-        #
-        #     day_data = self.history.data[str(day)]
-        #     times = sorted([int(t) for t in day_data.keys()])
-        #
-        #     for time_str in [str(t) for t in times]:
-        #         tick = day_data[time_str]
-        #         yield tick
-        #
-        #     # Move to next day
-        #     current_date += timedelta(days=1)
+    def get_history(self) -> List[TickData]:
+        history = []
+        for daily_data in self.daily_data:
+            history += daily_data['data']
+        return history

@@ -1,7 +1,7 @@
 from typing import Tuple, List, Dict
 import numpy as np
 
-from optimization.genetic_optimizer.abstractions.individual_stats import  IndividualStats
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 
 
 # Non-dominating sorting:
@@ -41,10 +41,9 @@ def advance_pareto_front(individuals: List[IndividualStats]):
 
 
 def collect_fronts(individuals: List[IndividualStats]) -> Dict[int, List]:
-    more_to_come = True
     index = 0
     pareto_fronts = dict()
-    while more_to_come:
+    while True:
         front = get_pareto_front(individuals)
         if len(front) == 0:
             break
@@ -72,7 +71,7 @@ def crowd_sort(front: List[IndividualStats]) -> List[IndividualStats]:
         for i in range(1, len(sorted_front)-1):
             fv0 = sorted_front[i-1].fitness_values[oc]
             fv1 = sorted_front[i+1].fitness_values[oc]
-            sorted_front[i].crowding_distance += -(fv1-fv0) / denom
+            sorted_front[i].crowding_distance += abs(-(fv1-fv0) / denom)
             # The minus makes the largest absolute values the largest negative number.  Easier for sorting
             # and selecting.
 

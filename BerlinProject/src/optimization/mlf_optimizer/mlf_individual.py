@@ -24,7 +24,7 @@ def choose_parameters(config: MonitorConfiguration):
 # The definition of the optimization individual
 class MlfIndividual(IndividualBase):
 
-    def __init__(self, monitor_configuration: MonitorConfiguration,  monitor: Monitor ):
+    def __init__(self, monitor_configuration: MonitorConfiguration,  monitor: Monitor):
         self.monitor = monitor
         self.monitor_configuration = monitor_configuration
 
@@ -45,7 +45,7 @@ class MlfIndividual(IndividualBase):
         pass
 
     def copy_individual(self) -> "MlfIndividual":
-        return MlfIndividual(monitor=self.monitor, monitor_configuration=self.monitor_configuration )
+        return MlfIndividual(monitor=copy.deepcopy(self.monitor), monitor_configuration=copy.deepcopy(self.monitor_configuration))
 
     def __str__(self):
         out = f"MlfIndividual: {self.monitor}"

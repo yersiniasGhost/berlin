@@ -82,7 +82,7 @@
   "data": {
 	"type": "TickHistory",
 	"ticker": "NVDA",
-	"start_date": "2024-05-01",
+	"start_date": "2024-05-02",
 	"end_date": "2024-05-30",
 	"time_increment": 1
   },
@@ -100,7 +100,7 @@
   "ga_hyperparameters": {
 	"number_of_iterations": 50,
 	"population_size": 200,
-	"propagation_fraction": 0.4,
+	"propagation_fraction": 0.2,
 	"elite_size": 5,
 	"chance_of_mutation": 0.05,
 	"chance_of_crossover": 0.05

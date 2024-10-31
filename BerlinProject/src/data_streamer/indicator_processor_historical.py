@@ -1,40 +1,52 @@
-from typing import List, Dict
+from typing import List, Dict, Union
 import numpy as np
-from environments.tick_data import TickData
 from .data_preprocessor import DataPreprocessor
 from models.monitor_configuration import MonitorConfiguration
 from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
 from features.candle_patterns import CandlePatterns
 from models.indicator_definition import IndicatorDefinition
+from mongo_tools.sample_tools import SampleTools
+from mongo_tools.tick_history_tools import TickHistoryTools
+from features.indicators import sma_crossover, macd_histogram_crossover, bol_bands_lower_band_bounce
 from environments.tick_data import TickData
-from features.indicators import *
 
 
 class IndicatorProcessorHistorical:
 
-    def __init__(self, configuration: MonitorConfiguration):
+    def __init__(self, configuration: MonitorConfiguration, data_link: Union[SampleTools, TickHistoryTools]):
         self.config: MonitorConfiguration = configuration
+        self.data_link = data_link
+        self.indicator_values = self.precalculate()
+        self.index = 0
+
 
     @staticmethod
-    def calculate_time_based_metric(indicator_data: np.ndarray, lookback: int) -> float:
-        search = indicator_data[-lookback:]
-        non_zero_indices = np.nonzero(search)[0]
-        if non_zero_indices.size == 0:
-            return 0.0
-        c = search[non_zero_indices[-1]]
-        lookback_location = len(search) - non_zero_indices[-1] - 1
-        lookback_ratio = lookback_location / float(lookback)
-        metric = (1.0 - lookback_ratio) * np.sign(c)
+    def calculate_time_based_metric_over_array(indicator_data: np.ndarray, lookback: int) -> np.ndarray:
+        metrics = np.zeros(len(indicator_data))
 
-        return metric
+        for i in range(len(metrics)):
+            start = max(0, i-lookback)
+            window = indicator_data[start:i]
+            non_zero_indices = np.nonzero(window)[0]
+
+            if non_zero_indices.size > 0:
+                c = window[non_zero_indices[-1]]
+                lookback_location = len(window) - non_zero_indices[-1] - 1  # lookback - non_zero_indices[-1] - 1
+                lookback_ratio = lookback_location / float(lookback)
+                metrics[i] = (1.0 - lookback_ratio) * np.sign(c)
+        return metrics
+
+    def next_tick(self, _: DataPreprocessor) -> Dict[str, float]:
+        output = {}
+        for indicator in self.config.indicators:
+            output[indicator.name] = self.indicator_values[indicator.name][self.index]
+        self.index += 1
+        return output
 
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
-    def next_tick(self, data_preprocessor: DataPreprocessor) -> Dict[str, float]:
-        if not self.precalculated_indicators:
-            data_preprocessor.get
-        tick, history = data_preprocessor.get_data()  # get non-normalized data
-        history = history[-50:]
+    def precalculate(self) -> Dict[str, np.array]:
+        history = self.data_link.get_history()
         output = {}
         for indicator in self.config.indicators:
             look_back = indicator.parameters.get('lookback', 10)
@@ -43,18 +55,18 @@ class IndicatorProcessorHistorical:
             if indicator.type == CANDLE_STICK_PATTERN:
                 indicator_name = indicator.parameters['talib']
                 cp = CandlePatterns([indicator_name])
-                result = cp.process_tick_data(tick, history, look_back)
+                result = cp.process_tick_data(history, len(history))
                 bull = indicator.parameters.get('bull', True)
-                metric = self.calculate_time_based_metric(result[indicator_name], look_back)
-                if bull is True and metric < 0:
-                    metric = 0.0
-                elif bull is False and metric > 0:
-                    metric = 0.0
+                metric = self.calculate_time_based_metric_over_array(result[indicator_name], look_back)
+                if bull is True:
+                    metric[metric < 0] = 0
+                elif bull is False:
+                    metric[metric > 0] = 0
                 output[indicator.name] = metric
 
             elif indicator.type == INDICATOR_TYPE:
-                result = self.calculate_indicator(tick, history, indicator)
-                metric = self.calculate_time_based_metric(result[indicator.name], look_back)
+                result = self.calculate_indicator(history, indicator)
+                metric = self.calculate_time_based_metric_over_array(result[indicator.name], look_back)
 
                 output[indicator.name] = metric
 
@@ -65,8 +77,8 @@ class IndicatorProcessorHistorical:
         return output
 
     @staticmethod
-    def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
-        history= history[-100:]
+    def calculate_indicator(history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
+
         if indicator.function == 'sma_crossover':
             return {indicator.name: sma_crossover(history, indicator.parameters)}
 

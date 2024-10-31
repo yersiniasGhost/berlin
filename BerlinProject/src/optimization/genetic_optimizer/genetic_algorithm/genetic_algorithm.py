@@ -91,7 +91,6 @@ class GeneticAlgorithm:
                 population = self.prepare_next_generation(fronts)
 
     def prepare_next_generation(self, fronts: Dict[int, List]) -> List[IndividualBase]:
-        e = time.time_ns()
         elitists, parents = self.select_winning_population(fronts)
         mutate_these_elitist = []
         for _ in range(self.number_of_elitist_mutations):
@@ -141,7 +140,7 @@ class GeneticAlgorithm:
                     break
         return next_population
 
-    def select_winning_population(self, fronts: Dict[int, List]) -> Tuple[List[IndividualBase],List[IndividualBase]]:
+    def select_winning_population(self, fronts: Dict[int, List]) -> Tuple[List[IndividualBase], List[IndividualBase]]:
         elitists: List[IndividualBase] = []
         parents: List[IndividualBase] = []
         if self.elitist_size > 0:
@@ -150,8 +149,9 @@ class GeneticAlgorithm:
                     break
                 stats_in_front = [i_stats for i_stats in front]
                 sorted_stats = self.problem_domain.get_sorted_individual_stats(stats_in_front)
-                # sorted_front = self.__crowd_sort(front, self.elitist_size-len(new_population))
-                for stat in sorted_stats:
+                sorted_front = self.__crowd_sort(front, self.elitist_size-len(parents))
+                for index, stat in enumerate(sorted_front):
+                    print(sorted_stats[index])
                     if len(elitists) < self.elitist_size:
                         elitists += [stat.individual.copy_individual()]
                         continue
@@ -173,7 +173,6 @@ class GeneticAlgorithm:
     @staticmethod
     def __crowd_sort(front: List[IndividualStats], size: int) -> List[IndividualStats]:
         sorted_front = crowd_sort(front)
-        r = sorted_front[0:size]
         return sorted_front[0:size]
 
     def __post_iteration_cleanup(self, iteration: str):

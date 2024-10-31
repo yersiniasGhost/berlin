@@ -40,7 +40,7 @@ class CandlePatterns:
         closes_np = np.array(closes)
         return self.find_patterns(opens_np, highs_np, lows_np, closes_np)
 
-    def process_tick_data(self, tick: TickData, tick_data: List[TickData], look_back: int) -> Dict[str, np.array]:
+    def process_tick_data(self, tick_data: List[TickData], look_back: int) -> Dict[str, np.array]:
         opens, highs, lows, closes = [], [], [], []
         for history_tick in tick_data[-look_back:]:
             opens.append(history_tick.open)
@@ -49,9 +49,9 @@ class CandlePatterns:
             closes.append(history_tick.close)
 
         # Add in the last tick
-        opens.append(tick.open)
-        highs.append(tick.high)
-        lows.append(tick.low)
-        closes.append(tick.close)
+        # opens.append(tick.open)
+        # highs.append(tick.high)
+        # lows.append(tick.low)
+        # closes.append(tick.close)
 
         return self.process_candlestick_data(opens, highs, lows, closes)

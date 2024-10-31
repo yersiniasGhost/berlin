@@ -36,17 +36,19 @@ class MlfFitnessCalculator(FitnessCalculator):
             self.data_streamer.run()
             print(cnt, "fitness: ", bt.results)
             cnt += 1
-            individual_stats = self.__calculate_individual_stats(individual, bt)
+            individual_stats = self.__calculate_individual_stats(individual, bt, cnt)
             fitness_results.append(individual_stats)
         return fitness_results
 
     def calculate_individual(self, individual: MlfIndividual):
-        return self.__calculate_individual_stats(individual)
+        return self.__calculate_individual_stats(individual, 0)
 
-    def __calculate_individual_stats(self, individual: MlfIndividual, bt: MonitorResultsBacktest):
+    def __calculate_individual_stats(self, individual: MlfIndividual, bt: MonitorResultsBacktest, index: int):
         # Calculate the objectives.
         fitness_values = np.array([objective.calculate_objective(individual, bt) for objective in self.objectives])
-        individual_stats = IndividualStats(index=0,
+        if fitness_values[0] == 100.0:
+            fitness_values = np.ones_like(fitness_values) * 100.0
+        individual_stats = IndividualStats(index=index,
                                            fitness_values=fitness_values,
                                            individual=individual)
         return individual_stats
