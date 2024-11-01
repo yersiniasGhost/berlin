@@ -109,8 +109,10 @@ class TickHistoryTools:
                 self.tick_index += 1
             yield None
 
-    def get_history(self) -> List[TickData]:
+    def get_history(self, separate_days: bool = False) -> List[TickData]:
         history = []
         for daily_data in self.daily_data:
             history += daily_data['data']
+            if separate_days:
+                history += [None]
         return history

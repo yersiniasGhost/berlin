@@ -7,6 +7,7 @@ from operations.monitor_backtest_results import MonitorResultsBacktest
 @dataclass
 class MaximizeProfit(ObjectiveFunctionBase):
     mode: str = "negative"  # Could be "reciprocal" or "scaling"
+    expected_total_profit: float = 2.0
 
     def __post_init__(self):
         self.name = "Maximize Profit"
@@ -19,8 +20,9 @@ class MaximizeProfit(ObjectiveFunctionBase):
         total_profit = bt.get_total_percent_profits()
         if total_profit == 0.0:
             return 100.0
-        return (1.0 - total_profit) / self.normalization_factor * self.weight
+        # return (self.expected_total_profit - total_profit) / self.normalization_factor * self.weight
         # return -total_profit / self.normalization_factor * self.weight
+        return (1.0 / total_profit) / self.normalization_factor * self.weight
 
 
 @dataclass
@@ -50,7 +52,8 @@ class MinimizeLosingTrades(ObjectiveFunctionBase):
         individual: MlfIndividual = args[0]
         bt: MonitorResultsBacktest = args[1]
 
-        number_of_trades = bt.results['success'] + bt.results['fail'] + 1
-        number_of_losing_trades = bt.results['fail']
+        number_of_losing_trades = bt.results['fail'] + bt.results['bearish_signal fail']
+        number_of_winning_trades = bt.results['success'] + bt.results['bearish_signal success']
+        number_of_trades = number_of_winning_trades + number_of_losing_trades + 1
 
         return (number_of_losing_trades / number_of_trades) / self.normalization_factor * self.weight

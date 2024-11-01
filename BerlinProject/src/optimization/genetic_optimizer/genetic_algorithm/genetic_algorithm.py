@@ -90,28 +90,53 @@ class GeneticAlgorithm:
             if iteration != self.number_of_generations - 1:
                 population = self.prepare_next_generation(fronts)
 
+
+    @staticmethod
+    def debug_population(population, caller):
+        return
+        # for i in range(len(population)):
+        #     for j in range(i + 1, len(population)):  # Start from i + 1 to avoid comparing the same object
+        #         if population[i] == population[j]:  # Use the overridden __eq__ method
+        #             print("\n\nWTF", caller)
+        #             print(population[i].instance_id, population[i].source, "other", population[j].instance_id, population[j].source, "\n----------------")
+        #             # break  # No need to check the rest if we found a duplicate
+
+
     def prepare_next_generation(self, fronts: Dict[int, List]) -> List[IndividualBase]:
         elitists, parents = self.select_winning_population(fronts)
+        self.debug_population(elitists, 'e1')
+        self.debug_population(parents, "p1")
+        self.debug_population(elitists+parents, 'ep')
         mutate_these_elitist = []
-        for _ in range(self.number_of_elitist_mutations):
+        for grp in range(self.number_of_elitist_mutations):
             for e in elitists:
-                mutate_these_elitist.append(e.copy_individual())
+                mutate_these_elitist.append(e.copy_individual(f"mutate elite #{grp}"))
 
-        for _ in range(len(elitists)):
-            mutate_these_elitist.append(elitists[0].copy_individual())
-        for _ in range(len(elitists)):
-            mutate_these_elitist.append(elitists[1].copy_individual())
-
-        # offspring = self.create_offspring(len(elitists)+len(parents), mutate_these_elitist[0]+parents)
-        offspring = self.create_offspring(len(elitists)+len(parents), mutate_these_elitist+parents)
-        self.mutate_population(parents)
         self.mutate_population(mutate_these_elitist)
-        # for temp_elitists in mutate_these_elitist:
-        #     self.mutate_population(temp_elitists)
-        #     elitists += temp_elitists
         elitists += mutate_these_elitist
+        self.mutate_population(parents)
+        offspring = self.create_offspring(len(elitists), parents)
+        self.debug_population(offspring, 'off')
         elitists += offspring
-        elitists += parents[:-len(mutate_these_elitist)]
+        self.debug_population(elitists, 'e2')
+        left = self.population_size - len(elitists)
+        if left > 0:
+            self.mutate_population(parents)
+            elitists += parents[:left]
+        self.debug_population(elitists, 'e4')
+
+        left = self.population_size - len(elitists)
+        while left > 0:
+            print("MISSING", left)
+            for p in parents:
+                p2 = p.copy_individual("missing")
+                self.mutate_population([p2])
+                elitists += [p2]
+                left = self.population_size - len(elitists)
+                if left <= 0:
+                    break
+
+        self.debug_population(elitists, 'e3')
 
         return elitists
 
@@ -127,47 +152,31 @@ class GeneticAlgorithm:
 
     def create_offspring(self, retained_population_size: int, parents: List[IndividualBase]) -> List[IndividualBase]:
         next_population = []
-        random.shuffle(parents)
         num_children = self.population_size - retained_population_size
-        num_breeds = int((num_children / (len(parents) / 2)))
         # TODO replace this with tournament selection
-        while len(next_population) < num_children:
-            for i in range(int(len(parents)/2)):
-                mom = parents[i]
-                dad = parents[len(parents)-1-i]
-                next_population += self.problem_domain.cross_over_function(mom, dad, self.chance_of_crossover)
-                if len(next_population) >= num_children:
-                    break
+        random.shuffle(parents)
+        for i in range(int(len(parents)/2)):
+            mom = parents[i]
+            dad = parents[len(parents)-1-i]
+            if mom == dad:
+                continue
+            next_population += self.problem_domain.cross_over_function(mom, dad, self.chance_of_crossover)
+            self.debug_population(next_population, f"{i}")
+            if len(next_population) >= num_children:
+                break
         return next_population
 
     def select_winning_population(self, fronts: Dict[int, List]) -> Tuple[List[IndividualBase], List[IndividualBase]]:
         elitists: List[IndividualBase] = []
         parents: List[IndividualBase] = []
-        if self.elitist_size > 0:
-            for front in fronts.values():
-                if len(elitists) >= self.elitist_size:
-                    break
-                stats_in_front = [i_stats for i_stats in front]
-                sorted_stats = self.problem_domain.get_sorted_individual_stats(stats_in_front)
-                sorted_front = self.__crowd_sort(front, self.elitist_size-len(parents))
-                for index, stat in enumerate(sorted_front):
-                    print(sorted_stats[index])
-                    if len(elitists) < self.elitist_size:
-                        elitists += [stat.individual.copy_individual()]
-                        continue
-                    break
-        # for i in elitists:
-        #     parents += [i]
-            # parents += [i.copy_individual()]
 
         for front in fronts.values():
-            n = len(front) + len(parents)
-            if n > self.propagation_size:
-                sorted_front = self.__crowd_sort(front, self.propagation_size - len(parents))
-                parents += [stat.individual for stat in sorted_front]
-                break
-            parents += [stat.individual for stat in front]
-
+            sorted_front = crowd_sort(front)
+            for stat in sorted_front:
+                if len(elitists) < self.elitist_size:
+                    elitists.append(stat.individual.copy_individual("keep elite"))
+                elif len(parents) < self.propagation_size:
+                    parents.append(stat.individual.copy_individual("prop"))
         return elitists, parents
 
     @staticmethod

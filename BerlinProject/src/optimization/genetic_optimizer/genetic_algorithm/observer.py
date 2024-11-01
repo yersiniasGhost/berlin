@@ -6,6 +6,7 @@ import copy
 
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator
+from optimization.genetic_optimizer.genetic_algorithm.pareto_front import crowd_sort
 
 
 def get_fitness_metrics_from_fronts(fronts: Dict[int, List[IndividualStats]]) -> List[List[float]]:
@@ -50,26 +51,21 @@ class StatisticsObserver:
     best_word: List[int] = None
 
     def collect_metrics(self, fronts: Dict[int, List[IndividualStats]]):
-        # stats = []
-        # for front in fronts.values():
-        #     for i_stats in front:
-        #         stats.append(self.objectives.collect_metrics(i_stats))
 
-        stats = get_fitness_metrics_from_fronts(fronts)
-        stats_by_ind = self.objectives.get_sorted_fitness_stats(stats)
-        ind_sums = stats_by_ind.sum(1)[..., None]
-        x = np.append(stats_by_ind, ind_sums, 1)
-        num_objectives = self.objectives.get_number_of_objectives()
-        sorted_stats = x[x[:, num_objectives].argsort()]
-        self.best_metric_iteration = sorted_stats[0]
-        self.worst_metric_iteration = sorted_stats[-1]
-        self.average_metric_iteration = sorted_stats[int(len(sorted_stats)/2)]
+        sorted_front = crowd_sort(fronts[0])
+        self.best_metric_iteration = sorted_front[0].fitness_values
+        self.worst_metric_iteration = sorted_front[-1].fitness_values
+        self.average_metric_iteration = sorted_front[int(len(sorted_front)/2)]
 
-        # self.best_word = sorted_stats[0].word
-
-        # self.best_metric_iteration = self.objectives.transform_metrics([np.min(row) for row in stats_by_metric])
-        # self.worst_metric_iteration = self.objectives.transform_metrics([np.max(row) for row in stats_by_metric])
-        # self.average_metric_iteration=self.objectives.transform_metrics([np.average(row) for row in stats_by_metric])
+        # stats = get_fitness_metrics_from_fronts(fronts)
+        # stats_by_ind = self.objectives.get_sorted_fitness_stats(stats)
+        # ind_sums = stats_by_ind.sum(1)[..., None]
+        # x = np.append(stats_by_ind, ind_sums, 1)
+        # num_objectives = self.objectives.get_number_of_objectives()
+        # sorted_stats = x[x[:, num_objectives].argsort()]
+        # self.best_metric_iteration = sorted_stats[0]
+        # self.worst_metric_iteration = sorted_stats[-1]
+        # self.average_metric_iteration = sorted_stats[int(len(sorted_stats)/2)]
 
         self.best_metrics.append(self.best_metric_iteration)
         self.worst_metrics.append(self.worst_metric_iteration)

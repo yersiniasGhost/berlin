@@ -12,6 +12,7 @@ from operations.monitor_backtest_results import MonitorResultsBacktest
 @dataclass
 class MlfFitnessCalculator(FitnessCalculator):
     data_streamer: Optional[DataStreamer] = None
+    display_results: bool = False
 
     def __post_init__(self):
         pass
@@ -21,6 +22,9 @@ class MlfFitnessCalculator(FitnessCalculator):
 
     def initialize_objectives(self, population: List[MlfIndividual]):
         pass
+
+    def set_final_result(self, display: bool):
+        self.display_results = display
 
     # This is the entry point for all simulations to be executed for each of the
     # individual set of rules.  Calculate the state of the system for every time stamp
@@ -34,7 +38,14 @@ class MlfFitnessCalculator(FitnessCalculator):
             self.data_streamer.replace_monitor_configuration(individual.monitor_configuration)
             self.data_streamer.replace_external_tools(bt)
             self.data_streamer.run()
-            print(cnt, "fitness: ", bt.results)
+            if self.display_results:
+                print("Final Result?")
+                print(cnt, "fitness: ", bt.results, f"profit: %{(bt.get_total_percent_profits() * 100.0):.3f}", f"loss: %{(bt.get_total_percent_losses()*100.0):.3f}" )
+                print(individual.monitor.triggers)
+                print("Threshold", individual.monitor.threshold)
+                for indicator in individual.monitor_configuration.indicators:
+                    print(indicator.name, indicator.parameters)
+                print("-----------")
             cnt += 1
             individual_stats = self.__calculate_individual_stats(individual, bt, cnt)
             fitness_results.append(individual_stats)

@@ -11,3 +11,4 @@ class IndicatorDefinition(BaseModel):
     parameters: Optional[dict] = None
     ranges: Optional[dict] = None
     description: str = "NA"
+

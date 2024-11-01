@@ -1,26 +1,103 @@
 {
-  "test_name": "VFO",
+  "test_name": "ABC-02-bear_threshold",
   "stalled_counter": 10,
   "monitor": {
 	"_id": "65f2d5555555555555555555",
 	"user_id": "65f2d6666666666666666666",
 	"name": "My Test Strategy",
 	"description": "A test monitor using SMA and MACD",
-	"threshold": 0.5,
+	"threshold": 0.8,
+	"bear_threshold": 0.8,
 	"triggers": {
-	  "my_silly_sma_cross": 1.0,
-	  "my_silly_bol_bounce": 1.0
+	  "bollinger_bull": 1.0,
+	  "macd_cross_bull": 1.0,
+	  "smaX_bull": 1.0
+	}, 
+	"bear_triggers": {
+	  "bollinger_bear": 1.0
 	}
   },
   "indicators": [
 	{
-	  "name": "my_silly_sma_cross",
+	  "name": "macd_cross_bull",
+	  "type": "Indicator",
+	  "function": "macd_histogram_crossover",
+            "parameters": {
+                "slow": 13,
+                "fast": 5,
+                "signal": 3,
+                "histogram_threshold": 0.08,
+                "lookback": 10,
+                "trend": "bullish"
+            },
+	  "ranges": {
+		"slow": {"t": "int",  "r": [11, 30] },
+		"fast": {"t": "int", "r":  [3, 11]},
+		"signal": {"t":  "int", "r": [3, 11]},
+		"histogram_threshold": {"t": "float", "r": [0.02, 0.2]},
+		"lookback": {"t": "int", "r": [2, 15]},
+		"trend": {"t": "skip"}
+	  }
+	},
+	{
+	  "name": "bollinger_bull",
+	  "function": "bol_bands_lower_band_bounce",
+	  "type": "Indicator",
+	  "parameters": {
+		"period": 25,
+		"sd": 2,
+		"candle_bounce_number": 3,
+		"bounce_trigger": 0.5,
+		"lookback": 10,
+		"trend": "bearish"
+	  },
+	  "ranges": {
+		"bounce_trigger": {
+		  	"t": "float",
+			"r": [
+			  0.1,
+			  0.6
+			]
+		},
+		"lookback": {
+		  "t": "int",
+		  "r": [
+			5,
+			15
+		  ]
+		},
+		"candle_bounce_number": {
+		  "t": "int",
+		  "r": [
+			2,
+			8
+		  ]
+		},
+		"period": {
+		  "t": "int",
+		  "r": [
+			5,
+			25
+		  ]
+		},
+		"sd": {
+		  "t": "float",
+		  "r": [
+			1.25,
+			2.75
+		  ]
+		}
+	  }
+	},
+	{
+	  "name": "smaX_bull",
 	  "function": "sma_crossover",
 	  "type": "Indicator",
 	  "parameters": {
 		"period": 10,
 		"crossover_value": 0.0005,
-		"lookback": 25
+		"lookback": 25,
+		"trend": "bullish"
 	  },
 	  "ranges": {
 		"period": {
@@ -35,12 +112,12 @@
 		"r":  [0.0001, 0.001]},
 		"lookback": {
 		  "t": "int",
-		  "r": [5, 25]
+		  "r": [2, 15]
 		}
 	  }
 	  },
 	{
-	  "name": "my_silly_bol_bounce",
+	  "name": "bollinger_bear",
 	  "function": "bol_bands_lower_band_bounce",
 	  "type": "Indicator",
 	  "parameters": {
@@ -48,19 +125,24 @@
 		"sd": 2,
 		"candle_bounce_number": 5,
 		"bounce_trigger": 0.2,
-		"lookback": 10
+		"lookback": 10,
+		"trend": "bullish"
 	  },
 	  "ranges": {
 		"bounce_trigger": {
-		  "t": "skip"
+		  "t": "float",
+			"r": [
+			  0.1,
+			  0.6
+			]
 		},
 		"lookback": {
 		  "t": "int",
-		  "r": [5, 25]
+		  "r": [2, 15]
 		},
 		"candle_bounce_number": {
 		  "t": "int",
-		  "r": [2, 10]
+		  "r": [2, 8]
 		},
 		"period": {
 		  "t": "int",
@@ -72,8 +154,8 @@
 		"sd": {
 		  "t": "float",
 		  "r": [
-			1.5,
-			2.5
+			1.25,
+			2.75
 		  ]
 		}
 	  }
@@ -82,8 +164,8 @@
   "data": {
 	"type": "TickHistory",
 	"ticker": "NVDA",
-	"start_date": "2024-05-02",
-	"end_date": "2024-05-30",
+	"start_date": "2024-05-01",
+	"end_date": "2024-07-30",
 	"time_increment": 1
   },
   "objectives": [
@@ -93,16 +175,16 @@
 	},
 	{
 	  "objective": "MinimizeLosingTrades",
-	  "weight": 1.0
+	  "weight": 2.0
 	},
-	{ "objective":  "MinimizeLoss", "weight":  1.0}
+	{ "objective":  "MinimizeLoss", "weight":  5.0}
   ],
   "ga_hyperparameters": {
-	"number_of_iterations": 50,
+	"number_of_iterations": 200,
 	"population_size": 200,
-	"propagation_fraction": 0.2,
-	"elite_size": 5,
-	"chance_of_mutation": 0.05,
-	"chance_of_crossover": 0.05
+	"propagation_fraction": 0.5,
+	"elite_size": 15,
+	"chance_of_mutation": 0.1,
+	"chance_of_crossover": 0.1
   }
 }

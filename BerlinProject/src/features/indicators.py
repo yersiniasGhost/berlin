@@ -22,10 +22,11 @@ def sma_crossover(tick_data: List[TickData], parameters: Dict[str, float]) -> np
 
     sma = sma_indicator(tick_data, parameters['period'])
     closes = np.array([tick.close for tick in tick_data])
-    sma_threshold = sma * (1 + parameters['crossover_value'])
     if parameters['trend'] == 'bullish':
+        sma_threshold = sma * (1 + parameters['crossover_value'])
         crossovers = closes > sma_threshold
     elif parameters['trend'] == 'bearish':
+        sma_threshold = sma * (1 - parameters['crossover_value'])
         crossovers = closes < sma_threshold
         # Detect the moment of crossover (1 only when previous was 0 and current is 1)
     result = np.zeros(len(tick_data))
@@ -50,7 +51,6 @@ def macd_histogram_crossover(tick_data: List[TickData], parameters: Dict[str, fl
         return np.array([math.nan] * len(tick_data))
 
     macd, signal, histogram = macd_calculation(tick_data, parameters['fast'], parameters['slow'], parameters['signal'])
-
     # Initialize result array
     result = np.zeros(len(tick_data))
 

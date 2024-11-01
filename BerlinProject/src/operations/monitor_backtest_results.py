@@ -37,7 +37,7 @@ class MonitorResultsBacktest(ExternalTool):
         self.monitor_value_bear = []
         self.cash = 100000
         self.size = float
-        self.results = {"success": 0, "fail": 0, "bearish_signal": 0}
+        self.results = {"success": 0, "fail": 0, "bearish_signal success": 0, "bearish_signal fail": 0}
 
     def get_total_percent_profits(self) -> float:
         pct = 0.0
@@ -116,16 +116,16 @@ class MonitorResultsBacktest(ExternalTool):
                 self.cash = self.size * tick.close
                 self.size = 0
                 self.results['fail'] += 1
-            elif bear_trigger >= self.monitor.threshold:
+            elif bear_trigger >= self.monitor.bear_threshold:
                 self.trade.exit_price = tick.close
                 self.trade.exit_index = index
-                self.trade.exit_type = 'bearish_signal'
                 self.trade_history.append(self.trade)
-                self.trade = None
                 self.cash = self.size * tick.close
                 self.size = 0
-                self.results['bearish_signal'] += 1
-
+                result = "success" if self.trade.exit_price > self.trade.entry_price else "fail"
+                self.trade.exit_type = f"bearish_signal {result}"
+                self.results[self.trade.exit_type] += 1
+                self.trade = None
 
         #     make it a choice if you want to end position at end of day
         if self.trade:

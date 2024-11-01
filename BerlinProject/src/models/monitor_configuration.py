@@ -16,3 +16,7 @@ class MonitorConfiguration(BaseModel):
             values['definition'] = [IndicatorDefinition(**item) for item in values['indicators']]
         return values
 
+
+
+    def __eq__(self, other: "MonitorConfiguration"):
+        return self.indicators == other.indicators

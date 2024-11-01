@@ -43,6 +43,15 @@ class IndicatorProcessorHistorical:
         self.index += 1
         return output
 
+    def precalculate_day(self):
+        '''
+        We must fina all the None's and send in the day data individually.
+        Rather than output[indicator.name] = metric   we should output[indicator.name] += metric
+        :return:
+        '''
+        pass
+
+
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
     def precalculate(self) -> Dict[str, np.array]:
