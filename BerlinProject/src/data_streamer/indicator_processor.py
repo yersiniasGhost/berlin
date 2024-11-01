@@ -83,6 +83,5 @@ class IndicatorProcessor:
 
         elif indicator.function == 'bol_bands_lower_band_bounce':
             return {indicator.name: bol_bands_lower_band_bounce(history, indicator.parameters)}
-
         else:
             raise ValueError(f"Unknown indicator: {indicator.name}")

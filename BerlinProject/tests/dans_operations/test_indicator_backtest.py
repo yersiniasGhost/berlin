@@ -70,8 +70,8 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
         data_config = {
             'type': 'TickHistory',
             'ticker': "NVDA",
-            'start_date': datetime(2024, 10, 23),
-            'end_date': datetime(2024, 10, 23),
+            'start_date': '2024-05-01',
+            'end_date': '2024-05-30',
             'time_increment': 1
 
         }
@@ -85,7 +85,8 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
                 'fast': 6,
                 'slow': 14,
                 'signal': 5,
-                'histogram_threshold': .05
+                'histogram_threshold': .05,
+                'trend': 'bullish'
             }
         }
 
@@ -95,7 +96,8 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
             'type': INDICATOR_TYPE,
             'parameters': {
                 'period': 10,
-                'crossover_value': .0005
+                'crossover_value': .0005,
+                'trend': 'bullish'
             }
         }
 
@@ -107,7 +109,8 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
                 'period': 10,
                 'sd': 2,
                 'candle_bounce_number': 5,
-                'bounce_trigger': .2}
+                'bounce_trigger': .2,
+                'trend': 'bullish'}
 
         }
 
@@ -125,3 +128,14 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
         streamer.run()
         x
         # self.assertEqual(0, len(bt.trade_history))
+
+
+    def test_calc_multiple_fib(self):
+        data_config = {
+            'type': 'TickHistory',
+            'ticker': "NVDA",
+            'start_date': '2024-05-01',
+            'end_date': '2024-05-30',
+            'time_increment': 1
+
+        }

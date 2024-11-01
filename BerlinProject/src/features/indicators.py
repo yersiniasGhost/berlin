@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from typing import Dict, List
 
 import talib
@@ -57,6 +58,7 @@ def macd_histogram_crossover(tick_data: List[TickData], parameters: Dict[str, fl
     # Fixed the syntax for checking trend parameter
     if parameters['trend'] == 'bullish':  # Removed []
         # Create a boolean array where True indicates histogram > threshold
+
         above_threshold = histogram > parameters['histogram_threshold']
 
         # Detect the moment of crossover (1 only when previous was below and current is above)
@@ -129,5 +131,59 @@ def bol_bands_lower_band_bounce(tick_data: List[TickData], parameters: Dict[str,
                         (i == candle_bounce_number or
                          (upper[i - 1] - closes[i - 1]) / (upper[i - 1] - middle[i - 1]) < parameters[
                              'bounce_trigger'])):
-                    signals[i] = 1  # Using -1 for bearish signals to differentiate from bullish
+                    signals[i] = 1
     return signals
+
+
+
+# TODO: calculate reistance and support lines first with local extrema and minima first.
+# have it look back 10 mins on both sides for each one use those as the support and resistnace.
+# continually update. choose ones on either side where there is a extrema or minima. if there is its valid.
+
+
+
+
+
+
+
+
+
+def fib_retracement_resistance_hit(daily_data: List[Dict[str, List[TickData]]], lag_period: int = 30) -> np.ndarray:
+    """
+    Calculate Fibonacci signals for all data
+    Returns a single continuous numpy array containing signals (0, 1, or nan)
+    """
+    all_signals = np.array([], dtype=float)
+
+    for day_dict in daily_data:
+        tick_data = day_dict['data']
+        fib_levels = calculate_fib_levels(tick_data, lag_period)
+        # Create array for signals for this day
+        day_signals = np.full(len(tick_data), 0, dtype=float)
+        day_signals[:lag_period] = np.nan  # Fill lag period with NaN
+        fib_values = [
+            fib_levels.fib_0,
+            fib_levels.fib_236,
+            fib_levels.fib_382,
+            fib_levels.fib_500,
+            fib_levels.fib_618,
+            fib_levels.fib_786,
+            fib_levels.fib_1000
+        ]
+
+        # Check each tick after lag period for crossovers
+        for i in range(lag_period, len(tick_data)):
+            current_close = tick_data[i].close
+            previous_close = tick_data[i - 1].close
+
+            # Check if close hits one of the fib resistance lines from below.
+            for fib_value in fib_values:
+                if previous_close < fib_value and current_close >= fib_value:
+                    day_signals[i] = 1
+                    break
+
+        # Append the signals to the array
+        all_signals = np.concatenate([all_signals, day_signals])
+
+    return all_signals
+

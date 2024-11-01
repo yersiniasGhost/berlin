@@ -4,15 +4,14 @@ import numpy as np
 import pandas as pd
 
 from src.features.indicators import sma_crossover, macd_calculation, macd_histogram_crossover, create_bol_bands, \
-    bol_bands_lower_band_bounce
+    bol_bands_lower_band_bounce, fib_retracement_resistance_hit
 from environments.tick_data import TickData
 
 
 class TestSMATriggerCrossover(unittest.TestCase):
 
     def test_crossover(self):
-
-        parameters= {
+        parameters = {
             'period': 3,
             'crossover_value': .005
         }
@@ -45,12 +44,12 @@ class TestSMATriggerCrossover(unittest.TestCase):
         np.testing.assert_array_equal(histogram, expected_histogram)
 
     def test_macd_histogram_crossover(self):
-
         parameters = {
             'fast': 12,
             'slow': 26,
             'signal': 9,
-            'histogram_threshold': 20.0
+            'histogram_threshold': 20.0,
+            'trend': 'bullish'
         }
 
         TESTS_DATA_DIR = os.path.join(os.path.dirname(__file__), '../test_data')
@@ -68,7 +67,6 @@ class TestSMATriggerCrossover(unittest.TestCase):
         np.testing.assert_array_equal(check[-10:], expected_last_10)
 
     def test_create_bol_bands(self):
-
         parameters = {
             'period': 10,
             'sd': 2
@@ -106,6 +104,7 @@ class TestSMATriggerCrossover(unittest.TestCase):
 
         sap = bol_bands_lower_band_bounce(history, parameters)
         x
+
     def test_sma_cross_bear(self):
         parameters = {
             'period': 3,
@@ -149,7 +148,6 @@ class TestSMATriggerCrossover(unittest.TestCase):
         ]
 
         sap = bol_bands_lower_band_bounce(history, parameters)
-        x
 
     def test_macd_histogram_crossover_bearish(self):
         parameters = {
@@ -171,4 +169,4 @@ class TestSMATriggerCrossover(unittest.TestCase):
         ]
 
         check = macd_histogram_crossover(history, parameters)
-        x
+
