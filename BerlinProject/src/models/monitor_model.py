@@ -9,6 +9,7 @@ class Monitor(BaseModel):
     name: str
     description: str = "NA"
     threshold: float
+    bear_threshold: float
     # triggers are Custom IndicatorDefintion IDs (later, for now we are using the names)
     triggers: Dict[str, float]
     bear_triggers: Optional[Dict[str, float]] = None

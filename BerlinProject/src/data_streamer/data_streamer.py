@@ -5,6 +5,7 @@ from mongo_tools.tick_history_tools import TickHistoryTools
 from .feature_vector_calculator import FeatureVectorCalculator
 from mongo_tools.sample_tools import SampleTools
 from .data_preprocessor import DataPreprocessor
+from .indicator_processor_historical import IndicatorProcessorHistorical
 from .indicator_processor import IndicatorProcessor
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
@@ -19,10 +20,13 @@ class DataStreamer:
         self.data_link: Optional[Union[TickHistoryTools, SampleTools]] = None
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
-        self.reset_after_sample : bool = True
+        self.reset_after_sample: bool = False
 
-    def replace_monitor_configuration(self, monitor: MonitorConfiguration):
-        self.indicators = IndicatorProcessor(monitor)
+    def replace_monitor_configuration(self, monitor: MonitorConfiguration, historical: bool = True):
+        if historical:
+            self.indicators = IndicatorProcessorHistorical(monitor, self.data_link)
+        else:
+            self.indicators = IndicatorProcessor(monitor)
 
     def configure_data(self, data_config: dict) -> None:
         # TODO finish testing:
@@ -54,7 +58,7 @@ class DataStreamer:
         # normalize the data.
         sample_stats = self.data_link.get_stats()
         self.preprocessor.reset_state(sample_stats)
-        index=0
+        index = 0
         for tick in self.data_link.serve_next_tick():
             if tick:
                 self.preprocessor.next_tick(tick)

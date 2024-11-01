@@ -7,6 +7,8 @@ from models.monitor_model import Monitor
 
 def choose_weights(monitor: Monitor):
     monitor.triggers = {key: random.randint(1, 100) for key in monitor.triggers}
+    monitor.bear_triggers = {key: random.randint(1, 100) for key in monitor.bear_triggers}
+    monitor.threshold = random.uniform(0.6, 0.9)
 
 
 def choose_parameters(config: MonitorConfiguration):
@@ -24,10 +26,17 @@ def choose_parameters(config: MonitorConfiguration):
 # The definition of the optimization individual
 class MlfIndividual(IndividualBase):
 
-    def __init__(self, monitor_configuration: MonitorConfiguration,  monitor: Monitor ):
+    def __init__(self, monitor_configuration: MonitorConfiguration,  monitor: Monitor, source: str = "NA"):
+        super().__init__(source)
         self.monitor = monitor
         self.monitor_configuration = monitor_configuration
 
+
+    def __eq__(self, other):
+        if not isinstance(other, MlfIndividual):
+            return False
+        return (self.monitor == other.monitor and
+                self.monitor_configuration == other.monitor_configuration)
 
     @classmethod
     def create_itself(cls, monitor: Monitor,  monitor_configuration: MonitorConfiguration) -> "MlfIndividual":
@@ -35,7 +44,7 @@ class MlfIndividual(IndividualBase):
         choose_weights(new_monitor)
         new_config = copy.deepcopy(monitor_configuration)
         choose_parameters(new_config)
-        return MlfIndividual(new_config, monitor=new_monitor)
+        return MlfIndividual(new_config, monitor=new_monitor, source="init")
 
 
     '''
@@ -44,8 +53,10 @@ class MlfIndividual(IndividualBase):
     def mutate_function(self, mutate_probability: float):
         pass
 
-    def copy_individual(self) -> "MlfIndividual":
-        return MlfIndividual(monitor=self.monitor, monitor_configuration=self.monitor_configuration )
+    def copy_individual(self, source: str = "copy") -> "MlfIndividual":
+        return MlfIndividual(monitor=copy.deepcopy(self.monitor),
+                             monitor_configuration=copy.deepcopy(self.monitor_configuration),
+                             source=source)
 
     def __str__(self):
         out = f"MlfIndividual: {self.monitor}"

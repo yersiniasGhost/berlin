@@ -1,7 +1,7 @@
 from typing import Tuple, List, Dict
 import numpy as np
 
-from optimization.genetic_optimizer.abstractions.individual_stats import  IndividualStats
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 
 
 # Non-dominating sorting:
@@ -28,30 +28,28 @@ def collect_domination_statistics(individuals: List[IndividualStats]):
                 solution_b.dominated_by_solution()
 
 
-def get_pareto_front(individuals: List[IndividualStats]) -> List[IndividualStats]:
-    output = [ind for ind in individuals if ind.dominated_by_count == 0]
+def get_pareto_front(individuals: List[IndividualStats], index: int) -> List[IndividualStats]:
+    output = [ind for ind in individuals if ind.dominated_by_count == index]
     return output
 
 
-def advance_pareto_front(individuals: List[IndividualStats]):
-    for ind in individuals:
-        ind.reduce_dominated_by_count()
-        for dom in ind.dominates_over:
-            dom.reduce_dominated_by_count()
-
 
 def collect_fronts(individuals: List[IndividualStats]) -> Dict[int, List]:
-    more_to_come = True
     index = 0
     pareto_fronts = dict()
-    while more_to_come:
-        front = get_pareto_front(individuals)
+    while True:
+        front = get_pareto_front(individuals, index)
         if len(front) == 0:
             break
-        advance_pareto_front(front)
-        pareto_fronts[index] = front
+        pareto_fronts[index] = balance_fronts(front)
         index += 1
     return pareto_fronts
+
+
+def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
+    ideal_point = np.min([ind.fitness_values for ind in front], axis=0)
+    balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
+    return balanced_front
 
 
 def sort_front(individuals: List[IndividualStats], objective_index: int) -> List[IndividualStats]:
@@ -62,6 +60,9 @@ def crowd_sort(front: List[IndividualStats]) -> List[IndividualStats]:
     """
     For each objective, sort the individuals then calculate the crowding distance for each individual
     """
+    if True:
+        return balance_fronts(front)
+
     eps = np.finfo(float).eps
     objective_count = len(front[0].fitness_values)
     for oc in range(0, objective_count):
@@ -72,7 +73,7 @@ def crowd_sort(front: List[IndividualStats]) -> List[IndividualStats]:
         for i in range(1, len(sorted_front)-1):
             fv0 = sorted_front[i-1].fitness_values[oc]
             fv1 = sorted_front[i+1].fitness_values[oc]
-            sorted_front[i].crowding_distance += -(fv1-fv0) / denom
+            sorted_front[i].crowding_distance += (fv1-fv0) / denom
             # The minus makes the largest absolute values the largest negative number.  Easier for sorting
             # and selecting.
 

@@ -5,21 +5,27 @@ from pathlib import Path
 import random
 import argparse
 
+
 from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
 from optimization.mlf_optimizer.mlf_individual import MlfIndividual
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 import logging
-
 # Set pymongo logger level to WARNING
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 MAX_STALLED_METRIC = 200
 
 
-def output_best_monitor(individual: MlfIndividual, output_path: Path):
-    print("BEST Result")
+def output_best_monitor(stats: IndividualStats, output_path: Path):
+    print("'BEST' Result")
+    individual = stats.individual
     print(individual.monitor.triggers)
+    print("Threshold", individual.monitor.threshold)
     for indicator in individual.monitor_configuration.indicators:
         print(indicator.name, indicator.parameters)
+    print("Fitness Values", stats.index, stats.fitness_values)
+
+
 
 
 if __name__ == "__main__":
@@ -64,6 +70,13 @@ if __name__ == "__main__":
     # with open(log_path / f'{tn}.csv', 'w') as f:
     #     f.write(f"Random Seed: {args.seed}\n")
 
+    log_p = Path(log_path) / f'{tn}.csv'
+    if log_p.exists():
+        log_p.unlink()
+    log_p = Path(log_path) / f'{tn}.iterations'
+    if log_p.exists():
+        log_p.unlink()
+
     io = MlfOptimizerConfig.from_file(input_path, ga_config)
     # io.write_configuration(copy_payload)
     genetic_algorithm = io.create_project()
@@ -89,7 +102,7 @@ if __name__ == "__main__":
         out_str = f"{test_name}, {stats[0].iteration}/{genetic_algorithm.number_of_generations}, {stalled_metric}/{max_stalled_metric}, " \
                   f"{dt:.2f}s, eta: {eta / 60:.2f}m, {metric_out}"
         s = e
-        print(out_str)
+        print("\n", out_str)
         ot, sep = "", ""
         with open(log_path / f'{tn}.csv', 'a') as f:
             for m in stats[1].best_metric_iteration:
@@ -99,11 +112,17 @@ if __name__ == "__main__":
 
         with open(log_path / f'{tn}.iterations', 'a') as f:
             f.write(f'{out_str}\n')
+
+
         best = stats[1].best_front[0]
         last_metric = metric_out
 
-        if stats[0].iteration % skip == 0:
-            output_best_monitor(best.individual, plots_path)
+        # if stats[0].iteration % skip == 0:
+        #     output_best_monitor(best, plots_path)
+
+        io.fitness_calculator.set_final_result(True)
+        io.fitness_calculator.calculate_fitness_functions(-9, [best.individual])
+        io.fitness_calculator.set_final_result(False)
         # if stats[0].iteration % 50 == 0:
         #     tn_iter = f"{tn}--{stats[0].iteration}"
         #     plot_combined_results(io, best.individual, plots_path, tn_iter, show_graphs, io.start_date, io.time_frame)
