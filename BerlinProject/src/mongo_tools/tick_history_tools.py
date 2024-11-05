@@ -1,10 +1,11 @@
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
 from bson import ObjectId
 from config.types import PYMONGO_ID, SAMPLE_COLLECTION, TICK_HISTORY_COLLECTION
 from environments.tick_data import TickData
-
+from .book_data import BookData
 from pymongo.collection import Collection
 
 from models.tick_history import TickHistory
@@ -13,20 +14,20 @@ from pymongo import InsertOne, collection
 import logging
 
 
+STREAMING_MODE = "stream"
+RANDOM_MODE = "random"
+BOOK_MODE = "book mode"
 @dataclass
 class DailyTickHistory:
     data: Dict[str, List[TickData]]
 
 
-DAILY_STREAM = List[TickData]
-MONTHLY_STREAM = Dict[str, DAILY_STREAM]
-TICK_GROUP = List[MONTHLY_STREAM]
-
-
 class TickHistoryTools:
-    def __init__(self, daily_data: List[TICK_GROUP]):  # Updated type hint
-        self.daily_data = daily_data
+    def __init__(self, daily_data: List[BookData]):  # Updated type hint
+        self.books = daily_data
         self.tick_index = 0
+        self.episodes = []
+        self.episode_index = 0
 
     def get_stats(self) -> dict:
         stats = {
@@ -77,24 +78,22 @@ class TickHistoryTools:
 
     # [{0: [TickData]}, {1:[TickData]}, {2:[TickData]}...]
     @classmethod
-    def get_tools2(cls, selected_data_config: List[Dict]):
-        all_processed_data = []
-        indexed = []
+    def get_tools2(cls, selected_data_config: List[Dict]) -> "TickHistoryTools":
+        books = []
 
         for spec in selected_data_config:
             start_date = datetime.strptime(spec['start_date'], '%Y-%m-%d')
             end_date = datetime.strptime(spec['end_date'], '%Y-%m-%d')
             time_increments = int(spec['time_increments'])
-            data = cls.get_the_data_for_tools(spec['ticker'], start_date,
+            book_data = cls.get_the_data_for_tools(spec['ticker'], start_date,
                                               end_date, time_increments)
-            all_processed_data.append(data)
+            books.append(book_data)
             # creates "indexed" which is the index to tickdata dict.
-            indexed = cls.index_days(daily_data=all_processed_data)
 
-        return cls(daily_data=all_processed_data)
+        return cls(books)
 
     @classmethod
-    def get_the_data_for_tools(cls, ticker: str, start_date: datetime, end_date: datetime, time_increments) -> List:
+    def get_the_data_for_tools(cls, ticker: str, start_date: datetime, end_date: datetime, time_increments) -> BookData:
         processed_days = []
         current_date = start_date
 
@@ -110,15 +109,16 @@ class TickHistoryTools:
                     current_day_date = current_date.replace(day=day_int)
                     if start_date <= current_day_date <= end_date:
                         day_ticks = list(month_data[day].values())
-                        daily_history = {'data': day_ticks}
-                        processed_days.append(daily_history)
+                        processed_days.append(day_ticks)
 
             # Move to next month
             if current_date.month == 12:
                 current_date = current_date.replace(year=current_date.year + 1, month=1)
             else:
                 current_date = current_date.replace(month=current_date.month + 1)
-        return processed_days
+
+        bd = BookData(processed_days)
+        return bd
 
     # Function to take the daily data and make it the indexed format...
     # may refactor it somewhere else
@@ -140,21 +140,68 @@ class TickHistoryTools:
         processed_days = cls.get_the_data_for_tools(ticker, start_date, end_date, time_increments)
         return cls(daily_data=[processed_days])
 
+    @staticmethod
+    def split_list(lst, n):
+        k, m = divmod(len(lst), n)
+        return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
+
+    def set_iteration_mode(self, mode: str, episode_count: int = 1, randomize: bool = True):
+        self.episodes = []
+        if mode == STREAMING_MODE:
+            # Create tuples for all combinations of (book_idx, value_idx)
+            indices = []
+            for book_idx, book in enumerate(self.books):
+                data_length = book.data_length()
+                for value_idx in range(data_length):
+                    indices.append((book_idx, value_idx))
+            self.episodes.append(indices)
+
+        elif mode == BOOK_MODE:
+            for book_idx, book in enumerate(self.books):
+                indices = []
+                data_length = book.data_length()
+                for value_idx in range(data_length):
+                    indices.append((book_idx, value_idx))
+                if randomize:
+                    random.shuffle(indices)
+                self.episodes.append(indices)
+        elif mode == RANDOM_MODE:
+            indices = []
+            for book_idx, book in enumerate(self.books):
+                data_length = book.data_length()
+                for value_idx in range(data_length):
+                    indices.append((book_idx, value_idx))
+            random.shuffle(indices)
+            self.episodes = self.split_list(indices, episode_count)
+
+        self.iteration_mode = mode
+
+
+
     def serve_next_tick(self) -> Iterable[TickData]:
-        for daily_data in self.daily_data:
-            self.tick_index = 0
-            data = daily_data['data']  # Changed to dictionary access
-            for tick in data:
-                yield tick
-                self.tick_index += 1
+
+        for episode in self.episodes:
+            for book_index, day_index in episode:
+                book = self.books[book_index]
+                for (absolute_index, td) in book.get_next_tick(day_index):
+                    yield td
             yield None
+        yield None
+
+        # elif self.iteration_mode == RANDOM_MODE:
+        #     count_of_days =0
+        #     for book in self.books:
+        #         for day in range(len(book.data)):
+
+
+
 
     # new serve next tick to handle the indexed dict.
     def serve_next_tick2(self) -> Iterable[TickData]:
 
-        for day_index in sorted(self.daily_data.keys()):
+        for day_index in sorted(self.books.keys()):
             self.tick_index = 0
-            data = self.daily_data[day_index]
+            data = self.books[day_index]
 
             for tick in data:
                 yield tick
@@ -164,7 +211,7 @@ class TickHistoryTools:
 
     def get_history(self, separate_days: bool = False) -> List[TickData]:
         history = []
-        for daily_data in self.daily_data:
+        for daily_data in self.books:
             history += daily_data['data']
             if separate_days:
                 history += [None]
