@@ -27,7 +27,7 @@ class MonitorResultsBacktest(ExternalTool):
 
     def __init__(self, name: str, monitor: Monitor):
         self.position = []
-        self.target_profit = 2
+        self.target_profit = 10
         self.stop_loss = 1
         self.name = name
         self.trade: Optional[Trade] = None
@@ -38,6 +38,7 @@ class MonitorResultsBacktest(ExternalTool):
         self.cash = 100000
         self.size = float
         self.results = {"success": 0, "fail": 0, "bearish_signal success": 0, "bearish_signal fail": 0}
+        self.gains = 0
 
     def get_total_percent_profits(self) -> float:
         pct = 0.0
@@ -87,6 +88,7 @@ class MonitorResultsBacktest(ExternalTool):
         bear_trigger = self.calculate_trigger(indicator_results, self.monitor.bear_triggers)
         self.monitor_value_bear.append(bear_trigger)
 
+
         if bull_trigger >= self.monitor.threshold:
             if self.trade is None:
                 self.trade = Trade(size=1, entry_price=tick.close, entry_index=index)
@@ -107,6 +109,7 @@ class MonitorResultsBacktest(ExternalTool):
                 self.cash = self.size * tick.close
                 self.size = 0
                 self.results['success'] += 1
+                self.gains =+ self.get_total_percent_profits()
             elif tick.close <= exit_loss:
                 self.trade.exit_price = tick.close
                 self.trade.exit_index = index
@@ -116,6 +119,7 @@ class MonitorResultsBacktest(ExternalTool):
                 self.cash = self.size * tick.close
                 self.size = 0
                 self.results['fail'] += 1
+                self.gains =- self.get_total_percent_losses()
             elif bear_trigger >= self.monitor.bear_threshold:
                 self.trade.exit_price = tick.close
                 self.trade.exit_index = index
@@ -125,13 +129,18 @@ class MonitorResultsBacktest(ExternalTool):
                 result = "success" if self.trade.exit_price > self.trade.entry_price else "fail"
                 self.trade.exit_type = f"bearish_signal {result}"
                 self.results[self.trade.exit_type] += 1
+                if result == 'success':
+                    self.gains =+ self.get_total_percent_profits()
+                if result == 'fail':
+                    self.gains =- self.get_total_percent_losses()
                 self.trade = None
-
         #     make it a choice if you want to end position at end of day
         if self.trade:
             if tick.close is None:
                 self.trade.exit_price = tick.close
                 self.trade.exit_index = index
+
+
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         pass

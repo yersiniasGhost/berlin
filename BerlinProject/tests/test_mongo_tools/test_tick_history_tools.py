@@ -30,7 +30,6 @@ class TestTickHistory(unittest.TestCase):
         self.assertEqual(len(check), 3,
                          f"Expected 3 trading days got {len(check)}")
 
-
     def test_ticks_in_day(self):
         """Test that we can get tick data across multiple days"""
         tools = TickHistoryTools.get_tools(
@@ -67,4 +66,51 @@ class TestTickHistory(unittest.TestCase):
             end_date=datetime(2024, 9, 25),
             time_increments=1
         )
+
+
+class TestNewTickHistory(unittest.TestCase):
+
+    def test_new_method(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '1'
+        }
+        ]
+
+        tools = TickHistoryTools.get_tools2(data_config)
+
+        check = tools.daily_data
+
+        lengths = [len(data_dict) for outer_list in check for data_dict in outer_list]
+
+        self.assertEqual(len(lengths), 3,
+                         f"Expected 3 trading days got {len(check)}")
+
+    def test_new_method2(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '5'
+        },
+            {
+                'ticker': 'META',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            }
+        ]
+
+        tools = TickHistoryTools.get_tools2(data_config)
+
+        check = tools.daily_data
+
+        indexed_data = TickHistoryTools.index_days(check)
+
+        self.assertEqual(len(indexed_data), 6,
+                         f"Expected 6 indexed tickdatas got {len(check)}")
+
+
 

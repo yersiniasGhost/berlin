@@ -18,11 +18,15 @@ class DailyTickHistory:
     data: Dict[str, List[TickData]]
 
 
+DAILY_STREAM = List[TickData]
+MONTHLY_STREAM = Dict[str, DAILY_STREAM]
+TICK_GROUP = List[MONTHLY_STREAM]
+
+
 class TickHistoryTools:
-    def __init__(self, daily_data: List[Dict[str, List[TickData]]]):  # Updated type hint
+    def __init__(self, daily_data: List[TICK_GROUP]):  # Updated type hint
         self.daily_data = daily_data
         self.tick_index = 0
-
 
     def get_stats(self) -> dict:
         stats = {
@@ -54,7 +58,7 @@ class TickHistoryTools:
         return Mongo().database[TICK_HISTORY_COLLECTION]
 
     @classmethod
-    def get_history_data(cls, ticker: str, date: datetime, time_increments: int = 1) -> Optional[TickHistory]:
+    def get_history_data(cls, ticker: str, date: datetime, time_increments: str = '1') -> Optional[TickHistory]:
         """Fetch tick history data for given parameters"""
 
         collection = cls.get_collection()
@@ -71,9 +75,26 @@ class TickHistoryTools:
             return TickHistory(**retrieved_data)
         return None
 
+    # [{0: [TickData]}, {1:[TickData]}, {2:[TickData]}...]
+    @classmethod
+    def get_tools2(cls, selected_data_config: List[Dict]):
+        all_processed_data = []
+        indexed = []
+
+        for spec in selected_data_config:
+            start_date = datetime.strptime(spec['start_date'], '%Y-%m-%d')
+            end_date = datetime.strptime(spec['end_date'], '%Y-%m-%d')
+            time_increments = int(spec['time_increments'])
+            data = cls.get_the_data_for_tools(spec['ticker'], start_date,
+                                              end_date, time_increments)
+            all_processed_data.append(data)
+            # creates "indexed" which is the index to tickdata dict.
+            indexed = cls.index_days(daily_data=all_processed_data)
+
+        return cls(daily_data=all_processed_data)
 
     @classmethod
-    def get_tools(cls, ticker: str, start_date: datetime, end_date: datetime, time_increments):
+    def get_the_data_for_tools(cls, ticker: str, start_date: datetime, end_date: datetime, time_increments) -> List:
         processed_days = []
         current_date = start_date
 
@@ -97,8 +118,27 @@ class TickHistoryTools:
                 current_date = current_date.replace(year=current_date.year + 1, month=1)
             else:
                 current_date = current_date.replace(month=current_date.month + 1)
+        return processed_days
 
-        return cls(daily_data=processed_days)
+    # Function to take the daily data and make it the indexed format...
+    # may refactor it somewhere else
+    @classmethod
+    def index_days(cls, daily_data: List) -> Dict[int, List[TickData]]:
+        indexed_day_dict = {}
+        current_index = 0
+
+        for ticker_data in daily_data:
+
+            for day_dict in ticker_data:
+                indexed_day_dict[current_index] = day_dict['data']
+                current_index += 1
+
+        return indexed_day_dict
+
+    @classmethod
+    def get_tools(cls, ticker: str, start_date: datetime, end_date: datetime, time_increments):
+        processed_days = cls.get_the_data_for_tools(ticker, start_date, end_date, time_increments)
+        return cls(daily_data=[processed_days])
 
     def serve_next_tick(self) -> Iterable[TickData]:
         for daily_data in self.daily_data:
@@ -107,6 +147,19 @@ class TickHistoryTools:
             for tick in data:
                 yield tick
                 self.tick_index += 1
+            yield None
+
+    # new serve next tick to handle the indexed dict.
+    def serve_next_tick2(self) -> Iterable[TickData]:
+
+        for day_index in sorted(self.daily_data.keys()):
+            self.tick_index = 0
+            data = self.daily_data[day_index]
+
+            for tick in data:
+                yield tick
+                self.tick_index += 1
+
             yield None
 
     def get_history(self, separate_days: bool = False) -> List[TickData]:

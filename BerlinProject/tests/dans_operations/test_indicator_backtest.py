@@ -128,14 +128,3 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
         streamer.run()
         x
         # self.assertEqual(0, len(bt.trade_history))
-
-
-    def test_calc_multiple_fib(self):
-        data_config = {
-            'type': 'TickHistory',
-            'ticker': "NVDA",
-            'start_date': '2024-05-01',
-            'end_date': '2024-05-30',
-            'time_increment': 1
-
-        }

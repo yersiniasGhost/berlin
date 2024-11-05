@@ -9,6 +9,7 @@ def choose_weights(monitor: Monitor):
     monitor.triggers = {key: random.randint(1, 100) for key in monitor.triggers}
     monitor.bear_triggers = {key: random.randint(1, 100) for key in monitor.bear_triggers}
     monitor.threshold = random.uniform(0.6, 0.9)
+    monitor.bear_threshold = random.uniform(0.6, 0.9)
 
 
 def choose_parameters(config: MonitorConfiguration):
