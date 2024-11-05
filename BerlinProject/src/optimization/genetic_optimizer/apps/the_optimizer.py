@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # parser.add_argument('name', type=str, nargs='+', help="Base name of the output files.")
     parser.add_argument('-g', "--config", type=str, help="Specify the GA configuration file (if separate)", default="")
     parser.add_argument('-o', '--output', type=str, help="Specify output path (default: output).", default="output")
-    parser.add_argument("-s", '--seed', type=int, help="Set the numpy random number seed.", default=426999)
+    parser.add_argument("-s", '--seed', type=int, help="Set the numpy random number seed.", default=6999)
     parser.add_argument("-v", '--visualize', action='store_true', default=False,
                         help='Pop up the graphs for run-time visualization.')
 

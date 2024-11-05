@@ -4,6 +4,8 @@ from typing import Dict, List
 import talib
 import talib as ta
 import numpy as np
+from scipy.signal import argrelextrema
+
 from environments.tick_data import TickData
 
 
@@ -97,9 +99,7 @@ def bol_bands_lower_band_bounce(tick_data: List[TickData], parameters: Dict[str,
     upper = array[0]
 
     closes = np.array([tick.close for tick in tick_data])
-
     signals = np.zeros(len(closes))
-
     candle_bounce_number = int(parameters['candle_bounce_number'])
 
     for i in range(candle_bounce_number, len(closes)):
@@ -131,3 +131,41 @@ def bol_bands_lower_band_bounce(tick_data: List[TickData], parameters: Dict[str,
                              'bounce_trigger'])):
                     signals[i] = 1  # Using -1 for bearish signals to differentiate from bullish
     return signals
+
+
+
+
+def calculate_resistance(data: np.array, sensitivity: int = 10):
+    maxima_indices = argrelextrema(data, np.greater_equal, order=sensitivity)[0]
+
+
+def calculate_support(data: np.array, sensitivity: int = 10) -> np.array:
+    minima_indices = argrelextrema(data, np.less_equal, order=sensitivity)[0]
+    return minima_indices
+
+
+# A fibonaci retracement is building when we have a pull back from a recently created new high or resistance line
+# and a previous support line defined.   The distance between the two creates Fib support lines at 23%, etc.
+# If the tick is bouncing off a support line then we have a trigger.
+def calculate_fibonici(data: np.array, long_sensitivity: int = 10):
+    pass
+
+
+def support_level_bounce(data: np.array, sensitivity: int, support_range: float, bounce_level: float):
+    minima = calculate_support(data, sensitivity)
+    bounces = []
+
+    for i in range(1, len(data)):
+        # Find the most recent support level before the current price
+        recent_support_indices = minima[minima < i]
+        if len(recent_support_indices) == 0:
+            continue  # Skip if no prior support exists
+
+        recent_support_index = recent_support_indices[-1]  # Last support level before the current day
+        recent_support_level = data[recent_support_index]
+        lower_bound = recent_support_level * (1 - support_range)
+        upper_bound = recent_support_level * (1 + support_range)
+
+        if lower_bound <= data[i] <= upper_bound:
+            if data[i] >= recent_support_level * (1 + bounce_level):
+                bounces.append((i, data[i], recent_support_level))

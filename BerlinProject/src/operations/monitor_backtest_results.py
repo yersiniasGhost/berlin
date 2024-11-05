@@ -27,7 +27,7 @@ class MonitorResultsBacktest(ExternalTool):
 
     def __init__(self, name: str, monitor: Monitor):
         self.position = []
-        self.target_profit = 2
+        self.target_profit = 10
         self.stop_loss = 1
         self.name = name
         self.trade: Optional[Trade] = None
