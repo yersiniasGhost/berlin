@@ -120,6 +120,7 @@ class TestNewTickHistory(unittest.TestCase):
 
         check = TickHistoryTools.get_tools2(data_config)
         check.set_iteration_mode(STREAMING_MODE)
+        sap = len(check.books.B[0])
         self.assertEqual(check.episodes, [[(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]])
 
         check.set_iteration_mode(BOOK_MODE, randomize=False)
