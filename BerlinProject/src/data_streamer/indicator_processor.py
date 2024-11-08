@@ -70,5 +70,13 @@ class IndicatorProcessor:
 
         elif indicator.function == 'bol_bands_lower_band_bounce':
             return {indicator.name: bol_bands_lower_band_bounce(history, indicator.parameters)}
+
+        elif indicator.function == 'support_level':
+            return {indicator.name: support_level(history, indicator.parameters)}
+
+        elif indicator.function == 'resistance_level':
+            return {indicator.name: resistance_level(history, indicator.parameters)}
+
+
         else:
             raise ValueError(f"Unknown indicator: {indicator.name}")

@@ -1,12 +1,15 @@
+from datetime import timedelta, datetime
 from typing import Tuple, List
 import numpy as np
 import pandas as pd
+import yfinance as yf
 import os
 import unittest
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.indicator_processor_historical import IndicatorProcessorHistorical
-from config.types import CANDLE_STICK_PATTERN
+from config.types import CANDLE_STICK_PATTERN, INDICATOR_TYPE
 from environments.tick_data import TickData
+from features.indicators2 import support_level, resistance_level
 
 
 class MockTickHistoryTools:
@@ -18,6 +21,7 @@ class MockTickHistoryTools:
             TickData(row['Close'], row['Open'], row['High'], row['Low'])
             for _, row in data.iterrows()
         ]
+
     def set_history(self, history: List[TickData]):
         self.history = history
 
@@ -40,7 +44,8 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
                 "parameters": {
                     "period": 10,
                     "crossover_value": 0.0005,
-                    "lookback": 25
+                    "lookback": 25,
+                    'trend': 'bullish'
                 }
             }
         ]
@@ -51,10 +56,8 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
         processor = IndicatorProcessorHistorical(config, mock_tick_history)
         self.assertTrue(len(processor.indicator_values), len(data))
 
-        result = processor.next_tick(None, None)
+        result = processor.next_tick(None)
         self.assertAlmostEqual(0.0, result['my_silly_sma_cross'])
-
-
 
     def test_single_candle(self):
         indicators = [
@@ -78,6 +81,56 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
 
         tick = TickData(open=62589, high=62597, low=62470, close=62557)  # CDLHAMMER
 
-        result = processor.next_tick(tick, history)
+        result = processor.next_tick(tick)
         self.assertTrue('Hammer pattern' in result.keys())
         self.assertTrue('Three Black Crows' in result.keys())
+
+    def test_support_resistance(self):
+        indicators = [
+            {"name": "silly_support_level",
+             'function': 'support_level',
+             'type': INDICATOR_TYPE,
+             "parameters":
+                 {"sensitivity": 30,
+                  "local_max_sensitivity": 1,
+                  "support_range": .05,
+                  "bounce_level": .01,
+                  "break_level": .0002,
+                  "trend": "bull"
+                  }}
+        ]
+        config = {"name": "silly_support_line", "indicators": indicators}
+        config = MonitorConfiguration(**config)
+
+        # Create simple data for two sine waves
+        end_time = datetime(2024, 11, 6, 23, 59)
+        start_time = end_time - timedelta(days=30)
+        df = yf.download(
+            "NVDA",
+            start=start_time,
+            end=end_time,
+            interval="15m"
+        )
+        # Convert the DataFrame to a list of TickData objects
+        history: List[TickData] = [
+            TickData(
+                close=row['Close'],
+                open=row['Open'],
+                high=row['High'],
+                low=row['Low'],
+                volume=row['Volume'],
+                timestamp=index
+            )
+            for index, row in df.iterrows()
+        ]
+
+        mock_tick_history = MockTickHistoryTools()
+        mock_tick_history.set_history(history)
+        processor = IndicatorProcessorHistorical(config, mock_tick_history)
+
+        results = []  # To store results for each tick
+        for tick in history:
+            result = processor.next_tick(tick)  # Process the current tick
+            results.extend(result.values())  # Add the values directly to the results
+
+        x
