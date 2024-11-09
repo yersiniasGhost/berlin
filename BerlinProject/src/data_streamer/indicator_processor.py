@@ -1,4 +1,6 @@
 from typing import Union
+
+from features.indicators2 import support_level, resistance_level
 from .data_preprocessor import DataPreprocessor
 from models.monitor_configuration import MonitorConfiguration
 from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE

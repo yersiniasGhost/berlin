@@ -52,7 +52,7 @@ class TestCalculateLines(unittest.TestCase):
                       "support_range": .05,
                       "bounce_level": .01,
                       "break_level": .0002,
-                      "trend": "bull"
+                      "trend": "bullish"
                       }
 
         check2 = support_level(tick_data_list, parameters)
@@ -65,7 +65,7 @@ class TestCalculateLines(unittest.TestCase):
                       "support_range": .005,
                       "bounce_level": .005,
                       "break_level": .005,
-                      "trend": "bear"
+                      "trend": "bearish"
                       }
 
         check3 = support_level(tick_data_list, parameters)
@@ -100,7 +100,7 @@ class TestCalculateLines(unittest.TestCase):
                       "resistance_range": .005,
                       "bounce_level": .01,
                       "break_level": .005,
-                      "trend": "bull"
+                      "trend": "bullish"
                       }
 
         check = resistance_level(tick_data_list, parameters)
@@ -113,7 +113,7 @@ class TestCalculateLines(unittest.TestCase):
                       "resistance_range": .005,
                       "bounce_level": .009,
                       "break_level": .005,
-                      "trend": "bear"
+                      "trend": "bearish"
                       }
 
         check2 = resistance_level(tick_data_list, parameters)

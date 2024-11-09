@@ -96,7 +96,7 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
                   "support_range": .05,
                   "bounce_level": .01,
                   "break_level": .0002,
-                  "trend": "bull"
+                  "trend": "bullish"
                   }}
         ]
         config = {"name": "silly_support_line", "indicators": indicators}
@@ -133,4 +133,3 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
             result = processor.next_tick(tick)  # Process the current tick
             results.extend(result.values())  # Add the values directly to the results
 
-        x

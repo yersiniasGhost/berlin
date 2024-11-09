@@ -98,9 +98,38 @@ class TestMonitorBackTest(unittest.TestCase):
                 "lookback": 10,
                 "trend": 'bullish'
             }
-
         }
         macd_bull = IndicatorDefinition(**indicator_config_macd_bull)
+
+        indicator_config_support_bounce = {"name": "silly_support_level",
+                                           'function': 'support_level',
+                                           'type': INDICATOR_TYPE,
+                                           "parameters":
+                                               {"sensitivity": 30,
+                                                "local_max_sensitivity": 1,
+                                                "support_range": .01,
+                                                "bounce_level": .005,
+                                                "break_level": .0002,
+                                                "trend": "bullish",
+                                                "lookback": 10
+                                                }}
+
+        support_bounce = IndicatorDefinition(**indicator_config_support_bounce)
+
+        indicator_config_resistance_break = {"name": "silly_resistance_level",
+                                             'function': 'resistance_level',
+                                             'type': INDICATOR_TYPE,
+                                             "parameters":
+                                                 {"sensitivity": 20,
+                                                  "local_min_sensitivity": 1,
+                                                  "resistance_range": .005,
+                                                  "bounce_level": .005,
+                                                  "break_level": .003,
+                                                  "trend": "bullish",
+                                                  "lookback": 10
+                                                  }}
+
+        resistance_break = IndicatorDefinition(**indicator_config_resistance_break)
 
         # Fake monitor configuration
         test_monitor = {
@@ -108,18 +137,20 @@ class TestMonitorBackTest(unittest.TestCase):
             "user_id": ObjectId("65f2d6666666666666666666"),
             "name": "My Test Strategy",
             "description": "A test monitor using SMA and MACD",
-            'target_reward': 1,
+            'target_reward': 2,
             'stop_loss': 1,
-            "threshold": 0.5,
-            "bear_threshold": 0.5,
+            "threshold": 0.8,
+            "bear_threshold": 0.8,
             "triggers": {
-                "my_silly_bol_bounce_lower": 1.0,
-                'my_silly_sma_cross_bull': 1.0,
-                'my_silly_macd_cross': 1.0
+                # "my_silly_bol_bounce_lower": 1.0,
+                # 'my_silly_sma_cross_bull': 1.0,
+                # 'my_silly_macd_cross': 1.0,
+                'silly_resistance_level': 1.0
                 # SMA with weight 8
             },
             "bear_triggers": {
-                'my_silly_sma_cross_bear': 0.5}
+                # 'my_silly_sma_cross_bear': 1.0
+            }
         }
 
         model_config = {
@@ -128,9 +159,12 @@ class TestMonitorBackTest(unittest.TestCase):
 
         # Create Monitor instance
         monitor = Monitor(**test_monitor)
-        ic = MonitorConfiguration(name='my test', indicators=[sma_bear, sma_bull, bol_bull, macd_bull])
+        ic = MonitorConfiguration(name='my test',
+                                  indicators=[sma_bear, sma_bull, bol_bull, macd_bull, resistance_break])
         bt = MonitorResultsBacktest('My Test Strategy', monitor)
         streamer = DataStreamer(data_config, model_config, ic)
         streamer.connect_tool(bt)
+        # streamer.replace_monitor_configuration(ic, historical=True)
+        streamer.data_link.set_iteration_mode("random")
         streamer.run()
         print()
