@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from src.features.indicators2 import calculate_support, calculate_resistance, support_level, resistance_level
+from src.features.indicators2 import (calculate_support, calculate_resistance,
+                                      support_level, resistance_level, calculate_fibonacci_levels, fib_trigger)
 
 from environments.tick_data import TickData
 
@@ -120,3 +121,37 @@ class TestCalculateLines(unittest.TestCase):
         signals, resistance_levels, resistance_indices = check2
         triggers4 = np.sum(signals)
         self.assertEqual(triggers4, 3.0)
+
+    def test_fib_calcs(self):
+        end_time = datetime(2024, 11, 6, 23, 59)
+        start_time = end_time - timedelta(days=30)
+        df = yf.download(
+            "NVDA",
+            start=start_time,
+            end=end_time,
+            interval="15m"
+        )
+
+        tick_data_list: List[TickData] = [
+            TickData(
+                close=row['Close'],
+                open=row['Open'],
+                high=row['High'],
+                low=row['Low'],
+                volume=row['Volume'],
+                timestamp=index
+            )
+            for index, row in df.iterrows()
+        ]
+
+        parameters = {"sensitivity": 30,
+                      "local_max_sensitivity": 1,
+                      "resistance_range": .005,
+                      "bounce_level": .009,
+                      "break_level": .005,
+                      "trend": "bullish"
+                      }
+
+        # fib_data, fib_indices = calculate_fibonacci_levels(tick_data_list, parameters)
+        grub= fib_trigger(tick_data_list, parameters)
+        x
