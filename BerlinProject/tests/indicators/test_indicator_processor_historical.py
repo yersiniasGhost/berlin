@@ -10,6 +10,7 @@ from data_streamer.indicator_processor_historical import IndicatorProcessorHisto
 from config.types import CANDLE_STICK_PATTERN, INDICATOR_TYPE
 from environments.tick_data import TickData
 from features.indicators2 import support_level, resistance_level
+from mongo_tools.tick_history_tools import TickHistoryTools
 
 
 class MockTickHistoryTools:
@@ -102,34 +103,34 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
         config = {"name": "silly_support_line", "indicators": indicators}
         config = MonitorConfiguration(**config)
 
-        # Create simple data for two sine waves
-        end_time = datetime(2024, 11, 6, 23, 59)
-        start_time = end_time - timedelta(days=30)
-        df = yf.download(
-            "NVDA",
-            start=start_time,
-            end=end_time,
-            interval="15m"
-        )
-        # Convert the DataFrame to a list of TickData objects
-        history: List[TickData] = [
-            TickData(
-                close=row['Close'],
-                open=row['Open'],
-                high=row['High'],
-                low=row['Low'],
-                volume=row['Volume'],
-                timestamp=index
-            )
-            for index, row in df.iterrows()
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '5'
+        },
+            {
+                'ticker': 'META',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            }
         ]
 
-        mock_tick_history = MockTickHistoryTools()
-        mock_tick_history.set_history(history)
-        processor = IndicatorProcessorHistorical(config, mock_tick_history)
+        tools = TickHistoryTools.get_tools2(data_config)
+        tools.set_iteration_mode(mode="random", episode_count=2, randomize=True)
 
-        results = []  # To store results for each tick
-        for tick in history:
-            result = processor.next_tick(tick)  # Process the current tick
-            results.extend(result.values())  # Add the values directly to the results
 
+        # all_episodes = []
+        # current_episode = []
+
+        # for tick in tools.serve_next_tick():
+        #     if tick is None:
+        #         if current_episode:  # Only append if episode has data
+        #             all_episodes.append(current_episode)
+        #             current_episode = []
+        #     else:
+        #         current_episode.append(tick)
+
+        check = IndicatorProcessorHistorical(config, tools)
+        x

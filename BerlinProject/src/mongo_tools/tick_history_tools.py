@@ -146,76 +146,106 @@ class TickHistoryTools:
         k, m = divmod(len(lst), n)
         return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
 
-    def set_iteration_mode(self, mode: str, episode_count: int = 1, randomize: bool = True):
+    # def set_iteration_mode(self, mode: str, episode_count: int = 1, randomize: bool = True):
+    #     self.episodes = []
+    #     if mode == STREAMING_MODE:
+    #         # Create tuples for all combinations of (book_idx, value_idx)
+    #         indices = []
+    #         for book_idx, book in enumerate(self.books):
+    #             data_length = book.data_length()
+    #             for value_idx in range(data_length):
+    #                 indices.append((book_idx, value_idx))
+    #         self.episodes.append(indices)
+    #
+    #     # elif mode == BOOK_MODE:
+    #     #     for book_idx, book in enumerate(self.books):
+    #     #         indices = []
+    #     #         data_length = book.data_length()
+    #     #         for value_idx in range(data_length):
+    #     #             indices.append((book_idx, value_idx))
+    #     #         if randomize:
+    #     #             random.shuffle(indices)
+    #     #         self.episodes.append(indices)
+    #     elif mode == RANDOM_MODE:
+    #         indices = []
+    #         for book_idx, book in enumerate(self.books):
+    #             data_length = book.data_length()
+    #             for value_idx in range(data_length):
+    #                 indices.append((book_idx, value_idx))
+    #         random.shuffle(indices)
+    #         self.episodes = self.split_list(indices, episode_count)
+    #
+    #     self.iteration_mode = mode
+
+    def set_iteration_mode(self, mode: str, episode_count: int = 1):
         self.episodes = []
+
+        # Get all day indices
+        day_indices = []
+        total_days = 0
+        for book in self.books:
+            for day_idx in range(len(book.data)):
+                day_indices.append(total_days)
+                total_days += 1
+
         if mode == STREAMING_MODE:
-            # Create tuples for all combinations of (book_idx, value_idx)
-            indices = []
-            for book_idx, book in enumerate(self.books):
-                data_length = book.data_length()
-                for value_idx in range(data_length):
-                    indices.append((book_idx, value_idx))
-            self.episodes.append(indices)
+            # Split ordered indices into episodes
+            self.episodes = self.split_list(day_indices, episode_count)
 
-        elif mode == BOOK_MODE:
-            for book_idx, book in enumerate(self.books):
-                indices = []
-                data_length = book.data_length()
-                for value_idx in range(data_length):
-                    indices.append((book_idx, value_idx))
-                if randomize:
-                    random.shuffle(indices)
-                self.episodes.append(indices)
         elif mode == RANDOM_MODE:
-            indices = []
-            for book_idx, book in enumerate(self.books):
-                data_length = book.data_length()
-                for value_idx in range(data_length):
-                    indices.append((book_idx, value_idx))
-            random.shuffle(indices)
-            self.episodes = self.split_list(indices, episode_count)
-
-        self.iteration_mode = mode
-
-
+            # Shuffle and split into episodes
+            random.shuffle(day_indices)
+            self.episodes = self.split_list(day_indices, episode_count)
 
     def serve_next_tick(self) -> Iterable[TickData]:
-
         for episode in self.episodes:
-            for book_index, day_index in episode:
-                book = self.books[book_index]
-                for (absolute_index, td) in book.get_next_tick(day_index):
-                    yield td
-                    if self.delay:
-                        time.sleep(self.delay)
+            for day_index in episode:
+                # Get all ticks for this day
+                for tick in self.books[day_index].data:
+                    yield tick
+                yield None
             yield None
         yield None
 
-        # elif self.iteration_mode == RANDOM_MODE:
-        #     count_of_days =0
-        #     for book in self.books:
-        #         for day in range(len(book.data)):
+    # def get_history(self, separate_days: bool = False) -> list[list[TickData] | None]:
+    #     history = []
+    #
+    #     # Use first episode's order (whether it's streaming or random)
+    #     if self.episodes:
+    #         for day_index in self.episodes[0]:
+    #             for tick in self.books[day_index].data:
+    #                 history.append(tick)
+    #             if separate_days:
+    #                 history.append(None)
+    #
+    #     return history
 
+    def get_history(self, separate_days: bool = False) -> Dict[int, Dict[int, List[TickData]]]:
+        history = {}
 
+        if self.episodes:
+            # Go through each episode
+            for episode_idx, episode in enumerate(self.episodes):
+                history[episode_idx] = {}
 
+                # Use the actual day_index as the key for each day's data
+                for day_index in episode:
+                    current_day = 0
+                    current_book = 0
 
-    # new serve next tick to handle the indexed dict.
-    def serve_next_tick2(self) -> Iterable[TickData]:
+                    # Find the book and day for this index
+                    while current_day <= day_index:
+                        if current_book >= len(self.books):
+                            break
+                        if current_day + len(self.books[current_book].data) > day_index:
+                            book_day_index = day_index - current_day
+                            # Store using the original day_index as key
+                            history[episode_idx][day_index] = self.books[current_book].data[book_day_index]
+                            break
+                        current_day += len(self.books[current_book].data)
+                        current_book += 1
 
-        for day_index in sorted(self.books.keys()):
-            self.tick_index = 0
-            data = self.books[day_index]
-
-            for tick in data:
-                yield tick
-                self.tick_index += 1
-
-            yield None
-
-    def get_history(self, separate_days: bool = False) -> List[TickData]:
-        history = []
-        for daily_data in self.books:
-            history += daily_data['data']
-            if separate_days:
-                history += [None]
         return history
+
+
+

@@ -56,8 +56,9 @@ class IndicatorProcessorHistorical:
 
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
+    # Change this next for THT??? allow it to read in the episode it is on???
     def precalculate(self) -> Tuple[Dict[str, np.array], Dict[str, np.array]]:
-        history = self.data_link.get_history(separate_days=False)
+        history = self.data_link.get_history()
         output = {}
         raw_indicators = {}
         for indicator in self.config.indicators:

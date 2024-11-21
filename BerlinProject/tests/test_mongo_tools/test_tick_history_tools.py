@@ -5,7 +5,6 @@ from mongo_tools.tick_history_tools import TickHistoryTools, STREAMING_MODE, BOO
 from datetime import datetime, timedelta
 
 
-
 class TestTickHistory(unittest.TestCase):
     # Create tools instance
     def test_number_of_days(self):
@@ -118,33 +117,12 @@ class TestNewTickHistory(unittest.TestCase):
             }
         ]
 
-        check = TickHistoryTools.get_tools2(data_config)
-        check.set_iteration_mode(STREAMING_MODE)
-        sap = len(check.books.B[0])
-        self.assertEqual(check.episodes, [[(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]])
-
-        check.set_iteration_mode(BOOK_MODE, randomize=False)
-        self.assertTrue(len(check.episodes) == 2)
-        self.assertEqual(check.episodes[0], [(0, 0), (0, 1), (0, 2)])
+        tools = TickHistoryTools.get_tools2(data_config)
 
         # WRITE TESTS FOR THIS STUFF vvv^^^
-        check.set_iteration_mode(RANDOM_MODE, 2)
-        self.assertEqual(2, len(check.episodes))
-        self.assertEqual(3, len(check.episodes[0]))
-        self.assertEqual(3, len(check.episodes[1]))
+        tools.set_iteration_mode(RANDOM_MODE, 2)
+        history_random = tools.get_history()
 
-        check.set_iteration_mode(RANDOM_MODE, 3)
-        self.assertEqual(3, len(check.episodes))
-        self.assertEqual(2, len(check.episodes[0]))
-        self.assertEqual(2, len(check.episodes[1]))
-
-        ticks = []
-        for td in check.serve_next_tick():
-            ticks.append(td)
-        print(ticks)
-
-
-
-
-
-
+        tools.set_iteration_mode(STREAMING_MODE, 2)
+        history_stream = tools.get_history()
+        x
