@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 from abc import ABC, abstractmethod
 import numpy as np
 from environments.tick_data import TickData
@@ -10,7 +10,8 @@ class ExternalTool(ABC):
         raise NotImplemented
 
     @abstractmethod
-    def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int) -> None:
+    def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int,
+                         raw_indicators: Optional[Dict[str, float]] = None) -> None:
         raise NotImplemented
 
     # Not required to be implemented

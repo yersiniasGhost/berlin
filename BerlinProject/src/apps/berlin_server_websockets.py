@@ -38,6 +38,7 @@ async def send_message(uri, identifier):
             # Receive and print messages from Rails
             response = await websocket.recv()
             print(f"Received from Rails: {response}")
+
             await asyncio.sleep(5)  # Send a message every 2 seconds (or your logic)
 
 

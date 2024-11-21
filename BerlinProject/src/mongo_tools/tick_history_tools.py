@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
 from bson import ObjectId
@@ -22,6 +23,8 @@ class TickHistoryTools:
     def __init__(self, daily_data: List[Dict[str, List[TickData]]]):  # Updated type hint
         self.daily_data = daily_data
         self.tick_index = 0
+        self.time_tick = time.time()
+        self.delay: Optional[int] = None
 
 
     def get_stats(self) -> dict:
@@ -53,6 +56,7 @@ class TickHistoryTools:
     def get_collection(cls) -> Collection:
         return Mongo().database[TICK_HISTORY_COLLECTION]
 
+
     @classmethod
     def get_history_data(cls, ticker: str, date: datetime, time_increments: int = 1) -> Optional[TickHistory]:
         """Fetch tick history data for given parameters"""
@@ -79,7 +83,7 @@ class TickHistoryTools:
 
         while current_date <= end_date:
             history = cls.get_history_data(ticker, current_date, time_increments)
-
+            history.process_timestamps()
             if history:
                 month_data = history.data
                 days = list(month_data.keys())
@@ -105,8 +109,19 @@ class TickHistoryTools:
             self.tick_index = 0
             data = daily_data['data']  # Changed to dictionary access
             for tick in data:
+                print("yield", tick)
                 yield tick
+
                 self.tick_index += 1
+                if self.delay:
+                    time.sleep(self.delay)
+                    # now = time.time()
+                    # remaining_time = self.delay - (now - self.time_tick)
+                    # print(remaining_time, self.time_tick, now)
+                    # self.time_tick = now
+                    # if remaining_time > 0:
+                    #     time.sleep(remaining_time+1)
+
             yield None
 
     def get_history(self, separate_days: bool = False) -> List[TickData]:

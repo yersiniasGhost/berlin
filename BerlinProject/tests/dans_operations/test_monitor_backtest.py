@@ -108,7 +108,10 @@ class TestMonitorBackTest(unittest.TestCase):
             "user_id": ObjectId("65f2d6666666666666666666"),
             "name": "My Test Strategy",
             "description": "A test monitor using SMA and MACD",
-            "threshold": 0.9,
+            'target_reward': 1,
+            'stop_loss': 1,
+            "threshold": 0.5,
+            "bear_threshold": 0.5,
             "triggers": {
                 "my_silly_bol_bounce_lower": 1.0,
                 'my_silly_sma_cross_bull': 1.0,
@@ -116,7 +119,7 @@ class TestMonitorBackTest(unittest.TestCase):
                 # SMA with weight 8
             },
             "bear_triggers": {
-                'my_silly_sma_cross_bear': 0.0}
+                'my_silly_sma_cross_bear': 0.5}
         }
 
         model_config = {
@@ -127,7 +130,6 @@ class TestMonitorBackTest(unittest.TestCase):
         monitor = Monitor(**test_monitor)
         ic = MonitorConfiguration(name='my test', indicators=[sma_bear, sma_bull, bol_bull, macd_bull])
         bt = MonitorResultsBacktest('My Test Strategy', monitor)
-
         streamer = DataStreamer(data_config, model_config, ic)
         streamer.connect_tool(bt)
         streamer.run()

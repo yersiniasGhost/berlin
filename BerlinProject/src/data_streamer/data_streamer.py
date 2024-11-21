@@ -60,12 +60,13 @@ class DataStreamer:
         self.preprocessor.reset_state(sample_stats)
         index = 0
         for tick in self.data_link.serve_next_tick():
+            raw_indicators: Optional[Dict[str, float]] = None
             if tick:
                 self.preprocessor.next_tick(tick)
                 fv = self.feature_vector_calculator.next_tick(self.preprocessor)
                 indicator_results = {}
                 if self.indicators:
-                    indicator_results = self.indicators.next_tick(self.preprocessor)
+                    indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
 
                 if None not in fv and fv:
                     for et in self.external_tool:
@@ -76,7 +77,7 @@ class DataStreamer:
                         et.present_sample(s, i)
                 if indicator_results:
                     for et in self.external_tool:
-                        et.indicator_vector(indicator_results, tick, index)
+                        et.indicator_vector(indicator_results, tick, index, raw_indicators)
                 index += 1
             else:
                 if self.reset_after_sample:

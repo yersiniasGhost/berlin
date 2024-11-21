@@ -1,4 +1,4 @@
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 import numpy as np
 from .data_preprocessor import DataPreprocessor
 from models.monitor_configuration import MonitorConfiguration
@@ -16,7 +16,7 @@ class IndicatorProcessorHistorical:
     def __init__(self, configuration: MonitorConfiguration, data_link: Union[SampleTools, TickHistoryTools]):
         self.config: MonitorConfiguration = configuration
         self.data_link = data_link
-        self.indicator_values = self.precalculate()
+        self.indicator_values, self.raw_indicators = self.precalculate()
         self.index = 0
 
 
@@ -36,12 +36,14 @@ class IndicatorProcessorHistorical:
                 metrics[i] = (1.0 - lookback_ratio) * np.sign(c)
         return metrics
 
-    def next_tick(self, _: DataPreprocessor) -> Dict[str, float]:
-        output = {}
+    def next_tick(self, _: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
+        output, raw = {}, {}
         for indicator in self.config.indicators:
             output[indicator.name] = self.indicator_values[indicator.name][self.index]
+            if indicator.name in self.raw_indicators.keys():
+                raw[indicator.name] = self.raw_indicators[indicator.name][self.index]
         self.index += 1
-        return output
+        return output, raw
 
     def precalculate_day(self):
         '''
@@ -51,12 +53,12 @@ class IndicatorProcessorHistorical:
         '''
         pass
 
-
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
-    def precalculate(self) -> Dict[str, np.array]:
-        history = self.data_link.get_history()
+    def precalculate(self) -> Tuple[Dict[str, np.array], Dict[str, np.array]]:
+        history = self.data_link.get_history(separate_days=False)
         output = {}
+        raw_indicators = {}
         for indicator in self.config.indicators:
             look_back = indicator.parameters.get('lookback', 10)
 
@@ -78,12 +80,13 @@ class IndicatorProcessorHistorical:
                 metric = self.calculate_time_based_metric_over_array(result[indicator.name], look_back)
 
                 output[indicator.name] = metric
+                raw_indicators[indicator.name] = result[indicator.name]
 
             # Pattern matching is using Eamonn's DTW
             elif indicator.type == PATTERN_MATCH:
                 pass
 
-        return output
+        return output, raw_indicators
 
     @staticmethod
     def calculate_indicator(history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:

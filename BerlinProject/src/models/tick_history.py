@@ -1,12 +1,10 @@
 from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 
-from config.pyobject_id import PyObjectId
 from bson import ObjectId
 from pydantic import BaseModel, Field as PydanticField, model_validator
 
 from environments.tick_data import TickData
-
-
 
 
 class TickHistory(BaseModel):
@@ -33,5 +31,15 @@ class TickHistory(BaseModel):
         return values
 
 
+    def process_timestamps(self):
+        for day, day_dict in self.data.items():
+            base_date = datetime(
+                year=int(self.year),
+                month=int(self.month),
+                day=int(day)
+            )
+            for seconds_from_midnight, tick in day_dict.items():
+                t = base_date + timedelta(seconds=int(seconds_from_midnight))
+                tick.timestamp = int(t.timestamp() * 1000)
 
 #  TIck history tools, give it a interval date range and tickers and it should run through them.
