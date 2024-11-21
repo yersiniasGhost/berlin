@@ -1,16 +1,9 @@
 import unittest
 
-from mongo_tools.tick_history_tools import TickHistoryTools
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
-from bson import ObjectId
-from config.types import PYMONGO_ID, SAMPLE_COLLECTION, TICK_HISTORY_COLLECTION
 from environments.tick_data import TickData
+from mongo_tools.tick_history_tools import TickHistoryTools, STREAMING_MODE, BOOK_MODE, RANDOM_MODE
+from datetime import datetime, timedelta
 
-from pymongo.collection import Collection
-
-from models.tick_history import TickHistory
-from mongo_tools.mongo import Mongo
 
 
 class TestTickHistory(unittest.TestCase):
@@ -25,11 +18,10 @@ class TestTickHistory(unittest.TestCase):
             time_increments=1
         )
 
-        check = tools.daily_data
+        check = tools.books
         # Assert we get exactly 390 ticks (one trading day)
         self.assertEqual(len(check), 3,
                          f"Expected 3 trading days got {len(check)}")
-
 
     def test_ticks_in_day(self):
         """Test that we can get tick data across multiple days"""
@@ -53,7 +45,7 @@ class TestTickHistory(unittest.TestCase):
             time_increments=1
         )
 
-        check = tools.daily_data
+        check = tools.books
 
         self.assertEqual(len(check), 60,
                          f"Expected 60 trading days got {len(check)}")
@@ -67,4 +59,92 @@ class TestTickHistory(unittest.TestCase):
             end_date=datetime(2024, 9, 25),
             time_increments=1
         )
+
+
+class TestNewTickHistory(unittest.TestCase):
+
+    def test_new_method(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '1'
+        }
+        ]
+
+        tools = TickHistoryTools.get_tools2(data_config)
+
+        check = tools.books
+
+        lengths = [len(data_dict) for outer_list in check for data_dict in outer_list]
+
+        self.assertEqual(len(lengths), 3,
+                         f"Expected 3 trading days got {len(check)}")
+
+    def test_new_method2(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '5'
+        },
+            {
+                'ticker': 'META',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            }
+        ]
+
+        tools = TickHistoryTools.get_tools2(data_config)
+        check = tools.books
+        indexed_data = TickHistoryTools.index_days(check)
+
+        self.assertEqual(len(indexed_data), 6,
+                         f"Expected 6 indexed tickdatas got {len(check)}")
+
+    def test_serve_next_tick_stream(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '5'
+        },
+            {
+                'ticker': 'META',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            }
+        ]
+
+        check = TickHistoryTools.get_tools2(data_config)
+        check.set_iteration_mode(STREAMING_MODE)
+        sap = len(check.books.B[0])
+        self.assertEqual(check.episodes, [[(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]])
+
+        check.set_iteration_mode(BOOK_MODE, randomize=False)
+        self.assertTrue(len(check.episodes) == 2)
+        self.assertEqual(check.episodes[0], [(0, 0), (0, 1), (0, 2)])
+
+        # WRITE TESTS FOR THIS STUFF vvv^^^
+        check.set_iteration_mode(RANDOM_MODE, 2)
+        self.assertEqual(2, len(check.episodes))
+        self.assertEqual(3, len(check.episodes[0]))
+        self.assertEqual(3, len(check.episodes[1]))
+
+        check.set_iteration_mode(RANDOM_MODE, 3)
+        self.assertEqual(3, len(check.episodes))
+        self.assertEqual(2, len(check.episodes[0]))
+        self.assertEqual(2, len(check.episodes[1]))
+
+        ticks = []
+        for td in check.serve_next_tick():
+            ticks.append(td)
+        print(ticks)
+
+
+
+
+
 

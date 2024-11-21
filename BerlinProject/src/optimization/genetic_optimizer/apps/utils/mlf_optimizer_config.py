@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import json
 
+from operations.monitor_backtest_results import MonitorResultsBacktest
 from optimization.genetic_optimizer.support.types import Json
 from optimization.genetic_optimizer.apps.utils.optimizer_config import GAHyperparameters
 from optimization.genetic_optimizer.apps.utils.objectives import Objective
@@ -60,6 +61,13 @@ class MlfOptimizerConfig:
                               chance_of_mutation=self.hyper_parameters.chance_of_mutation,
                               chance_of_crossover=self.hyper_parameters.chance_of_crossover)
         return ga
+
+    def create_backtest_env(self):
+        data_streamer = DataStreamer(self.data_config, self.model_config, self.monitor_config)
+
+        bt = MonitorResultsBacktest("Optimizer", self.monitor, )
+        data_streamer.connect_tool(bt)
+        return data_streamer, bt
 
     @staticmethod
     def from_json(resources: Json) -> 'MlfOptimizerConfig':

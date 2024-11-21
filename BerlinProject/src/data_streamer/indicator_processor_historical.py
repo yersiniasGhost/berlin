@@ -7,6 +7,7 @@ from features.candle_patterns import CandlePatterns
 from models.indicator_definition import IndicatorDefinition
 from mongo_tools.sample_tools import SampleTools
 from mongo_tools.tick_history_tools import TickHistoryTools
+from features.indicators2 import support_level, resistance_level
 from features.indicators import sma_crossover, macd_histogram_crossover, bol_bands_lower_band_bounce
 from environments.tick_data import TickData
 
@@ -99,6 +100,12 @@ class IndicatorProcessorHistorical:
 
         elif indicator.function == 'bol_bands_lower_band_bounce':
             return {indicator.name: bol_bands_lower_band_bounce(history, indicator.parameters)}
+
+        elif indicator.function == 'support_level':
+            return {indicator.name: support_level(history, indicator.parameters)}
+
+        elif indicator.function == 'resistance_level':
+            return {indicator.name: resistance_level(history, indicator.parameters)}
 
         else:
             raise ValueError(f"Unknown indicator: {indicator.name}")

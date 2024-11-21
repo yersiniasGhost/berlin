@@ -41,13 +41,9 @@ class MlfFitnessCalculator(FitnessCalculator):
             if self.display_results:
                 print("Final Result?")
                 print(cnt, "fitness: ", bt.results, f"profit: %{(bt.get_total_percent_profits() * 100.0):.3f}", f"loss: %{(bt.get_total_percent_losses()*100.0):.3f}" )
-                print("Bulls:")
-                print(individual.monitor.triggers)
-                print("Threshold", individual.monitor.threshold)
-                print("Bears")
-                print(individual.monitor.bear_triggers)
-                print("Threshold", individual.monitor.bear_threshold)
-                print("Indicators")
+                print("Bull triggers:", individual.monitor.triggers)
+                print("Bear triggers:", individual.monitor.bear_triggers)
+                print("Thresholds", individual.monitor.threshold, individual.monitor.bear_threshold)
                 for indicator in individual.monitor_configuration.indicators:
                     print(indicator.name, indicator.parameters)
                 print("-----------")
