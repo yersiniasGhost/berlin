@@ -98,7 +98,7 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
                   "bounce_level": .01,
                   "break_level": .0002,
                   "trend": "bullish"
-                  }}
+                  }},
         ]
         config = {"name": "silly_support_line", "indicators": indicators}
         config = MonitorConfiguration(**config)
@@ -118,19 +118,11 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
         ]
 
         tools = TickHistoryTools.get_tools2(data_config)
-        tools.set_iteration_mode(mode="random", episode_count=2, randomize=True)
-
-
-        # all_episodes = []
-        # current_episode = []
-
-        # for tick in tools.serve_next_tick():
-        #     if tick is None:
-        #         if current_episode:  # Only append if episode has data
-        #             all_episodes.append(current_episode)
-        #             current_episode = []
-        #     else:
-        #         current_episode.append(tick)
+        tools.set_iteration_mode(mode="random", episode_count=2)
 
         check = IndicatorProcessorHistorical(config, tools)
-        x
+        self.assertEqual(len(check.indicator_values[0]['silly_support_level']), 462, "Incorrect length")
+
+        tools.set_iteration_mode(mode="stream", episode_count=2)
+        check2 = IndicatorProcessorHistorical(config, tools)
+        self.assertEqual(len(check2.indicator_values[1]['silly_support_level']), 231, "Incorrect length")

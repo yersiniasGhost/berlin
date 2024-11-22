@@ -16,7 +16,8 @@ class DataStreamer:
                  indicator_configuration: Optional[MonitorConfiguration] = None):
         self.preprocessor = DataPreprocessor(model_configuration)
         self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
-        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
+        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(
+            indicator_configuration) if indicator_configuration else None
         self.data_link: Optional[Union[TickHistoryTools, SampleTools]] = None
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
@@ -47,7 +48,6 @@ class DataStreamer:
         #     indicator.prepare_historical_processor(self.data_link)
         self.indicators.prepare_historical_processor(self.data_link)
 
-
     def run(self):
         if self.data_link is None:
             raise ValueError("Data link is not initialized")
@@ -59,7 +59,7 @@ class DataStreamer:
         sample_stats = self.data_link.get_stats()
         self.preprocessor.reset_state(sample_stats)
         index = 0
-        for tick in self.data_link.serve_next_tick():
+        for tick, tick_index, day_index in self.data_link.serve_next_tick():
             raw_indicators: Optional[Dict[str, float]] = None
             if tick:
                 self.preprocessor.next_tick(tick)
@@ -90,7 +90,6 @@ class DataStreamer:
         self.data_link.reset_index()
         stats = self.data_link.get_stats()
         self.preprocessor.reset_state(stats)
-
 
     # Used for training of the RL Agents
     def get_next(self):

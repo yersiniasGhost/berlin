@@ -11,6 +11,7 @@ from environments.tick_data import TickData
 from models import IndicatorDefinition
 from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor
+from mongo_tools.tick_history_tools import RANDOM_MODE
 from operations.monitor_backtest_results import MonitorResultsBacktest
 
 
@@ -142,14 +143,11 @@ class TestMonitorBackTest(unittest.TestCase):
             "threshold": 0.8,
             "bear_threshold": 0.8,
             "triggers": {
-                # "my_silly_bol_bounce_lower": 1.0,
-                # 'my_silly_sma_cross_bull': 1.0,
-                # 'my_silly_macd_cross': 1.0,
+                "my_silly_bol_bounce_lower": 1.0,
+                'my_silly_sma_cross_bull': 1.0,
+                'my_silly_macd_cross': 1.0,
                 'silly_resistance_level': 1.0
                 # SMA with weight 8
-            },
-            "bear_triggers": {
-                # 'my_silly_sma_cross_bear': 1.0
             }
         }
 
@@ -160,11 +158,11 @@ class TestMonitorBackTest(unittest.TestCase):
         # Create Monitor instance
         monitor = Monitor(**test_monitor)
         ic = MonitorConfiguration(name='my test',
-                                  indicators=[sma_bear, sma_bull, bol_bull, macd_bull, resistance_break])
+                                  indicators=[sma_bull, bol_bull, macd_bull, resistance_break])
         bt = MonitorResultsBacktest('My Test Strategy', monitor)
         streamer = DataStreamer(data_config, model_config, ic)
         streamer.connect_tool(bt)
-        # streamer.replace_monitor_configuration(ic, historical=True)
-        streamer.data_link.set_iteration_mode("random")
+        streamer.replace_monitor_configuration(ic, historical=True)
+        streamer.data_link.set_iteration_mode(RANDOM_MODE, 2)
         streamer.run()
         print()

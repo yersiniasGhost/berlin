@@ -102,7 +102,7 @@ class TestNewTickHistory(unittest.TestCase):
         self.assertEqual(len(indexed_data), 6,
                          f"Expected 6 indexed tickdatas got {len(check)}")
 
-    def test_serve_next_tick_stream(self):
+    def test_get_history_random_stream(self):
         data_config = [{
             'ticker': 'NVDA',
             'start_date': '2024-05-22',
@@ -125,4 +125,30 @@ class TestNewTickHistory(unittest.TestCase):
 
         tools.set_iteration_mode(STREAMING_MODE, 2)
         history_stream = tools.get_history()
-        x
+
+    def test_serve_next_tick(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '5'
+        },
+            {
+                'ticker': 'META',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            }]
+
+        tools = TickHistoryTools.get_tools2(data_config)
+        tools.set_iteration_mode(RANDOM_MODE, 2)
+        tick_generator = tools.serve_next_tick()
+        first_tick = next(tick_generator)
+
+        # Get first 5 items (ticks or separators)
+        for _ in range(100):
+            tick, tick_idx, day_idx = next(tick_generator)
+            if tick is None:
+                print(f"End of day {day_idx}")
+            else:
+                print(f"Day {day_idx}, Tick {tick_idx}: Close = {tick.close}")

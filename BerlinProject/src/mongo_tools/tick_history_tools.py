@@ -197,17 +197,33 @@ class TickHistoryTools:
             random.shuffle(day_indices)
             self.episodes = self.split_list(day_indices, episode_count)
 
-    def serve_next_tick(self) -> Iterable[TickData]:
-        for episode in self.episodes:
-            for day_index in episode:
-                # Get all ticks for this day
-                for tick in self.books[day_index].data:
-                    yield tick
-                yield None
-            yield None
-        yield None
+    # def serve_next_tick(self) -> Iterable[TickData]:
+    #     for episode in self.episodes:
+    #         for day_index in episode:
+    #             # Get all ticks for this day
+    #             for tick in self.books[day_index].data:
+    #                 yield tick
+    #             yield None
+    #         yield None
+    #     yield None
 
-    # def get_history(self, separate_days: bool = False) -> list[list[TickData] | None]:
+    def serve_next_tick(self) -> Iterable[Tuple[Optional[TickData], int, int]]:
+        current_episode = self.episodes[self.episode_index]
+
+        for day_index in current_episode:
+            # Find correct book and day
+            current_total = 0
+            for book_idx, book in enumerate(self.books):
+                if current_total + len(book.data) > day_index:
+                    # Found the right book
+                    book_day_index = day_index - current_total
+                    for tick_index, tick in enumerate(book.data[book_day_index]):
+                        yield tick, tick_index, day_index
+                    yield None, None, None
+                    break
+                current_total += len(book.data)
+
+            # def get_history(self, separate_days: bool = False) -> list[list[TickData] | None]:
     #     history = []
     #
     #     # Use first episode's order (whether it's streaming or random)
@@ -220,32 +236,32 @@ class TickHistoryTools:
     #
     #     return history
 
-    def get_history(self, separate_days: bool = False) -> Dict[int, Dict[int, List[TickData]]]:
+    def get_history(self) -> Dict[int, List[TickData]]:
         history = {}
 
         if self.episodes:
-            # Go through each episode
-            for episode_idx, episode in enumerate(self.episodes):
-                history[episode_idx] = {}
+            episode = self.episodes[self.episode_index]
 
-                # Use the actual day_index as the key for each day's data
-                for day_index in episode:
-                    current_day = 0
-                    current_book = 0
+            for day_index in episode:
+                current_day = 0
+                current_book = 0
 
-                    # Find the book and day for this index
-                    while current_day <= day_index:
-                        if current_book >= len(self.books):
-                            break
-                        if current_day + len(self.books[current_book].data) > day_index:
-                            book_day_index = day_index - current_day
-                            # Store using the original day_index as key
-                            history[episode_idx][day_index] = self.books[current_book].data[book_day_index]
-                            break
-                        current_day += len(self.books[current_book].data)
-                        current_book += 1
+                while current_day <= day_index:
+                    if current_book >= len(self.books):
+                        break
+                    if current_day + len(self.books[current_book].data) > day_index:
+                        book_day_index = day_index - current_day
+                        # Store using the original day_index as key
+                        history[day_index] = self.books[current_book].data[book_day_index]
+                        break
+                    current_day += len(self.books[current_book].data)
+                    current_book += 1
+
+            if self.episode_index < len(self.episodes) - 1:
+                self.episode_index += 1
 
         return history
+
 
 
 

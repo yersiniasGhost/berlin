@@ -20,7 +20,6 @@ class DataPreprocessor:
     def get_data(self) -> Tuple[TickData, List[TickData]]:
         return self.tick, self.history
 
-
     def next_tick(self, tick: TickData):
         # Perform any required normalization on historical data
         # If no normalization use raw tick

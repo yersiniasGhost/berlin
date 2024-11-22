@@ -1,5 +1,7 @@
 from typing import List, Dict, Union, Tuple
 import numpy as np
+from numpy import ndarray
+
 from .data_preprocessor import DataPreprocessor
 from models.monitor_configuration import MonitorConfiguration
 from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
@@ -40,24 +42,52 @@ class IndicatorProcessorHistorical:
     def next_tick(self, _: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
         output, raw = {}, {}
         for indicator in self.config.indicators:
-            output[indicator.name] = self.indicator_values[indicator.name][self.index]
+            output[indicator.name] = self.indicator_values[indicator.name][day_index][tick_index]
             if indicator.name in self.raw_indicators.keys():
                 raw[indicator.name] = self.raw_indicators[indicator.name][self.index]
-        self.index += 1
         return output, raw
 
-    def precalculate_day(self):
-        '''
-        We must fina all the None's and send in the day data individually.
-        Rather than output[indicator.name] = metric   we should output[indicator.name] += metric
-        :return:
-        '''
-        pass
+    def precalculate(self) -> tuple[dict[str, ndarray], dict[str, ndarray]]:
+        history_by_days = self.data_link.get_history()
+        output = {}
+        raw_indicators = {}
+
+        # Build continuous history from all days
+        episode_history = []
+        for day_idx in sorted(history_by_days.keys()):
+            episode_history.extend(history_by_days[day_idx])
+
+        # Process indicators
+        for indicator in self.config.indicators:
+            look_back = indicator.parameters.get('lookback', 10)
+
+            if indicator.type == CANDLE_STICK_PATTERN:
+                indicator_name = indicator.parameters['talib']
+                cp = CandlePatterns([indicator_name])
+                result = cp.process_tick_data(episode_history, len(episode_history))
+                bull = indicator.parameters.get('bull', True)
+                metric = self.calculate_time_based_metric_over_array(result[indicator_name], look_back)
+                if bull is True:
+                    metric[metric < 0] = 0
+                elif bull is False:
+                    metric[metric > 0] = 0
+                output[indicator.name] = metric
+
+            elif indicator.type == INDICATOR_TYPE:
+                result = self.calculate_indicator(episode_history, indicator)
+                metric = self.calculate_time_based_metric_over_array(result[indicator.name], look_back)
+                output[indicator.name] = metric
+                raw_indicators[indicator.name] = result[indicator.name]
+
+            elif indicator.type == PATTERN_MATCH:
+                pass
+
+        return output, raw_indicators
 
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
     # Change this next for THT??? allow it to read in the episode it is on???
-    def precalculate(self) -> Tuple[Dict[str, np.array], Dict[str, np.array]]:
+    def precalculate_orig(self) -> Tuple[Dict[str, np.array], Dict[str, np.array]]:
         history = self.data_link.get_history()
         output = {}
         raw_indicators = {}
