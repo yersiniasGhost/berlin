@@ -118,19 +118,7 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
         ]
 
         tools = TickHistoryTools.get_tools2(data_config)
-        tools.set_iteration_mode(mode="random", episode_count=2, randomize=True)
-
-
-        # all_episodes = []
-        # current_episode = []
-
-        # for tick in tools.serve_next_tick():
-        #     if tick is None:
-        #         if current_episode:  # Only append if episode has data
-        #             all_episodes.append(current_episode)
-        #             current_episode = []
-        #     else:
-        #         current_episode.append(tick)
+        tools.set_iteration_mode(mode="random", episode_count=2)
 
         check = IndicatorProcessorHistorical(config, tools)
         x

@@ -118,11 +118,40 @@ class TestNewTickHistory(unittest.TestCase):
         ]
 
         tools = TickHistoryTools.get_tools2(data_config)
+        tools.set_iteration_mode("random", 1)  # 2 episodes
 
-        # WRITE TESTS FOR THIS STUFF vvv^^^
-        tools.set_iteration_mode(RANDOM_MODE, 2)
-        history_random = tools.get_history()
+        # Print initial state
+        print("\nTest Setup:")
+        print(f"Episodes created: {tools.episodes}")
 
-        tools.set_iteration_mode(STREAMING_MODE, 2)
-        history_stream = tools.get_history()
+        # Process ticks
+        print("\nProcessing ticks:")
+        for item in tools.serve_next_tick():
+            if item is None:
+                print("Got None separator")
+                continue
+
+            day_index, tick_index, tick = item
+
+            # Basic assertions
+            self.assertIsInstance(tick, TickData)
+            self.assertGreaterEqual(tick_index, 0)
+            self.assertIsInstance(day_index, int)
+
+            # Only print first few ticks per day to avoid spam
+            if tick_index >= 5:
+                print(f"... (more ticks for day {day_index})")
+                break
+
+        # tools = TickHistoryTools.get_tools2(data_config)
+        #
+        # # WRITE TESTS FOR THIS STUFF vvv^^^
+        # tools.set_iteration_mode(RANDOM_MODE, 2)
+        # tick_generator = tools.serve_next_tick()
+        # history_random = tools.get_history()
+        #
+        # tools.set_iteration_mode(STREAMING_MODE, 2)
+        # history_stream = tools.get_history()
+
+
         x

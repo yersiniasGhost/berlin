@@ -20,7 +20,6 @@ class IndicatorProcessorHistorical:
         self.indicator_values, self.raw_indicators = self.precalculate()
         self.index = 0
 
-
     @staticmethod
     def calculate_time_based_metric_over_array(indicator_data: np.ndarray, lookback: int) -> np.ndarray:
         metrics = np.zeros(len(indicator_data))
@@ -37,7 +36,14 @@ class IndicatorProcessorHistorical:
                 metrics[i] = (1.0 - lookback_ratio) * np.sign(c)
         return metrics
 
-    def next_tick(self, _: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
+    # def next_tick(self, day_index: str, tick_index: int):
+    #     output, raw = {}, {}
+    #         for indicator, day in self.config.indiactors:
+    #
+    #
+    #         return
+
+    def next_tick_orig(self) -> Tuple[Dict[str, float], Dict[str, float]]:
         output, raw = {}, {}
         for indicator in self.config.indicators:
             output[indicator.name] = self.indicator_values[indicator.name][self.index]
@@ -46,47 +52,55 @@ class IndicatorProcessorHistorical:
         self.index += 1
         return output, raw
 
-    def precalculate_day(self):
-        '''
-        We must fina all the None's and send in the day data individually.
-        Rather than output[indicator.name] = metric   we should output[indicator.name] += metric
-        :return:
-        '''
-        pass
+    def precalculate(self) -> Tuple[Dict[str, Dict[int, np.array]], Dict[str, Dict[int, np.array]]]:
+        """
+        Calculate indicators for all days and organize by indicator name and day index.
 
-    # Each indicator will calculate a rating based upon different factors such as
-    # indicator strength or age.   TBD
-    # Change this next for THT??? allow it to read in the episode it is on???
-    def precalculate(self) -> Tuple[Dict[str, np.array], Dict[str, np.array]]:
-        history = self.data_link.get_history()
+        Returns:
+            Tuple[Dict[str, Dict[int, np.array]], Dict[str, Dict[int, np.array]]]:
+                First dict: {indicator_name: {day_index: metric_array}}
+                Second dict: {indicator_name: {day_index: raw_values_array}}
+        """
+        full_history = self.data_link.get_history()
         output = {}
         raw_indicators = {}
+
+        # Initialize dictionaries for each indicator
         for indicator in self.config.indicators:
-            look_back = indicator.parameters.get('lookback', 10)
+            output[indicator.name] = {}
+            raw_indicators[indicator.name] = {}
 
-            # Candle stick patterns are using TALIB definitions
-            if indicator.type == CANDLE_STICK_PATTERN:
-                indicator_name = indicator.parameters['talib']
-                cp = CandlePatterns([indicator_name])
-                result = cp.process_tick_data(history, len(history))
-                bull = indicator.parameters.get('bull', True)
-                metric = self.calculate_time_based_metric_over_array(result[indicator_name], look_back)
-                if bull is True:
-                    metric[metric < 0] = 0
-                elif bull is False:
-                    metric[metric > 0] = 0
-                output[indicator.name] = metric
+        # Process each day's data
+        for day_index, history in full_history.items():
+            for indicator in self.config.indicators:
+                look_back = indicator.parameters.get('lookback', 10)
 
-            elif indicator.type == INDICATOR_TYPE:
-                result = self.calculate_indicator(history, indicator)
-                metric = self.calculate_time_based_metric_over_array(result[indicator.name], look_back)
+                # Candle stick patterns using TALIB
+                if indicator.type == CANDLE_STICK_PATTERN:
+                    indicator_name = indicator.parameters['talib']
+                    cp = CandlePatterns([indicator_name])
+                    result = cp.process_tick_data(history, len(history))
+                    bull = indicator.parameters.get('bull', True)
+                    metric = self.calculate_time_based_metric_over_array(result[indicator_name], look_back)
 
-                output[indicator.name] = metric
-                raw_indicators[indicator.name] = result[indicator.name]
+                    if bull is True:
+                        metric[metric < 0] = 0
+                    elif bull is False:
+                        metric[metric > 0] = 0
 
-            # Pattern matching is using Eamonn's DTW
-            elif indicator.type == PATTERN_MATCH:
-                pass
+                    output[indicator.name][day_index] = metric
+
+                # Regular indicators
+                elif indicator.type == INDICATOR_TYPE:
+                    result = self.calculate_indicator(history, indicator)
+                    metric = self.calculate_time_based_metric_over_array(result[indicator.name], look_back)
+
+                    output[indicator.name][day_index] = metric
+                    raw_indicators[indicator.name][day_index] = result[indicator.name]
+
+                # Pattern matching (DTW)
+                elif indicator.type == PATTERN_MATCH:
+                    pass
 
         return output, raw_indicators
 
