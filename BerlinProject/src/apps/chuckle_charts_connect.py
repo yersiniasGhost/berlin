@@ -4,6 +4,7 @@ from models.indicator_definition import IndicatorDefinition
 from data_streamer import DataStreamer
 from operations.chuckle_charts_web import ChuckleChartsWeb
 from config.types import CANDLE_STICK_PATTERN
+from mongo_tools.tick_history_tools import TickHistoryTools, RANDOM_MODE, STREAMING_MODE
 
 import logging
 
@@ -143,17 +144,21 @@ indicator_definitions = [
             "trend": "bearish"
         }
     },
-    {"name": "Three Black Crows", "parameters": {"talib": "CDL3BLACKCROWS", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
+    {"name": "Three Black Crows", "parameters": {"talib": "CDL3BLACKCROWS", "lookback": 3},
+     "type": CANDLE_STICK_PATTERN},
     {"name": "Hammer", "parameters": {"talib": "CDLHAMMER", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            # {"name": "Shooting Star", "parameters": {"talib": "CDLSHOOTINGSTAR", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            # {"name": "Doji", "parameters": {"talib": "CDLDOJI", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            {"name": "Engulfing Bull", "parameters": {"talib": "CDLENGULFING", "lookback": 3, "bull": True}, "type": CANDLE_STICK_PATTERN},
-            {"name": "Engulfing Bear", "parameters": {"talib": "CDLENGULFING", "lookback": 3, "bull": False}, "type": CANDLE_STICK_PATTERN},
-            {"name": "Morning Star", "parameters": {"talib": "CDLMORNINGSTAR", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            # {"name": "Evening Star", "parameters": {"talib": "CDLEVENINGSTAR", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            # {"name": "Piercing Line", "parameters": {"talib": "CDLPIERCING", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            {"name": "Dark Cloud Cover", "parameters": {"talib": "CDLDARKCLOUDCOVER", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
-            {"name": "Hammer pattern", "parameters": {"talib": "CDLHAMMER", "lookback": 3}, "type": CANDLE_STICK_PATTERN}
+    # {"name": "Shooting Star", "parameters": {"talib": "CDLSHOOTINGSTAR", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
+    # {"name": "Doji", "parameters": {"talib": "CDLDOJI", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
+    {"name": "Engulfing Bull", "parameters": {"talib": "CDLENGULFING", "lookback": 3, "bull": True},
+     "type": CANDLE_STICK_PATTERN},
+    {"name": "Engulfing Bear", "parameters": {"talib": "CDLENGULFING", "lookback": 3, "bull": False},
+     "type": CANDLE_STICK_PATTERN},
+    {"name": "Morning Star", "parameters": {"talib": "CDLMORNINGSTAR", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
+    # {"name": "Evening Star", "parameters": {"talib": "CDLEVENINGSTAR", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
+    # {"name": "Piercing Line", "parameters": {"talib": "CDLPIERCING", "lookback": 3}, "type": CANDLE_STICK_PATTERN},
+    {"name": "Dark Cloud Cover", "parameters": {"talib": "CDLDARKCLOUDCOVER", "lookback": 3},
+     "type": CANDLE_STICK_PATTERN},
+    {"name": "Hammer pattern", "parameters": {"talib": "CDLHAMMER", "lookback": 3}, "type": CANDLE_STICK_PATTERN}
 ]
 model_config = {"preprocess_config": "test_ds"}
 monitor_config = {
@@ -177,11 +182,15 @@ monitor_config = {
     }
 }
 data_config = {"type": "TickHistory",
-               "ticker": "NVDA",
-               "start_date": "2024-11-12",
-               "end_date": "2024-11-20",
-               "time_increment": 1
-               }
+               "configs": [
+                   {
+                       "ticker": "NVDA",
+                       "start_date": "2024-11-12",
+                       "end_date": "2024-11-20",
+                       "time_increments": 1
+                   }
+               ]}
+
 if __name__ == "__main__":
 
     indicators = []
@@ -192,7 +201,8 @@ if __name__ == "__main__":
 
     indicator_tool = ChuckleChartsWeb("Optimizer", monitor)
     data_streamer = DataStreamer(data_config, model_config)
-    data_streamer.data_link.delay = 2  #  add_options({"delay": 1})
+    data_streamer.data_link.delay = 2  # add_options({"delay": 1})
+    data_streamer.data_link.set_iteration_mode(STREAMING_MODE, 2)
     data_streamer.replace_monitor_configuration(monitor_configuration)
     data_streamer.connect_tool(indicator_tool)
     data_streamer.run()

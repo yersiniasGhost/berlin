@@ -1,5 +1,5 @@
 {
-  "test_name": "no.5.one_episode",
+  "test_name": "fib.test",
   "stalled_counter": 10,
   "monitor": {
 	"_id": "65f2d5555555555555555555",
@@ -12,7 +12,7 @@
 	  "bollinger_bull": 1.0,
 	  "macd_cross_bull": 1.0,
 	  "smaX_bull": 1.0
-	},
+	}, 
 	"bear_triggers": {
 	  "bollinger_bear": 1.0,
 	  "resistance level": 1.0

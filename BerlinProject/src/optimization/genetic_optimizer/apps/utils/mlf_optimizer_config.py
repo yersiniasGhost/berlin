@@ -15,6 +15,7 @@ from optimization.genetic_optimizer.abstractions.objective_function_base import 
 from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor
 from models.indicator_definition import IndicatorDefinition
+from mongo_tools.tick_history_tools import STREAMING_MODE, RANDOM_MODE
 from data_streamer import DataStreamer
 
 
@@ -42,6 +43,8 @@ class MlfOptimizerConfig:
     def create_project(self) -> GeneticAlgorithm:
 
         data_streamer = DataStreamer(self.data_config, self.model_config)
+        data_streamer.data_link.set_iteration_mode(STREAMING_MODE, 2)
+
         self.fitness_calculator = MlfFitnessCalculator(data_streamer=data_streamer)
         self.objectives_dict = {}
         for objective in self.objectives.values():

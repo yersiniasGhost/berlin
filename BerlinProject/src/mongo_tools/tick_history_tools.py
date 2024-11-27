@@ -25,7 +25,6 @@ class DailyTickHistory:
 
 class TickHistoryTools:
     def __init__(self, daily_data: List[BookData]):
-        self.current_episode = 0
         self.books = daily_data
         self.tick_index = 0
         self.episodes = []
@@ -182,12 +181,16 @@ class TickHistoryTools:
 
         return None  # if the index is in error
 
+    def update_episode(self):
+        self.episode_index += 1
+        if self.episode_index >= len(self.episodes):
+            self.episode_index = 0
+
     def serve_next_tick(self) -> Iterable[TickData]:
         for day_index in self.episodes[self.episode_index]:
             day_tick_list = self.get_day_tick_list(day_index)
             for tick_index, tick in enumerate(day_tick_list):
                 yield day_index, tick_index, tick
-
 
     def get_history(self) -> Dict[int, List[TickData]]:
         """Returns dictionary mapping day indices to TickData lists for current episode"""
@@ -195,7 +198,7 @@ class TickHistoryTools:
             return {}
 
         history = {}
-        current_episode = self.episodes[self.current_episode]
+        current_episode = self.episodes[self.episode_index]
 
         for day_index in current_episode:
             # Find which book contains this day

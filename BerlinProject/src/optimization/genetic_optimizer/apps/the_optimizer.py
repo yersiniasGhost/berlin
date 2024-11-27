@@ -16,16 +16,10 @@ logging.getLogger("pymongo").setLevel(logging.WARNING)
 MAX_STALLED_METRIC = 200
 
 
-def output_best_monitor(stats: IndividualStats, output_path: Path):
-    print("'BEST' Result")
-    individual = stats.individual
-    print(individual.monitor.triggers)
-    print("Threshold", individual.monitor.threshold)
-    for indicator in individual.monitor_configuration.indicators:
-        print(indicator.name, indicator.parameters)
-    print("Fitness Values", stats.index, stats.fitness_values)
-
-
+def output_best_configuration(individual: MlfIndividual, output_path: Path):
+    pass
+    # individual.monitor.somemagic.to_json
+    # individual.monitor_configuration.to_json
 
 
 if __name__ == "__main__":
@@ -123,18 +117,9 @@ if __name__ == "__main__":
         io.fitness_calculator.set_final_result(True)
         io.fitness_calculator.calculate_fitness_functions(-9, [best.individual])
         io.fitness_calculator.set_final_result(False)
-        # if stats[0].iteration % 50 == 0:
-        #     tn_iter = f"{tn}--{stats[0].iteration}"
-        #     plot_combined_results(io, best.individual, plots_path, tn_iter, show_graphs, io.start_date, io.time_frame)
-        #
-        #
-        # if stalled_metric == MAX_STALLED_METRIC or stats[0].iteration == genetic_algorithm.number_of_generations - 1:
-        #     # plot_optimized_curves(io, best.individual, plots_path, tn, show_graphs, io.start_date)
-        #     # plot_tasks(best.individual, io, plots_path, tn, show_graphs, io.start_date, io.time_frame)
-        #
-        #     output_task_spreadsheet(io, best.individual, plots_path, tn, io.start_date)
-        #     plot_combined_results(io, best.individual, plots_path, tn, show_graphs, io.start_date, io.time_frame)
-        #     break
+        io.fitness_calculator.reset_episode()
+        output_best_configuration(best, output_path)
+
 
     print(f"Run took {(time.time_ns() - start)/1e9} seconds")
 

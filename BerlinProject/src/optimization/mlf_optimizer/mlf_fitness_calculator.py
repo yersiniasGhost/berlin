@@ -26,6 +26,9 @@ class MlfFitnessCalculator(FitnessCalculator):
     def set_final_result(self, display: bool):
         self.display_results = display
 
+    def reset_episode(self):
+        self.data_streamer.data_link.update_episode()
+
     # This is the entry point for all simulations to be executed for each of the
     # individual set of rules.  Calculate the state of the system for every time stamp
     # and send the data to the objective functions.  See __calculate_individual_stat

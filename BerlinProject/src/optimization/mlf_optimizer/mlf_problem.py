@@ -81,7 +81,7 @@ class MlfProblem(ProblemDomain):
                             value = indicator.parameters[name]
                             new_value = 0
                             if range['t'] == "int":
-                                delta = int(delta)
+                                delta = max(1, int(delta))
                                 new_value = value + get_random_int(delta)
                             elif range['t'] == 'float':
                                 new_value = value + random.uniform(-delta, delta)

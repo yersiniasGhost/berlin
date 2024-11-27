@@ -43,7 +43,7 @@ class IndicatorProcessorHistorical:
         for indicator in self.config.indicators:
             name = indicator.name
             output[name] = self.indicator_values[name][day_index][tick_index]
-            raw[name] = self.raw_indicators[name][day_index][tick_index]
+            raw[name] = 0.0 # self.raw_indicators[name][day_index][tick_index]
 
         return output, raw
 
