@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
 from config.types import TICK_HISTORY_COLLECTION
 from environments.tick_data import TickData
-from .book_data import BookData
+from .book_data import BookData, DAILY_TICS
 from pymongo.collection import Collection
 
 from models.tick_history import TickHistory
@@ -146,7 +146,13 @@ class TickHistoryTools:
 
     def set_iteration_mode(self, mode: str, episode_count: int = 1):
         self.episodes = []
-        all_day_indices =  list(range(len(self.books[0].data)))
+        all_day_indices = []
+        current_idx = 0
+        for book_idx, book in enumerate(self.books):
+            book_days = len(book.data)
+            for _ in range(book_days):
+                all_day_indices.append(current_idx)
+                current_idx += 1
 
         if mode == STREAMING_MODE:
             # In streaming mode, just create episodes with sequential days
@@ -163,30 +169,25 @@ class TickHistoryTools:
         k, m = divmod(len(lst), n)
         return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
 
+    #  day 5
+    # book1: [0,1,2] book2: [3,4,5,6,7]
+    def get_day_tick_list(self, day_index: int) -> DAILY_TICS | None:
+        last_count = 0
+        for b in self.books:
+            book_count = last_count + b.data_length()
+            if day_index < book_count:
+                day_spot = day_index - last_count
+                return b.data[day_spot]
+            last_count = book_count
+
+        return None  # if the index is in error
+
     def serve_next_tick(self) -> Iterable[TickData]:
         for day_index in self.episodes[self.episode_index]:
-            for tick_index, tick in enumerate(self.books[0].data[day_index]):
+            day_tick_list = self.get_day_tick_list(day_index)
+            for tick_index, tick in enumerate(day_tick_list):
                 yield day_index, tick_index, tick
-            yield None
-        yield None
 
-    # def reset_index(self):
-    #     self.
-
-
-
-        # def get_history(self, separate_days: bool = False) -> list[list[TickData] | None]:
-    #     history = []
-    #
-    #     # Use first episode's order (whether it's streaming or random)
-    #     if self.episodes:
-    #         for day_index in self.episodes[0]:
-    #             for tick in self.books[day_index].data:
-    #                 history.append(tick)
-    #             if separate_days:
-    #                 history.append(None)
-    #
-    #     return history
 
     def get_history(self) -> Dict[int, List[TickData]]:
         """Returns dictionary mapping day indices to TickData lists for current episode"""

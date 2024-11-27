@@ -18,12 +18,20 @@ class TestMonitorBackTest(unittest.TestCase):
 
     def test_1(self):
         data_config = {
-            'type': 'TickHistory',
-            'ticker': "NVDA",
-            'start_date': '2024-05-01',
-            'end_date': '2024-05-30',
-            'time_increment': 1
-
+            "type": "TickHistory",
+            "configs": [{
+                'ticker': 'NVDA',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            },
+                {
+                    'ticker': 'META',
+                    'start_date': '2024-05-22',
+                    'end_date': '2024-05-24',
+                    'time_increments': '5'
+                }
+            ]
         }
 
         indicator_config_sma_bull = {
@@ -164,7 +172,7 @@ class TestMonitorBackTest(unittest.TestCase):
         bt = MonitorResultsBacktest('My Test Strategy', monitor)
         streamer = DataStreamer(data_config, model_config, ic)
         streamer.connect_tool(bt)
+        streamer.data_link.set_iteration_mode("stream", 1)  # Set this BEFORE replacing monitor config
         streamer.replace_monitor_configuration(ic, historical=True)
-        streamer.data_link.set_iteration_mode("random", 2)
         streamer.run()
         print()

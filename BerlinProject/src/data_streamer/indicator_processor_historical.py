@@ -36,12 +36,16 @@ class IndicatorProcessorHistorical:
                 metrics[i] = (1.0 - lookback_ratio) * np.sign(c)
         return metrics
 
-    # def next_tick(self, day_index: str, tick_index: int):
-    #     output, raw = {}, {}
-    #         for indicator, day in self.config.indiactors:
-    #
-    #
-    #         return
+
+    def next_tick(self, day_index: int, tick_index: int):
+        output, raw = {}, {}
+
+        for indicator in self.config.indicators:
+            name = indicator.name
+            output[name] = self.indicator_values[name][day_index][tick_index]
+            raw[name] = self.raw_indicators[name][day_index][tick_index]
+
+        return output, raw
 
     def next_tick_orig(self) -> Tuple[Dict[str, float], Dict[str, float]]:
         output, raw = {}, {}

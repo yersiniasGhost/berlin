@@ -118,40 +118,60 @@ class TestNewTickHistory(unittest.TestCase):
         ]
 
         tools = TickHistoryTools.get_tools2(data_config)
-        tools.set_iteration_mode("random", 1)  # 2 episodes
 
-        # Print initial state
-        print("\nTest Setup:")
-        print(f"Episodes created: {tools.episodes}")
+        tools.set_iteration_mode(RANDOM_MODE, 2)
+        history_random = tools.get_history()
 
-        # Process ticks
-        print("\nProcessing ticks:")
-        for item in tools.serve_next_tick():
-            if item is None:
-                print("Got None separator")
-                continue
+        tools.set_iteration_mode(STREAMING_MODE, 2)
+        history_stream = tools.get_history()
 
-            day_index, tick_index, tick = item
+    def test_get_day_tick_list(self):
+        data_config = [{
+            'ticker': 'NVDA',
+            'start_date': '2024-05-22',
+            'end_date': '2024-05-24',
+            'time_increments': '5'
+        },
+            {
+                'ticker': 'META',
+                'start_date': '2024-05-22',
+                'end_date': '2024-05-24',
+                'time_increments': '5'
+            }
+        ]
 
-            # Basic assertions
-            self.assertIsInstance(tick, TickData)
-            self.assertGreaterEqual(tick_index, 0)
-            self.assertIsInstance(day_index, int)
+        tools = TickHistoryTools.get_tools2(data_config)
 
-            # Only print first few ticks per day to avoid spam
-            if tick_index >= 5:
-                print(f"... (more ticks for day {day_index})")
+        tools.set_iteration_mode(RANDOM_MODE, 2)
+
+        # Test the get_day_tick_list
+        d1 = tools.get_day_tick_list(0)
+        d2 = tools.get_day_tick_list(3)
+        err = tools.get_day_tick_list(100)
+        # Test the generator
+        tick_generator = tools.serve_next_tick()
+
+        # Collect all ticks from first episode
+        ticks = []
+        for tick_data in tick_generator:
+            if tick_data is None:
                 break
+            if all(x is not None for x in tick_data):
+                day_index, tick_index, tick = tick_data
+                ticks.append((day_index, tick_index, tick))
 
-        # tools = TickHistoryTools.get_tools2(data_config)
-        #
-        # # WRITE TESTS FOR THIS STUFF vvv^^^
-        # tools.set_iteration_mode(RANDOM_MODE, 2)
-        # tick_generator = tools.serve_next_tick()
-        # history_random = tools.get_history()
-        #
-        # tools.set_iteration_mode(STREAMING_MODE, 2)
-        # history_stream = tools.get_history()
+        # Basic validations
+        assert len(ticks) > 0  # Should have some ticks
 
-
+        # Verify structure of returned data
+        first_tick = ticks[0]
+        assert len(first_tick) == 3  # Should have (day_index, tick_index, tick_data)
+        assert isinstance(first_tick[0], int)  # day_index should be int
+        assert isinstance(first_tick[1], int)  # tick_index should be int
+        assert hasattr(first_tick[2], 'open')
         x
+
+
+
+
+

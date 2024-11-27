@@ -81,7 +81,8 @@ class MonitorResultsBacktest(ExternalTool):
         normalized_trigger = trigger / total_weight
         return normalized_trigger
 
-    def indicator_vector(self, indicator_results: Dict[str, float], tick: TickData, index: int) -> None:
+    def indicator_vector(self, indicator_results: Dict[str, float], tick: TickData,
+                         index: int, raw_indicators: Dict[str, float]) -> None:
 
         bull_trigger = self.calculate_trigger(indicator_results, self.monitor.triggers)
         self.monitor_value.append(bull_trigger)

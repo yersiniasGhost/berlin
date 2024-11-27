@@ -31,14 +31,7 @@ class DataStreamer:
     def configure_data(self, data_config: dict) -> None:
         # TODO finish testing:
         if data_config.get('type', None) == "TickHistory":
-            ticker = data_config.get('ticker')
-            start_date_str = data_config.get('start_date')
-            end_date_str = data_config.get('end_date')
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-
-            time_increments = data_config.get('time_increment')
-            self.data_link = TickHistoryTools.get_tools(ticker, start_date, end_date, time_increments)
+            self.data_link = TickHistoryTools.get_tools2(data_config["configs"])
         else:
             self.data_link = SampleTools.get_samples2(data_config[0])
 
@@ -46,7 +39,6 @@ class DataStreamer:
         # for indicator in self.indicators:
         #     indicator.prepare_historical_processor(self.data_link)
         self.indicators.prepare_historical_processor(self.data_link)
-
 
     def run(self):
         if self.data_link is None:
@@ -59,14 +51,14 @@ class DataStreamer:
         sample_stats = self.data_link.get_stats()
         self.preprocessor.reset_state(sample_stats)
         index = 0
-        for tick in self.data_link.serve_next_tick():
+        for day_index, tick_index, tick in self.data_link.serve_next_tick():
             raw_indicators: Optional[Dict[str, float]] = None
             if tick:
                 self.preprocessor.next_tick(tick)
                 fv = self.feature_vector_calculator.next_tick(self.preprocessor)
                 indicator_results = {}
                 if self.indicators:
-                    indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
+                    indicator_results, raw_indicators = self.indicators.next_tick(day_index, tick_index)
 
                 if None not in fv and fv:
                     for et in self.external_tool:

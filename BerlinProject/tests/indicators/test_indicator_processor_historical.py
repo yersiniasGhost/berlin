@@ -86,6 +86,44 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
         self.assertTrue('Hammer pattern' in result.keys())
         self.assertTrue('Three Black Crows' in result.keys())
 
+    # def test_support_resistance(self):
+    #     indicators = [
+    #         {"name": "silly_support_level",
+    #          'function': 'support_level',
+    #          'type': INDICATOR_TYPE,
+    #          "parameters":
+    #              {"sensitivity": 30,
+    #               "local_max_sensitivity": 1,
+    #               "support_range": .05,
+    #               "bounce_level": .01,
+    #               "break_level": .0002,
+    #               "trend": "bullish"
+    #               }}
+    #     ]
+    #     config = {"name": "silly_support_line", "indicators": indicators}
+    #     config = MonitorConfiguration(**config)
+    #
+    #     data_config = [{
+    #         'ticker': 'NVDA',
+    #         'start_date': '2024-05-22',
+    #         'end_date': '2024-05-24',
+    #         'time_increments': '5'
+    #     },
+    #         {
+    #             'ticker': 'META',
+    #             'start_date': '2024-05-22',
+    #             'end_date': '2024-05-24',
+    #             'time_increments': '5'
+    #         }
+    #     ]
+    #
+    #     tools = TickHistoryTools.get_tools2(data_config)
+    #     tools.set_iteration_mode(mode="random", episode_count=2)
+    #
+    #     check = IndicatorProcessorHistorical(config, tools)
+    #
+    #     x
+
     def test_support_resistance(self):
         indicators = [
             {"name": "silly_support_level",
@@ -118,7 +156,13 @@ class TestIndicatorProcessorHistorical(unittest.TestCase):
         ]
 
         tools = TickHistoryTools.get_tools2(data_config)
-        tools.set_iteration_mode(mode="random", episode_count=2)
+        tools.set_iteration_mode(mode="stream", episode_count=2)
 
-        check = IndicatorProcessorHistorical(config, tools)
+        processor = IndicatorProcessorHistorical(config, tools)
+        history = tools.get_history()
+        sample_day = list(history.keys())[2]
+
+        print("\nFirst 30 ticks for day", sample_day)
+        for i in range(30):
+            output, raw = processor.next_tick(sample_day, i)
         x

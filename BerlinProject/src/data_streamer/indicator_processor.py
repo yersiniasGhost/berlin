@@ -30,7 +30,7 @@ class IndicatorProcessor:
 
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
-    def next_tick(self, data_preprocessor: DataPreprocessor) -> Dict[str, float]:
+    def next_tick(self, data_preprocessor: DataPreprocessor, _) -> Dict[str, float]:
         tick, history = data_preprocessor.get_data()  # get non-normalized data
         history = history[-50:]
         output = {}

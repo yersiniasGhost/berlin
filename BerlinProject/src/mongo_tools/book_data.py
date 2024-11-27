@@ -19,7 +19,6 @@ class BookData:
             yield absolute_index, tick
         yield None, None
 
-
     def get_tick(self, day: int, tick_index: int) -> Tuple[int, TickData]:
         last_index = self.lengths[day - 1] if day > 0 else 0
         absolute_index = last_index + tick_index
