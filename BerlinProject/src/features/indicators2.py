@@ -134,31 +134,33 @@ def resistance_level(tick_data: List[TickData], parameters: dict):
     return signals
 
 
-# Use the values from the updated
 def calculate_fibonacci_levels(tick_data: List[TickData], parameters: dict) -> tuple[list[np.ndarray], list[int]]:
     data = np.array([tick.close for tick in tick_data])
 
-    # Get support and resistance points
+    # Get support and resistance points based on sensitivity
     resistance_maxima = calculate_resistance(data, parameters['sensitivity'])
     support_minima = calculate_support(data, parameters['sensitivity'])
+
     fibonacci_levels: list[np.ndarray] = []
     fibonacci_indices: list[int] = []
     fib_ratios = np.array([0, 0.236, 0.382, 0.5, 0.618, 0.786, 1], dtype=np.float64)
+
     current_max = None
     current_min = None
 
     for i in range(2, len(data)):
         new_levels_found = False
-        # update the resistance
+
+        # Update resistance at any new local maximum
         if i in resistance_maxima:
-            if current_max is None or data[i] > current_max:
-                current_max = data[i]
-                new_levels_found = True
-        # Update the support
+            current_max = data[i]  # Always update to new local max
+            new_levels_found = True
+
+        # Update support at any new local minimum
         if i in support_minima:
-            if current_min is None or data[i] < current_min:
-                current_min = data[i]
-                new_levels_found = True
+            current_min = data[i]  # Always update to new local min
+            new_levels_found = True
+
         # Calculate fib levels if we have both high and low
         if (current_max is not None and
                 current_min is not None and
@@ -175,66 +177,68 @@ def calculate_fibonacci_levels(tick_data: List[TickData], parameters: dict) -> t
 # For a bullish signal... look if there was prior bullish movement.
 # See if after the max is established that it hits one of the retracement levels and starts to increase.
 # Check that there is a maxiumum after the minimum.
-
-# def fib_trigger(tick_data: List[TickData], parameters: dict) -> np.ndarray:
-#     data = np.array([tick.close for tick in tick_data])
-#     fib_data, fib_indices = calculate_fibonacci_levels(tick_data, parameters)
-#     signals = np.zeros(len(tick_data))
-#
-#     bounce_threshold = parameters.get('bounce_threshold')
-#     level_threshold = parameters.get('resistance_range')
-#
-#     for i in range(len(fib_indices)):
-#         pass
-
-
+# Which fiobnacci levels do we care about?
+# Change it thus that the minima's at the beginning are changing as well.
 def fib_trigger(tick_data: List[TickData], parameters: dict) -> np.ndarray:
-    """
-    Detect bounces off fibonacci levels with configurable look-ahead window
-    """
     data = np.array([tick.close for tick in tick_data])
     signals = np.zeros(len(data))
 
-    # Calculate fibonacci levels and track their indices
+    resistance_maxima = calculate_resistance(data, parameters['sensitivity'])
+    support_minima = calculate_support(data, parameters['sensitivity'])
     fib_data, fib_indices = calculate_fibonacci_levels(tick_data, parameters)
 
-    # Get resistance points for bounce confirmation
-    local_maxima = calculate_resistance(data, parameters['local_max_sensitivity'])
-
-    # Get the look ahead window from parameters
-    candles_after_bounce = parameters.get('candles_after_bounce', 1)  # Default to 3 if not specified
-
-    current_fib_levels = None  # Current set of fibonacci levels
-    last_fib_index = None  # Index where current fib levels were calculated
+    candles_after_bounce = parameters.get('candles_after_bounce', 1)
+    current_fib_levels = None
+    last_support_idx = None
+    last_resistance_idx = None
 
     for i in range(2, len(data)):
-        # Update fibonacci levels if we're at a calculation point
-        if i in fib_indices:
-            idx = fib_indices.index(i)
-            current_fib_levels = fib_data[idx]
-            last_fib_index = i
+        # Update our last known support/resistance points
+        if i in support_minima:
+            last_support_idx = i
+            # Reset resistance as we need a new one after this support
+            last_resistance_idx = None
+            current_fib_levels = None
 
-        # Only check for signals if we have fibonacci levels established
-        if current_fib_levels is not None and last_fib_index is not None:
-            # Check if there's a resistance point between the last fib calculation and current point
-            bounce_condition = any((last_fib_index < res_idx < i) for res_idx in local_maxima)
+        if i in resistance_maxima and last_support_idx is not None:
+            if i > last_support_idx:  # Only update if this resistance comes after our support
+                last_resistance_idx = i
 
-            if parameters['trend'] == 'bullish' and bounce_condition:
-                # Check each fibonacci level for potential bounce
+        # Update fibonacci levels if we're at a calculation point and have valid support/resistance
+        if i in fib_indices and last_support_idx is not None and last_resistance_idx is not None:
+            if last_resistance_idx > last_support_idx:  # Confirm proper sequence
+                idx = fib_indices.index(i)
+                current_fib_levels = fib_data[idx]
+
+        # Only check for signals if we have valid fibonacci levels
+        if current_fib_levels is not None and last_resistance_idx is not None:
+            if parameters['trend'] == 'bullish':
                 for fib_level in current_fib_levels:
                     lower_bound = fib_level * (1 - parameters['resistance_range'])
                     upper_bound = fib_level * (1 + parameters['resistance_range'])
                     bounce_trigger = fib_level * (1 + parameters['bounce_level'])
 
-                    # Check if price is near fibonacci level
                     if lower_bound < data[i - 1] < upper_bound:
-                        # Look ahead for bounce within the specified window
-                        look_ahead_end = min(i + candles_after_bounce, len(data))
+                        # Check if prices before this point were higher
+                        lookback_period = 5
+                        lookback_start = max(0, i - lookback_period)
+                        if not all(data[lookback_start:i - 1] > data[i - 1]):
+                            continue
 
-                        # Check if any point in the look-ahead window shows a bounce
+                        look_ahead_end = min(i + candles_after_bounce, len(data))
                         for j in range(i, look_ahead_end):
                             if data[i - 1] < bounce_trigger < data[j]:
                                 signals[j] = 1
-                                break  # Exit once we find a valid bounce
+                                break
 
     return signals
+
+
+# There must be a resistance and support established
+# There must be a max after the minima
+# Once a price gets near that maximum then lowers and hits a fib level
+# It must increase "bounce value" amount in "candles_after_bounce" amount of time
+# The prices before the "bounce" must be higher than the value it bounces at
+# ^ this ensures it doesnt detect when it simply crosses from below then increase.
+
+

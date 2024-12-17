@@ -79,6 +79,8 @@ class IndicatorProcessor:
         elif indicator.function == 'resistance_level':
             return {indicator.name: resistance_level(history, indicator.parameters)}
 
+        elif indicator.function == 'fib_trigger':
+            return {indicator.name: resistance_level(history, indicator.parameters)}
 
         else:
             raise ValueError(f"Unknown indicator: {indicator.name}")

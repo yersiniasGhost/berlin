@@ -11,6 +11,7 @@ class GAHyperparameters:
     chance_of_mutation: float
     chance_of_crossover: float
 
+
     @staticmethod
     def from_json(json: Json) -> 'GAHyperparameters':
         number_of_iterations = json.get("number_of_iterations", 1000)

@@ -21,16 +21,10 @@ class TestMonitorBackTest(unittest.TestCase):
             "type": "TickHistory",
             "configs": [{
                 'ticker': 'NVDA',
-                'start_date': '2024-05-22',
-                'end_date': '2024-05-24',
-                'time_increments': '5'
-            },
-                {
-                    'ticker': 'META',
-                    'start_date': '2024-05-22',
-                    'end_date': '2024-05-24',
-                    'time_increments': '5'
-                }
+                'start_date': '2024-12-02',
+                'end_date': '2024-12-06',
+                'time_increments': '1'
+            }
             ]
         }
 
@@ -164,6 +158,7 @@ class TestMonitorBackTest(unittest.TestCase):
         model_config = {
             "preprocess_config": "test_ds",
         }
+
 
         # Create Monitor instance
         monitor = Monitor(**test_monitor)

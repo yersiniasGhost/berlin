@@ -7,7 +7,7 @@ from features.candle_patterns import CandlePatterns
 from models.indicator_definition import IndicatorDefinition
 from mongo_tools.sample_tools import SampleTools
 from mongo_tools.tick_history_tools import TickHistoryTools
-from features.indicators2 import support_level, resistance_level
+from features.indicators2 import support_level, resistance_level, fib_trigger
 from features.indicators import sma_crossover, macd_histogram_crossover, bol_bands_lower_band_bounce
 from environments.tick_data import TickData
 
@@ -125,6 +125,9 @@ class IndicatorProcessorHistorical:
 
         elif indicator.function == 'resistance_level':
             return {indicator.name: resistance_level(history, indicator.parameters)}
+
+        elif indicator.function == 'fib_trigger':
+            return {indicator.name: fib_trigger(history, indicator.parameters)}
 
         else:
             raise ValueError(f"Unknown indicator: {indicator.name}")
