@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dynamic Candlestick Chart</title>
+    <!-- Include lightweight-charts for candlestick charts -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .chart-container { height: 500px; margin-bottom: 30px; position: relative; }
+        .controls { margin-bottom: 20px; }
+        select, button { padding: 8px; margin-right: 10px; }
+        .status-box {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+        }
+        .data-table th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+        .data-table tr:nth-child(even){background-color: #f9f9f9;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dynamic Candlestick Chart</h1>
+
+        <div class="status-box">
+            <h3>Status: <span id="statusText">Not connected</span></h3>
+            <div id="dataStatus">No data</div>
+        </div>
+
+        <div class="controls">
+            <select id="symbol">
+                <option value="AAPL">Apple (AAPL)</option>
+                <option value="MSFT" selected>Microsoft (MSFT)</option>
+                <option value="GOOGL">Alphabet (GOOGL)</option>
+                <option value="AMZN">Amazon (AMZN)</option>
+            </select>
+
+            <select id="timeframe">
+                <option value="1m">1 Minute</option>
+                <option value="5m">5 Minutes</option>
+                <option value="15m">15 Minutes</option>
+                <option value="1h">1 Hour</option>
+                <option value="1d">1 Day</option>
+            </select>
+
+            <button id="subscribe">Subscribe</button>
+        </div>
+
+        <div id="chartContainer" class="chart-container"></div>
+
+        <h3>Latest Candles</h3>
+        <table id="dataTable" class="data-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Open</th>
+                    <th>High</th>
+                    <th>Low</th>
+                    <th>Close</th>
+                    <th>Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data rows will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Application state
+        const state = {
+            chart: null,
+            candleSeries: null,
+            volumeSeries: null,
+            symbol: 'MSFT',
+            timeframe: '1m',
+            rawCandles: [], // Store raw 1-minute candles
+            aggregatedCandles: {}, // Store aggregated candles for each timeframe
+            lastUpdateTime: null,
+            subscribedSymbol: null
+        };
+
+        // Initialize chart
+        function initChart() {
+            // Create chart element
+            const chartElement = document.getElementById('chartContainer');
+            state.chart = LightweightCharts.createChart(chartElement, {
+                width: chartElement.clientWidth,
+                height: chartElement.clientHeight,
+                layout: {
+                    backgroundColor: '#ffffff',
+                    textColor: '#333',
+                    fontSize: 12,
+                    fontFamily: 'Arial, sans-serif',
+                },
+                grid: {
+                    vertLines: {
+                        color: '#f0f0f0',
+                    },
+                    horzLines: {
+                        color: '#f0f0f0',
+                    },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#ddd',
+                    scaleMargins: {
+                        top: 0.1,
+                        bottom: 0.2,
+                    },
+                },
+                timeScale: {
+                    borderColor: '#ddd',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // Add candlestick series
+            state.candleSeries = state.chart.addCandlestickSeries({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+            });
+
+            // Add volume series as histogram
+            state.volumeSeries = state.chart.addHistogramSeries({
+                priceFormat: {
+                    type: 'volume',
+                },
+                priceScaleId: '', // Don't create a separate price scale
+                scaleMargins: {
+                    top: 0.8, // Position at the bottom of the chart
+                    bottom: 0,
+                },
+                color: '#ccc',
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                state.chart.resize(
+                    chartElement.clientWidth,
+                    chartElement.clientHeight
+                );
+            });
+
+            // Add chart title
+            state.chart.applyOptions({
+                watermark: {
+                    visible: true,
+                    text: state.symbol,
+                    color: 'rgba(0, 0, 0, 0.2)',
+                    fontSize: 40,
+                }
+            });
+        }
+
+        // Subscribe to symbol
+        function subscribeToSymbol() {
+            state.symbol = document.getElementById('symbol').value;
+            state.timeframe = document.getElementById('timeframe').value;
+
+            // Reset data
+            state.rawCandles = [];
+            state.aggregatedCandles = {};
+
+            // Update chart title
+            state.chart.applyOptions({
+                watermark: {
+                    text: state.symbol,
+                }
+            });
+
+            // Clear chart data
+            state.candleSeries.setData([]);
+            state.volumeSeries.setData([]);
+
+            // Update status
+            document.getElementById('statusText').innerText = `Connecting to ${state.symbol}...`;
+
+            fetch('/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    symbols: [state.symbol]
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                console.log('Subscription result:', result);
+                state.subscribedSymbol = state.symbol;
+                document.getElementById('statusText').innerText = `Subscribed to ${state.symbol}`;
+
+                // Start fetching data
+                updateData();
+            })
+            .catch(error => {
+                console.error('Error subscribing:', error);
+                document.getElementById('statusText').innerText =
+                    `Error subscribing to ${state.symbol}: ${error.message}`;
+            });
+        }
+
+        // Process raw candle data from the CHART_EQUITY endpoint
+        function processRawCandle(candle) {
+            // Map Schwab CHART_EQUITY fields to our candle format
+            /*
+             * '1': sequence number
+             * '2': open price
+             * '3': high price
+             * '4': low price
+             * '5': close price
+             * '6': volume
+             * '7': timestamp (milliseconds since epoch)
+             */
+            return {
+                time: Math.floor(candle['7'] / 1000), // Convert ms to seconds for the chart library
+                open: parseFloat(candle['2']),
+                high: parseFloat(candle['3']),
+                low: parseFloat(candle['4']),
+                close: parseFloat(candle['5']),
+                volume: parseFloat(candle['6'])
+            };
+        }
+
+        // Aggregate candles into larger timeframes
+        function aggregateCandles(rawCandles, timeframeMinutes) {
+            if (!rawCandles || rawCandles.length === 0) return [];
+
+            const minuteInSeconds = 60;
+            const intervalSeconds = timeframeMinutes * minuteInSeconds;
+            const aggregated = {};
+
+            // Process each candle
+            rawCandles.forEach(candle => {
+                // Skip invalid candles
+                if (!candle.time || !candle.open || !candle.high ||
+                    !candle.low || !candle.close || !candle.volume) {
+                    return;
+                }
+
+                // Calculate interval key (round down to nearest interval)
+                const intervalTime = Math.floor(candle.time / intervalSeconds) * intervalSeconds;
+
+                // Create or update aggregated candle
+                if (!aggregated[intervalTime]) {
+                    aggregated[intervalTime] = {
+                        time: intervalTime,
+                        open: candle.open,
+                        high: candle.high,
+                        low: candle.low,
+                        close: candle.close,
+                        volume: candle.volume
+                    };
+                } else {
+                    const existingCandle = aggregated[intervalTime];
+                    // Update high and low
+                    existingCandle.high = Math.max(existingCandle.high, candle.high);
+                    existingCandle.low = Math.min(existingCandle.low, candle.low);
+                    // Update close (last value wins)
+                    existingCandle.close = candle.close;
+                    // Accumulate volume
+                    existingCandle.volume += candle.volume;
+                }
+            });
+
+            // Convert to array and sort by time
+            return Object.values(aggregated).sort((a, b) => a.time - b.time);
+        }
+
+        // Update chart with new data
+        function updateData() {
+            const timestamp = Date.now();
+            const url = `/data/${state.symbol}?timeframe=${state.timeframe}&_=${timestamp}`;
+
+            fetch(url)
+            .then(response => response.json())
+            .then(newData => {
+                if (newData && newData.length > 0) {
+                    // Process raw data into candles
+                    const processed = [];
+
+                    // Handle chart data from Schwab API (has fields 1-7)
+                    newData.forEach(point => {
+                        // Check if this is chart data (has the right structure)
+                        if (point['1'] !== undefined && point['2'] !== undefined &&
+                            point['3'] !== undefined && point['4'] !== undefined &&
+                            point['5'] !== undefined && point['7'] !== undefined) {
+
+                            processed.push(processRawCandle(point));
+                        }
+                        // Handle already processed data (direct from UI tool)
+                        else if (point.open !== undefined && point.high !== undefined &&
+                                 point.low !== undefined && point.close !== undefined &&
+                                 point.timestamp !== undefined) {
+
+                            processed.push({
+                                time: Math.floor(new Date(point.timestamp).getTime() / 1000),
+                                open: point.open,
+                                high: point.high,
+                                low: point.low,
+                                close: point.close,
+                                volume: point.volume || 0
+                            });
+                        }
+                    });
+
+                    // Only proceed if we have valid processed data
+                    if (processed.length > 0) {
+                        // Store raw 1-minute candles
+                        state.rawCandles = processed;
+
+                        // Determine timeframe minutes
+                        let timeframeMinutes = 1;
+                        switch (state.timeframe) {
+                            case '5m': timeframeMinutes = 5; break;
+                            case '15m': timeframeMinutes = 15; break;
+                            case '1h': timeframeMinutes = 60; break;
+                            case '1d': timeframeMinutes = 1440; break;
+                        }
+
+                        // Aggregate candles for the selected timeframe
+                        const candles = timeframeMinutes === 1 ?
+                            processed : aggregateCandles(processed, timeframeMinutes);
+
+                        // Store aggregated candles for this timeframe
+                        state.aggregatedCandles[state.timeframe] = candles;
+
+                        if (candles.length > 0) {
+                            // Update candlestick series
+                            state.candleSeries.setData(candles);
+
+                            // Update volume series
+                            const volumeData = candles.map(candle => ({
+                                time: candle.time,
+                                value: candle.volume,
+                                color: candle.close >= candle.open ?
+                                    'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                            }));
+                            state.volumeSeries.setData(volumeData);
+
+                            // Update table with most recent candles (reverse order - newest first)
+                            updateDataTable(candles.slice(-10).reverse());
+
+                            // Update status
+                            state.lastUpdateTime = new Date();
+                            document.getElementById('statusText').innerText =
+                                `Connected to ${state.symbol}`;
+                            document.getElementById('dataStatus').innerText =
+                                `Last update: ${state.lastUpdateTime.toLocaleTimeString()} - ` +
+                                `${processed.length} candles, showing ${candles.length} ${state.timeframe} candles`;
+
+                            // Fit the chart to the data
+                            state.chart.timeScale().fitContent();
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                document.getElementById('statusText').innerText =
+                    `Error: ${error.message}`;
+            });
+        }
+
+        // Update data table
+        function updateDataTable(candles) {
+            const tableBody = document.querySelector('#dataTable tbody');
+            tableBody.innerHTML = '';
+
+            candles.forEach(candle => {
+                const row = document.createElement('tr');
+
+                // Time
+                const timeCell = document.createElement('td');
+                const date = new Date(candle.time * 1000);
+                timeCell.textContent = date.toLocaleTimeString();
+                row.appendChild(timeCell);
+
+                // OHLC
+                ['open', 'high', 'low', 'close'].forEach(field => {
+                    const cell = document.createElement('td');
+                    cell.textContent = candle[field] ? candle[field].toFixed(2) : 'N/A';
+                    row.appendChild(cell);
+                });
+
+                // Volume
+                const volCell = document.createElement('td');
+                volCell.textContent = candle.volume ? candle.volume.toLocaleString() : 'N/A';
+                row.appendChild(volCell);
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Check connection status
+        function checkStatus() {
+            fetch('/status')
+            .then(response => response.json())
+            .then(status => {
+                if (status.connected) {
+                    const counts = status.data_counts || {};
+                    const symbolCount = counts[state.symbol] || 0;
+
+                    if (symbolCount > 0) {
+                        document.getElementById('statusText').innerText =
+                            `Connected - ${state.symbol}: ${symbolCount} data points`;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking status:', error);
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+
+            // Set defaults
+            document.getElementById('symbol').value = state.symbol;
+
+            // Subscribe button
+            document.getElementById('subscribe').addEventListener('click', subscribeToSymbol);
+
+            // Symbol and timeframe change handlers
+            document.getElementById('symbol').addEventListener('change', function() {
+                state.symbol = this.value;
+                subscribeToSymbol();
+            });
+
+            document.getElementById('timeframe').addEventListener('change', function() {
+                const previousTimeframe = state.timeframe;
+                state.timeframe = this.value;
+
+                // Clear chart series data
+                state.candleSeries.setData([]);
+                state.volumeSeries.setData([]);
+
+                // If we already have data for this timeframe, use it
+                // Otherwise we'll fetch new data
+                if (state.aggregatedCandles[state.timeframe]) {
+                    const candles = state.aggregatedCandles[state.timeframe];
+
+                    state.candleSeries.setData(candles);
+
+                    const volumeData = candles.map(candle => ({
+                        time: candle.time,
+                        value: candle.volume,
+                        color: candle.close >= candle.open ?
+                            'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                    }));
+                    state.volumeSeries.setData(volumeData);
+
+                    // Update table
+                    updateDataTable(candles.slice(-10).reverse());
+                } else {
+                    // Recalculate aggregations if we have the raw data
+                    if (state.rawCandles.length > 0) {
+                        let timeframeMinutes = 1;
+                        switch (state.timeframe) {
+                            case '5m': timeframeMinutes = 5; break;
+                            case '15m': timeframeMinutes = 15; break;
+                            case '1h': timeframeMinutes = 60; break;
+                            case '1d': timeframeMinutes = 1440; break;
+                        }
+
+                        const candles = timeframeMinutes === 1 ?
+                            state.rawCandles : aggregateCandles(state.rawCandles, timeframeMinutes);
+
+                        state.aggregatedCandles[state.timeframe] = candles;
+
+                        state.candleSeries.setData(candles);
+
+                        const volumeData = candles.map(candle => ({
+                            time: candle.time,
+                            value: candle.volume,
+                            color: candle.close >= candle.open ?
+                                'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                        }));
+                        state.volumeSeries.setData(volumeData);
+
+                        // Update table
+                        updateDataTable(candles.slice(-10).reverse());
+                    } else {
+                        // Get new data for this timeframe
+                        updateData();
+                    }
+                }
+
+                // Fit the chart to the data
+                state.chart.timeScale().fitContent();
+            });
+
+            // Auto-subscribe to default symbol
+            subscribeToSymbol();
+
+            // Update data and check status regularly
+            setInterval(updateData, 1000);
+            setInterval(checkStatus, 5000);
+        });
+    </script>
+</body>
+</html>
