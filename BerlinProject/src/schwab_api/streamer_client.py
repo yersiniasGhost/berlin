@@ -4,6 +4,7 @@ import threading
 import time
 import logging
 from typing import Dict, List, Optional, Callable, Any
+from datetime import datetime
 
 
 class SchwabStreamerClient:
@@ -206,6 +207,9 @@ class SchwabStreamerClient:
         self.callbacks['LEVELONE_EQUITIES'].append(callback)
 
         # Fields to request for quotes
+        # 0=Symbol, 1=Bid Price, 2=Ask Price, 3=Last Price, 4=Bid Size, 5=Ask Size,
+        # 8=Volume, 10=Last Size, 12=High Price, 13=Low Price, 14=Bid Tick, 15=Close Price,
+        # 16=Exchange ID, 17=Marginable, 18=Shortable, 19=Island Bid, 24=Volatility, 38=Market Maker
         fields = "0,1,2,3,4,5,8,10,12,13,14,15,16,17,18,19,24,38"
 
         subscribe_request = {
@@ -241,7 +245,10 @@ class SchwabStreamerClient:
 
         self.callbacks['CHART_EQUITY'].append(callback)
 
-        # Fields for chart data (all available fields)
+        # Fields for chart data:
+        # 0=Sequence, 1=Chart Time (UNIX timestamp)
+        # 2=Open Price, 3=High Price, 4=Low Price, 5=Close Price, 6=Volume
+        # 7=Market DateTime (UNIX timestamp), 8=Cumulative Volume
         fields = "0,1,2,3,4,5,6,7,8"
 
         subscribe_request = {
@@ -262,6 +269,64 @@ class SchwabStreamerClient:
 
         self.logger.info(f"Subscribing to charts for: {symbols}")
         self.ws.send(json.dumps(subscribe_request))
+
+    def add_chart_symbols(self, symbols: List[str]):
+        """
+        Add symbols to an existing chart subscription.
+
+        Args:
+            symbols: List of additional stock symbols to subscribe to
+        """
+        if not self.is_connected:
+            self.logger.error("Not connected to Schwab Streamer API")
+            return
+
+        add_request = {
+            "requests": [
+                {
+                    "service": "CHART_EQUITY",
+                    "requestid": self._get_next_request_id(),
+                    "command": "ADD",
+                    "SchwabClientCustomerId": self.customer_id,
+                    "SchwabClientCorrelId": self.correl_id,
+                    "parameters": {
+                        "keys": ",".join(symbols)
+                    }
+                }
+            ]
+        }
+
+        self.logger.info(f"Adding chart symbols: {symbols}")
+        self.ws.send(json.dumps(add_request))
+
+    def unsubscribe_charts(self, symbols: List[str]):
+        """
+        Unsubscribe from chart data for specified symbols.
+
+        Args:
+            symbols: List of stock symbols to unsubscribe from
+        """
+        if not self.is_connected:
+            self.logger.error("Not connected to Schwab Streamer API")
+            return
+
+        unsub_request = {
+            "requests": [
+                {
+                    "service": "CHART_EQUITY",
+                    "requestid": self._get_next_request_id(),
+                    "command": "UNSUBS",
+                    "SchwabClientCustomerId": self.customer_id,
+                    "SchwabClientCorrelId": self.correl_id,
+                    "parameters": {
+                        "keys": ",".join(symbols)
+                    }
+                }
+            ]
+        }
+
+        self.logger.info(f"Unsubscribing from charts for: {symbols}")
+        self.ws.send(json.dumps(unsub_request))
 
     def subscribe_account_activity(self, callback: Callable[[List[Dict]], None]):
         """

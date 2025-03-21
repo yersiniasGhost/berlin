@@ -1,34 +1,39 @@
-import time
 import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
-from config.types import  TICK_HISTORY_COLLECTION
+from bson import ObjectId
+from config.types import PYMONGO_ID, SAMPLE_COLLECTION, TICK_HISTORY_COLLECTION
 from environments.tick_data import TickData
 from .book_data import BookData
 from pymongo.collection import Collection
+from data_streamer.data_link import DataLink
 
 from models.tick_history import TickHistory
 from mongo_tools.mongo import Mongo
 from pymongo import InsertOne, collection
 import logging
 
-
 STREAMING_MODE = "stream"
 RANDOM_MODE = "random"
 BOOK_MODE = "book mode"
+
+
 @dataclass
 class DailyTickHistory:
     data: Dict[str, List[TickData]]
 
 
-class TickHistoryTools:
+class TickHistoryTools(DataLink):
     def __init__(self, daily_data: List[BookData]):  # Updated type hint
+        super().__init__()
         self.books = daily_data
         self.tick_index = 0
         self.episodes = []
         self.episode_index = 0
-        self.delay: Optional[int] = None
+        self.iteration_mode = STREAMING_MODE
+        # Set default episodes if not explicitly set later
+        self.set_iteration_mode(STREAMING_MODE)
 
     def get_stats(self) -> dict:
         stats = {
@@ -73,11 +78,11 @@ class TickHistoryTools:
 
         retrieved_data = collection.find_one(query)
         if retrieved_data:
-            t = TickHistory(**retrieved_data)
-            t.process_timestamps()
-            return t
+            #  THIS IS WHERE I WOULD FIX TIMESTAMP FOR EACH DATA IF NEED BE
+            return TickHistory(**retrieved_data)
         return None
 
+    # [{0: [TickData]}, {1:[TickData]}, {2:[TickData]}...]
     @classmethod
     def get_tools2(cls, selected_data_config: List[Dict]) -> "TickHistoryTools":
         books = []
@@ -87,7 +92,7 @@ class TickHistoryTools:
             end_date = datetime.strptime(spec['end_date'], '%Y-%m-%d')
             time_increments = int(spec['time_increments'])
             book_data = cls.get_the_data_for_tools(spec['ticker'], start_date,
-                                              end_date, time_increments)
+                                                   end_date, time_increments)
             books.append(book_data)
             # creates "indexed" which is the index to tickdata dict.
 
@@ -146,122 +151,118 @@ class TickHistoryTools:
         k, m = divmod(len(lst), n)
         return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
 
-    # def set_iteration_mode(self, mode: str, episode_count: int = 1, randomize: bool = True):
-    #     self.episodes = []
-    #     if mode == STREAMING_MODE:
-    #         # Create tuples for all combinations of (book_idx, value_idx)
-    #         indices = []
-    #         for book_idx, book in enumerate(self.books):
-    #             data_length = book.data_length()
-    #             for value_idx in range(data_length):
-    #                 indices.append((book_idx, value_idx))
-    #         self.episodes.append(indices)
-    #
-    #     # elif mode == BOOK_MODE:
-    #     #     for book_idx, book in enumerate(self.books):
-    #     #         indices = []
-    #     #         data_length = book.data_length()
-    #     #         for value_idx in range(data_length):
-    #     #             indices.append((book_idx, value_idx))
-    #     #         if randomize:
-    #     #             random.shuffle(indices)
-    #     #         self.episodes.append(indices)
-    #     elif mode == RANDOM_MODE:
-    #         indices = []
-    #         for book_idx, book in enumerate(self.books):
-    #             data_length = book.data_length()
-    #             for value_idx in range(data_length):
-    #                 indices.append((book_idx, value_idx))
-    #         random.shuffle(indices)
-    #         self.episodes = self.split_list(indices, episode_count)
-    #
-    #     self.iteration_mode = mode
-
-    def set_iteration_mode(self, mode: str, episode_count: int = 1):
+    def set_iteration_mode(self, mode: str, episode_count: int = 1, randomize: bool = True):
         self.episodes = []
-
-        # Get all day indices
-        day_indices = []
-        total_days = 0
-        for book in self.books:
-            for day_idx in range(len(book.data)):
-                day_indices.append(total_days)
-                total_days += 1
+        self.iteration_mode = mode
 
         if mode == STREAMING_MODE:
-            # Split ordered indices into episodes
-            self.episodes = self.split_list(day_indices, episode_count)
-
-        elif mode == RANDOM_MODE:
-            # Shuffle and split into episodes
-            random.shuffle(day_indices)
-            self.episodes = self.split_list(day_indices, episode_count)
-
-    # def serve_next_tick(self) -> Iterable[TickData]:
-    #     for episode in self.episodes:
-    #         for day_index in episode:
-    #             # Get all ticks for this day
-    #             for tick in self.books[day_index].data:
-    #                 yield tick
-    #             yield None
-    #         yield None
-    #     yield None
-
-    def serve_next_tick(self) -> Iterable[Tuple[Optional[TickData], int, int]]:
-        current_episode = self.episodes[self.episode_index]
-
-        for day_index in current_episode:
-            # Find correct book and day
-            current_total = 0
+            # Create tuples for all combinations of (book_idx, value_idx)
+            indices = []
             for book_idx, book in enumerate(self.books):
-                if current_total + len(book.data) > day_index:
-                    # Found the right book
-                    book_day_index = day_index - current_total
-                    for tick_index, tick in enumerate(book.data[book_day_index]):
-                        yield tick, tick_index, day_index
-                    yield None, None, None
-                    break
-                current_total += len(book.data)
+                data_length = book.data_length()
+                for value_idx in range(data_length):
+                    indices.append((book_idx, value_idx))
+            self.episodes.append(indices)
 
-            # def get_history(self, separate_days: bool = False) -> list[list[TickData] | None]:
-    #     history = []
-    #
-    #     # Use first episode's order (whether it's streaming or random)
-    #     if self.episodes:
-    #         for day_index in self.episodes[0]:
-    #             for tick in self.books[day_index].data:
-    #                 history.append(tick)
-    #             if separate_days:
-    #                 history.append(None)
-    #
-    #     return history
+        elif mode == BOOK_MODE:
+            for book_idx, book in enumerate(self.books):
+                indices = []
+                data_length = book.data_length()
+                for value_idx in range(data_length):
+                    indices.append((book_idx, value_idx))
+                if randomize:
+                    random.shuffle(indices)
+                self.episodes.append(indices)
+        elif mode == RANDOM_MODE:
+            indices = []
+            for book_idx, book in enumerate(self.books):
+                data_length = book.data_length()
+                for value_idx in range(data_length):
+                    indices.append((book_idx, value_idx))
+            random.shuffle(indices)
+            self.episodes = self.split_list(indices, episode_count)
 
-    def get_history(self) -> Dict[int, List[TickData]]:
-        history = {}
+    def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
+        """
+        Implement the DataLink serve_next_tick method to yield ticks.
+        Also notifies handlers for event-driven processing.
 
-        if self.episodes:
-            episode = self.episodes[self.episode_index]
+        Yields:
+            Tuple of (tick_data, tick_index, day_index)
+        """
+        for episode in self.episodes:
+            for book_index, day_index in episode:
+                book = self.books[book_index]
+                for (absolute_index, td) in book.get_next_tick(day_index):
+                    # Notify handlers before yielding
+                    self.notify_handlers(td, absolute_index, day_index)
+                    yield td, absolute_index, day_index
+            yield None, -1, -1  # End of episode
+        yield None, -1, -1  # End of all episodes
 
-            for day_index in episode:
-                current_day = 0
-                current_book = 0
+    def start_streaming(self):
+        """
+        Start streaming historical data in a non-blocking way.
+        This method processes the data and triggers handlers, but doesn't block.
+        """
+        import threading
 
-                while current_day <= day_index:
-                    if current_book >= len(self.books):
-                        break
-                    if current_day + len(self.books[current_book].data) > day_index:
-                        book_day_index = day_index - current_day
-                        # Store using the original day_index as key
-                        history[day_index] = self.books[current_book].data[book_day_index]
-                        break
-                    current_day += len(self.books[current_book].data)
-                    current_book += 1
+        def stream_worker():
+            for episode in self.episodes:
+                for book_index, day_index in episode:
+                    book = self.books[book_index]
+                    for (absolute_index, td) in book.get_next_tick(day_index):
+                        self.notify_handlers(td, absolute_index, day_index)
+                        # Add a small delay to simulate real-time data
+                        import time
+                        time.sleep(0.01)
+                # Notify end of episode
+                self.notify_handlers(None, -1, -1)
+            # Notify end of all episodes
+            self.notify_handlers(None, -1, -1)
 
-            if self.episode_index < len(self.episodes) - 1:
-                self.episode_index += 1
+        thread = threading.Thread(target=stream_worker)
+        thread.daemon = True
+        thread.start()
 
-        return history
+    def reset_index(self) -> None:
+        """Reset the tick index to start from the beginning"""
+        self.tick_index = 0
+        self.episode_index = 0
 
+        # Also reset each book's internal state
+        for book in self.books:
+            book.reset_index()
 
+    def get_next2(self) -> Optional[TickData]:
+        """Get the next tick without using the iterator pattern"""
+        if self.episode_index >= len(self.episodes):
+            return None
 
+        current_episode = self.episodes[self.episode_index]
+        if self.tick_index >= len(current_episode):
+            self.episode_index += 1
+            self.tick_index = 0
+            if self.episode_index >= len(self.episodes):
+                return None
+            current_episode = self.episodes[self.episode_index]
 
+        book_index, day_index = current_episode[self.tick_index]
+        book = self.books[book_index]
+
+        # Get the tick data
+        for i, (_, td) in enumerate(book.get_next_tick(day_index)):
+            if i == 0:  # Just get the first one
+                self.tick_index += 1
+                return td
+
+        # If we get here, there was no data for this day
+        self.tick_index += 1
+        return self.get_next2()  # Try the next one
+
+    def get_present_sample_and_index(self) -> Tuple[dict, int]:
+        """For sample data, returns the current sample and its index."""
+        if self.tick_index >= len(self.episodes[0]):
+            return None, None
+
+        return {"data": self.books[0].data}, self.tick_index

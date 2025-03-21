@@ -5,10 +5,12 @@ import logging
 import time
 from datetime import datetime, timedelta
 import pandas as pd
-import random
+import os
 
-# Import the data processor
-from data_processor import DataProcessor
+# Import the data processor and Schwab client
+from schwab_api.data_processor import DataProcessor
+from schwab_api.authentication import SchwabClient, easy_client
+from data_streamer.schwab_data_stream import SchwabDataStreamAdapter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -16,6 +18,14 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger('StockApp')
 
 app = Flask(__name__)
+
+# App configuration
+APP_CONFIG = {
+    'app_key': os.environ.get('SCHWAB_APP_KEY', ''),
+    'app_secret': os.environ.get('SCHWAB_APP_SECRET', ''),
+    'redirect_uri': os.environ.get('SCHWAB_REDIRECT_URI', 'https://127.0.0.1:8182'),
+    'token_path': os.environ.get('SCHWAB_TOKEN_PATH', 'schwab_tokens.json')
+}
 
 # This will store our streaming data for each symbol
 streaming_data = {}
@@ -26,35 +36,47 @@ data_lock = threading.Lock()
 
 # Initialize Schwab client
 schwab_client = None
+streaming_client = None
 is_connected = False
 
 # Initialize data processor
 data_processor = DataProcessor()
+# Initialize adapter
+schwab_adapter = None
 
 
 def initialize_schwab():
-    global schwab_client, is_connected
-    # Create and authenticate the Schwab client
+    global schwab_client, streaming_client, is_connected, schwab_adapter
+
     try:
-        from authentication import SchwabClient  # Your authentication module
         logger.info("Creating Schwab client")
-        schwab_client = SchwabClient()
+        # Use the easy_client method for simplified authentication
+        schwab_client = easy_client(
+            app_key=APP_CONFIG['app_key'],
+            app_secret=APP_CONFIG['app_secret'],
+            callback_url=APP_CONFIG['redirect_uri'],
+            token_path=APP_CONFIG['token_path']
+        )
 
-        logger.info("Authenticating with Schwab API")
-        success = schwab_client.authenticate()
+        if schwab_client:
+            logger.info("Successfully authenticated with Schwab API")
 
-        if success:
-            logger.info("Authentication successful, connecting to stream")
-            success = schwab_client.connect_stream()
-            if success:
+            # Create streaming client
+            streaming_client = schwab_client.create_streaming_session()
+
+            if streaming_client:
                 is_connected = True
                 logger.info("Successfully connected to Schwab streaming API")
+
+                # Initialize adapter
+                schwab_adapter = SchwabDataStreamAdapter()
+                return True
             else:
-                logger.error("Failed to connect to Schwab streaming API")
+                logger.error("Failed to create streaming session")
         else:
             logger.error("Authentication with Schwab API failed")
 
-        return success
+        return False
     except Exception as e:
         logger.exception(f"Error initializing Schwab client: {e}")
         return False
@@ -62,12 +84,12 @@ def initialize_schwab():
 
 def check_stream_connection():
     """Check and maintain streaming connection"""
-    global schwab_client, is_connected
+    global streaming_client, is_connected, active_symbols
 
     while True:
-        if schwab_client:
+        if streaming_client:
             # Update the global connection status from client
-            is_connected = getattr(schwab_client, 'is_connected', False)
+            is_connected = getattr(streaming_client, 'is_connected', False)
 
             # Log connection status periodically
             logger.debug(f"Stream connection status: {is_connected}")
@@ -76,7 +98,8 @@ def check_stream_connection():
             if is_connected and active_symbols:
                 # Check if we need to resubscribe symbols
                 try:
-                    schwab_client.subscribe_quotes(list(active_symbols), handle_quote_data)
+                    streaming_client.subscribe_quotes(list(active_symbols), handle_quote_data)
+                    streaming_client.subscribe_charts(list(active_symbols), handle_chart_data)
                     logger.info(f"Resubscribed to: {list(active_symbols)}")
                 except Exception as e:
                     logger.error(f"Error resubscribing: {e}")
@@ -88,6 +111,10 @@ def check_stream_connection():
 def handle_quote_data(data):
     """Handle incoming quote data"""
     logger.info(f"Received quote data: {str(data)[:100]}...")  # Log first part of data
+
+    # Forward to schwab adapter
+    if schwab_adapter:
+        schwab_adapter.handle_quote_data(data)
 
     with data_lock:
         for quote in data:
@@ -105,147 +132,58 @@ def handle_quote_data(data):
                     # Create a new data point
                     new_point = {
                         'timestamp': timestamp,
-                        'open': last,  # For streaming, we use last price for all OHLC values initially
-                        'high': last,
-                        'low': last,
-                        'close': last,
+                        'last': last,
+                        'bid': bid,
+                        'ask': ask,
                         'volume': volume
                     }
 
-                    # Process through data processor which handles anomalies
-                    updated_data = data_processor.process_streaming_update(symbol, new_point)
+                    # Process through data processor - updates last candle
+                    updated_data = data_processor.process_quote_update(symbol, new_point)
                     streaming_data[symbol] = updated_data
 
-                    logger.debug(f"Updated data for {symbol}, current candles: {len(updated_data)}")
+                    logger.debug(f"Updated quote data for {symbol}")
 
                 except Exception as e:
                     logger.error(f"Error processing quote for {symbol}: {e}")
 
 
-def generate_mock_price_series(symbol, days=1, initial_price=None):
-    """Generate a realistic mock price series for a symbol"""
-    # Use a seed based on symbol name for consistent results
-    random.seed(sum(ord(c) for c in symbol))
+def handle_chart_data(data):
+    """Handle incoming chart (OHLCV) data"""
+    logger.info(f"Received chart data: {str(data)[:100]}...")  # Log first part of data
 
-    # Set initial price based on symbol if not provided
-    if initial_price is None:
-        initial_price = random.uniform(50, 500)
+    # Forward to schwab adapter
+    if schwab_adapter:
+        schwab_adapter.handle_chart_data(data)
 
-    # Parameters for random walk
-    volatility = random.uniform(0.005, 0.02)  # Daily volatility
-    drift = random.uniform(-0.001, 0.001)  # Slight trend
+    with data_lock:
+        for chart_entry in data:
+            symbol = chart_entry.get('key', 'UNKNOWN')
+            if symbol in active_symbols:
+                try:
+                    # Parse chart values - field numbers based on Schwab API documentation
+                    timestamp_ms = int(chart_entry.get('7', 0))
+                    timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+                    formatted_time = timestamp.strftime('%Y-%m-%d %H:%M:%S')
 
-    # Create timestamp series starting from midnight
-    end_time = datetime.now()
-    start_time = end_time - timedelta(days=days)
-    start_time = datetime.combine(start_time.date(), datetime.min.time())  # Midnight of start day
+                    # Create a candle data point
+                    candle = {
+                        'timestamp': formatted_time,
+                        'open': float(chart_entry.get('2', 0.0)),
+                        'high': float(chart_entry.get('3', 0.0)),
+                        'low': float(chart_entry.get('4', 0.0)),
+                        'close': float(chart_entry.get('5', 0.0)),
+                        'volume': int(chart_entry.get('6', 0))
+                    }
 
-    # Include all times from midnight, but add more activity during market hours
-    current_time = start_time
-    times = []
+                    # Process through data processor
+                    updated_data = data_processor.process_chart_update(symbol, candle)
+                    streaming_data[symbol] = updated_data
 
-    while current_time <= end_time:
-        # More data points during market hours
-        hours_increment = 1 / 60  # 1 minute by default
+                    logger.debug(f"Updated chart data for {symbol}, candles: {len(updated_data)}")
 
-        # For pre-market and after-hours, use larger increments
-        current_hour = current_time.hour
-        if current_hour < 6 or current_hour > 13:
-            # Only add a point every 5 minutes outside market hours
-            if current_time.minute % 5 == 0:
-                times.append(current_time)
-        else:
-            times.append(current_time)
-
-        current_time += timedelta(minutes=1)
-
-    # Generate price series as geometric random walk
-    prices = [initial_price]
-    for i in range(1, len(times)):
-        # Different activity based on market hours
-        t = times[i]
-        time_of_day = t.hour + t.minute / 60
-
-        # Market open/close times (6:30 AM - 1:00 PM)
-        market_open_hour = 6.5  # 6:30 AM
-        market_close_hour = 13.0  # 1:00 PM
-
-        # Pre-market (low activity)
-        if time_of_day < market_open_hour:
-            daily_volatility = volatility * 0.3
-            daily_return = drift * 0.5 + random.normalvariate(0, daily_volatility)
-        # Market hours (high activity)
-        elif market_open_hour <= time_of_day <= market_close_hour:
-            # More activity at market open and close
-            if abs(time_of_day - market_open_hour) < 1 or abs(time_of_day - market_close_hour) < 1:
-                daily_volatility = volatility * 1.5
-            else:
-                daily_volatility = volatility
-            daily_return = drift + random.normalvariate(0, daily_volatility)
-        # After-market (low activity)
-        else:
-            daily_volatility = volatility * 0.4
-            daily_return = drift * 0.5 + random.normalvariate(0, daily_volatility)
-
-        prices.append(prices[-1] * (1 + daily_return))
-
-    # Create OHLC candles
-    candles = []
-    for i, t in enumerate(times):
-        # Create realistic candle with open, high, low, close
-        price = prices[i]
-
-        # Different volatility based on market hours
-        time_of_day = t.hour + t.minute / 60
-        # Market open/close times
-        market_open_hour = 6.5  # 6:30 AM
-        market_close_hour = 13.0  # 1:00 PM
-
-        if time_of_day < market_open_hour:
-            candle_volatility = volatility * 0.3
-        elif market_open_hour <= time_of_day <= market_close_hour:
-            candle_volatility = volatility * random.uniform(0.5, 1.5)
-        else:
-            candle_volatility = volatility * 0.4
-
-        open_price = price
-        close_price = price * (1 + random.normalvariate(0, candle_volatility / 2))
-        high_price = max(open_price, close_price) * (1 + abs(random.normalvariate(0, candle_volatility)))
-        low_price = min(open_price, close_price) * (1 - abs(random.normalvariate(0, candle_volatility)))
-
-        # Volume varies by time of day
-        # Pre-market (very low volume)
-        if time_of_day < market_open_hour:
-            volume = random.randint(100, 1000)
-        # Market hours (high volume, especially at open and close)
-        elif market_open_hour <= time_of_day <= market_close_hour:
-            if abs(time_of_day - market_open_hour) < 1:
-                volume = random.randint(5000, 15000)  # Higher volume at open
-            elif abs(time_of_day - market_close_hour) < 1:
-                volume = random.randint(4000, 12000)  # Higher volume at close
-            else:
-                volume = random.randint(2000, 8000)  # Normal market hours
-        # After-market (low volume)
-        else:
-            volume = random.randint(500, 2000)
-
-        candles.append({
-            'timestamp': t.strftime('%Y-%m-%d %H:%M:%S'),
-            'open': round(open_price, 2),
-            'high': round(high_price, 2),
-            'low': round(low_price, 2),
-            'close': round(close_price, 2),
-            'volume': volume
-        })
-
-    return candles
-
-
-# Mock data for testing if Schwab API is not available
-def create_mock_data(symbol, days=1):
-    """Create mock data for a symbol if real data is not available"""
-    logger.info(f"Creating mock data for {symbol}")
-    return generate_mock_price_series(symbol, days)
+                except Exception as e:
+                    logger.error(f"Error processing chart data for {symbol}: {e}")
 
 
 def fetch_historical_data(symbol, days=1):
@@ -282,29 +220,23 @@ def fetch_historical_data(symbol, days=1):
                             'close': candle['close'],
                             'volume': candle['volume']
                         })
+
                 logger.info(f"Retrieved {len(candles)} historical data points for {symbol}")
 
                 # Process through our data processor
                 return data_processor.process_historical_data(symbol, candles)
             else:
                 logger.error(f"Error fetching historical data: {getattr(response, 'text', 'No response text')}")
-                mock_data = create_mock_data(symbol)
-                return data_processor.process_historical_data(symbol, mock_data)
+                return []
         except Exception as e:
             logger.exception(f"Exception fetching historical data: {e}")
-            mock_data = create_mock_data(symbol)
-            return data_processor.process_historical_data(symbol, mock_data)
+            return []
 
-    logger.warning(f"Cannot fetch historical data from Schwab API, using mock data for {symbol}")
-    mock_data = create_mock_data(symbol)
-    return data_processor.process_historical_data(symbol, mock_data)
+    logger.warning(f"Cannot fetch historical data from Schwab API, no connection available")
+    return []
 
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
+# 4. REPLACE the subscribe route with this version:
 @app.route('/subscribe', methods=['POST'])
 def subscribe():
     data = request.json
@@ -329,24 +261,35 @@ def subscribe():
             # Load historical data for each symbol
             try:
                 historical_data = fetch_historical_data(symbol)
-                streaming_data[symbol] = historical_data
-                logger.info(f"Loaded {len(historical_data)} historical data points for {symbol}")
+                if historical_data:
+                    streaming_data[symbol] = historical_data
+                    logger.info(f"Loaded {len(historical_data)} historical data points for {symbol}")
+                else:
+                    streaming_data[symbol] = []
+                    logger.warning(f"No historical data available for {symbol}")
             except Exception as e:
                 logger.error(f"Error fetching historical data for {symbol}: {e}")
-                streaming_data[symbol] = create_mock_data(symbol)
-                logger.info(f"Using mock data for {symbol}")
+                streaming_data[symbol] = []
 
     # Subscribe to real-time updates
-    if is_connected and schwab_client:
+    if is_connected and streaming_client:
         try:
             logger.info(f"Subscribing to quotes for {list(active_symbols)}")
-            schwab_client.subscribe_quotes(list(active_symbols), handle_quote_data)
+            streaming_client.subscribe_quotes(list(active_symbols), handle_quote_data)
+
+            logger.info(f"Subscribing to charts for {list(active_symbols)}")
+            streaming_client.subscribe_charts(list(active_symbols), handle_chart_data)
+
+            # Update the adapter with the current symbols
+            if schwab_adapter:
+                schwab_adapter.symbols = list(active_symbols)
+
             return jsonify({
                 'success': True,
-                'message': f'Subscribed to {len(active_symbols)} symbols with historical data'
+                'message': f'Subscribed to {len(active_symbols)} symbols with real-time data'
             })
         except Exception as e:
-            logger.error(f"Error subscribing to quotes: {e}")
+            logger.error(f"Error subscribing to data streams: {e}")
             return jsonify({
                 'success': True,
                 'message': f'Loaded historical data for {len(active_symbols)} symbols'
@@ -354,9 +297,12 @@ def subscribe():
     else:
         return jsonify({
             'success': True,
-            'message': f'Using historical/mock data for {len(active_symbols)} symbols'
+            'message': f'No streaming connection available for {len(active_symbols)} symbols'
         })
 
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 @app.route('/data/<symbol>')
 def get_data(symbol):
@@ -382,9 +328,12 @@ def get_status():
 
 
 if __name__ == '__main__':
+    # Import random here to avoid circular imports
+    import random
+
     # Print instructions
     print("\n==== STOCK STREAMING APP ====")
-    print("1. First authenticate with Schwab API (follow prompts in console)")
+    print("1. First authenticate with Schwab API")
     print("2. Then visit the web application at: http://127.0.0.1:5000\n")
 
     # Initialize Schwab client in a separate thread
