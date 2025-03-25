@@ -55,7 +55,7 @@ class TestSchwabHistoricalData(unittest.TestCase):
             "type": "CharlesSchwab",
             "user_prefs": self.client.user_prefs,
             "access_token": self.client.access_token,
-            "symbols": ["NVDA"],
+            "symbols": ["NVDA", "PLTR"],
             "timeframe": "5m",
             "days_history": 3
         }
