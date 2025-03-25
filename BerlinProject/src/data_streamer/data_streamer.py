@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Union
 
-from mongo_tools.tick_history_tools import TickHistoryTools
+from mongo_tools.tick_history_tools_copy import TickHistoryTools
 from .feature_vector_calculator import FeatureVectorCalculator
 from mongo_tools.sample_tools import SampleTools
 from .data_preprocessor import DataPreprocessor
