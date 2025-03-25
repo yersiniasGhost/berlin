@@ -2,7 +2,7 @@ from typing import Iterator, Tuple, Optional, Dict, List, Any
 from datetime import datetime, timedelta
 import time
 import logging
-from environments.tick_data import TickData
+from src.environments.tick_data import TickData
 from data_streamer.data_link import DataLink
 
 logger = logging.getLogger('SchwabDataLink')
@@ -65,40 +65,40 @@ class SchwabDataLink(DataLink):
 
     def connect(self) -> bool:
         """
-        Connect to Schwab streaming API and load historical data
+        Connect to Schwab streaming API with improved error handling
 
         Returns:
-            True if connection was successful, False otherwise
+            bool: True if connection and login are successful, False otherwise
         """
         if not self.load_historical_data():
             logger.error("Failed to load historical data")
             return False
 
         try:
-            # Import here to avoid circular imports
             from src.schwab_api.streamer_client import SchwabStreamerClient
 
             # Create streaming client
-            self.streaming_client = SchwabStreamerClient(self.user_prefs, self.access_token)
+            self.streaming_client = SchwabStreamerClient(
+                user_prefs=self.user_prefs,
+                access_token=self.access_token
+            )
 
-            # Connect to the streaming API
-            connected = self.streaming_client.connect()
-
-            if connected:
-                logger.info("Successfully connected to Schwab streaming API")
-
-                # Subscribe to quotes
-                self.streaming_client.subscribe_quotes(self.symbols, self._handle_quote_data)
-                logger.info(f"Subscribed to quotes for {self.symbols}")
-
-                # Subscribe to charts
-                self.streaming_client.subscribe_charts(self.symbols, self._handle_chart_data)
-                logger.info(f"Subscribed to charts for {self.symbols}")
-
-                return True
-            else:
-                logger.error("Failed to connect to Schwab streaming API")
+            # Connect and login
+            if not self.streaming_client.connect():
+                logger.error("Failed to connect to streaming API")
                 return False
+
+            # Subscribe to quotes and charts
+            self.streaming_client.subscribe_quotes(
+                self.symbols,
+                self._handle_quote_data
+            )
+            self.streaming_client.subscribe_charts(
+                self.symbols,
+                self._handle_chart_data
+            )
+
+            return True
 
         except Exception as e:
             logger.error(f"Error connecting to Schwab API: {e}")
