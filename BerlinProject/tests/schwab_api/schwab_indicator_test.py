@@ -1,185 +1,233 @@
-import unittest
-import os
-import json
 import logging
+import time
 from datetime import datetime
+from typing import Dict, Optional
 import numpy as np
-import matplotlib.pyplot as plt
-import math
-from typing import List, Dict
-import talib as ta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('SchwabSMAAnalysis')
-
-from src.schwab_api.authentication import SchwabClient
-from src.data_streamer.schwab_data_link import SchwabDataLink
-from src.environments.tick_data import TickData
-from src.features.indicators import sma_indicator, sma_crossover
+logger = logging.getLogger('SchwabTool')
 
 
-def analyze_schwab_data():
-    """Direct analysis of Schwab data without unittest framework"""
-    # Load credentials directly
-    auth_info = {
-        "api_key": "QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ",
-        "api_secret": "RmwUJyBGGgW2r2C7",
-        "redirect_uri": "https://127.0.0.1"
-    }
+class SchwabIndicatorAnalyzer:
+    def __init__(self):
+        from src.schwab_api.authentication import SchwabClient
+        from src.data_streamer.external_tool import ExternalTool
+        from src.environments.tick_data import TickData
+        from src.models.monitor_configuration import MonitorConfiguration
+        from src.config.types import INDICATOR_TYPE
 
-    # Create a token path to save authentication
-    token_path = "schwab_tokens.json"
+        # Create UI Tool for displaying indicator signals
+        class IndicatorMonitor(ExternalTool):
+            def __init__(self):
+                self.indicator_history = {}
+                self.price_history = []
+                self.timestamps = []
+                self.raw_values = {}
 
-    # Create client with the credentials
-    client = SchwabClient(
-        app_key=auth_info["api_key"],
-        app_secret=auth_info["api_secret"],
-        redirect_uri=auth_info["redirect_uri"],
-        token_path=token_path
-    )
+            def indicator_vector(self, indicators: Dict[str, float], tick: TickData,
+                                 index: int, raw_indicators: Optional[Dict[str, float]] = None):
+                # Store price and timestamp
+                self.price_history.append(tick.close)
+                timestamp = tick.timestamp or datetime.now()
+                self.timestamps.append(timestamp)
 
-    # Authenticate
-    print("\n=== AUTHENTICATION PROCESS ===")
-    print("A browser window will open. After logging in, copy the ENTIRE URL")
-    print("you were redirected to and paste it below when prompted.\n")
+                # Format timestamp for display
+                time_str = timestamp.strftime('%Y-%m-%d %H:%M:%S') if isinstance(timestamp, datetime) else timestamp
 
-    auth_success = client.authenticate(use_local_server=False)
-    if not auth_success:
-        print("Authentication failed")
-        return
+                # Store indicator values
+                for name, value in indicators.items():
+                    if name not in self.indicator_history:
+                        self.indicator_history[name] = []
+                    self.indicator_history[name].append(value)
 
-    # Get user preferences if needed
-    if not client.user_prefs:
-        client._get_streamer_info()
+                    # Store raw values if available
+                    if raw_indicators and name in raw_indicators:
+                        if name not in self.raw_values:
+                            self.raw_values[name] = []
+                        self.raw_values[name].append(raw_indicators[name])
 
-    # Analysis parameters
-    symbol = "NVDA"
-    sma_period = 20
-    crossover_value = 0.002  # 0.2%
-    timeframe = "1m"  # 5-minute candles
-    days_history = 1
+                # Print current values
+                print(f"\nTick {index}: {time_str} | Price: ${tick.close:.2f}")
 
-    # Set up data link
-    print(f"\nSetting up data link for {symbol} with {timeframe} candles...")
-    data_link = SchwabDataLink(
-        user_prefs=client.user_prefs,
-        access_token=client.access_token,
-        symbols=[symbol],
-        timeframe=timeframe,
-        days_history=days_history
-    )
+                for name, value in indicators.items():
+                    trigger_status = "🔴 TRIGGERED" if value > 0 else "⚪ inactive"
+                    raw_value = raw_indicators.get(name, None) if raw_indicators else None
+                    raw_info = f" (Raw: {raw_value})" if raw_value is not None else ""
+                    print(f"  {name}: {value:.4f} {trigger_status}{raw_info}")
 
-    # Load historical data
-    print(f"Loading {days_history} days of historical data...")
-    success = data_link.load_historical_data()
-    if not success:
-        print("Failed to load historical data")
-        return
+                print("-" * 50)
 
-    # Get candles for the symbol
-    candles = data_link.candle_data.get(symbol, [])
-    if not candles:
-        print(f"No candles found for {symbol}")
-        return
+            def feature_vector(self, fv: np.array, tick: TickData):
+                # Process feature vector data (SMA, MACD calculations)
+                if fv is not None and len(fv) > 0 and tick is not None:
+                    pass
 
-    print(f"Loaded {len(candles)} candles for {symbol}")
+        # Authentication setup
+        logger.info("Setting up authentication...")
+        self.client = SchwabClient(
+            app_key="QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ",
+            app_secret="RmwUJyBGGgW2r2C7",
+            redirect_uri="https://127.0.0.1",
+            token_path="schwab_tokens.json"
+        )
 
-    # Calculate SMA
-    print(f"Calculating {sma_period}-period SMA...")
-    sma_values = sma_indicator(candles, sma_period)
+        # Try to use existing tokens first, refresh if needed
+        if not self.client.access_token:
+            logger.info("No token found, authenticating...")
+            self.client.authenticate(use_local_server=False)
+        else:
+            logger.info("Found existing token, checking validity...")
+            # First try to refresh the token
+            if hasattr(self.client, 'refresh_token') and self.client.refresh_token:
+                logger.info("Attempting to refresh token...")
+                refresh_success = self.client.refresh_auth_token()
+                if refresh_success:
+                    logger.info("Token refreshed successfully")
+                else:
+                    logger.info("Token refresh failed, re-authenticating...")
+                    self.client.authenticate(use_local_server=False)
+            else:
+                # If no refresh token, just re-authenticate
+                logger.info("No refresh token available, re-authenticating...")
+                self.client.authenticate(use_local_server=False)
 
-    # Check that SMA calculation worked
-    valid_sma_count = np.sum(~np.isnan(sma_values))
-    print(f"Calculated {valid_sma_count} valid SMA values")
+        # Create indicator definitions
+        self.indicator_config = MonitorConfiguration(
+            name="trading_signals",
+            indicators=[
+                {
+                    "name": "sma_crossover",
+                    "type": INDICATOR_TYPE,
+                    "function": "sma_crossover",
+                    "parameters": {
+                        "period": 20,
+                        "crossover_value": 0.002,
+                        "trend": "bullish",
+                        "lookback": 10
+                    }
+                },
+                {
+                    "name": "macd_signal",
+                    "type": INDICATOR_TYPE,
+                    "function": "macd_histogram_crossover",
+                    "parameters": {
+                        "fast": 12,
+                        "slow": 26,
+                        "signal": 9,
+                        "histogram_threshold": 0.1,
+                        "trend": "bullish",
+                        "lookback": 15
+                    }
+                }
+            ]
+        )
 
-    # Calculate crossover signals
-    print("Detecting SMA crossover signals...")
-    parameters = {
-        "period": sma_period,
-        "crossover_value": crossover_value,
-        "trend": "bullish"
-    }
-    signals = sma_crossover(candles, parameters)
+        # Create UI tool
+        self.ui_tool = IndicatorMonitor()
 
-    # Count and print signals
-    signal_indices = np.where(signals > 0)[0]
-    signal_count = len(signal_indices)
-    print(f"Found {signal_count} SMA crossover signals")
+    def process_data_directly(self):
+        """Process historical data directly using SchwabDataLink and indicators"""
+        from src.data_streamer.schwab_data_link import SchwabDataLink
+        from src.data_streamer.indicator_processor import IndicatorProcessor
+        from src.data_streamer.data_preprocessor import DataPreprocessor
 
-    # Print details of signals
-    if signal_count > 0:
-        print("\nSignal details:")
-        for i, idx in enumerate(signal_indices):
-            if idx < len(candles):
-                candle = candles[idx]
-                print(f"Signal {i + 1}: Time={candle.timestamp}, Price=${candle.close:.2f}")
+        # Create model configuration
+        model_config = {
+            "feature_vector": [
+                {"name": "close"},
+                {"name": "SMA", "parameters": {"sma": 20}},
+                {"name": "MACD", "parameters": {
+                    "fast_period": 12,
+                    "slow_period": 26,
+                    "signal_period": 9
+                }}
+            ]
+        }
 
-    # Create a simple plot if there's data
-    plot_results(candles, sma_values, signals)
+        # Initialize data processors
+        preprocessor = DataPreprocessor(model_config)
+        indicator_processor = IndicatorProcessor(self.indicator_config)
 
+        # Initialize SchwabDataLink
+        logger.info("Creating SchwabDataLink...")
+        data_link = SchwabDataLink(
+            user_prefs=self.client.user_prefs,
+            access_token=self.client.access_token,
+            symbols=["NVDA"],
+            timeframe="5m",
+            days_history=3
+        )
 
-def plot_results(candles, sma_values, signals):
-    """Plot the results of SMA analysis"""
-    try:
-        # Extract data for plotting
-        timestamps = [candle.timestamp for candle in candles]
-        prices = [candle.close for candle in candles]
+        # Load historical data
+        logger.info("Loading historical data...")
+        success = data_link.load_historical_data()
 
-        # Find signal indices and values
-        signal_indices = np.where(signals > 0)[0]
-        signal_timestamps = [timestamps[i] for i in signal_indices if i < len(timestamps)]
-        signal_prices = [prices[i] for i in signal_indices if i < len(prices)]
+        # Handle potential 401 error by re-authenticating and trying again
+        if not success:
+            logger.warning("Failed to load historical data, attempting re-authentication...")
+            self.client.authenticate(use_local_server=False)
 
-        # Create the plot
-        plt.figure(figsize=(12, 6))
-
-        # Plot price
-        plt.plot(timestamps, prices, label='Close Price', color='blue')
-
-        # Plot SMA (skipping NaN values)
-        valid_indices = ~np.isnan(sma_values)
-        if np.any(valid_indices):
-            plt.plot(
-                [timestamps[i] for i in range(len(timestamps)) if valid_indices[i]],
-                sma_values[valid_indices],
-                label=f'SMA ({int(sma_values.size)})',
-                color='orange'
+            # Re-create data link with new token
+            data_link = SchwabDataLink(
+                user_prefs=self.client.user_prefs,
+                access_token=self.client.access_token,
+                symbols=["NVDA"],
+                timeframe="5m",
+                days_history=3
             )
 
-        # Plot signals
-        if signal_timestamps:
-            plt.scatter(
-                signal_timestamps,
-                signal_prices,
-                color='green',
-                marker='^',
-                s=100,
-                label='Buy Signal'
-            )
+            # Try again
+            logger.info("Retrying loading historical data...")
+            success = data_link.load_historical_data()
 
-        # Format the plot
-        plt.title('SMA Crossover Analysis')
-        plt.xlabel('Time')
-        plt.ylabel('Price ($)')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+            if not success:
+                logger.error("Failed to load historical data after re-authentication")
+                return
 
-        # Format date axis if datetime objects
-        if hasattr(timestamps[0], 'strftime'):
-            plt.gcf().autofmt_xdate()
+        # Print data summary
+        for symbol in data_link.symbols:
+            count = len(data_link.candle_data.get(symbol, []))
+            logger.info(f"Loaded {count} historical candles for {symbol}")
 
-        # Save and show plot
-        plot_filename = f'sma_analysis_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-        plt.savefig(plot_filename)
-        print(f"\nPlot saved as {plot_filename}")
+        # Process historical data
+        logger.info("Processing historical data with indicators...")
+        index = 0
 
-        plt.tight_layout()
-        plt.show()  # Show the plot
+        # Get stats for normalization
+        stats = data_link.get_stats()
+        preprocessor.reset_state(stats)
 
-    except Exception as e:
-        print(f"Error plotting results: {e}")
+        # Process each tick
+        for symbol in data_link.symbols:
+            for tick in data_link.candle_data[symbol]:
+                # Process through preprocessor
+                preprocessor.next_tick(tick)
+
+                # Calculate indicators
+                indicator_results = indicator_processor.next_tick(preprocessor)
+
+                # Send to UI tool
+                self.ui_tool.indicator_vector(indicator_results, tick, index, None)
+
+                index += 1
+
+        # Display summary
+        logger.info(f"Processed {index} ticks from historical data")
+        print("\n===== INDICATOR ANALYSIS SUMMARY =====")
+
+        # Calculate trigger counts
+        for name, values in self.ui_tool.indicator_history.items():
+            trigger_count = sum(1 for v in values if v > 0)
+            if trigger_count > 0:
+                trigger_pct = (trigger_count / len(values)) * 100
+                print(f"{name}: {trigger_count} triggers ({trigger_pct:.1f}% of candles)")
+            else:
+                print(f"{name}: No triggers detected")
+
+        print("======================================")
 
 
-if __name__ == '__main__':
-    analyze_schwab_data()
+if __name__ == "__main__":
+    analyzer = SchwabIndicatorAnalyzer()
+    analyzer.process_data_directly()
