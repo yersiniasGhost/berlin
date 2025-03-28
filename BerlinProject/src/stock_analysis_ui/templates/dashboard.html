@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock Analysis Dashboard{% endblock %}
+
+{% block head_extra %}
+<style>
+    .ticker-card {
+        transition: all 0.3s ease;
+    }
+    .ticker-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .progress-bull {
+        background-color: #28a745;
+    }
+    .progress-bear {
+        background-color: #dc3545;
+    }
+    .ticker-price {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+    .ticker-change-up {
+        color: #28a745;
+    }
+    .ticker-change-down {
+        color: #dc3545;
+    }
+    .empty-dashboard {
+        min-height: 300px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>Market Dashboard</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSymbolModal">
+            <i class="fas fa-plus me-1"></i> Add Symbol
+        </button>
+    </div>
+</div>
+
+<div id="tickerContainer" class="row g-4">
+    <div class="col-12 empty-dashboard">
+        <div class="text-center">
+            <i class="fas fa-chart-line fa-5x mb-3 text-muted"></i>
+            <h3>No ticker data available</h3>
+            <p class="text-muted">Add symbols and start streaming to see data</p>
+            <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#configModal">
+                <i class="fas fa-cog me-1"></i> Configure
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Dashboard-specific JavaScript
+    let tickerData = {};
+    
+    // Socket.IO event handlers
+    socket.on('ticker_update', function(data) {
+        // Store the data
+        tickerData[data.symbol] = data.data;
+        
+        // Update the UI
+        updateTickerUI();
+    });
+    
+    socket.on('indicator_update', function(data) {
+        // Update indicators and overall scores
+        if (!tickerData[data.symbol]) {
+            tickerData[data.symbol] = {};
+        }
+        
+        tickerData[data.symbol].indicators = data.indicators;
+        tickerData[data.symbol].overall_scores = data.overall_scores;
+        
+        // Update the UI
+        updateTickerUI();
+    });
+    
+    // Function to update ticker cards
+    function updateTickerUI() {
+        const container = document.getElementById('tickerContainer');
+        const symbols = Object.keys(tickerData);
+        
+        // Clear empty dashboard if we have data
+        if (symbols.length > 0) {
+            const emptyDashboard = container.querySelector('.empty-dashboard');
+            if (emptyDashboard) {
+                container.innerHTML = '';
+            }
+        }
+        
+        // Update or create cards for each ticker
+        symbols.forEach(symbol => {
+            const data = tickerData[symbol];
+            
+            // Skip if missing critical data
+            if (!data || !data.close) {
+                return;
+            }
+            
+            // Check if card exists
+            let card = container.querySelector(`[data-symbol="${symbol}"]`);
+            
+            if (!card) {
+                // Create new card
+                const col = document.createElement('div');
+                col.className = 'col-md-4 col-lg-3';
+                
+                card = document.createElement('div');
+                card.className = 'card ticker-card shadow-sm';
+                card.setAttribute('data-symbol', symbol);
+                
+                // Make card clickable to go to details page
+                card.style.cursor = 'pointer';
+                card.addEventListener('click', function() {
+                    window.location.href = `/ticker/${symbol}`;
+                });
+                
+                col.appendChild(card);
+                container.appendChild(col);
+            }
+            
+            // Get price change direction
+            let changeDirection = '';
+            let changeClass = '';
+            if (data.previousClose && data.close > data.previousClose) {
+                changeDirection = '▲';
+                changeClass = 'ticker-change-up';
+            } else if (data.previousClose && data.close < data.previousClose) {
+                changeDirection = '▼';
+                changeClass = 'ticker-change-down';
+            }
+            
+            // Format price
+            const price = typeof data.close === 'number' ? data.close.toFixed(2) : data.close;
+            
+            // Format timestamp
+            let timeStr = '';
+            if (data.timestamp) {
+                const time = new Date(data.timestamp);
+                timeStr = time.toLocaleTimeString();
+            }
+            
+            // Progress bars
+            let bullScore = 0;
+            let bearScore = 0;
+            
+            if (data.overall_scores) {
+                bullScore = data.overall_scores.bull || 0;
+                bearScore = data.overall_scores.bear || 0;
+            }
+            
+            // Update card content
+            card.innerHTML = `
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="mb-0">${symbol}</h5>
+                    <small class="text-muted">${timeStr}</small>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="ticker-price ${changeClass}">${price} ${changeDirection}</span>
+                        <span class="badge bg-secondary">${data.volume ? data.volume.toLocaleString() : 'N/A'}</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="d-flex justify-content-between">
+                            <span>Bullish Signal</span>
+                            <span>${(bullScore * 100).toFixed(0)}%</span>
+                        </label>
+                        <div class="progress" style="height: 15px;">
+                            <div class="progress-bar progress-bull" role="progressbar" 
+                                 style="width: ${bullScore * 100}%" 
+                                 aria-valuenow="${bullScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <label class="d-flex justify-content-between">
+                            <span>Bearish Signal</span>
+                            <span>${(bearScore * 100).toFixed(0)}%</span>
+                        </label>
+                        <div class="progress" style="height: 15px;">
+                            <div class="progress-bar progress-bear" role="progressbar" 
+                                 style="width: ${bearScore * 100}%" 
+                                 aria-valuenow="${bearScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white">
+                    <div class="row small text-muted">
+                        <div class="col-6">
+                            <div>Open: ${data.open ? data.open.toFixed(2) : 'N/A'}</div>
+                            <div>Low: ${data.low ? data.low.toFixed(2) : 'N/A'}</div>
+                        </div>
+                        <div class="col-6 text-end">
+                            <div>High: ${data.high ? data.high.toFixed(2) : 'N/A'}</div>
+                            <div>Close: ${data.close ? data.close.toFixed(2) : 'N/A'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    // Check if we have data already
+    function loadInitialData() {
+        fetch('/api/tickers')
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.data) {
+                    tickerData = data.data;
+                    updateTickerUI();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading ticker data:', error);
+            });
+    }
+    
+    // Initialize
+    window.addEventListener('DOMContentLoaded', function() {
+        loadInitialData();
+        
+        // Add symbol from modal
+        document.getElementById('confirmAddSymbolBtn').addEventListener('click', function() {
+            const symbolInput = document.getElementById('newSymbolInput');
+            const symbol = symbolInput.value.trim().toUpperCase();
+            
+            if (symbol) {
+                // Add to UI
+                addSymbolToUI(symbol);
+                
+                // Clear input and close modal
+                symbolInput.value = '';
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addSymbolModal'));
+                modal.hide();
+            }
+        });
+    });
+</script>
+{% endblock %}
