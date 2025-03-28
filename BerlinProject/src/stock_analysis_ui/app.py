@@ -39,7 +39,7 @@ ui_tool = None
 data_service = None
 
 # Default indicator configurations
-from config.indicator_configs import DEFAULT_INDICATORS, AVAILABLE_INDICATORS
+from ui_config.indicator_configs import DEFAULT_INDICATORS, AVAILABLE_INDICATORS
 
 
 def authenticate_before_startup():

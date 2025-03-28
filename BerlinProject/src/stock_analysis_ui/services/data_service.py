@@ -108,7 +108,7 @@ class DataService:
 
         try:
             # Get Schwab authentication from the manager
-            from schwab_auth import SchwabAuthManager
+            from .schwab_auth import SchwabAuthManager
             auth_manager = SchwabAuthManager()
 
             if not auth_manager.is_authenticated():
