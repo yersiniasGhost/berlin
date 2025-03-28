@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Manual Authentication</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <p>After logging in to Schwab, you were redirected to a page with a URL containing a code.</p>
+                <p>Please copy the entire URL from your browser address bar and paste it below:</p>
+            </div>
+            
+            <form action="/api/manual_auth" method="post">
+                <div class="mb-3">
+                    <label for="codeUrl" class="form-label">Redirect URL</label>
+                    <input type="text" class="form-control" id="codeUrl" name="code_url" placeholder="https://127.0.0.1?code=..." required>
+                    <div class="form-text">Paste the entire URL here</div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Submit</button>
+                <a href="/" class="btn btn-outline-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Process URL to extract just the code
+    document.querySelector('form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const urlInput = document.getElementById('codeUrl');
+        const url = urlInput.value.trim();
+        
+        // Extract code from URL
+        let code = '';
+        try {
+            if (url.includes('code=')) {
+                const codeStart = url.indexOf('code=') + 5;
+                let codeEnd = url.indexOf('&', codeStart);
+                if (codeEnd === -1) codeEnd = url.length;
+                code = url.substring(codeStart, codeEnd);
+            }
+        } catch (err) {
+            console.error('Error extracting code:', err);
+        }
+        
+        if (code) {
+            // Create a hidden input for the code
+            const codeInput = document.createElement('input');
+            codeInput.type = 'hidden';
+            codeInput.name = 'code';
+            codeInput.value = code;
+            this.appendChild(codeInput);
+            
+            // Submit the form
+            this.submit();
+        } else {
+            alert('Could not extract authorization code from the URL. Please make sure you copied the entire URL.');
+        }
+    });
+</script>
+{% endblock %}
