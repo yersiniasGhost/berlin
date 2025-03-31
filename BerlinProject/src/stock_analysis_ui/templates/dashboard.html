@@ -94,7 +94,7 @@
     function updateTickerUI() {
         const container = document.getElementById('tickerContainer');
         const symbols = Object.keys(tickerData);
-        
+
         // Clear empty dashboard if we have data
         if (symbols.length > 0) {
             const emptyDashboard = container.querySelector('.empty-dashboard');
@@ -102,34 +102,34 @@
                 container.innerHTML = '';
             }
         }
-        
+
         // Update or create cards for each ticker
         symbols.forEach(symbol => {
             const data = tickerData[symbol];
-            
+
             // Skip if missing critical data
             if (!data || !data.close) {
                 return;
             }
-            
+
             // Check if card exists
             let card = container.querySelector(`[data-symbol="${symbol}"]`);
-            
+
             if (!card) {
                 // Create new card
                 const col = document.createElement('div');
                 col.className = 'col-md-4 col-lg-3';
-                
+
                 card = document.createElement('div');
                 card.className = 'card ticker-card shadow-sm';
                 card.setAttribute('data-symbol', symbol);
-                
+
                 // Make card clickable to go to details page
                 card.style.cursor = 'pointer';
                 card.addEventListener('click', function() {
                     window.location.href = `/ticker/${symbol}`;
                 });
-                
+
                 col.appendChild(card);
                 container.appendChild(col);
             }

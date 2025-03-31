@@ -206,24 +206,24 @@
         if (!tickerData) {
             return;
         }
-        
+
         // Update price and change display
         const priceElem = document.getElementById('tickerPrice');
         const changeElem = document.getElementById('tickerChange');
         const lastUpdateElem = document.getElementById('lastUpdate');
-        
+
         // Format price
         const price = typeof tickerData.close === 'number' ? tickerData.close.toFixed(2) : tickerData.close;
         priceElem.textContent = `$${price}`;
-        
+
         // Format change
         if (tickerData.previousClose) {
             const change = tickerData.close - tickerData.previousClose;
             const changePercent = (change / tickerData.previousClose) * 100;
-            
+
             let changeClass = '';
             let changeSign = '';
-            
+
             if (change > 0) {
                 changeClass = 'price-up';
                 changeSign = '+';
@@ -231,19 +231,19 @@
                 changeClass = 'price-down';
                 changeSign = '';
             }
-            
+
             changeElem.textContent = `${changeSign}${change.toFixed(2)} (${changeSign}${changePercent.toFixed(2)}%)`;
             changeElem.className = `change ${changeClass}`;
         } else {
             changeElem.textContent = '';
         }
-        
+
         // Format timestamp
         if (tickerData.timestamp) {
             const time = new Date(tickerData.timestamp);
             lastUpdateElem.textContent = `Last update: ${time.toLocaleTimeString()}`;
         }
-        
+
         // Update candle history
         updateCandleHistory();
     }

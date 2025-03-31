@@ -16,6 +16,7 @@ class SchwabDataLink(DataLink):
 
     def __init__(self, user_prefs: dict, access_token: str, symbols: list,
                  timeframe: str = "1m", days_history: int = 1):
+
         """
         Initialize the Schwab data link
 
@@ -262,10 +263,7 @@ class SchwabDataLink(DataLink):
 
     def _handle_chart_data(self, data: List[Dict[str, Any]]) -> None:
         """
-        Handle incoming chart data from Schwab API
-
-        Args:
-            data: List of chart data dictionaries
+        Handle incoming chart data from Schwab API with proper OHLC aggregation
         """
         for chart_entry in data:
             symbol = chart_entry.get('key', '')
@@ -276,35 +274,80 @@ class SchwabDataLink(DataLink):
                     timestamp_ms = int(chart_entry.get('7', 0))
                     timestamp = datetime.fromtimestamp(timestamp_ms / 1000) if timestamp_ms else datetime.now()
 
+                    # Round timestamp to the current minute for candle identification
+                    current_minute = timestamp.replace(second=0, microsecond=0)
+
                     # Extract OHLCV data
-                    open_price = float(chart_entry.get('2', 0.0))
-                    high_price = float(chart_entry.get('3', 0.0))
-                    low_price = float(chart_entry.get('4', 0.0))
-                    close_price = float(chart_entry.get('5', 0.0))
-                    volume = int(chart_entry.get('6', 0))
+                    current_price = float(chart_entry.get('5', 0.0))  # Close price
 
-                    # Create TickData
-                    tick = TickData(
-                        open=open_price,
-                        high=high_price,
-                        low=low_price,
-                        close=close_price,
-                        volume=volume,
-                        timestamp=timestamp
-                    )
+                    # Initialize minute candles dict if needed
+                    if not hasattr(self, 'minute_candles'):
+                        self.minute_candles = {}
 
-                    # Set symbol
-                    try:
-                        tick.symbol = symbol
-                    except AttributeError:
-                        pass
+                    if symbol not in self.minute_candles:
+                        self.minute_candles[symbol] = {}
 
-                    # Store in latest_data
-                    self.latest_data[symbol] = tick
-                    self.logger.debug(f"Updated latest data for {symbol} with chart data")
+                    # Initialize or update the current minute's candle
+                    if current_minute not in self.minute_candles[symbol]:
+                        # Start a new candle with the current tick data
+                        self.minute_candles[symbol][current_minute] = {
+                            'open': float(chart_entry.get('2', current_price)),  # Open
+                            'high': float(chart_entry.get('3', current_price)),  # High
+                            'low': float(chart_entry.get('4', current_price)),  # Low
+                            'close': current_price,  # Close
+                            'volume': int(chart_entry.get('6', 0)),  # Volume
+                            'timestamp': current_minute,
+                            'tick_count': 1
+                        }
+                    else:
+                        # Update existing candle
+                        candle = self.minute_candles[symbol][current_minute]
+                        # Keep original open price
+                        candle['high'] = max(candle['high'], float(chart_entry.get('3', current_price)))
+                        candle['low'] = min(candle['low'], float(chart_entry.get('4', current_price)))
+                        candle['close'] = current_price  # Update close price
+                        candle['volume'] += int(chart_entry.get('6', 0))  # Add volume
+                        candle['tick_count'] += 1
+
+                    # Check for completed candles (previous minutes)
+                    now = datetime.now()
+                    previous_minute = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
+
+                    # Find and emit completed candles
+                    for minute, candle in list(self.minute_candles[symbol].items()):
+                        if minute <= previous_minute:
+                            # Create tick data from completed candle
+                            tick = TickData(
+                                open=candle['open'],
+                                high=candle['high'],
+                                low=candle['low'],
+                                close=candle['close'],
+                                volume=candle['volume'],
+                                timestamp=minute
+                            )
+
+                            # Set symbol
+                            try:
+                                tick.symbol = symbol
+                            except AttributeError:
+                                pass
+
+                            # Store in latest_data for processing by serve_next_tick
+                            self.latest_data[symbol] = tick
+
+                            # Also add to historical data for retrieval later
+                            self.candle_data[symbol].append(tick)
+
+                            # Remove processed candle
+                            del self.minute_candles[symbol][minute]
+
+                            self.logger.debug(
+                                f"Completed 1-minute candle for {symbol}: O={candle['open']:.2f} H={candle['high']:.2f} L={candle['low']:.2f} C={candle['close']:.2f} V={candle['volume']}")
 
                 except Exception as e:
                     self.logger.error(f"Error processing chart data for {symbol}: {e}")
+                    import traceback
+                    traceback.print_exc()
 
     def get_stats(self) -> dict:
         """
@@ -370,11 +413,8 @@ class SchwabDataLink(DataLink):
 
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
         """
-        Serve next tick from either historical data, gap-filling data, or live data
-        Implements the DataLink method
-
-        Yields:
-            Tuple of (tick_data, tick_index, day_index)
+        Serve next tick from either historical data or live data
+        Implements the DataLink method - no gap filling, only real data
         """
         self.logger.info(f"Starting to serve ticks for symbols: {self.symbols}")
 
@@ -404,63 +444,8 @@ class SchwabDataLink(DataLink):
                 self.notify_handlers(tick, idx, ticker_idx)
                 yield tick, idx, ticker_idx
 
-                # Add configurable delay for historical data simulation
-                if self.delay > 0:
-                    time.sleep(self.delay)
-
-            # Get the timestamp of the last historical data point
-            if self.candle_data[symbol]:
-                last_tick = self.candle_data[symbol][-1]
-                last_timestamp = getattr(last_tick, 'timestamp', None)
-
-                # If we have a valid timestamp, fill the gap between history and now
-                if last_timestamp and isinstance(last_timestamp, datetime):
-                    self.logger.info(f"Filling gap between historical data and now for {symbol}")
-
-                    # Get current market time
-                    current_time = datetime.now()
-
-                    # Start from the next minute after last historical data
-                    gap_start = last_timestamp + timedelta(minutes=1)
-                    gap_start = gap_start.replace(second=0, microsecond=0)  # Start at exact minute
-
-                    # End at the current time, rounded down to the nearest minute
-                    gap_end = current_time.replace(second=0, microsecond=0)
-
-                    # Generate ticks for every minute in the gap
-                    gap_time = gap_start
-                    while gap_time < gap_end:
-                        # Create gap-filling tick based on last historical data
-                        gap_tick = TickData(
-                            open=last_tick.close,
-                            high=last_tick.close,
-                            low=last_tick.close,
-                            close=last_tick.close,
-                            volume=0,  # No volume for gap-filling ticks
-                            timestamp=gap_time
-                        )
-
-                        # Set symbol
-                        try:
-                            gap_tick.symbol = symbol
-                        except AttributeError:
-                            pass
-
-                        self.logger.debug(f"Yielding gap-filling tick for {symbol} at {gap_time}")
-                        # Notify handlers and yield
-                        self.notify_handlers(gap_tick, self.tick_index, ticker_idx)
-                        yield gap_tick, self.tick_index, ticker_idx
-                        self.tick_index += 1
-
-                        # Increment time by 1 minute
-                        gap_time += timedelta(minutes=1)
-
-                # Update last_tick to be the last generated tick
-                if 'gap_tick' in locals():
-                    last_tick = gap_tick
-
             # End of symbol data
-            self.logger.info(f"End of historical and gap-filling data for {symbol}")
+            self.logger.info(f"End of historical data for {symbol}")
             yield None, -1, ticker_idx
             ticker_idx += 1
 
@@ -473,74 +458,29 @@ class SchwabDataLink(DataLink):
         self.connect()
 
         # Setup variables for minute-based ticks
-        last_minute_ticks = {}  # Store the last tick data for each symbol for each minute
-        last_tick_times = {}  # Store the last time we generated a tick for each symbol
+        self.minute_candles = {}  # Initialize minute candles dict if not already done
 
-        # Initialize with current minute
-        current_minute = datetime.now().replace(second=0, microsecond=0)
+        # Initialize for each symbol
         for symbol in self.symbols:
-            last_tick_times[symbol] = current_minute
+            if symbol not in self.minute_candles:
+                self.minute_candles[symbol] = {}
 
         # Then stream live data with 1-minute candles
         while self.live_mode:
-            current_time = datetime.now()
-            current_minute = current_time.replace(second=0, microsecond=0)
-
-            # Process each symbol
+            # Process real-time data
             for idx, symbol in enumerate(self.symbols):
-                # Check if a new minute has started since our last tick
-                if symbol in last_tick_times and current_minute > last_tick_times[symbol]:
-                    # Get real-time data if available
-                    if symbol in self.latest_data and self.latest_data[symbol]:
-                        tick = self.latest_data[symbol]
-                        self.latest_data[symbol] = None
-                    else:
-                        # If no real-time data, use the last known tick
-                        if symbol in self.candle_data and self.candle_data[symbol]:
-                            last_historical_tick = self.candle_data[symbol][-1]
-
-                            # Create a new tick based on last historical or the last minute tick
-                            if symbol in last_minute_ticks:
-                                base_tick = last_minute_ticks[symbol]
-                            else:
-                                base_tick = last_historical_tick
-
-                            # Create a new tick with the same values
-                            tick = TickData(
-                                open=base_tick.close,
-                                high=base_tick.close,
-                                low=base_tick.close,
-                                close=base_tick.close,
-                                volume=0,  # No volume for gap ticks
-                                timestamp=last_tick_times[symbol]
-                            )
-                        else:
-                            # No historical data to base on
-                            continue
-
-                    # Ensure tick has correct timestamp (use last minute)
-                    tick.timestamp = last_tick_times[symbol]
-
-                    # Ensure tick has symbol attribute
-                    try:
-                        tick.symbol = symbol
-                    except AttributeError:
-                        pass
-
-                    self.logger.debug(f"Yielding 1-minute tick for {symbol} at {tick.timestamp}")
-                    # Store this tick for the next minute if needed
-                    last_minute_ticks[symbol] = tick
-
-                    # Update the last tick time to the current minute
-                    last_tick_times[symbol] = current_minute
+                # Check if we have any completed candles to emit
+                if symbol in self.latest_data and self.latest_data[symbol]:
+                    tick = self.latest_data[symbol]
+                    self.latest_data[symbol] = None  # Clear so we don't process again
 
                     # Notify handlers and yield
                     self.notify_handlers(tick, self.tick_index, idx)
                     yield tick, self.tick_index, idx
                     self.tick_index += 1
 
-            # Add delay between live checks
-            time.sleep(0.1)  # Smaller delay to be more responsive
+            # Small delay between checks
+            time.sleep(0.1)
 
     def reset_index(self) -> None:
         """Reset tick index and day index"""
