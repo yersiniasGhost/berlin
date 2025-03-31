@@ -45,7 +45,7 @@ class IndicatorProcessorHistorical:
             output[indicator.name] = self.indicator_values[indicator.name][day_index][tick_index]
             if indicator.name in self.raw_indicators.keys():
                 raw[indicator.name] = self.raw_indicators[indicator.name][self.index]
-        return output, raw
+        return output, raw  # Return both calculated results and raw values
 
     def precalculate(self) -> tuple[dict[str, ndarray], dict[str, ndarray]]:
         history_by_days = self.data_link.get_history()

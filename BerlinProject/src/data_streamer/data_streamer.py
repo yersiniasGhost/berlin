@@ -1,6 +1,10 @@
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Union
+import logging
 
+# Configure at module level
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('SchwabDataLink')  # Replace with appropriate name for each file
 from mongo_tools.tick_history_tools_copy import TickHistoryTools
 from .feature_vector_calculator import FeatureVectorCalculator
 from mongo_tools.sample_tools import SampleTools
@@ -81,6 +85,9 @@ class DataStreamer:
 
     # Add this to your DataStreamer class:
 
+    # Add to DataStreamer class in data_streamer.py
+    # In data_streamer.py, update the run method
+
     def run(self):
         """
         Main method to run the data streaming process.
@@ -100,9 +107,10 @@ class DataStreamer:
 
         # Process each tick from the data link
         try:
+            logger.info("DataStreamer: Starting to process data")
             for result in self.data_link.serve_next_tick():
                 if result is None:
-                    # Handle None result (WebSocket might return None)
+                    logger.debug("DataStreamer: Received None result, continuing")
                     continue
 
                 # Unpack the result
@@ -110,6 +118,7 @@ class DataStreamer:
 
                 # Skip if we received a None tick (end of episode marker)
                 if tick is None:
+                    logger.debug("DataStreamer: Received None tick (end of episode)")
                     # End of sample or day boundary
                     if self.reset_after_sample:
                         index = 0
@@ -117,6 +126,20 @@ class DataStreamer:
                             external_tool.reset_next_sample()
                         self.preprocessor.reset_state(sample_stats)
                     continue
+
+                # Ensure tick has a symbol (fallback to index in symbols list if needed)
+                if hasattr(self.data_link, 'symbols') and day_index < len(self.data_link.symbols):
+                    symbol = self.data_link.symbols[day_index]
+                    # If tick doesn't have symbol attribute or it's not set
+                    if not hasattr(tick, 'symbol') or not tick.symbol:
+                        try:
+                            # Try to set symbol directly
+                            tick.symbol = symbol
+                        except AttributeError:
+                            # If can't set directly, add it as a attribute
+                            setattr(tick, 'symbol', symbol)
+
+                logger.debug(f"DataStreamer: Processing tick {index} for symbol: {getattr(tick, 'symbol', 'Unknown')}")
 
                 # Process the tick through the data pipeline
                 self.preprocessor.next_tick(tick)
@@ -147,11 +170,11 @@ class DataStreamer:
                 index += 1
 
         except KeyboardInterrupt:
-            self.logger.info("Data streaming interrupted by user")
-            print("\nData streaming interrupted by user")
+            logger.info("DataStreamer: Data streaming interrupted by user")
         except Exception as e:
-            self.logger.error(f"Error during data streaming: {e}")
-            print(f"\nError during data streaming: {e}")
+            logger.error(f"DataStreamer: Error during data streaming: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
     def reset(self):

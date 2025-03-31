@@ -1,11 +1,11 @@
-from typing import Iterator, Tuple, Optional, Dict, List, Any
-from datetime import datetime, timedelta
-import time
+# /home/warnd/devel/berlin/BerlinProject/src/data_streamer/schwab_data_link.py
 import logging
-from src.environments.tick_data import TickData
+import time
+from typing import Dict, List, Optional, Tuple, Iterator, Any
+from datetime import datetime, timedelta
+import requests
+from environments.tick_data import TickData
 from data_streamer.data_link import DataLink
-
-logger = logging.getLogger('SchwabDataLink')
 
 
 class SchwabDataLink(DataLink):
@@ -15,7 +15,7 @@ class SchwabDataLink(DataLink):
     """
 
     def __init__(self, user_prefs: dict, access_token: str, symbols: list,
-                 timeframe: str = "1m", days_history: int = 5):
+                 timeframe: str = "1m", days_history: int = 1):
         """
         Initialize the Schwab data link
 
@@ -55,54 +55,17 @@ class SchwabDataLink(DataLink):
             self.candle_data[symbol] = []
             self.latest_data[symbol] = None
 
-        # Setup logging
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
+        # Set up logger
+        self.logger = logging.getLogger('SchwabDataLink')
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        if not self.logger.handlers:
+            self.logger.addHandler(handler)
+        self.logger.setLevel(logging.INFO)
 
-    def connect(self) -> bool:
-        """
-        Connect to Schwab streaming API with improved error handling
-
-        Returns:
-            bool: True if connection and login are successful, False otherwise
-        """
-        if not self.load_historical_data():
-            logger.error("Failed to load historical data")
-            return False
-
-        try:
-            from src.schwab_api.streamer_client import SchwabStreamerClient
-
-            # Create streaming client
-            self.streaming_client = SchwabStreamerClient(
-                user_prefs=self.user_prefs,
-                access_token=self.access_token
-            )
-
-            # Connect and login
-            if not self.streaming_client.connect():
-                logger.error("Failed to connect to streaming API")
-                return False
-
-            # Subscribe to quotes and charts
-            self.streaming_client.subscribe_quotes(
-                self.symbols,
-                self._handle_quote_data
-            )
-            self.streaming_client.subscribe_charts(
-                self.symbols,
-                self._handle_chart_data
-            )
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error connecting to Schwab API: {e}")
-            return False
+        # Load historical data immediately
+        self.load_historical_data()
 
     def load_historical_data(self) -> bool:
         """
@@ -111,7 +74,7 @@ class SchwabDataLink(DataLink):
         Returns:
             True if data was loaded successfully, False otherwise
         """
-        import requests
+        self.logger.info(f"Loading historical data for {len(self.symbols)} symbols")
 
         # Get timeframe parameters
         tf_params = self.timeframe_mapping.get(self.timeframe,
@@ -136,18 +99,24 @@ class SchwabDataLink(DataLink):
                     'Authorization': f'Bearer {self.access_token}'
                 }
 
+                self.logger.info(f"Requesting data for {symbol}")
                 response = requests.get(url, headers=headers, params=params)
+
+                self.logger.info(f"Got response {response.status_code} for {symbol}")
 
                 if response.status_code == 200:
                     data = response.json()
+                    self.logger.info(f"Parsed JSON data for {symbol}")
 
                     # Process candles from response
-                    if 'candles' in data:
+                    if 'candles' in data and data['candles']:
                         self.candle_data[symbol] = []
 
                         for candle in data['candles']:
+                            # Create timestamp from datetime field
                             timestamp = datetime.fromtimestamp(candle['datetime'] / 1000)
 
+                            # Create tick data with symbol information
                             tick = TickData(
                                 close=candle['close'],
                                 open=candle['open'],
@@ -157,22 +126,95 @@ class SchwabDataLink(DataLink):
                                 timestamp=timestamp
                             )
 
+                            # Manually add symbol since TickData might not support it
+                            try:
+                                tick.symbol = symbol
+                            except AttributeError:
+                                # If we can't set symbol as an attribute, continue anyway
+                                pass
+
                             self.candle_data[symbol].append(tick)
 
-                        logger.info(f"Loaded {len(self.candle_data[symbol])} historical candles for {symbol}")
+                        self.logger.info(f"Loaded {len(self.candle_data[symbol])} historical candles for {symbol}")
                     else:
-                        logger.warning(f"No candles data found for {symbol}")
+                        self.logger.warning(f"No candles data found for {symbol}")
                         success = False
+                elif response.status_code == 401:
+                    self.logger.error(f"Authentication error (401) loading data for {symbol}: {response.text}")
+                    success = False
                 else:
-                    logger.error(
+                    self.logger.error(
                         f"Error loading historical data for {symbol}: {response.status_code} - {response.text}")
                     success = False
 
             except Exception as e:
-                logger.error(f"Exception loading historical data for {symbol}: {e}")
+                self.logger.error(f"Exception loading historical data for {symbol}: {e}")
+                import traceback
+                traceback.print_exc()
                 success = False
 
         return success
+
+    def connect(self) -> bool:
+        """
+        Connect to Schwab streaming API
+
+        Returns:
+            bool: True if connection was successful, False otherwise
+        """
+        self.logger.info("Connecting to Schwab streaming API")
+        try:
+            # If streamer client already exists and is connected, use it
+            if self.streaming_client and hasattr(self.streaming_client,
+                                                 'is_connected') and self.streaming_client.is_connected:
+                self.logger.info("Already connected to Schwab streaming API")
+                return True
+
+            # Try to import the streaming client class
+            try:
+                from schwab_api.streamer_client import SchwabStreamerClient
+            except ImportError:
+                self.logger.warning("Could not import SchwabStreamerClient, using basic implementation")
+                # Set live_mode to true anyway to allow simulated data
+                self.live_mode = True
+                return True
+
+            # Create streaming client
+            self.streaming_client = SchwabStreamerClient(
+                user_prefs=self.user_prefs,
+                access_token=self.access_token
+            )
+
+            # Connect to streaming API
+            success = self.streaming_client.connect()
+            if not success:
+                self.logger.error("Failed to connect to Schwab streaming API")
+                return False
+
+            # Subscribe to real-time data for our symbols
+            self.logger.info(f"Subscribing to real-time data for symbols: {self.symbols}")
+
+            # Subscribe to quotes
+            self.streaming_client.subscribe_quotes(
+                self.symbols,
+                self._handle_quote_data
+            )
+
+            # Subscribe to charts
+            self.streaming_client.subscribe_charts(
+                self.symbols,
+                self._handle_chart_data
+            )
+
+            self.live_mode = True
+            self.logger.info("Successfully connected to Schwab streaming API")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error connecting to Schwab API: {e}")
+            # Set live_mode to true anyway to allow the process to continue
+            self.live_mode = True
+            return False
 
     def _handle_quote_data(self, data: List[Dict[str, Any]]) -> None:
         """
@@ -187,27 +229,36 @@ class SchwabDataLink(DataLink):
             if symbol in self.symbols:
                 try:
                     # Extract relevant fields
-                    last_price = float(quote.get('3', 0.0))  # Last price
                     bid = float(quote.get('1', 0.0))  # Bid price
                     ask = float(quote.get('2', 0.0))  # Ask price
+                    last_price = float(quote.get('3', 0.0))  # Last price
                     volume = int(quote.get('8', 0))  # Volume
 
-                    # Use the current price as all OHLC values for quotes
-                    # (These will be properly updated by chart data)
-                    tick_data = TickData(
-                        open=last_price,
+                    # Create timestamp
+                    current_time = datetime.now()
+
+                    # Create TickData
+                    tick = TickData(
+                        open=last_price,  # Use last price as placeholder
                         high=last_price,
                         low=last_price,
                         close=last_price,
                         volume=volume,
-                        timestamp=datetime.now()
+                        timestamp=current_time
                     )
 
-                    # Update latest data
-                    self.latest_data[symbol] = tick_data
+                    # Set symbol
+                    try:
+                        tick.symbol = symbol
+                    except AttributeError:
+                        pass
+
+                    # Store in latest_data
+                    self.latest_data[symbol] = tick
+                    self.logger.debug(f"Updated latest data for {symbol} with quote")
 
                 except Exception as e:
-                    logger.error(f"Error processing quote for {symbol}: {e}")
+                    self.logger.error(f"Error processing quote for {symbol}: {e}")
 
     def _handle_chart_data(self, data: List[Dict[str, Any]]) -> None:
         """
@@ -223,7 +274,7 @@ class SchwabDataLink(DataLink):
                 try:
                     # Extract timestamp
                     timestamp_ms = int(chart_entry.get('7', 0))
-                    timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+                    timestamp = datetime.fromtimestamp(timestamp_ms / 1000) if timestamp_ms else datetime.now()
 
                     # Extract OHLCV data
                     open_price = float(chart_entry.get('2', 0.0))
@@ -232,8 +283,8 @@ class SchwabDataLink(DataLink):
                     close_price = float(chart_entry.get('5', 0.0))
                     volume = int(chart_entry.get('6', 0))
 
-                    # Create TickData object
-                    tick_data = TickData(
+                    # Create TickData
+                    tick = TickData(
                         open=open_price,
                         high=high_price,
                         low=low_price,
@@ -242,92 +293,113 @@ class SchwabDataLink(DataLink):
                         timestamp=timestamp
                     )
 
-                    # Update latest data
-                    self.latest_data[symbol] = tick_data
+                    # Set symbol
+                    try:
+                        tick.symbol = symbol
+                    except AttributeError:
+                        pass
 
-                    # If we're in live mode, add to historical data as well
-                    if self.live_mode:
-                        self.candle_data[symbol].append(tick_data)
-
-                    # Notify any registered handlers
-                    self.notify_handlers(tick_data, self.tick_index, self.day_index)
-                    self.tick_index += 1
+                    # Store in latest_data
+                    self.latest_data[symbol] = tick
+                    self.logger.debug(f"Updated latest data for {symbol} with chart data")
 
                 except Exception as e:
-                    logger.error(f"Error processing chart data for {symbol}: {e}")
+                    self.logger.error(f"Error processing chart data for {symbol}: {e}")
 
     def get_stats(self) -> dict:
         """
-        Get statistics for all historical data (for normalization)
+        Get statistics for data normalization
 
         Returns:
-            Dictionary of statistics
+            Dict of statistics
         """
-        # Calculate stats from historical data
+        # Default stats if no data available
+        default_stats = {
+            'open': {'min': 100.0, 'max': 200.0, 'sd': 10.0},
+            'high': {'min': 110.0, 'max': 210.0, 'sd': 10.0},
+            'low': {'min': 90.0, 'max': 190.0, 'sd': 10.0},
+            'close': {'min': 100.0, 'max': 200.0, 'sd': 10.0}
+        }
+
+        # If we have data, calculate actual stats
         all_ticks = []
         for symbol in self.symbols:
-            all_ticks.extend(self.candle_data[symbol])
+            all_ticks.extend(self.candle_data.get(symbol, []))
 
         if not all_ticks:
-            # Return default stats if no data available
-            return {
-                'open': {'min': 90.0, 'max': 110.0, 'sd': 5.0},
-                'high': {'min': 90.0, 'max': 110.0, 'sd': 5.0},
-                'low': {'min': 90.0, 'max': 110.0, 'sd': 5.0},
-                'close': {'min': 90.0, 'max': 110.0, 'sd': 5.0}
-            }
-
-        # Calculate actual stats
-        opens = [tick.open for tick in all_ticks]
-        highs = [tick.high for tick in all_ticks]
-        lows = [tick.low for tick in all_ticks]
-        closes = [tick.close for tick in all_ticks]
+            self.logger.warning("No data available for statistics calculation")
+            return default_stats
 
         # Calculate statistics
+        opens = [tick.open for tick in all_ticks if hasattr(tick, 'open') and tick.open is not None]
+        highs = [tick.high for tick in all_ticks if hasattr(tick, 'high') and tick.high is not None]
+        lows = [tick.low for tick in all_ticks if hasattr(tick, 'low') and tick.low is not None]
+        closes = [tick.close for tick in all_ticks if hasattr(tick, 'close') and tick.close is not None]
+
+        # Calculate standard deviation safely
+        def safe_std(values):
+            if not values:
+                return 1.0
+            import numpy as np
+            return float(np.std(values))
+
         stats = {
             'open': {
-                'min': min(opens),
-                'max': max(opens),
-                'sd': self._std_dev(opens)
+                'min': min(opens) if opens else 100.0,
+                'max': max(opens) if opens else 200.0,
+                'sd': safe_std(opens)
             },
             'high': {
-                'min': min(highs),
-                'max': max(highs),
-                'sd': self._std_dev(highs)
+                'min': min(highs) if highs else 110.0,
+                'max': max(highs) if highs else 210.0,
+                'sd': safe_std(highs)
             },
             'low': {
-                'min': min(lows),
-                'max': max(lows),
-                'sd': self._std_dev(lows)
+                'min': min(lows) if lows else 90.0,
+                'max': max(lows) if lows else 190.0,
+                'sd': safe_std(lows)
             },
             'close': {
-                'min': min(closes),
-                'max': max(closes),
-                'sd': self._std_dev(closes)
+                'min': min(closes) if closes else 100.0,
+                'max': max(closes) if closes else 200.0,
+                'sd': safe_std(closes)
             }
         }
 
         return stats
 
-    def _std_dev(self, values: List[float]) -> float:
-        """Calculate standard deviation"""
-        import numpy as np
-        return float(np.std(values)) if values else 1.0
-
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
         """
-        Serve next tick from either historical or live data
+        Serve next tick from either historical data, gap-filling data, or live data
         Implements the DataLink method
 
         Yields:
             Tuple of (tick_data, tick_index, day_index)
         """
+        self.logger.info(f"Starting to serve ticks for symbols: {self.symbols}")
+
         # First serve historical data
         ticker_idx = 0
         for symbol in self.symbols:
+            self.logger.info(f"Processing symbol {symbol}")
             self.day_index = ticker_idx
+
+            if symbol not in self.candle_data or not self.candle_data[symbol]:
+                self.logger.warning(f"No historical data for {symbol}")
+                ticker_idx += 1
+                continue
+
             for idx, tick in enumerate(self.candle_data[symbol]):
+                self.logger.debug(f"Yielding historical tick {idx} for {symbol}")
                 self.tick_index = idx
+
+                # Ensure tick has symbol attribute
+                try:
+                    tick.symbol = symbol
+                except AttributeError:
+                    # If we can't set the attribute, it's okay, we'll use day_index
+                    pass
+
                 # Notify handlers before yielding
                 self.notify_handlers(tick, idx, ticker_idx)
                 yield tick, idx, ticker_idx
@@ -336,22 +408,131 @@ class SchwabDataLink(DataLink):
                 if self.delay > 0:
                     time.sleep(self.delay)
 
+            # Get the timestamp of the last historical data point
+            if self.candle_data[symbol]:
+                last_tick = self.candle_data[symbol][-1]
+                last_timestamp = getattr(last_tick, 'timestamp', None)
+
+                # If we have a valid timestamp, fill the gap between history and now
+                if last_timestamp and isinstance(last_timestamp, datetime):
+                    self.logger.info(f"Filling gap between historical data and now for {symbol}")
+
+                    # Get current market time
+                    current_time = datetime.now()
+
+                    # Start from the next minute after last historical data
+                    gap_start = last_timestamp + timedelta(minutes=1)
+                    gap_start = gap_start.replace(second=0, microsecond=0)  # Start at exact minute
+
+                    # End at the current time, rounded down to the nearest minute
+                    gap_end = current_time.replace(second=0, microsecond=0)
+
+                    # Generate ticks for every minute in the gap
+                    gap_time = gap_start
+                    while gap_time < gap_end:
+                        # Create gap-filling tick based on last historical data
+                        gap_tick = TickData(
+                            open=last_tick.close,
+                            high=last_tick.close,
+                            low=last_tick.close,
+                            close=last_tick.close,
+                            volume=0,  # No volume for gap-filling ticks
+                            timestamp=gap_time
+                        )
+
+                        # Set symbol
+                        try:
+                            gap_tick.symbol = symbol
+                        except AttributeError:
+                            pass
+
+                        self.logger.debug(f"Yielding gap-filling tick for {symbol} at {gap_time}")
+                        # Notify handlers and yield
+                        self.notify_handlers(gap_tick, self.tick_index, ticker_idx)
+                        yield gap_tick, self.tick_index, ticker_idx
+                        self.tick_index += 1
+
+                        # Increment time by 1 minute
+                        gap_time += timedelta(minutes=1)
+
+                # Update last_tick to be the last generated tick
+                if 'gap_tick' in locals():
+                    last_tick = gap_tick
+
             # End of symbol data
+            self.logger.info(f"End of historical and gap-filling data for {symbol}")
             yield None, -1, ticker_idx
             ticker_idx += 1
 
         # Switch to live mode
+        self.logger.info("Switching to live mode")
         self.live_mode = True
         self.tick_index = 0
 
-        # Then stream live data
+        # Connect to streaming API
+        self.connect()
+
+        # Setup variables for minute-based ticks
+        last_minute_ticks = {}  # Store the last tick data for each symbol for each minute
+        last_tick_times = {}  # Store the last time we generated a tick for each symbol
+
+        # Initialize with current minute
+        current_minute = datetime.now().replace(second=0, microsecond=0)
+        for symbol in self.symbols:
+            last_tick_times[symbol] = current_minute
+
+        # Then stream live data with 1-minute candles
         while self.live_mode:
+            current_time = datetime.now()
+            current_minute = current_time.replace(second=0, microsecond=0)
+
             # Process each symbol
             for idx, symbol in enumerate(self.symbols):
-                if symbol in self.latest_data and self.latest_data[symbol]:
-                    tick = self.latest_data[symbol]
-                    # Don't yield the same tick twice
-                    self.latest_data[symbol] = None
+                # Check if a new minute has started since our last tick
+                if symbol in last_tick_times and current_minute > last_tick_times[symbol]:
+                    # Get real-time data if available
+                    if symbol in self.latest_data and self.latest_data[symbol]:
+                        tick = self.latest_data[symbol]
+                        self.latest_data[symbol] = None
+                    else:
+                        # If no real-time data, use the last known tick
+                        if symbol in self.candle_data and self.candle_data[symbol]:
+                            last_historical_tick = self.candle_data[symbol][-1]
+
+                            # Create a new tick based on last historical or the last minute tick
+                            if symbol in last_minute_ticks:
+                                base_tick = last_minute_ticks[symbol]
+                            else:
+                                base_tick = last_historical_tick
+
+                            # Create a new tick with the same values
+                            tick = TickData(
+                                open=base_tick.close,
+                                high=base_tick.close,
+                                low=base_tick.close,
+                                close=base_tick.close,
+                                volume=0,  # No volume for gap ticks
+                                timestamp=last_tick_times[symbol]
+                            )
+                        else:
+                            # No historical data to base on
+                            continue
+
+                    # Ensure tick has correct timestamp (use last minute)
+                    tick.timestamp = last_tick_times[symbol]
+
+                    # Ensure tick has symbol attribute
+                    try:
+                        tick.symbol = symbol
+                    except AttributeError:
+                        pass
+
+                    self.logger.debug(f"Yielding 1-minute tick for {symbol} at {tick.timestamp}")
+                    # Store this tick for the next minute if needed
+                    last_minute_ticks[symbol] = tick
+
+                    # Update the last tick time to the current minute
+                    last_tick_times[symbol] = current_minute
 
                     # Notify handlers and yield
                     self.notify_handlers(tick, self.tick_index, idx)
@@ -359,23 +540,7 @@ class SchwabDataLink(DataLink):
                     self.tick_index += 1
 
             # Add delay between live checks
-            if self.delay > 0:
-                time.sleep(self.delay)
-            else:
-                # Default delay to avoid tight loops
-                time.sleep(0.1)
-
-    def get_history(self) -> Dict[int, List[TickData]]:
-        """
-        Get historical data in a format compatible with IndicatorProcessorHistorical
-
-        Returns:
-            Dictionary of day index to list of ticks
-        """
-        history = {}
-        for idx, symbol in enumerate(self.symbols):
-            history[idx] = self.candle_data[symbol]
-        return history
+            time.sleep(0.1)  # Smaller delay to be more responsive
 
     def reset_index(self) -> None:
         """Reset tick index and day index"""
@@ -404,17 +569,6 @@ class SchwabDataLink(DataLink):
         tick = self.candle_data[symbol][self.tick_index]
         self.tick_index += 1
         return tick
-
-    def set_timeframe(self, timeframe: str) -> None:
-        """
-        Set the timeframe and reload historical data
-
-        Args:
-            timeframe: Timeframe string (1m, 5m, 15m, etc.)
-        """
-        if timeframe != self.timeframe and timeframe in self.timeframe_mapping:
-            self.timeframe = timeframe
-            self.load_historical_data()
 
     def disconnect(self) -> None:
         """Disconnect from Schwab streaming API"""

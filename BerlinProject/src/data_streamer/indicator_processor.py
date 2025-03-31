@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Tuple
 
 from features.indicators2 import support_level, resistance_level
 from .data_preprocessor import DataPreprocessor
@@ -30,10 +30,12 @@ class IndicatorProcessor:
 
     # Each indicator will calculate a rating based upon different factors such as
     # indicator strength or age.   TBD
-    def next_tick(self, data_preprocessor: DataPreprocessor) -> Dict[str, float]:
+    def next_tick(self, data_preprocessor: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
         tick, history = data_preprocessor.get_data()  # get non-normalized data
         history = history[-50:]
         output = {}
+        raw_output = {}  # Add this to store raw indicator values
+
         for indicator in self.config.indicators:
             look_back = indicator.parameters.get('lookback', 10)
 
@@ -41,7 +43,7 @@ class IndicatorProcessor:
             if indicator.type == CANDLE_STICK_PATTERN:
                 indicator_name = indicator.parameters['talib']
                 cp = CandlePatterns([indicator_name])
-                result = cp.process_tick_data(tick, history, look_back)
+                result = cp.process_tick_data(history, look_back)
                 bull = indicator.parameters.get('bull', True)
                 metric = self.calculate_time_based_metric(result[indicator_name], look_back)
                 if bull is True and metric < 0:
@@ -49,19 +51,19 @@ class IndicatorProcessor:
                 elif bull is False and metric > 0:
                     metric = 0.0
                 output[indicator.name] = metric
+                raw_output[indicator.name] = result[indicator_name][-1] if len(result[indicator_name]) > 0 else 0.0
 
             elif indicator.type == INDICATOR_TYPE:
                 result = self.calculate_indicator(tick, history, indicator)
                 metric = self.calculate_time_based_metric(result[indicator.name], look_back)
-
                 output[indicator.name] = metric
+                raw_output[indicator.name] = result[indicator.name][-1] if len(result[indicator.name]) > 0 else 0.0
 
             # Pattern matching is using Eamonn's DTW
             elif indicator.type == PATTERN_MATCH:
                 pass
 
-        return output
-
+        return output, raw_output  # Return both the processed results and raw values
     @staticmethod
     def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
         if indicator.function == 'sma_crossover':

@@ -37,6 +37,9 @@ class UIExternalTool:
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
 
+    # Fix in UIExternalTool.feature_vector method
+    # In services/ui_external_tool.py
+
     def feature_vector(self, fv: np.ndarray, tick):
         """
         Process a new feature vector.
@@ -45,11 +48,27 @@ class UIExternalTool:
             fv: Feature vector as numpy array
             tick: Corresponding tick data
         """
-        if not hasattr(tick, 'symbol') or tick.symbol is None:
-            logger.warning("Tick data missing symbol information")
-            return
+        print(f"UIExternalTool: Received feature vector for tick: {tick}")
 
-        symbol = tick.symbol
+        if not hasattr(tick, 'symbol') or tick.symbol is None:
+            print(f"UIExternalTool: Warning - Tick data missing symbol information: {tick}")
+            # Try to extract symbol from attribute access
+            symbol = getattr(tick, 'symbol', None)
+
+            if symbol is None:
+                # If we still don't have a symbol, check if it's a dictionary-like object
+                try:
+                    symbol = tick.get('symbol', None)
+                except (AttributeError, TypeError):
+                    pass
+
+            if symbol is None:
+                print(f"UIExternalTool: Cannot process tick without symbol: {tick}")
+                return
+        else:
+            symbol = tick.symbol
+
+        print(f"UIExternalTool: Processing feature vector for {symbol}")
 
         # Initialize data structures for new tickers
         if symbol not in self.ticker_data:
@@ -60,14 +79,29 @@ class UIExternalTool:
             self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
 
         # Store current tick data
-        timestamp = tick.timestamp or datetime.now()
+        timestamp = getattr(tick, 'timestamp', None) or datetime.now()
+
+        # Convert datetime to string for JSON serialization
+        if isinstance(timestamp, datetime):
+            timestamp_str = timestamp.isoformat()
+        else:
+            timestamp_str = str(timestamp)
+
+        # Extract attributes safely
+        def safe_get(obj, attr, default=0.0):
+            try:
+                val = getattr(obj, attr, default)
+                return val if val is not None else default
+            except:
+                return default
+
         self.ticker_data[symbol] = {
-            'timestamp': timestamp,
-            'open': getattr(tick, 'open', 0.0),
-            'high': getattr(tick, 'high', 0.0),
-            'low': getattr(tick, 'low', 0.0),
-            'close': getattr(tick, 'close', 0.0),
-            'volume': getattr(tick, 'volume', 0),
+            'timestamp': timestamp_str,  # Use string timestamp here
+            'open': safe_get(tick, 'open'),
+            'high': safe_get(tick, 'high'),
+            'low': safe_get(tick, 'low'),
+            'close': safe_get(tick, 'close'),
+            'volume': safe_get(tick, 'volume', 0),
             'symbol': symbol
         }
 
@@ -76,11 +110,13 @@ class UIExternalTool:
         if len(self.history[symbol]) > self.max_history_items:
             self.history[symbol].pop(0)
 
+        print(f"UIExternalTool: Emitting ticker_update for {symbol}")
         # Emit update via Socket.IO
         self.socketio.emit('ticker_update', {
             'symbol': symbol,
             'data': self.ticker_data[symbol]
         })
+        print(f"UIExternalTool: Ticker update emitted for {symbol}")
 
     def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
@@ -94,7 +130,7 @@ class UIExternalTool:
             raw_indicators: Optional raw indicator values
         """
         if not hasattr(tick, 'symbol') or tick.symbol is None:
-            logger.warning("Tick data missing symbol information")
+            print(f"UIExternalTool: Warning - Tick data missing symbol information: {tick}")
             return
 
         symbol = tick.symbol
@@ -127,13 +163,26 @@ class UIExternalTool:
             'bear': bear_score
         }
 
-        # Emit update via Socket.IO
-        self.socketio.emit('indicator_update', {
+        # Get a timestamp for the update
+        timestamp = getattr(tick, 'timestamp', None) or datetime.now()
+
+        # Convert datetime to string for JSON serialization
+        if isinstance(timestamp, datetime):
+            timestamp_str = timestamp.isoformat()
+        else:
+            timestamp_str = str(timestamp)
+
+        # Create a JSON-serializable update object
+        update_data = {
             'symbol': symbol,
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
-            'overall_scores': self.overall_scores[symbol]
-        })
+            'overall_scores': self.overall_scores[symbol],
+            'timestamp': timestamp_str  # Include string timestamp
+        }
+
+        # Emit update via Socket.IO
+        self.socketio.emit('indicator_update', update_data)
 
     def calculate_weighted_score(self, indicators: Dict[str, float], weights: Dict[str, float]) -> float:
         """
@@ -218,13 +267,28 @@ class UIExternalTool:
         Returns:
             Dictionary with all ticker data
         """
-        return {
+        # Create a copy to ensure JSON serialization works
+        result = {
             'tickers': list(self.ticker_data.keys()),
-            'data': self.ticker_data,
-            'indicators': self.indicators,
-            'overall_scores': self.overall_scores,
-            'history': {symbol: self.history[symbol][-20:] for symbol in self.history}  # Last 20 items
+            'data': {},
+            'indicators': {},
+            'overall_scores': {},
+            'history': {}
         }
+
+        # Convert all data to JSON-serializable format
+        for symbol in self.ticker_data:
+            # Copy ticker data
+            result['data'][symbol] = self.ticker_data[symbol].copy()
+
+            # Copy indicators and overall scores
+            result['indicators'][symbol] = self.indicators.get(symbol, {}).copy()
+            result['overall_scores'][symbol] = self.overall_scores.get(symbol, {'bull': 0.0, 'bear': 0.0}).copy()
+
+            # Copy recent history (last 20 items)
+            result['history'][symbol] = [item.copy() for item in self.history.get(symbol, [])[-20:]]
+
+        return result
 
     def clear_data(self) -> None:
         """

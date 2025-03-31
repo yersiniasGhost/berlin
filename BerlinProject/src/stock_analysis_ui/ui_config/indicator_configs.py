@@ -1,8 +1,8 @@
 from typing import Dict, List, Any
 
 # Constants for indicator types
-INDICATOR_TYPE = "INDICATOR_TYPE"
-CANDLE_STICK_PATTERN = "CANDLE_STICK_PATTERN"
+INDICATOR_TYPE = "Indicator"
+CANDLE_STICK_PATTERN = "CDL"
 
 # Default indicator configuration
 DEFAULT_INDICATORS = [
@@ -174,3 +174,5 @@ def create_monitor_configuration(indicators: List[Dict[str, Any]], name: str = "
         "name": name,
         "indicators": indicators
     }
+
+

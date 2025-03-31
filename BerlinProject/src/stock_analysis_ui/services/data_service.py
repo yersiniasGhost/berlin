@@ -78,7 +78,8 @@ class DataService:
         except ImportError as e:
             logger.error(f"Error importing project modules: {e}")
             return False
-        
+
+    # In data_service.py, update the start method
     def start(self, symbols: List[str], indicators: List[Dict], weights: Dict[str, float] = None) -> bool:
         """
         Start data streaming for the specified symbols and indicators.
