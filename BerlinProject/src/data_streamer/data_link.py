@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Tuple, Iterator, Any, Callable
 from abc import ABC, abstractmethod
 from datetime import datetime
 from environments.tick_data import TickData
+from logging import logger
 
 
 class DataLink(ABC):
@@ -24,9 +25,17 @@ class DataLink(ABC):
         self.tick_handlers.append(handler)
 
     def notify_handlers(self, tick, tick_index, day_index):
-        print(f"Notifying handlers with tick data: {tick}")
+        """Notify registered tick handlers"""
+        if not tick:
+            return
+
+        logger.info(f"Notifying handlers: {len(self.tick_handlers)} handlers registered")
+
         for handler in self.tick_handlers:
-            handler(tick, tick_index, day_index)
+            try:
+                handler(tick, tick_index, day_index)
+            except Exception as e:
+                logger.error(f"Error in tick handler: {str(e)}", exc_info=True)
 
     @abstractmethod
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:

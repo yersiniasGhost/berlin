@@ -197,6 +197,20 @@
         </div>
     </div>
 
+    <!-- In the configuration modal, add this after the symbols section -->
+    <div class="mb-3">
+        <label class="form-label">Candle Timeframe</label>
+        <select class="form-select" id="timeframeSelect">
+            <option value="1m">1 Minute</option>
+            <option value="5m">5 Minutes</option>
+            <option value="15m">15 Minutes</option>
+            <option value="30m">30 Minutes</option>
+            <option value="1h">1 Hour</option>
+            <option value="1d">1 Day</option>
+        </select>
+        <div class="form-text">Select the candle timeframe for both historical and live data</div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -220,6 +234,11 @@
         socket.on('disconnect', () => {
             console.log('Disconnected from server');
             updateConnectionStatus(false);
+        });
+
+        // Debug all incoming events
+        socket.onAny((event, ...args) => {
+            console.log(`Socket.io received event: ${event}`, args);
         });
 
         // Authentication handling
@@ -320,6 +339,10 @@
                 weights[name] = value;
             });
 
+            // Get selected timeframe
+            const timeframeSelect = document.getElementById('timeframeSelect');
+            const timeframe = timeframeSelect ? timeframeSelect.value : '1m';
+
             // Start streaming
             fetch('/api/start', {
                 method: 'POST',
@@ -329,7 +352,8 @@
                 body: JSON.stringify({
                     symbols: symbols,
                     indicators: indicators,
-                    weights: weights
+                    weights: weights,
+                    timeframe: timeframe
                 })
             })
             .then(response => response.json())

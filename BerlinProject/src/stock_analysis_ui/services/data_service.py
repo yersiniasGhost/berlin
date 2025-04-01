@@ -80,7 +80,8 @@ class DataService:
             return False
 
     # In data_service.py, update the start method
-    def start(self, symbols: List[str], indicators: List[Dict], weights: Dict[str, float] = None) -> bool:
+    def start(self, symbols: List[str], indicators: List[Dict], weights: Dict[str, float] = None,
+              timeframe: str = "1m") -> bool:
         """
         Start data streaming for the specified symbols and indicators.
 
@@ -88,6 +89,7 @@ class DataService:
             symbols: List of ticker symbols to monitor
             indicators: List of indicator configurations
             weights: Optional dictionary of indicator weights
+            timeframe: Candle timeframe (1m, 5m, 15m, 30m, 1h, 1d)
 
         Returns:
             bool: True if streaming started successfully, False otherwise
@@ -106,6 +108,7 @@ class DataService:
         self.current_symbols = symbols
         self.current_indicators = indicators
         self.current_weights = weights or {}
+        self.current_timeframe = timeframe
 
         try:
             # Get Schwab authentication from the manager
@@ -122,8 +125,8 @@ class DataService:
                 "user_prefs": auth_manager.user_prefs,
                 "access_token": auth_manager.access_token,
                 "symbols": symbols,
-                "timeframe": "1m",
-                "days_history": 1
+                "timeframe": timeframe,
+                "days_history": 5
             }
 
             # Create model configuration (simple for now)
@@ -180,7 +183,7 @@ class DataService:
             self.streaming_thread.start()
 
             self.is_streaming = True
-            logger.info(f"Started streaming for symbols: {', '.join(symbols)}")
+            logger.info(f"Started streaming for symbols: {', '.join(symbols)} with timeframe: {timeframe}")
             return True
 
         except Exception as e:

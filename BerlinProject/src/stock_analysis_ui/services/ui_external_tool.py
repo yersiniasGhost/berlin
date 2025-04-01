@@ -28,7 +28,7 @@ class UIExternalTool:
         self.overall_scores = {}  # Store overall bull/bear scores by ticker
 
         # Configure history limits
-        self.max_history_items = 100
+        self.max_history_items = 600
 
         # Initialize logger
         if not logger.handlers:
@@ -41,37 +41,18 @@ class UIExternalTool:
     # In services/ui_external_tool.py
 
     def feature_vector(self, fv: np.ndarray, tick):
-        """
-        Process a new feature vector.
-
-        Args:
-            fv: Feature vector as numpy array
-            tick: Corresponding tick data
-        """
-        print(f"UIExternalTool: Received feature vector for tick: {tick}")
+        """Process feature vector"""
+        logger.info(f"UIExternalTool received feature vector for tick: {tick}")
 
         if not hasattr(tick, 'symbol') or tick.symbol is None:
-            print(f"UIExternalTool: Warning - Tick data missing symbol information: {tick}")
-            # Try to extract symbol from attribute access
-            symbol = getattr(tick, 'symbol', None)
+            logger.warning("Tick data missing symbol information")
+            return
 
-            if symbol is None:
-                # If we still don't have a symbol, check if it's a dictionary-like object
-                try:
-                    symbol = tick.get('symbol', None)
-                except (AttributeError, TypeError):
-                    pass
-
-            if symbol is None:
-                print(f"UIExternalTool: Cannot process tick without symbol: {tick}")
-                return
-        else:
-            symbol = tick.symbol
-
-        print(f"UIExternalTool: Processing feature vector for {symbol}")
+        symbol = tick.symbol
 
         # Initialize data structures for new tickers
         if symbol not in self.ticker_data:
+            logger.info(f"Initializing data for new symbol: {symbol}")
             self.ticker_data[symbol] = {}
             self.history[symbol] = []
             self.indicators[symbol] = {}
@@ -79,45 +60,31 @@ class UIExternalTool:
             self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
 
         # Store current tick data
-        timestamp = getattr(tick, 'timestamp', None) or datetime.now()
+        timestamp = getattr(tick, 'timestamp', datetime.now())
 
-        # Convert datetime to string for JSON serialization
-        if isinstance(timestamp, datetime):
-            timestamp_str = timestamp.isoformat()
-        else:
-            timestamp_str = str(timestamp)
-
-        # Extract attributes safely
-        def safe_get(obj, attr, default=0.0):
-            try:
-                val = getattr(obj, attr, default)
-                return val if val is not None else default
-            except:
-                return default
-
-        self.ticker_data[symbol] = {
-            'timestamp': timestamp_str,  # Use string timestamp here
-            'open': safe_get(tick, 'open'),
-            'high': safe_get(tick, 'high'),
-            'low': safe_get(tick, 'low'),
-            'close': safe_get(tick, 'close'),
-            'volume': safe_get(tick, 'volume', 0),
+        tick_data = {
+            'timestamp': timestamp,
+            'open': getattr(tick, 'open', 0.0),
+            'high': getattr(tick, 'high', 0.0),
+            'low': getattr(tick, 'low', 0.0),
+            'close': getattr(tick, 'close', 0.0),
+            'volume': getattr(tick, 'volume', 0),
             'symbol': symbol
         }
 
+        self.ticker_data[symbol] = tick_data
+
         # Add to history (limited size)
-        self.history[symbol].append(self.ticker_data[symbol].copy())
+        self.history[symbol].append(tick_data.copy())
         if len(self.history[symbol]) > self.max_history_items:
             self.history[symbol].pop(0)
 
-        print(f"UIExternalTool: Emitting ticker_update for {symbol}")
         # Emit update via Socket.IO
+        logger.info(f"Emitting ticker_update for {symbol} with price {tick_data['close']}")
         self.socketio.emit('ticker_update', {
             'symbol': symbol,
-            'data': self.ticker_data[symbol]
+            'data': tick_data
         })
-        print(f"UIExternalTool: Ticker update emitted for {symbol}")
-
     def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
         """

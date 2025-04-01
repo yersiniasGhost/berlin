@@ -231,13 +231,16 @@ class SchwabStreamerClient:
         self.logger.info(f"Subscribing to quotes for: {symbols}")
         self.ws.send(json.dumps(subscribe_request))
 
-    def subscribe_charts(self, symbols: List[str], callback: Callable[[List[Dict]], None]):
+    def subscribe_charts(self, symbols: List[str], callback: Callable[[List[Dict]], None],
+                         frequency_type: str = "minute", frequency: int = 1):
         """
-        Subscribe to minute charts for specified symbols.
+        Subscribe to candle chart data for specified symbols.
 
         Args:
             symbols: List of stock symbols (e.g., ['AAPL', 'TSLA'])
             callback: Function to call when new chart data is received
+            frequency_type: Type of frequency ("minute", "daily", "weekly")
+            frequency: Frequency value (1, 5, 15, etc. for minutes)
         """
         if not self.is_connected:
             self.logger.error("Not connected to Schwab Streamer API")
@@ -251,6 +254,7 @@ class SchwabStreamerClient:
         # 7=Market DateTime (UNIX timestamp), 8=Cumulative Volume
         fields = "0,1,2,3,4,5,6,7,8"
 
+        # Chart URL format includes frequency info
         subscribe_request = {
             "requests": [
                 {
@@ -261,13 +265,15 @@ class SchwabStreamerClient:
                     "SchwabClientCorrelId": self.correl_id,
                     "parameters": {
                         "keys": ",".join(symbols),
-                        "fields": fields
+                        "fields": fields,
+                        "frequency_type": frequency_type,
+                        "frequency": frequency
                     }
                 }
             ]
         }
 
-        self.logger.info(f"Subscribing to charts for: {symbols}")
+        self.logger.info(f"Subscribing to charts for: {symbols} with frequency: {frequency_type}:{frequency}")
         self.ws.send(json.dumps(subscribe_request))
 
     def add_chart_symbols(self, symbols: List[str]):

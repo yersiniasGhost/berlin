@@ -140,9 +140,10 @@ def start_streaming():
     # Configure indicators (use default or from request)
     indicators = request.json.get('indicators', DEFAULT_INDICATORS)
     weights = request.json.get('weights', {})
+    timeframe = request.json.get('timeframe', '1m')  # Default to 1m if not specified
 
     # Start data service
-    success = data_service.start(symbols, indicators, weights)
+    success = data_service.start(symbols, indicators, weights, timeframe)
 
     # If we couldn't start the real data service, send some test data
     if not success:
