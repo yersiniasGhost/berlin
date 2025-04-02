@@ -4,6 +4,8 @@ from typing import Dict, Optional, List, Any
 from datetime import datetime
 from flask_socketio import SocketIO
 
+from environments.tick_data import TickData
+
 logger = logging.getLogger('UIExternalTool')
 
 
@@ -59,14 +61,29 @@ class UIExternalTool:
             self.raw_indicators[symbol] = {}
             self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
 
-        # Store current tick data
+        # Check if this is a completed candle (it will have open/high/low attributes)
+        is_completed_candle = hasattr(tick, 'open') and hasattr(tick, 'high') and hasattr(tick, 'low')
+
+        # If it's a completed candle, handle it differently
+        if is_completed_candle:
+            # Handle as a completed candle
+            self.handle_completed_candle(symbol, tick)
+            return
+
+        # Store current tick data (for regular ticks)
         timestamp = getattr(tick, 'timestamp', datetime.now())
 
+        # Convert datetime to string for JSON serialization
+        if isinstance(timestamp, datetime):
+            timestamp_str = timestamp.isoformat()
+        else:
+            timestamp_str = str(timestamp)
+
         tick_data = {
-            'timestamp': timestamp,
-            'open': getattr(tick, 'open', 0.0),
-            'high': getattr(tick, 'high', 0.0),
-            'low': getattr(tick, 'low', 0.0),
+            'timestamp': timestamp_str,
+            'open': getattr(tick, 'open', tick.close),
+            'high': getattr(tick, 'high', tick.close),
+            'low': getattr(tick, 'low', tick.close),
             'close': getattr(tick, 'close', 0.0),
             'volume': getattr(tick, 'volume', 0),
             'symbol': symbol
@@ -74,17 +91,13 @@ class UIExternalTool:
 
         self.ticker_data[symbol] = tick_data
 
-        # Add to history (limited size)
-        self.history[symbol].append(tick_data.copy())
-        if len(self.history[symbol]) > self.max_history_items:
-            self.history[symbol].pop(0)
-
         # Emit update via Socket.IO
         logger.info(f"Emitting ticker_update for {symbol} with price {tick_data['close']}")
         self.socketio.emit('ticker_update', {
             'symbol': symbol,
             'data': tick_data
         })
+
     def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
         """
@@ -150,6 +163,7 @@ class UIExternalTool:
 
         # Emit update via Socket.IO
         self.socketio.emit('indicator_update', update_data)
+
 
     def calculate_weighted_score(self, indicators: Dict[str, float], weights: Dict[str, float]) -> float:
         """
@@ -243,6 +257,10 @@ class UIExternalTool:
             'history': {}
         }
 
+        # Add more detailed logging
+        logger.info(f"get_ticker_data called, have {len(self.ticker_data)} symbols")
+        logger.info(f"History lengths: {', '.join([f'{s}: {len(h)}' for s, h in self.history.items()])}")
+
         # Convert all data to JSON-serializable format
         for symbol in self.ticker_data:
             # Copy ticker data
@@ -252,10 +270,59 @@ class UIExternalTool:
             result['indicators'][symbol] = self.indicators.get(symbol, {}).copy()
             result['overall_scores'][symbol] = self.overall_scores.get(symbol, {'bull': 0.0, 'bear': 0.0}).copy()
 
-            # Copy recent history (last 20 items)
-            result['history'][symbol] = [item.copy() for item in self.history.get(symbol, [])[-20:]]
+            # Copy recent history (all items)
+            result['history'][symbol] = [item.copy() for item in self.history.get(symbol, [])]
+            logger.info(f"Returning {len(result['history'][symbol])} historical candles for {symbol}")
 
         return result
+
+    def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
+        """
+        Handle a completed candle for a symbol.
+
+        Args:
+            symbol: Symbol the candle belongs to
+            candle: The completed TickData candle
+        """
+        logger.info(f"Handling completed candle for {symbol}: {candle}")
+
+        # Make sure we have data structures initialized
+        if symbol not in self.ticker_data:
+            self.ticker_data[symbol] = {}
+            self.history[symbol] = []
+            self.indicators[symbol] = {}
+            self.raw_indicators[symbol] = {}
+            self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
+
+        # Convert datetime to string for JSON serialization
+        timestamp = candle.timestamp
+        if isinstance(timestamp, datetime):
+            timestamp_str = timestamp.isoformat()
+        else:
+            timestamp_str = str(timestamp)
+
+        # Create JSON-serializable candle data
+        candle_data = {
+            'timestamp': timestamp_str,
+            'open': candle.open,
+            'high': candle.high,
+            'low': candle.low,
+            'close': candle.close,
+            'volume': candle.volume,
+            'symbol': symbol
+        }
+
+        # Add to history
+        self.history[symbol].append(candle_data.copy())
+        if len(self.history[symbol]) > self.max_history_items:
+            self.history[symbol].pop(0)
+
+        # Emit candle update via Socket.IO
+        logger.info(f"Emitting completed candle for {symbol}")
+        self.socketio.emit('candle_completed', {
+            'symbol': symbol,
+            'candle': candle_data
+        })
 
     def clear_data(self) -> None:
         """

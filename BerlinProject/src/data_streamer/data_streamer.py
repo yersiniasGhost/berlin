@@ -84,10 +84,6 @@ class DataStreamer:
         self.indicators.prepare_historical_processor(self.data_link)
 
     # Add this to your DataStreamer class:
-
-    # Add to DataStreamer class in data_streamer.py
-    # In data_streamer.py, update the run method
-
     def run(self):
         """
         Main method to run the data streaming process.
@@ -109,7 +105,7 @@ class DataStreamer:
         try:
             logger.info("DataStreamer: Starting to process data")
             for result in self.data_link.serve_next_tick():
-                if result is None:
+                if result is None or result[0] is None:
                     logger.debug("DataStreamer: Received None result, continuing")
                     continue
 
@@ -152,7 +148,7 @@ class DataStreamer:
                     indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
 
                 # Send feature vector to external tools if valid
-                if None not in feature_vector and feature_vector:
+                if feature_vector and None not in feature_vector:
                     for external_tool in self.external_tool:
                         external_tool.feature_vector(feature_vector, tick)
 
@@ -176,7 +172,7 @@ class DataStreamer:
             import traceback
             traceback.print_exc()
             raise
-
+        
     def reset(self):
         self.data_link.reset_index()
         stats = self.data_link.get_stats()

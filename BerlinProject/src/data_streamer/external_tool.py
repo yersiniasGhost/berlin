@@ -21,3 +21,6 @@ class ExternalTool(ABC):
     # Not required to be implemented
     def reset_next_sample(self):
         pass
+
+    def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
+        pass

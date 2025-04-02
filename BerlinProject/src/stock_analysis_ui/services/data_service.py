@@ -79,7 +79,6 @@ class DataService:
             logger.error(f"Error importing project modules: {e}")
             return False
 
-    # In data_service.py, update the start method
     def start(self, symbols: List[str], indicators: List[Dict], weights: Dict[str, float] = None,
               timeframe: str = "1m") -> bool:
         """
@@ -177,6 +176,20 @@ class DataService:
             # Set weights in UI tool
             self.ui_tool.update_weights(self.current_weights)
 
+            # Explicitly load historical data
+            if hasattr(self.data_streamer.data_link, 'load_historical_data'):
+                logger.info("Loading historical data...")
+                success = self.data_streamer.data_link.load_historical_data()
+                if not success:
+                    logger.warning("Failed to load historical data, continuing without it")
+
+            # Connect to streaming service
+            if hasattr(self.data_streamer.data_link, 'connect'):
+                logger.info("Connecting to streaming service...")
+                success = self.data_streamer.data_link.connect()
+                if not success:
+                    logger.warning("Failed to connect to streaming service, continuing with historical data only")
+
             # Start streaming in a separate thread
             self.streaming_thread = threading.Thread(target=self._stream_data)
             self.streaming_thread.daemon = True
@@ -187,7 +200,7 @@ class DataService:
             return True
 
         except Exception as e:
-            logger.error(f"Error starting data streaming: {e}")
+            logger.error(f"Error starting data streaming: {e}", exc_info=True)
             return False
 
     def _stream_data(self):

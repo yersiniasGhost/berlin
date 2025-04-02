@@ -217,11 +217,36 @@
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
 
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js Financial plugin for Candlestick charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
 
     <!-- Common JavaScript -->
     <script>
+                // Add this near the start of your base.html JavaScript
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log("DOM loaded, checking Socket.IO connection status...");
+
+          // Debug Socket.IO connection
+          if (typeof socket === 'undefined') {
+            console.error("ERROR: socket is undefined! Socket.IO not initialized properly");
+          } else {
+            console.log("Socket.IO object exists, connection state:", socket.connected);
+
+            socket.on('connect', function() {
+              console.log("Socket.IO CONNECTED successfully at", new Date().toLocaleTimeString());
+            });
+
+            socket.on('disconnect', function() {
+              console.error("Socket.IO DISCONNECTED at", new Date().toLocaleTimeString());
+            });
+
+            socket.on('connect_error', function(error) {
+              console.error("Socket.IO CONNECTION ERROR:", error);
+            });
+          }
+        });
+
         // Common JavaScript for all pages
         const socket = io();
         let authenticated = false;
@@ -623,6 +648,20 @@
         window.addEventListener('DOMContentLoaded', function() {
             checkAuthentication();
             loadIndicators();
+        });
+
+                // Debug SocketIO connections
+        socket.on('connect', () => {
+          console.log('Socket.IO connected successfully');
+        });
+
+        socket.on('disconnect', () => {
+          console.log('Socket.IO disconnected');
+        });
+
+        // Log all events received
+        socket.onAny((event, ...args) => {
+          console.log('Socket.IO event received:', event, args);
         });
     </script>
 
