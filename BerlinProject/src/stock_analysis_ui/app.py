@@ -275,6 +275,39 @@ def handle_disconnect():
     logger.info('Client disconnected')
 
 
+# Add this to your Flask routes in app.py
+@app.route('/api/test_socket')
+def test_socket():
+    """Test Socket.IO event emission"""
+    symbol = request.args.get('symbol', 'TEST')
+    print(f"Emitting test Socket.IO event for {symbol}")
+
+    # Emit a test event
+    socketio.emit('test_event', {
+        'message': 'This is a test event from the server',
+        'timestamp': datetime.now().isoformat(),
+        'symbol': symbol
+    })
+
+    # Also try to emit a candle event
+    socketio.emit('candle_completed', {
+        'symbol': symbol,
+        'candle': {
+            'timestamp': datetime.now().isoformat(),
+            'open': 100.0,
+            'high': 105.0,
+            'low': 95.0,
+            'close': 102.0,
+            'volume': 1000
+        }
+    })
+
+    return jsonify({
+        'success': True,
+        'message': 'Test events emitted'
+    })
+
+
 # Main entry point
 if __name__ == '__main__':
     # Authenticate before starting the server

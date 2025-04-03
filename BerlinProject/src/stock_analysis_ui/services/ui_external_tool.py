@@ -42,19 +42,17 @@ class UIExternalTool:
     # Fix in UIExternalTool.feature_vector method
     # In services/ui_external_tool.py
 
+    # In src/stock_analysis_ui/services/ui_external_tool.py, update feature_vector
+
     def feature_vector(self, fv: np.ndarray, tick):
         """Process feature vector"""
-        logger.info(f"UIExternalTool received feature vector for tick: {tick}")
-
         if not hasattr(tick, 'symbol') or tick.symbol is None:
-            logger.warning("Tick data missing symbol information")
             return
 
         symbol = tick.symbol
 
         # Initialize data structures for new tickers
         if symbol not in self.ticker_data:
-            logger.info(f"Initializing data for new symbol: {symbol}")
             self.ticker_data[symbol] = {}
             self.history[symbol] = []
             self.indicators[symbol] = {}
@@ -62,7 +60,8 @@ class UIExternalTool:
             self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
 
         # Check if this is a completed candle (it will have open/high/low attributes)
-        is_completed_candle = hasattr(tick, 'open') and hasattr(tick, 'high') and hasattr(tick, 'low')
+        is_completed_candle = (hasattr(tick, 'open') and hasattr(tick, 'high') and
+                               hasattr(tick, 'low') and not getattr(tick, 'is_current', False))
 
         # If it's a completed candle, handle it differently
         if is_completed_candle:
@@ -81,22 +80,29 @@ class UIExternalTool:
 
         tick_data = {
             'timestamp': timestamp_str,
-            'open': getattr(tick, 'open', tick.close),
-            'high': getattr(tick, 'high', tick.close),
-            'low': getattr(tick, 'low', tick.close),
+            'open': getattr(tick, 'open', getattr(tick, 'close', 0.0)),
+            'high': getattr(tick, 'high', getattr(tick, 'close', 0.0)),
+            'low': getattr(tick, 'low', getattr(tick, 'close', 0.0)),
             'close': getattr(tick, 'close', 0.0),
             'volume': getattr(tick, 'volume', 0),
-            'symbol': symbol
+            'symbol': symbol,
+            'is_current': getattr(tick, 'is_current', False)
         }
 
         self.ticker_data[symbol] = tick_data
 
         # Emit update via Socket.IO
-        logger.info(f"Emitting ticker_update for {symbol} with price {tick_data['close']}")
         self.socketio.emit('ticker_update', {
             'symbol': symbol,
             'data': tick_data
         })
+
+        # If this is a current (in-progress) candle, also emit a special event
+        if getattr(tick, 'is_current', False):
+            self.socketio.emit('current_candle_update', {
+                'symbol': symbol,
+                'candle': tick_data
+            })
 
     def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
@@ -163,7 +169,6 @@ class UIExternalTool:
 
         # Emit update via Socket.IO
         self.socketio.emit('indicator_update', update_data)
-
 
     def calculate_weighted_score(self, indicators: Dict[str, float], weights: Dict[str, float]) -> float:
         """
@@ -276,16 +281,12 @@ class UIExternalTool:
 
         return result
 
+    # In src/stock_analysis_ui/services/ui_external_tool.py, update handle_completed_candle
+
     def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
         """
         Handle a completed candle for a symbol.
-
-        Args:
-            symbol: Symbol the candle belongs to
-            candle: The completed TickData candle
         """
-        logger.info(f"Handling completed candle for {symbol}: {candle}")
-
         # Make sure we have data structures initialized
         if symbol not in self.ticker_data:
             self.ticker_data[symbol] = {}
@@ -318,10 +319,15 @@ class UIExternalTool:
             self.history[symbol].pop(0)
 
         # Emit candle update via Socket.IO
-        logger.info(f"Emitting completed candle for {symbol}")
         self.socketio.emit('candle_completed', {
             'symbol': symbol,
             'candle': candle_data
+        })
+
+        # Also emit a ticker_update event to ensure the UI is updated
+        self.socketio.emit('ticker_update', {
+            'symbol': symbol,
+            'data': candle_data
         })
 
     def clear_data(self) -> None:

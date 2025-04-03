@@ -194,12 +194,11 @@ class SchwabDataLink(DataLink):
 
         return success
 
+    # In src/data_streamer/schwab_data_link.py, modify the _handle_quote_data method
+
     def _handle_quote_data(self, data: List[Dict[str, Any]]) -> None:
         """
         Handle incoming quote data from Schwab API.
-
-        Args:
-            data: List of quote data dictionaries
         """
         logger.info(f"Received quote data: {len(data)} ticks")
 
@@ -275,14 +274,18 @@ class SchwabDataLink(DataLink):
                     # If a candle was completed, notify the handlers
                     if completed_candle:
                         logger.info(f"Completed candle: {completed_candle.timestamp}")
-                        # Notify of completed candle specifically
-                        # This allows the UI to add it to the chart
+                        # Notify of completed candle
                         self.notify_handlers(completed_candle, self.tick_index, self.symbols.index(symbol))
                         self.tick_index += 1
 
+                    # Also notify about the current candle itself for real-time updates
+                    if current_candle:
+                        # Set a flag to indicate this is not a completed candle
+                        setattr(current_candle, 'is_current', True)
+                        self.notify_handlers(current_candle, -1, self.symbols.index(symbol))
+
             except Exception as e:
                 logger.error(f"Error processing quote: {e}")
-
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
         """
         Serve next tick from either historical or live data.

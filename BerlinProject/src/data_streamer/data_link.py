@@ -24,6 +24,8 @@ class DataLink(ABC):
         """
         self.tick_handlers.append(handler)
 
+    # In src/data_streamer/data_link.py, enhance notify_handlers
+
     def notify_handlers(self, tick, tick_index, day_index):
         """Notify registered tick handlers"""
         if not tick:
@@ -32,8 +34,9 @@ class DataLink(ABC):
         for handler in self.tick_handlers:
             try:
                 handler(tick, tick_index, day_index)
-            except Exception as e:
-                print("uh oh")
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
     @abstractmethod
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:

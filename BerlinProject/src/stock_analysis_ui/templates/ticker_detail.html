@@ -149,29 +149,26 @@
                 </div>
             </div>
         </div>
+        <!-- Add this after the Recent Candles card in ticker_detail.html -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Latest Price Updates</h5>
+                <span class="badge bg-primary" id="updateCount">0</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="candle-history" id="priceUpdates">
+                    <div class="text-center py-5">
+                        <div class="text-muted">No price updates available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-
-        // Add this at the top of your ticker_detail.html script block
-    socket.on('candle_completed', function(data) {
-      console.log("CANDLE COMPLETED RECEIVED:", data);
-      document.title = "Candle received!"; // This will change the page title as a visible indicator
-
-      // Try direct DOM manipulation as a test
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'alert alert-success';
-      infoDiv.textContent = `Received candle for ${data.symbol}: Price ${data.candle.close} at ${new Date().toLocaleTimeString()}`;
-      document.body.prepend(infoDiv);
-    });
-
-    socket.on('ticker_update', function(data) {
-      console.log("TICKER UPDATE RECEIVED:", data);
-    });
-
     // Initialize variables
     let symbol = "{{ symbol }}";  // From Flask template
     let tickerData = null;
@@ -206,51 +203,71 @@
         setupTimeframeSelector();
     });
 
-    function initChart() {
-        const ctx = document.getElementById('priceChart').getContext('2d');
-        priceChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: `${symbol} Price`,
-                    data: [],
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    fill: true,
-                    tension: 0.1
-                }]
+// Update the initChart function in ticker_detail.html
+function initChart() {
+    const ctx = document.getElementById('priceChart').getContext('2d');
+
+    // Create empty data arrays
+    const labels = [];
+    const data = [];
+
+    // Initialize the chart
+    priceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: `${symbol} Price`,
+                data: data,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 0 // Disable animation for better performance with streaming data
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'minute',
-                            displayFormats: {
-                                minute: 'HH:mm'
-                            }
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'minute',
+                        displayFormats: {
+                            minute: 'HH:mm'
                         }
                     },
-                    y: {
-                        beginAtZero: false
+                    title: {
+                        display: true,
+                        text: 'Time'
                     }
                 },
-                plugins: {
-                    legend: {
-                        position: 'top'
-                    },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false
+                y: {
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Price'
                     }
                 }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
             }
-        });
-        console.log("Chart initialized");
-    }
+        }
+    });
+
+    console.log("Chart initialized with empty data");
+}
 
     function loadInitialData() {
       console.log("Attempting to load initial data...");
@@ -266,13 +283,44 @@
           if (data.history && data.history[symbol]) {
             console.log(`Found ${data.history[symbol].length} historical candles`);
 
+            // Update chart with history
+            updateChartWithData(data.history[symbol]);
+
+            // Update candle table
+            updateCandleTable(data.history[symbol]);
+
             // Display the first few candles for debugging
             if (data.history[symbol].length > 0) {
               console.log("First candle:", data.history[symbol][0]);
               console.log("Last candle:", data.history[symbol][data.history[symbol].length - 1]);
+
+              // Update ticker info from last candle
+              if (data.history[symbol].length > 0) {
+                updateTickerInfo(data.history[symbol][data.history[symbol].length - 1]);
+              }
+
+              // Update candle count
+              const countElem = document.getElementById('candleCount');
+              if (countElem) {
+                countElem.textContent = data.history[symbol].length;
+              }
             }
           } else {
             console.warn("No historical data found in API response");
+          }
+
+          // Check if we have indicators
+          if (data.indicators && data.indicators[symbol]) {
+            indicators = data.indicators[symbol];
+            rawIndicators = (data.raw_indicators && data.raw_indicators[symbol])
+                ? data.raw_indicators[symbol] : {};
+            updateIndicatorUI();
+          }
+
+          // Check if we have overall scores
+          if (data.overall_scores && data.overall_scores[symbol]) {
+            overallScores = data.overall_scores[symbol];
+            updateOverallScores();
           }
         })
         .catch(error => {
@@ -514,21 +562,125 @@
             });
     }
 
+            // Add this function in the scripts section of ticker_detail.html
+    function updatePriceUpdatesTable(priceUpdate) {
+        const container = document.getElementById('priceUpdates');
+        if (!container) return;
+
+        // Create table if it doesn't exist
+        if (!container.querySelector('table')) {
+            container.innerHTML = `
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Price</th>
+                            <th>Volume</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        const tbody = container.querySelector('tbody');
+        if (!tbody) return;
+
+        // Create new row
+        const row = document.createElement('tr');
+        const time = new Date(priceUpdate.timestamp).toLocaleTimeString();
+        const price = parseFloat(priceUpdate.close).toFixed(2);
+        const volume = priceUpdate.volume || 0;
+
+        row.innerHTML = `
+            <td>${time}</td>
+            <td>${price}</td>
+            <td>${volume}</td>
+        `;
+
+        // Add at the top
+        if (tbody.firstChild) {
+            tbody.insertBefore(row, tbody.firstChild);
+        } else {
+            tbody.appendChild(row);
+        }
+
+        // Limit number of rows
+        while (tbody.children.length > 20) {
+            tbody.removeChild(tbody.lastChild);
+        }
+
+        // Update count
+        const countElem = document.getElementById('updateCount');
+        if (countElem) {
+            countElem.textContent = parseInt(countElem.textContent || '0') + 1;
+        }
+    }
+
     // Socket.IO event handlers
 
-    // Handle ticker updates (live price changes)
+    // Update the ticker_update handler in ticker_detail.html
     socket.on('ticker_update', function(data) {
         if (data.symbol !== symbol) {
             return;
         }
 
-        // Just update ticker info, not the chart (we'll update with completed candles)
+        console.log('Received ticker update:', data);
+
+        // Update ticker info display
         if (data.data) {
             updateTickerInfo(data.data);
+
+            // Also update the price updates table
+            updatePriceUpdatesTable(data.data);
         }
     });
 
-    // Handle completed candles
+    // Handle current (in-progress) candle updates
+    socket.on('current_candle_update', function(data) {
+        if (data.symbol !== symbol) {
+            return;
+        }
+
+        console.log('Received current candle update:', data);
+
+        const candle = data.candle;
+
+        // Update the ticker price display
+        updateTickerInfo(candle);
+
+        // If we have a chart, update the last candle
+        if (priceChart && priceChart.data.labels.length > 0) {
+            // Get the last data point index
+            const lastIndex = priceChart.data.labels.length - 1;
+
+            // Check if this is a new timestamp or an update to the current one
+            const lastTimestamp = new Date(priceChart.data.labels[lastIndex]);
+            const currentTimestamp = new Date(candle.timestamp);
+            const timeDiff = Math.abs(currentTimestamp - lastTimestamp);
+
+            if (timeDiff < 60000) { // Within a minute, update existing point
+                // Update only the close price for line chart
+                priceChart.data.datasets[0].data[lastIndex] = candle.close;
+            } else {
+                // Add new point
+                priceChart.data.labels.push(currentTimestamp);
+                priceChart.data.datasets[0].data.push(candle.close);
+
+                // Limit to 100 points
+                if (priceChart.data.labels.length > 100) {
+                    priceChart.data.labels.shift();
+                    priceChart.data.datasets[0].data.shift();
+                }
+            }
+
+            // Update the chart
+            priceChart.update();
+        }
+    });
+
+    // Update the candle_completed handler in ticker_detail.html
     socket.on('candle_completed', function(data) {
         if (data.symbol !== symbol) {
             return;
@@ -538,65 +690,96 @@
 
         const candle = data.candle;
 
-        // Add to chart - needs to be formatted for Chart.js
+        // Create date object from the timestamp string
         const timestamp = new Date(candle.timestamp);
+        console.log('Converted timestamp:', timestamp);
 
-        // Add new price point to chart
-        priceChart.data.labels.push(timestamp);
-        priceChart.data.datasets[0].data.push(candle.close);
+        // Update the price chart
+        if (priceChart && priceChart.data && priceChart.data.datasets && priceChart.data.datasets.length > 0) {
+            console.log('Updating chart with new candle:', candle);
 
-        // Limit chart data to last 100 points
-        if (priceChart.data.labels.length > 100) {
-            priceChart.data.labels.shift();
-            priceChart.data.datasets[0].data.shift();
+            // Add the new data point
+            priceChart.data.labels.push(timestamp);
+            priceChart.data.datasets[0].data.push(parseFloat(candle.close));
+
+            // Limit data points to keep chart responsive
+            if (priceChart.data.labels.length > 100) {
+                priceChart.data.labels.shift();
+                priceChart.data.datasets[0].data.shift();
+            }
+
+            // Explicitly update the chart
+            priceChart.update();
+            console.log('Chart updated, new length:', priceChart.data.labels.length);
+        } else {
+            console.warn('Chart not initialized or missing data structure');
         }
-
-        // Update chart
-        priceChart.update();
 
         // Update ticker display
         updateTickerInfo(candle);
 
         // Add to candle history table
-        const tbody = document.querySelector('#candleHistory table tbody');
-        if (tbody) {
-            // Create new row
-            const row = document.createElement('tr');
-            const time = timestamp.toLocaleTimeString();
-
-            // Determine price direction
-            const priceClass = candle.close > candle.open ? 'price-up' :
-                             candle.close < candle.open ? 'price-down' : '';
-
-            row.innerHTML = `
-                <td>${time}</td>
-                <td>${parseFloat(candle.open).toFixed(2)}</td>
-                <td>${parseFloat(candle.high).toFixed(2)}</td>
-                <td>${parseFloat(candle.low).toFixed(2)}</td>
-                <td class="${priceClass}">${parseFloat(candle.close).toFixed(2)}</td>
-                <td>${candle.volume}</td>
-            `;
-
-            // Add at the top
-            if (tbody.firstChild) {
-                tbody.insertBefore(row, tbody.firstChild);
-            } else {
-                tbody.appendChild(row);
+        const container = document.getElementById('candleHistory');
+        if (container) {
+            // Check if we need to create the table
+            if (!container.querySelector('table')) {
+                container.innerHTML = `
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Open</th>
+                                <th>High</th>
+                                <th>Low</th>
+                                <th>Close</th>
+                                <th>Vol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                `;
             }
 
-            // Limit number of rows
-            while (tbody.children.length > 20) {
-                tbody.removeChild(tbody.lastChild);
-            }
+            const tbody = container.querySelector('tbody');
+            if (tbody) {
+                // Create new row
+                const row = document.createElement('tr');
+                const time = timestamp.toLocaleTimeString();
 
-            // Update candle count
-            const countElem = document.getElementById('candleCount');
-            if (countElem) {
-                countElem.textContent = parseInt(countElem.textContent || '0') + 1;
+                // Determine price direction
+                const priceClass = candle.close > candle.open ? 'price-up' :
+                                 candle.close < candle.open ? 'price-down' : '';
+
+                row.innerHTML = `
+                    <td>${time}</td>
+                    <td>${parseFloat(candle.open).toFixed(2)}</td>
+                    <td>${parseFloat(candle.high).toFixed(2)}</td>
+                    <td>${parseFloat(candle.low).toFixed(2)}</td>
+                    <td class="${priceClass}">${parseFloat(candle.close).toFixed(2)}</td>
+                    <td>${candle.volume}</td>
+                `;
+
+                // Add at the top
+                if (tbody.firstChild) {
+                    tbody.insertBefore(row, tbody.firstChild);
+                } else {
+                    tbody.appendChild(row);
+                }
+
+                // Limit number of rows
+                while (tbody.children.length > 20) {
+                    tbody.removeChild(tbody.lastChild);
+                }
             }
         }
-    });
 
+        // Update candle count
+        const countElem = document.getElementById('candleCount');
+        if (countElem) {
+            countElem.textContent = parseInt(countElem.textContent || '0') + 1;
+        }
+    });
     // Handle indicator updates
     socket.on('indicator_update', function(data) {
         if (data.symbol !== symbol) {
@@ -613,10 +796,59 @@
         updateOverallScores();
     });
 
-        // Add this at the bottom of your script section
-    socket.on('candle_completed', function(data) {
-      console.log('CANDLE COMPLETED EVENT RECEIVED:', data);
-      alert('Received candle data!'); // This will create a visible alert to confirm receipt
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Page loaded for symbol:', symbol);
+
+        // Debug socket events - make this more verbose
+        socket.onAny((event, ...args) => {
+            console.log('Socket event received:', event);
+            console.log('Socket event data:', JSON.stringify(args, null, 2));
+        });
+
+        // Add connection status monitoring
+        function logSocketStatus() {
+            console.log('Socket connected:', socket.connected);
+            console.log('Socket id:', socket.id);
+        }
+
+        socket.on('connect', function() {
+            console.log('Socket CONNECTED!');
+            logSocketStatus();
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Socket DISCONNECTED!');
+        });
+
+        socket.on('connect_error', function(error) {
+            console.error('Socket connection error:', error);
+        });
+
+        // Check initial status
+        logSocketStatus();
+
+        // Manually test candle events
+        window.testCandle = function() {
+            console.log('Testing candle event');
+            const testData = {
+                symbol: symbol,
+                candle: {
+                    timestamp: new Date().toISOString(),
+                    open: 100,
+                    high: 105,
+                    low: 95,
+                    close: 102,
+                    volume: 1000
+                }
+            };
+
+            console.log('Emitting test candle_completed event');
+            socket.emit('candle_completed', testData);
+
+            console.log('Emitting test current_candle_update event');
+            socket.emit('current_candle_update', testData);
+        };
     });
+
 </script>
 {% endblock %}
