@@ -194,29 +194,16 @@ class SchwabDataLink(DataLink):
 
         return success
 
-    # In src/data_streamer/schwab_data_link.py, modify the _handle_quote_data method
-
     def _handle_quote_data(self, data: List[Dict[str, Any]]) -> None:
-        """
-        Handle incoming quote data from Schwab API.
-        """
-        logger.info(f"Received quote data: {len(data)} ticks")
-
+        """Handle incoming quote data from Schwab API."""
         if not data:
-            logger.debug("Empty quote data received")
             return
 
         for quote in data:
             try:
-                # Extract the symbol from the 'key' field
+                # Extract symbol
                 symbol = quote.get('key', '')
-
-                if not symbol:
-                    logger.warning(f"Quote missing symbol/key: {quote}")
-                    continue
-
-                if symbol not in self.symbols:
-                    logger.debug(f"Ignoring quote for non-tracked symbol: {symbol}")
+                if not symbol or symbol not in self.symbols:
                     continue
 
                 # Extract timestamp
@@ -232,10 +219,9 @@ class SchwabDataLink(DataLink):
                     try:
                         last_price = float(quote.get('3', 0.0))
                     except ValueError:
-                        logger.warning(f"Invalid price format: {quote.get('3')}")
+                        continue
 
                 if last_price is None or last_price <= 0:
-                    logger.warning(f"Invalid price in quote: {last_price}")
                     continue
 
                 # Extract volume
@@ -244,7 +230,7 @@ class SchwabDataLink(DataLink):
                     try:
                         volume = int(quote.get('8', 0))
                     except ValueError:
-                        logger.warning(f"Invalid volume format: {quote.get('8')}")
+                        pass
 
                 # Create tick
                 tick = TickData(
@@ -257,35 +243,24 @@ class SchwabDataLink(DataLink):
                     timestamp=timestamp
                 )
 
-                logger.info(f"Created tick: {symbol} @ {last_price} [{timestamp}]")
-
-                # Update latest tick
-                self.latest_data[symbol] = tick
-
-                # Process through candle aggregator if we're in live mode
+                # Process through candle aggregator in live mode
                 if self.live_mode:
-                    logger.info(f"Processing tick through candle aggregator")
+                    print(f"Processing tick for {symbol} @ {timestamp}: {last_price}")
                     current_candle, completed_candle = self.candle_aggregator.process_tick(tick)
 
-                    if current_candle:
-                        logger.info(f"Updated current candle: O:{current_candle.open} H:{current_candle.high} "
-                                    f"L:{current_candle.low} C:{current_candle.close}")
-
-                    # If a candle was completed, notify the handlers
+                    # If a candle was completed, notify handlers
                     if completed_candle:
-                        logger.info(f"Completed candle: {completed_candle.timestamp}")
-                        # Notify of completed candle
+                        print(f"COMPLETED CANDLE: {symbol} @ {completed_candle.timestamp}: "
+                              f"O:{completed_candle.open} H:{completed_candle.high} "
+                              f"L:{completed_candle.low} C:{completed_candle.close}")
+
+                        # Notify handlers of completed candle
                         self.notify_handlers(completed_candle, self.tick_index, self.symbols.index(symbol))
                         self.tick_index += 1
 
-                    # Also notify about the current candle itself for real-time updates
-                    if current_candle:
-                        # Set a flag to indicate this is not a completed candle
-                        setattr(current_candle, 'is_current', True)
-                        self.notify_handlers(current_candle, -1, self.symbols.index(symbol))
-
             except Exception as e:
-                logger.error(f"Error processing quote: {e}")
+                print(f"Error processing quote: {e}")
+
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
         """
         Serve next tick from either historical or live data.
