@@ -28,11 +28,29 @@ class IndicatorProcessor:
 
         return metric
 
-    # Each indicator will calculate a rating based upon different factors such as
-    # indicator strength or age.   TBD
     def next_tick(self, data_preprocessor: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
+        """
+        Process the next tick for indicators.
+        This should only be called with completed candles.
+
+        Args:
+            data_preprocessor: The data preprocessor containing the current tick and history
+
+        Returns:
+            Tuple of (indicator_results, raw_indicators)
+        """
         tick, history = data_preprocessor.get_data()  # get non-normalized data
-        history = history[-50:]
+
+        # Ensure we're working with a completed candle
+        if not hasattr(tick, 'open') or not hasattr(tick, 'high') or not hasattr(tick, 'low') or not hasattr(tick,
+                                                                                                             'close'):
+            logger.warning("IndicatorProcessor received incomplete candle data")
+            return {}, {}
+
+        # Use a reasonable history length but cap it to avoid performance issues
+        max_history = 50
+        history = history[-max_history:]
+
         output = {}
         raw_output = {}  # Add this to store raw indicator values
 
@@ -63,7 +81,8 @@ class IndicatorProcessor:
             elif indicator.type == PATTERN_MATCH:
                 pass
 
-        return output, raw_output  # Return both the processed results and raw values
+        return output, raw_output
+
     @staticmethod
     def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
         if indicator.function == 'sma_crossover':

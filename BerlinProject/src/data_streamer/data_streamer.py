@@ -123,7 +123,7 @@ class DataStreamer:
                         self.preprocessor.reset_state(sample_stats)
                     continue
 
-                # Ensure tick has a symbol (fallback to index in symbols list if needed)
+                # Ensure tick has a symbol
                 if hasattr(self.data_link, 'symbols') and day_index < len(self.data_link.symbols):
                     symbol = self.data_link.symbols[day_index]
                     # If tick doesn't have symbol attribute or it's not set
@@ -132,19 +132,24 @@ class DataStreamer:
                             # Try to set symbol directly
                             tick.symbol = symbol
                         except AttributeError:
-                            # If can't set directly, add it as a attribute
+                            # If can't set directly, add it as an attribute
                             setattr(tick, 'symbol', symbol)
 
                 logger.debug(f"DataStreamer: Processing tick {index} for symbol: {getattr(tick, 'symbol', 'Unknown')}")
+
+                # Check if this is a completed candle
+                is_completed_candle = (hasattr(tick, 'open') and hasattr(tick, 'high') and
+                                       hasattr(tick, 'low') and hasattr(tick, 'close') and
+                                       not getattr(tick, 'is_current', False))
 
                 # Process the tick through the data pipeline
                 self.preprocessor.next_tick(tick)
                 feature_vector = self.feature_vector_calculator.next_tick(self.preprocessor)
 
-                # Process indicators if available
+                # Process indicators only for completed candles
                 indicator_results = {}
                 raw_indicators = None
-                if self.indicators:
+                if is_completed_candle and self.indicators:
                     indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
 
                 # Send feature vector to external tools if valid
@@ -158,8 +163,8 @@ class DataStreamer:
                         for external_tool in self.external_tool:
                             external_tool.present_sample(sample, sample_index)
 
-                # Send indicator results to external tools if available
-                if indicator_results:
+                # Send indicator results to external tools if available (only for completed candles)
+                if is_completed_candle and indicator_results:
                     for external_tool in self.external_tool:
                         external_tool.indicator_vector(indicator_results, tick, index, raw_indicators)
 
@@ -172,7 +177,7 @@ class DataStreamer:
             import traceback
             traceback.print_exc()
             raise
-        
+
     def reset(self):
         self.data_link.reset_index()
         stats = self.data_link.get_stats()

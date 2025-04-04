@@ -132,55 +132,41 @@ def authenticate():
 
 @app.route('/api/start', methods=['POST'])
 def start_streaming():
-    """Start data streaming for selected tickers"""
-    symbols = request.json.get('symbols', [])
-    if not symbols:
-        return jsonify({"success": False, "error": "No symbols provided"})
+    """Start data streaming with configuration file"""
+    data = request.json
 
-    # Configure indicators (use default or from request)
-    indicators = request.json.get('indicators', DEFAULT_INDICATORS)
-    weights = request.json.get('weights', {})
-    timeframe = request.json.get('timeframe', '1m')  # Default to 1m if not specified
+    symbol = data.get('symbol')
+    timeframe = data.get('timeframe', '1m')
+    config = data.get('config')
 
-    # Start data service
-    success = data_service.start(symbols, indicators, weights, timeframe)
+    if not symbol:
+        return jsonify({"success": False, "error": "No symbol provided"})
 
-    # If we couldn't start the real data service, send some test data
-    if not success:
-        logger.warning("Could not start real data service, sending test data")
-        for symbol in symbols:
-            socketio.emit('ticker_update', {
-                'symbol': symbol,
-                'data': {
-                    'timestamp': datetime.now().isoformat(),
-                    'open': 150.0,
-                    'high': 152.5,
-                    'low': 149.0,
-                    'close': 151.75,
-                    'volume': 1000000,
-                    'symbol': symbol
-                }
-            })
+    if not config:
+        return jsonify({"success": False, "error": "No configuration provided"})
 
-            # Also send test indicator data
-            socketio.emit('indicator_update', {
-                'symbol': symbol,
-                'indicators': {
-                    'sma_crossover': 0.8,
-                    'macd_signal': 0.6
-                },
-                'raw_indicators': {
-                    'sma_crossover': 1.0,
-                    'macd_signal': 0.75
-                },
-                'overall_scores': {
-                    'bull': 0.7,
-                    'bear': 0.2
-                }
-            })
-        success = True
+    try:
+        # Extract indicators from config
+        indicators = config.get('indicators', [])
+        if not indicators:
+            return jsonify({"success": False, "error": "No indicators found in configuration"})
 
-    return jsonify({"success": success})
+        # Extract weights from monitor configuration
+        weights = {}
+        monitor = config.get('monitor', {})
+
+        if 'triggers' in monitor:
+            weights.update(monitor['triggers'])
+        if 'bear_triggers' in monitor:
+            weights.update(monitor['bear_triggers'])
+
+        # Start data service with symbol, indicators, and weights
+        success = data_service.start([symbol], indicators, weights, timeframe)
+
+        return jsonify({"success": success})
+    except Exception as e:
+        logger.error(f"Error starting streaming: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route('/api/stop', methods=['POST'])
@@ -260,6 +246,28 @@ def update_weights():
     # Update weights in data service
     success = data_service.update_weights(weights)
     return jsonify({"success": success})
+
+
+@app.route('/api/config/upload', methods=['POST'])
+def upload_config():
+    """Handle monitor configuration upload"""
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file part"})
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No selected file"})
+
+    if file and file.filename.endswith('.json'):
+        try:
+            config_data = json.load(file)
+            success = data_service.load_monitor_config(config_data)
+            return jsonify({"success": success})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+
+    return jsonify({"success": False, "error": "Invalid file type"})
 
 
 # Socket.IO events

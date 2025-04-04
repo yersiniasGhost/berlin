@@ -63,115 +63,90 @@
         {% block content %}{% endblock %}
     </div>
 
-    <!-- Configuration Modal -->
-    <div class="modal fade" id="configModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Configuration</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="modal fade" id="addSymbolModal" tabindex="-1" aria-labelledby="addSymbolModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addSymbolModalLabel">Add Ticker Symbols</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="newSymbolInput" class="form-label">Enter Ticker Symbols (comma-separated)</label>
+                    <textarea id="newSymbolInput" class="form-control" rows="3" placeholder="Enter symbols like AAPL, MSFT, GOOGL"></textarea>
                 </div>
-                <div class="modal-body">
-                    <ul class="nav nav-tabs" id="configTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="symbols-tab" data-bs-toggle="tab"
-                                    data-bs-target="#symbols-tab-pane" type="button" role="tab">
-                                Symbols
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
-                                    data-bs-target="#indicators-tab-pane" type="button" role="tab">
-                                Indicators
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="weights-tab" data-bs-toggle="tab"
-                                    data-bs-target="#weights-tab-pane" type="button" role="tab">
-                                Weights
-                            </button>
-                        </li>
-                    </ul>
-
-                    <div class="tab-content p-3" id="configTabsContent">
-                        <!-- Symbols Tab -->
-                        <div class="tab-pane fade show active" id="symbols-tab-pane" role="tabpanel" tabindex="0">
-                            <div class="mb-3">
-                                <label class="form-label">Ticker Symbols</label>
-                                <div class="input-group">
-                                    <input type="text" id="symbolInput" class="form-control" placeholder="Enter symbol (e.g., AAPL)">
-                                    <button class="btn btn-primary" id="addSymbolBtn">Add</button>
-                                </div>
-                                <div class="form-text">Enter comma-separated symbols or add them one by one.</div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Active Symbols</label>
-                                <div id="activeSymbols" class="border rounded p-2 min-height-100">
-                                    <div class="text-muted text-center">No symbols added</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Indicators Tab -->
-                        <div class="tab-pane fade" id="indicators-tab-pane" role="tabpanel" tabindex="0">
-                            <div class="mb-3">
-                                <label class="form-label">Available Indicators</label>
-                                <select id="indicatorSelect" class="form-select">
-                                    <option value="">Select an indicator to add...</option>
-                                </select>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Active Indicators</label>
-                                <div id="activeIndicators" class="border rounded p-2 min-height-200">
-                                    <div class="text-muted text-center">No indicators added</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Weights Tab -->
-                        <div class="tab-pane fade" id="weights-tab-pane" role="tabpanel" tabindex="0">
-                            <div class="alert alert-info">
-                                Adjust weights to control the influence of each indicator on the overall signal.
-                                Higher weights give the indicator more influence.
-                            </div>
-
-                            <div id="weightsContainer">
-                                <div class="text-muted text-center">No indicators configured</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="saveConfigBtn">Save and Apply</button>
-                </div>
+                <div id="symbolList" class="mb-3 d-flex flex-wrap gap-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmAddSymbolBtn">Add Symbols</button>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Add Symbol Modal -->
-    <div class="modal fade" id="addSymbolModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Ticker Symbol</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+ <!-- Configuration Modal -->
+<div class="modal fade" id="configModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Ticker Symbol</label>
+                    <div class="input-group">
+                        <input type="text" id="symbolInput" class="form-control" placeholder="Enter symbol (e.g., AAPL)">
+                        <button class="btn btn-primary" id="addSymbolBtn">Set</button>
+                    </div>
+                    <div class="form-text">Enter the ticker symbol you want to analyze</div>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="newSymbolInput" class="form-label">Ticker Symbol</label>
-                        <input type="text" class="form-control" id="newSymbolInput" placeholder="e.g., AAPL">
+
+                <div class="mb-3">
+                    <label class="form-label">Current Symbol</label>
+                    <div id="activeSymbols" class="border rounded p-2 min-height-100">
+                        <div class="text-muted text-center">No symbol selected</div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="confirmAddSymbolBtn">Add</button>
+
+                <div class="mb-3">
+                    <label class="form-label">Candle Timeframe</label>
+                    <select class="form-select" id="timeframeSelect">
+                        <option value="1m">1 Minute</option>
+                        <option value="5m">5 Minutes</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="30m">30 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="1d">1 Day</option>
+                    </select>
+                    <div class="form-text">Select the candle timeframe for both historical and live data</div>
                 </div>
+
+                <hr>
+
+                <div class="mb-3">
+                    <label class="form-label">Monitor Configuration</label>
+                    <div class="input-group">
+                        <input type="file" class="form-control" id="configFileInput" accept=".json">
+                        <button class="btn btn-primary" id="loadConfigBtn">Load</button>
+                    </div>
+                    <div class="form-text">Load monitor configuration from JSON file</div>
+                </div>
+
+                <div class="mb-3 mt-4">
+                    <label class="form-label">Configuration Preview</label>
+                    <pre id="configPreview" class="border rounded p-3 bg-light" style="max-height: 300px; overflow-y: auto;">No configuration loaded</pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveConfigBtn">Apply Configuration</button>
             </div>
         </div>
     </div>
+</div>
+
 
     <!-- Authentication Modal -->
     <div class="modal fade" id="authModal" tabindex="-1" aria-hidden="true">
@@ -223,447 +198,329 @@
 
     <!-- Common JavaScript -->
     <script>
-                // Add this near the start of your base.html JavaScript
-        document.addEventListener('DOMContentLoaded', function() {
-          console.log("DOM loaded, checking Socket.IO connection status...");
+    // Common JavaScript for all pages
+    const socket = io();
+    let authenticated = false;
 
-          // Debug Socket.IO connection
-          if (typeof socket === 'undefined') {
-            console.error("ERROR: socket is undefined! Socket.IO not initialized properly");
-          } else {
-            console.log("Socket.IO object exists, connection state:", socket.connected);
+    // Socket.IO event handlers
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        updateConnectionStatus(true);
+    });
 
-            socket.on('connect', function() {
-              console.log("Socket.IO CONNECTED successfully at", new Date().toLocaleTimeString());
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        updateConnectionStatus(false);
+    });
+
+    // Debug all incoming events
+    socket.onAny((event, ...args) => {
+        console.log(`Socket.io received event: ${event}`, args);
+    });
+
+    // Authentication handling
+    document.getElementById('authBtn').addEventListener('click', function() {
+        const authModal = new bootstrap.Modal(document.getElementById('authModal'));
+        authModal.show();
+    });
+
+    document.getElementById('startAuthBtn').addEventListener('click', function() {
+        this.disabled = true;
+
+        // For testing, simulate successful authentication directly
+        updateConnectionStatus(true);
+
+        // Show success message
+        const messageElem = document.getElementById('authMessage');
+        messageElem.classList.remove('d-none');
+        messageElem.classList.add('alert-success');
+        messageElem.innerHTML = "Authentication successful for testing! You can now use the application.";
+
+        // Close the modal after a delay
+        setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
+            if (modal) modal.hide();
+        }, 2000);
+    });
+
+    // Check if we're authenticated
+    function checkAuthentication() {
+        fetch('/api/tickers')
+            .then(response => {
+                if (response.status === 401) {
+                    updateConnectionStatus(false);
+                } else {
+                    authenticated = true;
+                    updateConnectionStatus(true);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking authentication:', error);
+                updateConnectionStatus(false);
             });
+    }
 
-            socket.on('disconnect', function() {
-              console.error("Socket.IO DISCONNECTED at", new Date().toLocaleTimeString());
-            });
+    function updateConnectionStatus(isConnected) {
+        const statusElem = document.getElementById('connectionStatus');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
 
-            socket.on('connect_error', function(error) {
-              console.error("Socket.IO CONNECTION ERROR:", error);
-            });
-          }
+        if (isConnected) {
+            statusElem.className = 'badge bg-success me-2';
+            statusElem.innerHTML = '<i class="fas fa-plug me-1"></i> Connected';
+            startBtn.disabled = false;
+            stopBtn.disabled = false;
+            authenticated = true;
+        } else {
+            statusElem.className = 'badge bg-secondary me-2';
+            statusElem.innerHTML = '<i class="fas fa-plug me-1"></i> Disconnected';
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            authenticated = false;
+        }
+    }
+
+    // Start/stop streaming
+    document.getElementById('startBtn').addEventListener('click', function() {
+        if (!authenticated) {
+            alert('Please authenticate first');
+            return;
+        }
+
+        // Show the configuration modal
+        const configModal = new bootstrap.Modal(document.getElementById('configModal'));
+        configModal.show();
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', function() {
+        fetch('/api/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Streaming stopped');
+                this.disabled = true;
+                document.getElementById('startBtn').disabled = false;
+            } else {
+                alert('Error stopping streaming');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error: ' + error.message);
         });
+    });
 
-        // Common JavaScript for all pages
-        const socket = io();
-        let authenticated = false;
+    // Configuration handling
+    document.getElementById('configFileInput').addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) return;
 
-        // Socket.IO event handlers
-        socket.on('connect', () => {
-            console.log('Connected to server');
+        const preview = document.getElementById('configPreview');
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            try {
+                const config = JSON.parse(e.target.result);
+                preview.textContent = JSON.stringify(config, null, 2);
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                preview.textContent = 'Error parsing JSON: ' + error.message;
+            }
+        };
+
+        reader.readAsText(file);
+    });
+
+    document.getElementById('loadConfigBtn').addEventListener('click', function() {
+        const fileInput = document.getElementById('configFileInput');
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('Please select a configuration file first');
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            try {
+                const config = JSON.parse(e.target.result);
+
+                // Extract ticker from config if available
+                if (config.data && config.data.ticker) {
+                    const symbol = config.data.ticker;
+                    clearSymbols();
+                    addSymbolToUI(symbol);
+                }
+
+                // Show success message
+                alert('Configuration loaded successfully');
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                alert('Error loading configuration: ' + error.message);
+            }
+        };
+
+        reader.readAsText(file);
+    });
+
+    // Symbol management (simplified)
+    document.getElementById('addSymbolBtn').addEventListener('click', function() {
+        const input = document.getElementById('symbolInput');
+        const symbolValue = input.value.trim().toUpperCase();
+
+        if (!symbolValue) {
+            return;
+        }
+
+        clearSymbols();
+        addSymbolToUI(symbolValue);
+        input.value = '';
+    });
+
+    function addSymbolToUI(symbol) {
+        const container = document.getElementById('activeSymbols');
+
+        // Create symbol tag
+        container.innerHTML = `
+            <span class="badge bg-primary symbol-tag p-2">
+                ${symbol} <i class="fas fa-times-circle ms-1 symbol-remove"></i>
+            </span>
+        `;
+
+        // Add remove event
+        container.querySelector('.symbol-remove').addEventListener('click', function() {
+            clearSymbols();
         });
+    }
 
-        socket.on('disconnect', () => {
-            console.log('Disconnected from server');
-            updateConnectionStatus(false);
-        });
+    function clearSymbols() {
+        const container = document.getElementById('activeSymbols');
+        container.innerHTML = '<div class="text-muted text-center">No symbol selected</div>';
+    }
 
-        // Debug all incoming events
-        socket.onAny((event, ...args) => {
-            console.log(`Socket.io received event: ${event}`, args);
-        });
+    // Save configuration
+    document.getElementById('saveConfigBtn').addEventListener('click', function() {
+        // Get the symbol
+        const symbolContainer = document.getElementById('activeSymbols');
+        const symbolTag = symbolContainer.querySelector('.symbol-tag');
 
-        // Authentication handling
-        document.getElementById('authBtn').addEventListener('click', function() {
-            const authModal = new bootstrap.Modal(document.getElementById('authModal'));
-            authModal.show();
-        });
+        if (!symbolTag) {
+            alert('Please select a ticker symbol first');
+            return;
+        }
 
-        // In base.html, replace the startAuthBtn click handler
-        document.getElementById('startAuthBtn').addEventListener('click', function() {
-            this.disabled = true;
+        const symbol = symbolTag.textContent.trim().split(' ')[0];
 
-            // For testing, simulate successful authentication directly
-            updateConnectionStatus(true);
+        // Get the file input
+        const fileInput = document.getElementById('configFileInput');
 
-            // Show success message
-            const messageElem = document.getElementById('authMessage');
-            messageElem.classList.remove('d-none');
-            messageElem.classList.add('alert-success');
-            messageElem.innerHTML = "Authentication successful for testing! You can now use the application.";
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('Please select a configuration file first');
+            return;
+        }
 
-            // Close the modal after a delay
-            setTimeout(() => {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
-                if (modal) modal.hide();
-            }, 2000);
-        });
+        // Get selected timeframe
+        const timeframe = document.getElementById('timeframeSelect').value;
 
-        // Check if we're authenticated
-        function checkAuthentication() {
-            fetch('/api/tickers')
-                .then(response => {
-                    if (response.status === 401) {
-                        updateConnectionStatus(false);
+        // Read the file and process it
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            try {
+                const config = JSON.parse(e.target.result);
+
+                // Create the data to send
+                const data = {
+                    symbol: symbol,
+                    timeframe: timeframe,
+                    config: config
+                };
+
+                // Send it to the server
+                fetch('/api/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Hide modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
+                        modal.hide();
+
+                        // Notify user
+                        alert(`Configuration applied successfully for ${symbol}`);
                     } else {
-                        authenticated = true;
-                        updateConnectionStatus(true);
+                        alert('Error applying configuration: ' + (data.error || 'Unknown error'));
                     }
                 })
                 .catch(error => {
-                    console.error('Error checking authentication:', error);
-                    updateConnectionStatus(false);
+                    console.error('Error:', error);
+                    alert('Error: ' + error.message);
                 });
+
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                alert('Error loading configuration: ' + error.message);
+            }
+        };
+
+        reader.readAsText(file);
+    });
+
+    // Add Symbol Modal
+    document.getElementById('confirmAddSymbolBtn').addEventListener('click', function() {
+        const symbolInput = document.getElementById('newSymbolInput');
+        const symbol = symbolInput.value.trim().toUpperCase();
+
+        if (symbol) {
+            // Add to UI
+            addSymbolToUI(symbol);
+
+            // Clear input and close modal
+            symbolInput.value = '';
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addSymbolModal'));
+            modal.hide();
+        }
+    });
+
+    // Debug SocketIO connections
+    socket.on('connect', () => {
+        console.log('Socket.IO connected successfully');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Socket.IO disconnected');
+    });
+
+    // Log all events received
+    socket.onAny((event, ...args) => {
+        console.log('Socket.IO event received:', event, args);
+    });
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded, checking Socket.IO connection status...");
+
+        // Debug Socket.IO connection
+        if (typeof socket === 'undefined') {
+            console.error("ERROR: socket is undefined! Socket.IO not initialized properly");
+        } else {
+            console.log("Socket.IO object exists, connection state:", socket.connected);
         }
 
-        function updateConnectionStatus(isConnected) {
-            const statusElem = document.getElementById('connectionStatus');
-            const startBtn = document.getElementById('startBtn');
-            const stopBtn = document.getElementById('stopBtn');
-
-            if (isConnected) {
-                statusElem.className = 'badge bg-success me-2';
-                statusElem.innerHTML = '<i class="fas fa-plug me-1"></i> Connected';
-                startBtn.disabled = false;
-                stopBtn.disabled = false;
-                authenticated = true;
-            } else {
-                statusElem.className = 'badge bg-secondary me-2';
-                statusElem.innerHTML = '<i class="fas fa-plug me-1"></i> Disconnected';
-                startBtn.disabled = true;
-                stopBtn.disabled = true;
-                authenticated = false;
-            }
-        }
-
-        // Start/stop streaming
-        document.getElementById('startBtn').addEventListener('click', function() {
-            if (!authenticated) {
-                alert('Please authenticate first');
-                return;
-            }
-
-            // Get active symbols
-            const symbolElements = document.querySelectorAll('#activeSymbols .symbol-tag');
-            const symbols = Array.from(symbolElements).map(el => el.getAttribute('data-symbol'));
-
-            if (symbols.length === 0) {
-                alert('Please add at least one symbol');
-                return;
-            }
-
-            // Get active indicators
-            const indicatorElements = document.querySelectorAll('#activeIndicators .indicator-item');
-            const indicators = Array.from(indicatorElements).map(el => {
-                return JSON.parse(el.getAttribute('data-config'));
-            });
-
-            if (indicators.length === 0) {
-                alert('Please add at least one indicator');
-                return;
-            }
-
-            // Get weights
-            const weights = {};
-            document.querySelectorAll('#weightsContainer .weight-input').forEach(input => {
-                const name = input.getAttribute('data-indicator');
-                const value = parseFloat(input.value);
-                weights[name] = value;
-            });
-
-            // Get selected timeframe
-            const timeframeSelect = document.getElementById('timeframeSelect');
-            const timeframe = timeframeSelect ? timeframeSelect.value : '1m';
-
-            // Start streaming
-            fetch('/api/start', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    symbols: symbols,
-                    indicators: indicators,
-                    weights: weights,
-                    timeframe: timeframe
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Streaming started');
-                    this.disabled = true;
-                    document.getElementById('stopBtn').disabled = false;
-                } else {
-                    alert('Error starting streaming: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error: ' + error.message);
-            });
-        });
-
-        document.getElementById('stopBtn').addEventListener('click', function() {
-            fetch('/api/stop', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Streaming stopped');
-                    this.disabled = true;
-                    document.getElementById('startBtn').disabled = false;
-                } else {
-                    alert('Error stopping streaming');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error: ' + error.message);
-            });
-        });
-
-        // Symbol management
-        document.getElementById('addSymbolBtn').addEventListener('click', function() {
-            const input = document.getElementById('symbolInput');
-            const symbolValue = input.value.trim().toUpperCase();
-
-            if (!symbolValue) {
-                return;
-            }
-
-            // Check if it's a comma-separated list
-            if (symbolValue.includes(',')) {
-                const symbols = symbolValue.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
-                symbols.forEach(addSymbolToUI);
-            } else {
-                addSymbolToUI(symbolValue);
-            }
-
-            input.value = '';
-        });
-
-        function addSymbolToUI(symbol) {
-            const container = document.getElementById('activeSymbols');
-
-            // Check if empty message is there and remove it
-            const emptyMessage = container.querySelector('.text-muted');
-            if (emptyMessage) {
-                container.removeChild(emptyMessage);
-            }
-
-            // Check if symbol already exists
-            if (container.querySelector(`[data-symbol="${symbol}"]`)) {
-                return;
-            }
-
-            // Create symbol tag
-            const tag = document.createElement('span');
-            tag.className = 'badge bg-primary symbol-tag me-2 mb-2';
-            tag.setAttribute('data-symbol', symbol);
-            tag.innerHTML = `${symbol} <i class="fas fa-times-circle ms-1 symbol-remove"></i>`;
-
-            // Add remove event
-            tag.querySelector('.symbol-remove').addEventListener('click', function() {
-                container.removeChild(tag);
-
-                // Check if container is empty
-                if (container.children.length === 0) {
-                    container.innerHTML = '<div class="text-muted text-center">No symbols added</div>';
-                }
-            });
-
-            container.appendChild(tag);
-        }
-
-        // Load indicators
-        function loadIndicators() {
-            fetch('/api/indicators')
-                .then(response => response.json())
-                .then(data => {
-                    const select = document.getElementById('indicatorSelect');
-                    select.innerHTML = '<option value="">Select an indicator to add...</option>';
-
-                    data.forEach(indicator => {
-                        const option = document.createElement('option');
-                        option.value = indicator.name;
-                        option.textContent = indicator.display_name || indicator.name;
-                        option.setAttribute('data-config', JSON.stringify(indicator));
-                        select.appendChild(option);
-                    });
-
-                    // Add change event
-                    select.addEventListener('change', function() {
-                        if (this.value) {
-                            const option = this.options[this.selectedIndex];
-                            const config = JSON.parse(option.getAttribute('data-config'));
-                            addIndicatorToUI(config);
-                            this.value = ''; // Reset select
-                        }
-                    });
-                })
-                .catch(error => {
-                    console.error('Error loading indicators:', error);
-                });
-        }
-
-        function addIndicatorToUI(config) {
-            const container = document.getElementById('activeIndicators');
-
-            // Check if empty message is there and remove it
-            const emptyMessage = container.querySelector('.text-muted');
-            if (emptyMessage) {
-                container.removeChild(emptyMessage);
-            }
-
-            // Check if indicator already exists
-            if (container.querySelector(`[data-name="${config.name}"]`)) {
-                return;
-            }
-
-            // Create indicator item
-            const item = document.createElement('div');
-            item.className = 'card mb-2 indicator-item';
-            item.setAttribute('data-name', config.name);
-            item.setAttribute('data-config', JSON.stringify(config));
-
-            item.innerHTML = `
-                <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="card-title mb-0">${config.display_name || config.name}</h6>
-                        <button class="btn btn-sm btn-outline-danger indicator-remove">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                    <div class="text-muted small">${config.function}</div>
-                    <div class="mt-2">
-                        <span class="badge bg-info">${config.parameters.trend || 'neutral'}</span>
-                        <span class="badge bg-secondary">lookback: ${config.parameters.lookback || 0}</span>
-                    </div>
-                </div>
-            `;
-
-            // Add remove event
-            item.querySelector('.indicator-remove').addEventListener('click', function() {
-                container.removeChild(item);
-
-                // Check if container is empty
-                if (container.children.length === 0) {
-                    container.innerHTML = '<div class="text-muted text-center">No indicators added</div>';
-                }
-
-                // Update weights UI
-                updateWeightsUI();
-            });
-
-            container.appendChild(item);
-
-            // Update weights UI
-            updateWeightsUI();
-        }
-
-        function updateWeightsUI() {
-            const container = document.getElementById('weightsContainer');
-            container.innerHTML = '';
-
-            const indicatorElements = document.querySelectorAll('#activeIndicators .indicator-item');
-
-            if (indicatorElements.length === 0) {
-                container.innerHTML = '<div class="text-muted text-center">No indicators configured</div>';
-                return;
-            }
-
-            // Create weights form
-            const form = document.createElement('div');
-            form.className = 'row g-3';
-
-            Array.from(indicatorElements).forEach(item => {
-                const config = JSON.parse(item.getAttribute('data-config'));
-                const name = config.name;
-                const displayName = config.display_name || name;
-
-                // Default weight based on indicator type
-                let defaultWeight = 5.0;
-                if (name.includes('macd')) {
-                    defaultWeight = 7.0;
-                } else if (name.includes('sma')) {
-                    defaultWeight = 3.0;
-                } else if (name.includes('bollinger')) {
-                    defaultWeight = 5.0;
-                }
-
-                const col = document.createElement('div');
-                col.className = 'col-md-6 mb-3';
-                col.innerHTML = `
-                    <label class="form-label">${displayName}</label>
-                    <div class="input-group">
-                        <input type="number" class="form-control weight-input"
-                               data-indicator="${name}" value="${defaultWeight}"
-                               min="0" max="10" step="0.1">
-                        <span class="input-group-text">weight</span>
-                    </div>
-                `;
-
-                form.appendChild(col);
-            });
-
-            container.appendChild(form);
-        }
-
-        // Save configuration
-        document.getElementById('saveConfigBtn').addEventListener('click', function() {
-            // This doesn't actually save to the server yet
-            // Just applies weights to running stream if active
-
-            // Get weights
-            const weights = {};
-            document.querySelectorAll('#weightsContainer .weight-input').forEach(input => {
-                const name = input.getAttribute('data-indicator');
-                const value = parseFloat(input.value);
-                weights[name] = value;
-            });
-
-            // Update weights
-            fetch('/api/weights', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(weights)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Hide modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
-                    modal.hide();
-                } else {
-                    alert('Error updating weights');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error: ' + error.message);
-            });
-        });
-
-        // Initialize
-        window.addEventListener('DOMContentLoaded', function() {
-            checkAuthentication();
-            loadIndicators();
-        });
-
-                // Debug SocketIO connections
-        socket.on('connect', () => {
-          console.log('Socket.IO connected successfully');
-        });
-
-        socket.on('disconnect', () => {
-          console.log('Socket.IO disconnected');
-        });
-
-        // Log all events received
-        socket.onAny((event, ...args) => {
-          console.log('Socket.IO event received:', event, args);
-        });
-
+        checkAuthentication();
+    });
 
 
     </script>

@@ -28,6 +28,7 @@ class UIExternalTool:
         self.indicators = {}  # Store indicator results by ticker
         self.raw_indicators = {}  # Store raw indicator values by ticker
         self.overall_scores = {}  # Store overall bull/bear scores by ticker
+        self.weights = {}  # Store weights for each ticker's indicators
 
         # Configure history limits
         self.max_history_items = 600
@@ -38,11 +39,6 @@ class UIExternalTool:
             handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
-
-    # Fix in UIExternalTool.feature_vector method
-    # In services/ui_external_tool.py
-
-    # In src/stock_analysis_ui/services/ui_external_tool.py, update feature_vector
 
     def feature_vector(self, fv: np.ndarray, tick):
         """Process feature vector"""
@@ -107,7 +103,7 @@ class UIExternalTool:
     def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
         """
-        Process new indicator results.
+        Process new indicator results with proper weight handling.
 
         Args:
             indicators: Dictionary of indicator values
@@ -116,7 +112,7 @@ class UIExternalTool:
             raw_indicators: Optional raw indicator values
         """
         if not hasattr(tick, 'symbol') or tick.symbol is None:
-            print(f"UIExternalTool: Warning - Tick data missing symbol information: {tick}")
+            logger.warning("Tick data missing symbol information")
             return
 
         symbol = tick.symbol
@@ -135,14 +131,14 @@ class UIExternalTool:
         if raw_indicators:
             self.raw_indicators[symbol] = raw_indicators.copy()
 
-        # Calculate overall scores
-        # This could be enhanced with the weights from your monitor model
-        bull_indicators = {k: v for k, v in indicators.items() if 'bearish' not in k.lower()}
-        bear_indicators = {k: v for k, v in indicators.items() if 'bearish' in k.lower()}
+        # Calculate overall scores using weights
+        # Split indicators into bullish and bearish
+        bull_indicators = {k: v for k, v in indicators.items() if 'bear' not in k.lower()}
+        bear_indicators = {k: v for k, v in indicators.items() if 'bear' in k.lower()}
 
-        # Calculate average scores (this should be replaced with weighted calculation)
-        bull_score = sum(bull_indicators.values()) / max(len(bull_indicators), 1)
-        bear_score = sum(bear_indicators.values()) / max(len(bear_indicators), 1)
+        # Apply weights (from monitor config)
+        bull_score = self.calculate_weighted_score(bull_indicators, self.weights.get(symbol, {}))
+        bear_score = self.calculate_weighted_score(bear_indicators, self.weights.get(symbol, {}))
 
         self.overall_scores[symbol] = {
             'bull': bull_score,
@@ -164,7 +160,7 @@ class UIExternalTool:
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
             'overall_scores': self.overall_scores[symbol],
-            'timestamp': timestamp_str  # Include string timestamp
+            'timestamp': timestamp_str
         }
 
         # Emit update via Socket.IO
@@ -197,39 +193,64 @@ class UIExternalTool:
 
         return weighted_sum / total_weight
 
-    def update_weights(self, weights: Dict[str, float]) -> None:
+    def update_weights(self, *args, **kwargs):
         """
-        Update weights and recalculate scores
+        Update weights for indicators - flexible method to handle different call patterns
+        """
+        weights = None
+        symbol = None
 
-        Args:
-            weights: Dictionary of indicator weights
-        """
-        # Recalculate scores for all tickers with new weights
-        for symbol in self.indicators:
+        # Handle different ways this method could be called
+        if len(args) == 1 and isinstance(args[0], dict):
+            # Called as update_weights(weights_dict)
+            weights = args[0]
+        elif len(args) == 2 and isinstance(args[1], dict):
+            # Called as update_weights(symbol, weights_dict)
+            symbol = args[0]
+            weights = args[1]
+        elif 'weights' in kwargs:
+            # Called with keyword arguments
+            weights = kwargs['weights']
+            symbol = kwargs.get('symbol')
+
+        if not weights:
+            logger.error("No weights provided to update_weights")
+            return
+
+        logger.info(f"Updating weights: symbol={symbol}, weights={weights}")
+
+        if symbol:
+            # Update weights for specific symbol
+            self.weights[symbol] = weights
+        else:
+            # Update weights for all symbols
+            for sym in self.ticker_data:
+                self.weights[sym] = weights
+
+        # Recalculate scores if we have indicators
+        for sym in self.indicators:
+            if sym not in self.weights:
+                self.weights[sym] = weights
+
             # Split indicators into bull and bear
-            bull_indicators = {k: v for k, v in self.indicators[symbol].items() if 'bearish' not in k.lower()}
-            bear_indicators = {k: v for k, v in self.indicators[symbol].items() if 'bearish' in k.lower()}
-
-            # Filter weights for bull and bear indicators
-            bull_weights = {k: v for k, v in weights.items() if k in bull_indicators}
-            bear_weights = {k: v for k, v in weights.items() if k in bear_indicators}
+            bull_indicators = {k: v for k, v in self.indicators[sym].items() if 'bear' not in k.lower()}
+            bear_indicators = {k: v for k, v in self.indicators[sym].items() if 'bear' in k.lower()}
 
             # Calculate weighted scores
-            bull_score = self.calculate_weighted_score(bull_indicators, bull_weights)
-            bear_score = self.calculate_weighted_score(bear_indicators, bear_weights)
+            bull_score = self.calculate_weighted_score(bull_indicators, self.weights[sym])
+            bear_score = self.calculate_weighted_score(bear_indicators, self.weights[sym])
 
-            self.overall_scores[symbol] = {
+            self.overall_scores[sym] = {
                 'bull': bull_score,
                 'bear': bear_score
             }
 
-        # Emit updates for all tickers
-        for symbol in self.indicators:
+            # Emit updates for this symbol
             self.socketio.emit('indicator_update', {
-                'symbol': symbol,
-                'indicators': self.indicators[symbol],
-                'raw_indicators': self.raw_indicators.get(symbol, {}),
-                'overall_scores': self.overall_scores[symbol]
+                'symbol': sym,
+                'indicators': self.indicators[sym],
+                'raw_indicators': self.raw_indicators.get(sym, {}),
+                'overall_scores': self.overall_scores[sym]
             })
 
     def present_sample(self, sample: dict, index: int) -> None:

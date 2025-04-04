@@ -97,6 +97,12 @@ class DataService:
             logger.info("Already streaming, stopping first")
             self.stop()
 
+        # Inside the start method, after creating data_streamer:
+        if weights:
+            for symbol in symbols:
+                if hasattr(self.ui_tool, 'update_weights'):
+                    self.ui_tool.update_weights(symbol, weights)
+
         # Import required modules
         if not hasattr(self, 'DataStreamer'):
             success = self._import_modules()
@@ -201,6 +207,47 @@ class DataService:
 
         except Exception as e:
             logger.error(f"Error starting data streaming: {e}", exc_info=True)
+            return False
+
+    def load_monitor_config(self, config_data: dict) -> bool:
+        """
+        Load a monitor configuration from a dictionary (parsed from JSON)
+
+        Args:
+            config_data: The monitor configuration dictionary
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            logger.info(f"Loading monitor configuration: {config_data.get('test_name', 'Unnamed Config')}")
+
+            # Extract monitor and indicators
+            monitor_config = config_data.get('monitor', {})
+            indicators = config_data.get('indicators', [])
+
+            if not indicators:
+                logger.error("No indicators found in config")
+                return False
+
+            # Get symbols from data section if present
+            symbols = []
+            if 'data' in config_data and 'ticker' in config_data['data']:
+                symbols.append(config_data['data']['ticker'])
+
+            # Extract weights from triggers
+            weights = {}
+            if 'triggers' in monitor_config:
+                weights.update(monitor_config['triggers'])
+            if 'bear_triggers' in monitor_config:
+                weights.update(monitor_config['bear_triggers'])
+
+            # Start streaming with the new configuration
+            success = self.start(symbols, indicators, weights)
+
+            return success
+        except Exception as e:
+            logger.error(f"Error loading monitor configuration: {e}", exc_info=True)
             return False
 
     def _stream_data(self):
