@@ -243,23 +243,31 @@ class SchwabDataLink(DataLink):
                     timestamp=timestamp
                 )
 
+                # Set is_current attribute after creation
+                setattr(tick, 'is_current', True)  # Mark as current (in-progress) candle
+
                 # Process through candle aggregator in live mode
                 if self.live_mode:
-                    print(f"Processing tick for {symbol} @ {timestamp}: {last_price}")
                     current_candle, completed_candle = self.candle_aggregator.process_tick(tick)
 
-                    # If a candle was completed, notify handlers
+                    # Always send current candle updates
+                    self.latest_data[symbol] = current_candle
+
+                    # If a candle was completed, notify handlers and send to the stream
                     if completed_candle:
-                        print(f"COMPLETED CANDLE: {symbol} @ {completed_candle.timestamp}: "
-                              f"O:{completed_candle.open} H:{completed_candle.high} "
-                              f"L:{completed_candle.low} C:{completed_candle.close}")
+                        logger.info(f"Completed candle: {symbol} @ {completed_candle.timestamp}: "
+                                    f"O:{completed_candle.open} H:{completed_candle.high} "
+                                    f"L:{completed_candle.low} C:{completed_candle.close}")
+
+                        # Set is_completed attribute to true
+                        setattr(completed_candle, 'is_current', False)
 
                         # Notify handlers of completed candle
                         self.notify_handlers(completed_candle, self.tick_index, self.symbols.index(symbol))
                         self.tick_index += 1
 
             except Exception as e:
-                print(f"Error processing quote: {e}")
+                logger.error(f"Error processing quote: {e}")
 
     def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
         """

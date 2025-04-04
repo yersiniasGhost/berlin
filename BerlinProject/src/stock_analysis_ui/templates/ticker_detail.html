@@ -433,6 +433,7 @@ function initChart() {
         container.innerHTML = html;
     }
 
+    // Update the updateIndicatorUI function in ticker_detail.html
     function updateIndicatorUI() {
         const container = document.getElementById('indicatorContainer');
 
@@ -466,15 +467,27 @@ function initChart() {
             let indicatorColor = 'bg-secondary';
             let textColor = 'text-muted';
 
-            if (value > 0.7) {
-                indicatorColor = 'bg-success';
-                textColor = 'text-success';
-            } else if (value > 0.3) {
-                indicatorColor = 'bg-info';
-                textColor = 'text-primary';
-            } else if (value > 0) {
-                indicatorColor = 'bg-warning';
-                textColor = 'text-warning';
+            // Check if this is a bullish or bearish indicator
+            const isBearish = name.toLowerCase().includes('bear');
+
+            if (isBearish) {
+                // Bearish indicators
+                if (value > 0.7) {
+                    indicatorColor = 'bg-danger';
+                    textColor = 'text-danger';
+                } else if (value > 0.3) {
+                    indicatorColor = 'bg-warning';
+                    textColor = 'text-warning';
+                }
+            } else {
+                // Bullish indicators
+                if (value > 0.7) {
+                    indicatorColor = 'bg-success';
+                    textColor = 'text-success';
+                } else if (value > 0.3) {
+                    indicatorColor = 'bg-info';
+                    textColor = 'text-primary';
+                }
             }
 
             // Format display name
@@ -488,6 +501,9 @@ function initChart() {
                 <div class="card h-100 indicator-card">
                     <div class="card-body">
                         <h6 class="card-title">${displayName}</h6>
+                        <div class="badge ${isBearish ? 'bg-danger' : 'bg-success'} mb-1">
+                            ${isBearish ? 'Bearish' : 'Bullish'}
+                        </div>
                         <div class="progress mb-2 indicator-progress">
                             <div class="progress-bar ${indicatorColor}" role="progressbar"
                                  style="width: ${value * 100}%"
