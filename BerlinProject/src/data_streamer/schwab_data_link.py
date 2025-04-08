@@ -111,18 +111,30 @@ class SchwabDataLink(DataLink):
     def load_historical_data(self) -> bool:
         """
         Load historical data for all symbols using Schwab API.
+        Only loads data from the start of the current trading day.
 
         Returns:
             bool: Success status
         """
         logger.info(f"Loading historical data for {self.symbols} with timeframe {self.timeframe}")
 
+        # Get today's date
+        today = datetime.now().date()
+
+        # Calculate start of pre-market trading (4:00 AM ET typically)
+        # Using a fixed time for simplicity. In production, you might want to
+        # use the actual market open times from an external source
+        premarket_start = datetime.combine(today, datetime.min.time().replace(hour=4, minute=0))
+
+        # Convert to milliseconds timestamp for API
+        start_timestamp = int(premarket_start.timestamp() * 1000)
+
         # Get timeframe parameters
         tf_params = self.timeframe_mapping.get(self.timeframe,
                                                {"periodType": "day", "period": 1,
                                                 "frequencyType": "minute", "frequency": 1})
 
-        logger.info(f"Using API parameters: {tf_params}")
+        logger.info(f"Using API parameters: {tf_params} with start time: {premarket_start}")
 
         # Try to load from API
         success = False
@@ -137,14 +149,15 @@ class SchwabDataLink(DataLink):
                     'period': tf_params["period"],
                     'frequencyType': tf_params["frequencyType"],
                     'frequency': tf_params["frequency"],
-                    'needExtendedHoursData': True
+                    'startDate': start_timestamp,  # Set start date to beginning of today's pre-market
+                    'needExtendedHoursData': True  # Include pre-market and after-hours data
                 }
 
                 headers = {
                     'Authorization': f'Bearer {self.access_token}'
                 }
 
-                logger.info(f"Requesting historical data for {symbol} from {url}")
+                logger.info(f"Requesting historical data for {symbol} from {url} starting at {premarket_start}")
 
                 response = requests.get(url, headers=headers, params=params)
 

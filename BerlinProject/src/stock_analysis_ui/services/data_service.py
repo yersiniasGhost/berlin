@@ -183,11 +183,20 @@ class DataService:
             self.ui_tool.update_weights(self.current_weights)
 
             # Explicitly load historical data
+            # In data_service.py, modify the start method:
+
+            # After loading historical data, explicitly push it to the UI tool
             if hasattr(self.data_streamer.data_link, 'load_historical_data'):
-                logger.info("Loading historical data...")
                 success = self.data_streamer.data_link.load_historical_data()
-                if not success:
-                    logger.warning("Failed to load historical data, continuing without it")
+
+                if success:
+                    for symbol in symbols:
+                        candles = self.data_streamer.data_link.candle_data.get(symbol, [])
+                        logger.info(f"Loaded {len(candles)} historical candles for {symbol}")
+
+                        # Push each historical candle to the UI
+                        for candle in candles:
+                            self.ui_tool.handle_completed_candle(symbol, candle)
 
             # Connect to streaming service
             if hasattr(self.data_streamer.data_link, 'connect'):
