@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Union
 import logging
 
+from .data_link import DataLink
+
 # Configure at module level
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('SchwabDataLink')  # Replace with appropriate name for each file
@@ -23,7 +25,7 @@ class DataStreamer:
         self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
         self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(
             indicator_configuration) if indicator_configuration else None
-        self.data_link: Optional[Union[TickHistoryTools, SampleTools]] = None
+        self.data_link: Optional[DataLink] = None
         self.configure_data(data_configuration)
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False

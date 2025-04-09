@@ -62,7 +62,7 @@ class DataService:
                 sys.path.insert(0, src_dir)
 
             # Now import the modules directly from data_streamer
-            from data_streamer.data_streamer import DataStreamer
+            from data_streamer.data_streamer_orig import DataStreamer
             from data_streamer.schwab_data_link import SchwabDataLink
             from models.monitor_configuration import MonitorConfiguration
             from models.indicator_definition import IndicatorDefinition
