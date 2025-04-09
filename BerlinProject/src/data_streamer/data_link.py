@@ -14,14 +14,15 @@ class DataLink(ABC):
     def __init__(self):
         """Initialize the DataLink with empty list of tick handlers."""
         self.tick_handlers: List[Callable[[TickData, int, int], None]] = []
+        self.quote_handlers: List[Callable[[Dict], None]] =[]
+        self.chart_handlers: List[Callable[[Dict], None]] =[]
+    def add_quote_handler(self, handler: Callable[[Dict], None]) -> None:
+        self.quote_handlers.append(handler)
+
+    def add_chart_handler(self, handler: Callable[[Dict], None]) -> None:
+        self.chart_handlers.append(handler)
 
     def register_tick_handler(self, handler: Callable[[TickData, int, int], None]) -> None:
-        """
-        Register a callback function to handle new tick data.
-
-        Args:
-            handler: Function that takes (tick_data, tick_index, day_index) as arguments
-        """
         self.tick_handlers.append(handler)
 
     # In src/data_streamer/data_link.py, enhance notify_handlers

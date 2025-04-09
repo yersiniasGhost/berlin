@@ -208,6 +208,9 @@ class SchwabDataLink(DataLink):
         streamer_url = self.user_prefs.get('streamerUrl')
         logger.info(f"Connecting to streamer URL: {streamer_url}")
 
+        # Add a login_complete flag
+        self.login_complete = False
+
         # Define WebSocket callbacks
         def on_open(ws):
             logger.info("WebSocket connection opened")
@@ -247,7 +250,17 @@ class SchwabDataLink(DataLink):
                 return False
             time.sleep(0.5)
 
+        # Wait for login to complete
+        timeout = 10
+        start_time = time.time()
+        while not self.login_complete:
+            if time.time() - start_time > timeout:
+                logger.error("Login timeout")
+                return False
+            time.sleep(0.5)
+
         return True
+
 
     def _get_next_request_id(self) -> str:
         """Get next request ID"""
@@ -292,6 +305,7 @@ class SchwabDataLink(DataLink):
                         code = content.get('code')
                         if code == 0:
                             logger.info("Login to streamer successful")
+                            self.login_complete = True
                         else:
                             logger.error(f"Login to streamer failed: {content.get('msg', '')}")
                     else:
@@ -427,17 +441,6 @@ class SchwabDataLink(DataLink):
         self.ws.send(json.dumps(subscribe_request))
         return True
 
-    def add_quote_handler(self, handler: Callable[[Dict], None]) -> None:
-        """
-        Add a handler function for quote data
-
-        Args:
-            handler: Function that takes a quote data dictionary as input
-        """
-        self.quote_handlers.append(handler)
-
-    def add_chart_handler(self, handler: Callable[[Dict], None]) -> None:
-        self.chart_handlers.append(handler)
 
     def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[Dict]:
         """

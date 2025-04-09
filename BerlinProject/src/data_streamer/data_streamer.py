@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Union
 import logging
 
+from environments.tick_data import TickData
 from .data_link import DataLink
 
 # Configure at module level
@@ -17,72 +18,113 @@ from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
 from .schwab_data_link import SchwabDataLink
 
+# TODO: reinstate feature vector in the future.
 
 class DataStreamer:
-    def __init__(self, data_link:DataLink, model_configuration: dict,
+    def __init__(self, data_link: DataLink, model_configuration: dict,
                  indicator_configuration: Optional[MonitorConfiguration] = None):
         self.preprocessor = DataPreprocessor(model_configuration)
-        self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
+        # self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
         self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(
             indicator_configuration) if indicator_configuration else None
         self.data_link: DataLink = data_link
+        self.data_link.add_chart_handler(self.chart_handler)
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False
 
-    def replace_monitor_configuration(self, monitor: MonitorConfiguration, historical: bool = True):
-        if historical:
-            self.indicators = IndicatorProcessorHistorical(monitor, self.data_link)
-        else:
-            self.indicators = IndicatorProcessor(monitor)
-
-    def configure_data(self, data_config: dict) -> None:
+    def tick_converter(self, data: dict) -> Optional[TickData]:
         """
-        Configure the data source based on the provided configuration.
+        Convert Schwab chart data to a TickData object.
 
         Args:
-            data_config: Configuration dictionary for the data source
+            data: Raw chart data from Schwab API
+
+        Returns:
+            TickData object or None if conversion fails
         """
-        data_type = data_config.get('type', None)
+        try:
+            # Extract data from the chart entry
+            symbol = data.get('key', '')
+            if not symbol:
+                logger.warning("Received chart data without symbol key")
+                return None
 
-        if data_type == "TickHistory":
-            ticker = data_config.get('ticker')
-            start_date_str = data_config.get('start_date')
-            end_date_str = data_config.get('end_date')
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-            time_increments = data_config.get('time_increment')
+            # Extract timestamp
+            timestamp_ms = int(data.get('7', 0))
+            timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
 
-            self.data_link = TickHistoryTools.get_tools(ticker, start_date, end_date, time_increments)
+            # Extract OHLCV data
+            open_price = float(data.get('2', 0.0))
+            high_price = float(data.get('3', 0.0))
+            low_price = float(data.get('4', 0.0))
+            close_price = float(data.get('5', 0.0))
+            volume = float(data.get('6', 0))
 
-        elif data_type == "CharlesSchwab":
-            # Extract Schwab specific configuration
-            user_prefs = data_config.get('user_prefs', {})
-            access_token = data_config.get('access_token', '')
-            symbols = data_config.get('symbols', [])
+            # Create TickData object
+            tick = TickData(
+                symbol=symbol,
+                timestamp=timestamp,
+                open=open_price,
+                high=high_price,
+                low=low_price,
+                close=close_price,
+                volume=volume
+            )
 
-            if not user_prefs or not access_token or not symbols:
-                raise ValueError("Missing required CharlesSchwab configuration parameters")
+            logger.info(f"Converted chart data for {symbol} at {timestamp}")
+            return tick
 
-            self.data_link = SchwabDataLink(user_prefs, access_token, symbols)
+        except Exception as e:
+            logger.error(f"Error converting chart data: {e}")
+            return None
 
-        elif data_type == "Sample":
-            # If data_config is a dictionary with 'samples' key
-            if isinstance(data_config, dict) and 'samples' in data_config:
-                self.data_link = SampleTools.get_samples2(data_config.get('samples'))
-            # If data_config is or contains a list to be passed directly
-            elif isinstance(data_config, list):
-                self.data_link = SampleTools.get_samples2(data_config)
-            elif isinstance(data_config, dict) and isinstance(data_config.get(0), dict):
-                self.data_link = SampleTools.get_samples2(data_config[0])
-            else:
-                raise ValueError(f"Invalid Sample data configuration format: {data_config}")
-        else:
-            raise ValueError(f"Unknown data source type: {data_type}")
+    def chart_handler(self, data: dict):
+        """
+        Process chart data from Schwab.
+        Converts the chart data to a TickData object and processes it through the pipeline.
+        """
+        try:
+            tick = self.tick_converter(data)
+            if not tick:
+                return
 
-    def prepare_historical_processors(self):
-        # for indicator in self.indicators:
-        #     indicator.prepare_historical_processor(self.data_link)
-        self.indicators.prepare_historical_processor(self.data_link)
+            # This is a completed candle from Schwab
+            is_completed_candle = True
+
+            # Process the tick through the preprocessor (this is needed!)
+            self.preprocessor.next_tick(tick)
+
+            # Process indicators
+            indicator_results = {}
+            raw_indicators = None
+            if is_completed_candle and self.indicators:
+                indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
+
+            # Send indicator results to external tools
+            if is_completed_candle and indicator_results:
+                for external_tool in self.external_tool:
+                    external_tool.indicator_vector(indicator_results, tick, 0, raw_indicators)
+        except Exception as e:
+            import logging
+            logging.getLogger('DataStreamer').error(f"Error in chart handler: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+    # def run2(self, data_link):
+    #     """
+    #     Alternative method to run the data streaming process with Schwab data.
+    #     """
+    #     data_link = SchwabDataLink()
+    #
+    #     if not data_link.authenticate():
+    #         logger.error("Authentication failed, exiting")
+    #         return
+    #
+    #     # Connect to streaming API
+    #     if not data_link.connect_stream():
+    #         logger.error("Failed to connect to streaming API")
+    #         return
 
     # Add this to your DataStreamer class:
     def run(self):
