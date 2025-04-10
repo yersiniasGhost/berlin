@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Tuple
 from environments.tick_data import TickData
+import traceback
 import numpy as np
 from features.features import calculate_sma_tick, calculate_macd_tick
 
@@ -13,6 +14,56 @@ class DataPreprocessor:
         self.tick: Optional[TickData] = None
         self.normalized_tick: Optional[TickData] = None
         self.sample_stats = None
+
+    def initialize(self, data_link, symbols: List[str], timeframe: str = "1m") -> bool:
+        """
+        Initialize the preprocessor with historical data for the given symbols.
+        Simply loads historical data and sets it as the history.
+
+        Args:
+            data_link: The data link to use for loading historical data
+            symbols: List of stock symbols to initialize
+            timeframe: Candle timeframe (e.g., "1m", "5m")
+
+        Returns:
+            bool: Success status
+        """
+        if not hasattr(data_link, 'load_historical_data'):
+            return False
+
+        success = True
+        all_historical_ticks = []
+
+        # Load historical data for each symbol
+        for symbol in symbols:
+            try:
+                # Get historical data from data link
+                historical_data = data_link.load_historical_data(symbol, timeframe)
+
+                if not historical_data:
+                    continue
+
+                # Historical data should already be TickData objects
+                all_historical_ticks.extend(historical_data)
+
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                success = False
+
+        # Sort all historical ticks by timestamp
+        all_historical_ticks.sort(key=lambda x: x.timestamp)
+
+        if all_historical_ticks:
+            self.history = all_historical_ticks
+
+            # Set the current tick to the last one in history
+            if all_historical_ticks:
+                self.tick = all_historical_ticks[-1]
+        else:
+            success = False
+
+        return success
 
     def get_normalized_data(self) -> Tuple[TickData, List[TickData]]:
         return self.normalized_tick, self.normalized_data

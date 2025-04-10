@@ -100,24 +100,28 @@ class UIExternalTool:
                 'candle': tick_data
             })
 
+    # In ui_external_tool.py, modify the indicator_vector method:
+
     def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
         """
-        Process new indicator results with proper weight handling.
-
-        Args:
-            indicators: Dictionary of indicator values
-            tick: Corresponding tick data
-            index: Tick index
-            raw_indicators: Optional raw indicator values
+        Process new indicator results.
+        Only update indicators on completed candles.
         """
         if not hasattr(tick, 'symbol') or tick.symbol is None:
-            logger.warning("Tick data missing symbol information")
+            return
+
+        # Only proceed for completed candles
+        is_completed_candle = (hasattr(tick, 'open') and hasattr(tick, 'high') and
+                               hasattr(tick, 'low') and hasattr(tick, 'close') and
+                               not getattr(tick, 'is_current', False))
+
+        if not is_completed_candle:
             return
 
         symbol = tick.symbol
 
-        # Initialize data structures for new tickers
+        # Initialize data structures if needed
         if symbol not in self.ticker_data:
             self.ticker_data[symbol] = {}
             self.history[symbol] = []
@@ -127,16 +131,14 @@ class UIExternalTool:
 
         # Store indicator results
         self.indicators[symbol] = indicators.copy()
-
         if raw_indicators:
             self.raw_indicators[symbol] = raw_indicators.copy()
 
         # Calculate overall scores using weights
-        # Split indicators into bullish and bearish
         bull_indicators = {k: v for k, v in indicators.items() if 'bear' not in k.lower()}
         bear_indicators = {k: v for k, v in indicators.items() if 'bear' in k.lower()}
 
-        # Apply weights (from monitor config)
+        # Apply weights
         bull_score = self.calculate_weighted_score(bull_indicators, self.weights.get(symbol, {}))
         bear_score = self.calculate_weighted_score(bear_indicators, self.weights.get(symbol, {}))
 
@@ -145,26 +147,14 @@ class UIExternalTool:
             'bear': bear_score
         }
 
-        # Get a timestamp for the update
-        timestamp = getattr(tick, 'timestamp', None) or datetime.now()
-
-        # Convert datetime to string for JSON serialization
-        if isinstance(timestamp, datetime):
-            timestamp_str = timestamp.isoformat()
-        else:
-            timestamp_str = str(timestamp)
-
-        # Create a JSON-serializable update object
-        update_data = {
+        # Emit update
+        self.socketio.emit('indicator_update', {
             'symbol': symbol,
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
             'overall_scores': self.overall_scores[symbol],
-            'timestamp': timestamp_str
-        }
-
-        # Emit update via Socket.IO
-        self.socketio.emit('indicator_update', update_data)
+            'timestamp': tick.timestamp.isoformat() if isinstance(tick.timestamp, datetime) else str(tick.timestamp)
+        })
 
     def calculate_weighted_score(self, indicators: Dict[str, float], weights: Dict[str, float]) -> float:
         """
@@ -305,10 +295,9 @@ class UIExternalTool:
     # In src/stock_analysis_ui/services/ui_external_tool.py, update handle_completed_candle
 
     def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
-        """
-        Handle a completed candle for a symbol.
-        """
-        # Make sure we have data structures initialized
+        """Handle a completed candle with improved history management"""
+
+        # Initialize data structures if needed
         if symbol not in self.ticker_data:
             self.ticker_data[symbol] = {}
             self.history[symbol] = []
@@ -316,14 +305,11 @@ class UIExternalTool:
             self.raw_indicators[symbol] = {}
             self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
 
-        # Convert datetime to string for JSON serialization
+        # Format timestamp
         timestamp = candle.timestamp
-        if isinstance(timestamp, datetime):
-            timestamp_str = timestamp.isoformat()
-        else:
-            timestamp_str = str(timestamp)
+        timestamp_str = timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp)
 
-        # Create JSON-serializable candle data
+        # Create candle data
         candle_data = {
             'timestamp': timestamp_str,
             'open': candle.open,
@@ -336,16 +322,22 @@ class UIExternalTool:
 
         # Add to history
         self.history[symbol].append(candle_data.copy())
-        if len(self.history[symbol]) > self.max_history_items:
-            self.history[symbol].pop(0)
 
-        # Emit candle update via Socket.IO
+        # Limit history size for performance
+        max_history = 1000
+        if len(self.history[symbol]) > max_history:
+            self.history[symbol] = self.history[symbol][-max_history:]
+
+        # Emit candle completion event
         self.socketio.emit('candle_completed', {
             'symbol': symbol,
             'candle': candle_data
         })
 
-        # Also emit a ticker_update event to ensure the UI is updated
+        # Update ticker data
+        self.ticker_data[symbol] = candle_data.copy()
+
+        # Emit ticker update
         self.socketio.emit('ticker_update', {
             'symbol': symbol,
             'data': candle_data
