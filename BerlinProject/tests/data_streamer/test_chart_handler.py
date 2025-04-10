@@ -1,4 +1,4 @@
-# test_schwab_data_processing.py
+# test_chart_handler.py
 import time
 import logging
 from typing import Dict, Optional, List
@@ -65,7 +65,7 @@ def main():
         "normalization": None
     }
 
-    # Create indicator configuration
+    # Create indicator configuration with all required parameters
     indicator_config = MonitorConfiguration(
         name="Simple Monitor",
         indicators=[
@@ -75,8 +75,8 @@ def main():
                 "function": "sma_crossover",
                 "parameters": {
                     "period": 10,
-                    "fast_period": 5,
-                    "slow_period": 20,
+                    "crossover_value": 0.01,  # Added this required parameter
+                    "trend": "bullish",       # Added this required parameter
                     "lookback": 10
                 }
             }
@@ -91,24 +91,28 @@ def main():
         indicator_configuration=indicator_config
     )
 
-    # Initialize the preprocessor
-    data_streamer.preprocessor = DataPreprocessor(model_config)
-
-    # Don't set feature_vector_calculator since it's commented out
-    # data_streamer.feature_vector_calculator = FeatureVectorCalculator(model_config)
-
-    data_streamer.indicators = IndicatorProcessor(indicator_config)
+    # # Initialize the preprocessor
+    # data_streamer.preprocessor = DataPreprocessor(model_config)
+    #
+    # # Set the indicators processor
+    # data_streamer.indicators = IndicatorProcessor(indicator_config)
 
     # Create and connect our printing tool
     printing_tool = PrintingTool()
     data_streamer.connect_tool(printing_tool)
 
-    # Subscribe to charts
-    symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "SPY"]
+    # First subscription (1-minute data)
+    symbols = ["NVDA"]
     timeframe = "1m"
-
-    logger.info(f"Subscribing to charts for: {symbols}")
+    logger.info(f"Subscribing to charts for {symbols} with timeframe {timeframe}")
     data_link.subscribe_charts(symbols, timeframe)
+
+    # Second subscription (5-minute data)
+    symbols2 = ["NVDA"]
+    timeframe2 = "5m"  # Change this to "5m" for 5-minute data
+    logger.info(f"Subscribing to charts for {symbols2} with timeframe {timeframe2}")
+    data_link.subscribe_charts(symbols2, timeframe2)
+
 
     try:
         # Keep running until interrupted

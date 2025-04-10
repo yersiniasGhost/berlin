@@ -441,17 +441,16 @@ class SchwabDataLink(DataLink):
         self.ws.send(json.dumps(subscribe_request))
         return True
 
-
-    def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[Dict]:
+    def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
         """
-        Load historical candle data for ONLY the current trading day
+        Load historical candle data for ONLY the current trading day and convert to TickData objects
 
         Args:
             symbol: Stock symbol
             timeframe: Candle timeframe (1m, 5m, 15m, 30m, 1h, 1d)
 
         Returns:
-            List of candle dictionaries
+            List of TickData objects
         """
         if not self.access_token:
             logger.error("No access token available")
@@ -517,26 +516,26 @@ class SchwabDataLink(DataLink):
                     candles = data['candles']
                     logger.info(f"Found {len(candles)} candles in response")
 
-                    processed_candles = []
+                    processed_ticks = []
                     for candle in candles:
                         timestamp = datetime.fromtimestamp(candle['datetime'] / 1000)
 
                         # Only include candles from today
                         if timestamp.date() == today:
-                            processed_candle = {
-                                'symbol': symbol,
-                                'timestamp': timestamp,
-                                'open': candle['open'],
-                                'high': candle['high'],
-                                'low': candle['low'],
-                                'close': candle['close'],
-                                'volume': candle.get('volume', 0)
-                            }
+                            # Create TickData object directly
+                            tick = TickData(
+                                symbol=symbol,
+                                timestamp=timestamp,
+                                open=candle['open'],
+                                high=candle['high'],
+                                low=candle['low'],
+                                close=candle['close'],
+                                volume=candle.get('volume', 0)
+                            )
+                            processed_ticks.append(tick)
 
-                            processed_candles.append(processed_candle)
-
-                    logger.info(f"Processed {len(processed_candles)} candles for today ({today})")
-                    return processed_candles
+                    logger.info(f"Processed {len(processed_ticks)} candles for today ({today})")
+                    return processed_ticks
                 else:
                     logger.warning(f"No 'candles' key in API response")
                     return []
@@ -557,26 +556,26 @@ class SchwabDataLink(DataLink):
                             candles = data['candles']
                             logger.info(f"Found {len(candles)} candles in retry response")
 
-                            processed_candles = []
+                            processed_ticks = []
                             for candle in candles:
                                 timestamp = datetime.fromtimestamp(candle['datetime'] / 1000)
 
                                 # Only include candles from today
                                 if timestamp.date() == today:
-                                    processed_candle = {
-                                        'symbol': symbol,
-                                        'timestamp': timestamp,
-                                        'open': candle['open'],
-                                        'high': candle['high'],
-                                        'low': candle['low'],
-                                        'close': candle['close'],
-                                        'volume': candle.get('volume', 0)
-                                    }
+                                    # Create TickData object directly
+                                    tick = TickData(
+                                        symbol=symbol,
+                                        timestamp=timestamp,
+                                        open=candle['open'],
+                                        high=candle['high'],
+                                        low=candle['low'],
+                                        close=candle['close'],
+                                        volume=candle.get('volume', 0)
+                                    )
+                                    processed_ticks.append(tick)
 
-                                    processed_candles.append(processed_candle)
-
-                            logger.info(f"Processed {len(processed_candles)} candles for today ({today}) in retry")
-                            return processed_candles
+                            logger.info(f"Processed {len(processed_ticks)} candles for today ({today}) in retry")
+                            return processed_ticks
 
                     else:
                         logger.error(f"Retry also failed: {response.status_code} - {response.text}")

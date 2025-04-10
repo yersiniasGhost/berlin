@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from typing import List, Dict, Optional, Tuple, Union
 import logging
 
@@ -31,6 +31,75 @@ class DataStreamer:
         self.data_link.add_chart_handler(self.chart_handler)
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False
+
+    def initialize(self, symbols: List[str], timeframe: str = "1m") -> bool:
+        """
+        Initialize the DataStreamer with historical data.
+        Uses the DataPreprocessor's history to calculate indicators.
+
+        Args:
+            symbols: List of stock symbols to initialize
+            timeframe: Candle timeframe (e.g., "1m", "5m")
+
+        Returns:
+            bool: Success status
+        """
+        if not hasattr(self.data_link, 'load_historical_data'):
+            return False
+
+        # First initialize the preprocessor with historical data
+        success = self.preprocessor.initialize(self.data_link, symbols, timeframe)
+
+        if not success or not self.preprocessor.history:
+            return False
+
+        # Now process the historical data through the indicator processor
+        if self.indicators:
+            try:
+                # Process each historical tick through indicators
+                for i, tick in enumerate(self.preprocessor.history):
+                    # Need to ensure the current tick is set before calculating indicators
+                    self.preprocessor.tick = tick
+
+                    # Calculate indicators for this tick
+                    indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
+
+                    # Important: Notify external tools about the indicator results
+                    if indicator_results:
+                        for external_tool in self.external_tool:
+                            external_tool.indicator_vector(indicator_results, tick, i, raw_indicators)
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return False
+
+        return True
+
+    def run(self):
+        """
+        Start the DataStreamer and begin processing real-time tick data.
+        This connects to the data link and processes incoming ticks.
+        """
+
+        # Register our chart handler with the data link
+        self.data_link.add_chart_handler(self.chart_handler)
+
+        print("DataStreamer is now running and processing real-time data")
+
+        try:
+            # This will keep the main thread alive
+            # The chart_handler will be called in a background thread when data arrives
+            while True:
+                time.sleep(0.5)
+
+        except KeyboardInterrupt:
+            print("DataStreamer stopped by user")
+        except Exception as e:
+            print(f"Error in DataStreamer: {e}")
+            import traceback
+            traceback.print_exc()
+
 
     def tick_converter(self, data: dict) -> Optional[TickData]:
         """
@@ -80,33 +149,34 @@ class DataStreamer:
 
     def chart_handler(self, data: dict):
         """
-        Process chart data from Schwab.
-        Converts the chart data to a TickData object and processes it through the pipeline.
+        Process chart data from the data link.
+        Converts chart data to TickData, adds it to history, and processes indicators.
         """
         try:
+            # Convert incoming data to TickData
             tick = self.tick_converter(data)
             if not tick:
                 return
 
-            # This is a completed candle from Schwab
-            is_completed_candle = True
+            # APPEND the tick to the preprocessor's history instead of replacing it
+            self.preprocessor.history.append(tick)
 
-            # Process the tick through the preprocessor (this is needed!)
-            self.preprocessor.next_tick(tick)
+            # Update the current tick in preprocessor
+            self.preprocessor.tick = tick
 
             # Process indicators
-            indicator_results = {}
-            raw_indicators = None
-            if is_completed_candle and self.indicators:
+            if self.indicators:
+                # Calculate indicators for this tick
                 indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
 
-            # Send indicator results to external tools
-            if is_completed_candle and indicator_results:
-                for external_tool in self.external_tool:
-                    external_tool.indicator_vector(indicator_results, tick, 0, raw_indicators)
+                # Notify external tools about the indicator results
+                if indicator_results:
+                    for external_tool in self.external_tool:
+                        external_tool.indicator_vector(indicator_results, tick, len(self.preprocessor.history) - 1,
+                                                       raw_indicators)
+
         except Exception as e:
-            import logging
-            logging.getLogger('DataStreamer').error(f"Error in chart handler: {e}")
+            print(f"Error in chart handler: {e}")
             import traceback
             traceback.print_exc()
 
