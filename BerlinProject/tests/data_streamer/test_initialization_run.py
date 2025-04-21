@@ -1,36 +1,63 @@
-# test_data_streamer_run.py
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
-
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.data_streamer import DataStreamer
 from data_streamer.external_tool import ExternalTool
 from environments.tick_data import TickData
-from models.monitor_configuration import MonitorConfiguration
+from models.monitor_configuration import MonitorConfiguration, IndicatorDefinition
+from config.types import INDICATOR_TYPE
 
 
-class HistoryMonitorTool(ExternalTool):
-    """Simple external tool that monitors history and indicator values"""
+class DebugMonitorTool(ExternalTool):
+    """Debug external tool that monitors history and indicator values"""
 
     def __init__(self):
         self.indicator_values = []
+        self.indicator_calls = 0
+        self.feature_calls = 0
 
     def feature_vector(self, fv: list, tick: TickData) -> None:
-        # We don't care about feature vectors for this test
-        pass
+        self.feature_calls += 1
+        print(f"Feature vector called: {self.feature_calls} times")
 
-    def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int,
-                         raw_indicators: Optional[Dict[str, float]] = None) -> None:
-        # Store the indicator values with timestamp
-        self.indicator_values.append({
-            'tick': tick,
-            'indicators': indicators,
-            'timestamp': datetime.now()
-        })
+    def indicator_vector(
+        self,
+        indicators: Dict[str, float],
+        tick: TickData,
+        index: int,
+        raw_indicators: Optional[Dict[str, float]] = None
+    ) -> None:
+        self.indicator_calls += 1
 
-        # Print a simple notification
-        print(f"New indicator calculation: {tick.symbol} @ {tick.timestamp} - {indicators}")
+        call_data = {
+            'index': index,
+            'timestamp': tick.timestamp if hasattr(tick, 'timestamp') else None,
+            'price': tick.close if hasattr(tick, 'close') else None,
+            'indicators': indicators.copy() if indicators else {},
+            'raw_indicators': raw_indicators.copy() if raw_indicators else None
+        }
+
+        self.indicator_values.append(call_data)
+
+        print(f"\n===== INDICATOR CALL #{self.indicator_calls} =====")
+        print(f"Tick Index: {index}")
+        print(f"Timestamp: {call_data['timestamp']}")
+        print(f"Close Price: {call_data['price']}")
+
+        if indicators:
+            print("\nINDICATOR VALUES:")
+            for name, value in indicators.items():
+                print(f"  {name}: {value}")
+
+            if raw_indicators:
+                print("\nRAW INDICATOR VALUES:")
+                for name, value in raw_indicators.items():
+                    print(f"  {name}: {value}")
+        else:
+            print("No indicator values received")
+
+        print("=" * 40)
 
     def present_sample(self, sample: dict, index: int):
         pass
@@ -43,54 +70,62 @@ class HistoryMonitorTool(ExternalTool):
         history = data_streamer.preprocessor.history
 
         print("\n" + "=" * 60)
-        print(f"SUMMARY at {datetime.now()}")
+        print("SUMMARY")
         print("=" * 60)
 
-        # History summary
         print(f"History size: {len(history)} ticks")
         if history:
             first_tick = history[0]
             last_tick = history[-1]
             print(f"Time range: {first_tick.timestamp} to {last_tick.timestamp}")
-            print(f"Duration: {last_tick.timestamp - first_tick.timestamp}")
+            if hasattr(last_tick, 'timestamp') and hasattr(first_tick, 'timestamp'):
+                print(f"Duration: {last_tick.timestamp - first_tick.timestamp}")
 
-        # Indicator summary
         print(f"\nIndicator calculations: {len(self.indicator_values)}")
+        print(f"Feature vector calls: {self.feature_calls}")
+
         if self.indicator_values:
-            # Count occurrences of each indicator value
-            indicator_counts = {}
+            trigger_counts = {}
             for item in self.indicator_values:
                 for indicator_name, value in item['indicators'].items():
-                    # Check for NaN without using pandas
-                    if isinstance(value, float) and value != value:  # NaN check
-                        rounded_value = "NaN"
+                    if value > 0:
+                        trigger_counts[indicator_name] = trigger_counts.get(indicator_name, 0) + 1
+
+            print("\nTRIGGER COUNTS (values > 0):")
+            for name, count in trigger_counts.items():
+                percentage = (count / self.indicator_calls) * 100 if self.indicator_calls else 0
+                print(f"  {name}: {count} triggers ({percentage:.1f}%)")
+
+            print("\nINDICATOR VALUE RANGES:")
+            value_ranges = {}
+            for item in self.indicator_values:
+                for indicator_name, value in item['indicators'].items():
+                    if indicator_name not in value_ranges:
+                        value_ranges[indicator_name] = {'min': value, 'max': value}
                     else:
-                        try:
-                            rounded_value = round(value, 2)
-                        except:
-                            rounded_value = value
+                        value_ranges[indicator_name]['min'] = min(value_ranges[indicator_name]['min'], value)
+                        value_ranges[indicator_name]['max'] = max(value_ranges[indicator_name]['max'], value)
 
-                    key = f"{indicator_name}:{rounded_value}"
-                    indicator_counts[key] = indicator_counts.get(key, 0) + 1
-            # Print most common indicator values
-            print("Most common indicator values:")
-            for key, count in sorted(indicator_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-                print(f"  {key}: {count} occurrences")
+            for name, range_data in value_ranges.items():
+                print(f"  {name}: Min={range_data['min']:.4f}, Max={range_data['max']:.4f}")
 
-        # Latest data
         if history:
             print("\nLatest 3 ticks in history:")
             for tick in history[-3:]:
-                print(f"  {tick.symbol} @ {tick.timestamp}: "
-                      f"OHLC({tick.open:.2f},{tick.high:.2f},{tick.low:.2f},{tick.close:.2f})")
+                if hasattr(tick, 'close'):
+                    print(
+                        f"  {getattr(tick, 'symbol', 'Unknown')} @ {getattr(tick, 'timestamp', 'Unknown')}: "
+                        f"OHLC({getattr(tick, 'open', 0):.2f},{getattr(tick, 'high', 0):.2f},"
+                        f"{getattr(tick, 'low', 0):.2f},{getattr(tick, 'close', 0):.2f})"
+                    )
 
         print("=" * 60)
 
 
 def main():
+    print("==== INDICATOR PROCESSOR DEBUG TEST ====")
     print("Testing DataStreamer with initialize and run...")
 
-    # Create and authenticate SchwabDataLink
     print("Creating and authenticating SchwabDataLink...")
     data_link = SchwabDataLink()
 
@@ -98,13 +133,12 @@ def main():
         print("Authentication failed, exiting")
         return
 
-    # Connect to streaming API
+    # Load historical data
     print("Connecting to streaming API...")
     if not data_link.connect_stream():
         print("Failed to connect to streaming API")
         return
 
-    # Create model configuration
     model_config = {
         "feature_vector": [
             {"name": "open"},
@@ -115,82 +149,76 @@ def main():
         "normalization": None
     }
 
-    # Create indicator configuration
     indicator_config = MonitorConfiguration(
         name="Test Monitor",
         indicators=[
             {
                 "name": "SMA Crossover",
-                "type": "Indicator",
+                "type": INDICATOR_TYPE,
                 "function": "sma_crossover",
                 "parameters": {
                     "period": 10,
-                    "crossover_value": 0.01,
+                    "crossover_value": 0.0002,
                     "trend": "bullish",
                     "lookback": 10
+                }
+            },
+            {
+                "name": "MACD Histogram",
+                "type": INDICATOR_TYPE,
+                "function": "macd_histogram_crossover",
+                "parameters": {
+                    "fast": 12,
+                    "slow": 26,
+                    "signal": 9,
+                    "histogram_threshold": 0.05,
+                    "lookback": 10,
+                    "trend": "bullish"
                 }
             }
         ]
     )
 
-    # Create DataStreamer
     print("Creating DataStreamer...")
     data_streamer = DataStreamer(
-        data_link=data_link,
+        data_link=data_link,  # Pass data_link directly
         model_configuration=model_config,
         indicator_configuration=indicator_config
     )
 
-    # Create and connect our monitoring tool
-    monitor = HistoryMonitorTool()
+    data_streamer.data_link = data_link
+
+    monitor = DebugMonitorTool()
     data_streamer.connect_tool(monitor)
 
-    # Define symbols to track
     symbols = ["NVDA"]
-    timeframe = "1m"
+    interval = "1m"
 
-    # Step 1: Initialize with historical data
     print(f"Initializing DataStreamer with historical data for {symbols}...")
-    success = data_streamer.initialize(symbols, timeframe)
+    data_streamer.initialize(symbols, interval)
 
-    if not success:
-        print("Initialization failed, exiting")
-        return
+    data_link.subscribe_charts(symbols, interval)
 
-    print(f"Initialization successful! Loaded {len(data_streamer.preprocessor.history)} historical ticks")
-
-    # Print initial summary
-    print("\nInitial state after initialization:")
-    monitor.print_summary(data_streamer)
-
-    # Step 2: Subscribe to real-time data
-    print(f"\nSubscribing to {symbols} with {timeframe} timeframe...")
-    data_link.subscribe_charts(symbols, timeframe)
-
-    # Step 3: Run the DataStreamer
     print("\nStarting DataStreamer run...")
 
-    # Start the run in a non-blocking way
     try:
-        # We'll run for a fixed time period, then print final summary
-        run_duration = 60  # seconds
+        run_duration = 120  # seconds
         print(f"Will run for {run_duration} seconds to collect real-time data...")
 
-        # Start running in a way that doesn't block
-        import threading
-        run_thread = threading.Thread(target=data_streamer.run)
-        run_thread.daemon = True
-        run_thread.start()
+        data_streamer.run()
 
-        # Wait for the specified duration
+
         time.sleep(run_duration)
 
-        # Print final summary
         print("\nFinal state after running:")
         monitor.print_summary(data_streamer)
 
     except KeyboardInterrupt:
         print("\nTest stopped by user")
+    except Exception as e:
+        print(f"\nError during run: {e}")
+        import traceback
+        traceback.print_exc()
 
     print("\nTest completed!")
 

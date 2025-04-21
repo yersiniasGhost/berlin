@@ -1,5 +1,5 @@
 from operations.runtime_analytics import RuntimeAnalytics
-from data_streamer.data_streamer import DataStreamer
+from data_streamer.data_streamer_orig import DataStreamer
 from operations.backtester import Backtester
 
 profile_data = [{
