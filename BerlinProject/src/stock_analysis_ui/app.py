@@ -3,6 +3,8 @@ import sys
 
 # Import path fixer - add this at the top
 import fix_imports
+from models import IndicatorDefinition
+from models.monitor_configuration import MonitorConfiguration
 
 fix_imports.setup_imports()
 
@@ -129,7 +131,7 @@ def authenticate():
         "message": "Already authenticated via command line"
     })
 
-
+# Inside app.py - update data service initialization
 @app.route('/api/start', methods=['POST'])
 def start_streaming():
     """Start data streaming with configuration file"""
@@ -146,22 +148,42 @@ def start_streaming():
         return jsonify({"success": False, "error": "No configuration provided"})
 
     try:
-        # Extract indicators from config
-        indicators = config.get('indicators', [])
-        if not indicators:
-            return jsonify({"success": False, "error": "No indicators found in configuration"})
+        # 1. Create indicator definitions as instances of IndicatorDefinition
+        indicators = []
+        for indicator_dict in config.get('indicators', []):
+            indicator_def = IndicatorDefinition(
+                name=indicator_dict["name"],
+                type=indicator_dict["type"],
+                function=indicator_dict["function"],
+                parameters=indicator_dict["parameters"]
+            )
+            indicators.append(indicator_def)
 
-        # Extract weights from monitor configuration
+        # 2. Create MonitorConfiguration with these indicators
+        monitor_config = MonitorConfiguration(
+            name=config.get('monitor', {}).get('name', 'Trading Signals'),
+            indicators=indicators
+        )
+
+        # 3. Get the weights from the 'triggers' sections
         weights = {}
-        monitor = config.get('monitor', {})
+        monitor_dict = config.get('monitor', {})
+        if 'triggers' in monitor_dict:
+            weights.update(monitor_dict['triggers'])
+        if 'bear_triggers' in monitor_dict:
+            weights.update(monitor_dict['bear_triggers'])
 
-        if 'triggers' in monitor:
-            weights.update(monitor['triggers'])
-        if 'bear_triggers' in monitor:
-            weights.update(monitor['bear_triggers'])
-
+        # 4. Extract symbols from 'data' section
+        symbols = []
+        data_config = config.get('data', {})
+        if 'ticker' in data_config:
+            symbols.append(data_config['ticker'])
         # Start data service with symbol, indicators, and weights
         success = data_service.start([symbol], indicators, weights, timeframe)
+
+        # Connect the UI tool to the data_streamer for progress tracking
+        if success and hasattr(ui_tool, 'set_data_streamer_ref') and hasattr(data_service, 'data_streamer'):
+            ui_tool.set_data_streamer_ref(data_service.data_streamer)
 
         return jsonify({"success": success})
     except Exception as e:
@@ -262,7 +284,28 @@ def upload_config():
     if file and file.filename.endswith('.json'):
         try:
             config_data = json.load(file)
-            success = data_service.load_monitor_config(config_data)
+
+            # Extract monitoring configuration
+            indicators = config_data.get('indicators', [])
+            if not indicators:
+                return jsonify({"success": False, "error": "No indicators found in configuration"})
+
+            # Get symbols from data section
+            symbols = []
+            if 'data' in config_data and 'ticker' in config_data['data']:
+                symbols.append(config_data['data']['ticker'])
+
+            # Extract weights from triggers
+            weights = {}
+            monitor = config_data.get('monitor', {})
+            if 'triggers' in monitor:
+                weights.update(monitor['triggers'])
+            if 'bear_triggers' in monitor:
+                weights.update(monitor['bear_triggers'])
+
+            # Start data service with extracted configuration
+            success = data_service.start(symbols, indicators, weights)
+
             return jsonify({"success": success})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})

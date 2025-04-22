@@ -4,6 +4,8 @@ import threading
 from typing import Dict, List, Any, Optional
 import importlib
 import sys
+import time
+from datetime import datetime
 
 logger = logging.getLogger('DataService')
 
@@ -30,6 +32,7 @@ class DataService:
         self.current_symbols = []
         self.current_indicators = []
         self.current_weights = {}
+        self.current_timeframe = "1m"  # Default timeframe
 
         # Add path to import project modules
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -61,8 +64,8 @@ class DataService:
             if src_dir not in sys.path:
                 sys.path.insert(0, src_dir)
 
-            # Now import the modules directly from data_streamer
-            from data_streamer.data_streamer_orig import DataStreamer
+            # Now import the modules directly
+            from data_streamer.data_streamer import DataStreamer  # Use the new refactored version
             from data_streamer.schwab_data_link import SchwabDataLink
             from models.monitor_configuration import MonitorConfiguration
             from models.indicator_definition import IndicatorDefinition
@@ -83,25 +86,10 @@ class DataService:
               timeframe: str = "1m") -> bool:
         """
         Start data streaming for the specified symbols and indicators.
-
-        Args:
-            symbols: List of ticker symbols to monitor
-            indicators: List of indicator configurations
-            weights: Optional dictionary of indicator weights
-            timeframe: Candle timeframe (1m, 5m, 15m, 30m, 1h, 1d)
-
-        Returns:
-            bool: True if streaming started successfully, False otherwise
         """
         if self.is_streaming:
             logger.info("Already streaming, stopping first")
             self.stop()
-
-        # Inside the start method, after creating data_streamer:
-        if weights:
-            for symbol in symbols:
-                if hasattr(self.ui_tool, 'update_weights'):
-                    self.ui_tool.update_weights(symbol, weights)
 
         # Import required modules
         if not hasattr(self, 'DataStreamer'):
@@ -116,7 +104,7 @@ class DataService:
         self.current_timeframe = timeframe
 
         try:
-            # Get Schwab authentication from the manager
+            # Get Schwab authentication
             from .schwab_auth import SchwabAuthManager
             auth_manager = SchwabAuthManager()
 
@@ -124,37 +112,28 @@ class DataService:
                 logger.error("Not authenticated with Schwab API")
                 return False
 
-            # Create data configuration
-            data_config = {
-                "type": "CharlesSchwab",
-                "user_prefs": auth_manager.user_prefs,
-                "access_token": auth_manager.access_token,
-                "symbols": symbols,
-                "timeframe": timeframe,
-                "days_history": 5
-            }
+            # Create SchwabDataLink instance with authentication
+            self.schwab_data_link = self.SchwabDataLink()
 
-            # Create model configuration (simple for now)
+            # Manually set authentication credentials from auth_manager
+            self.schwab_data_link.access_token = auth_manager.access_token
+            self.schwab_data_link.refresh_token = auth_manager.refresh_token
+            self.schwab_data_link.user_prefs = auth_manager.user_prefs
+
+            # Create model configuration
             model_config = {
                 "feature_vector": [
                     {"name": "close"},
                     {"name": "open"},
                     {"name": "high"},
-                    {"name": "low"},
-                    {"name": "SMA", "parameters": {"sma": 20}},
-                    {"name": "MACD", "parameters": {
-                        "fast_period": 12,
-                        "slow_period": 26,
-                        "signal_period": 9
-                    }}
-                ]
+                    {"name": "low"}
+                ],
+                "normalization": None  # No normalization for UI display
             }
 
-            # Create indicator configuration
-            # Convert the indicators list to a format suitable for MonitorConfiguration
+            # Convert indicator dictionaries to IndicatorDefinition objects
             indicator_defs = []
             for indicator in indicators:
-                # Create IndicatorDefinition objects
                 indicator_def = self.IndicatorDefinition(
                     name=indicator["name"],
                     type=indicator["type"],
@@ -163,47 +142,37 @@ class DataService:
                 )
                 indicator_defs.append(indicator_def)
 
-            # Create the MonitorConfiguration
+            # Create monitor configuration with proper objects
             monitor_config = self.MonitorConfiguration(
                 name="trading_signals",
                 indicators=indicator_defs
             )
 
-            # Create DataStreamer
+            # Create DataStreamer with the direct data_link instance
             self.data_streamer = self.DataStreamer(
-                data_configuration=data_config,
+                data_link=self.schwab_data_link,
                 model_configuration=model_config,
                 indicator_configuration=monitor_config
             )
 
-            # Connect UI tool
+            # Connect UI tool to receive updates
             self.data_streamer.connect_tool(self.ui_tool)
 
-            # Set weights in UI tool
-            self.ui_tool.update_weights(self.current_weights)
+            # Update weights in UI tool
+            if weights:
+                self.ui_tool.update_weights(weights)
 
-            # Explicitly load historical data
-            # In data_service.py, modify the start method:
+            # Initialize data with historical data
+            logger.info(f"Initializing with historical data for symbols: {symbols}")
+            self.data_streamer.initialize(symbols, timeframe)
 
-            # After loading historical data, explicitly push it to the UI tool
-            if hasattr(self.data_streamer.data_link, 'load_historical_data'):
-                success = self.data_streamer.data_link.load_historical_data()
+            # Log initial history size
+            initial_history_size = len(self.data_streamer.preprocessor.history)
+            logger.info(f"Loaded {initial_history_size} historical data points")
 
-                if success:
-                    for symbol in symbols:
-                        candles = self.data_streamer.data_link.candle_data.get(symbol, [])
-                        logger.info(f"Loaded {len(candles)} historical candles for {symbol}")
-
-                        # Push each historical candle to the UI
-                        for candle in candles:
-                            self.ui_tool.handle_completed_candle(symbol, candle)
-
-            # Connect to streaming service
-            if hasattr(self.data_streamer.data_link, 'connect'):
-                logger.info("Connecting to streaming service...")
-                success = self.data_streamer.data_link.connect()
-                if not success:
-                    logger.warning("Failed to connect to streaming service, continuing with historical data only")
+            # Store in UI tool for reference
+            if hasattr(self.ui_tool, 'set_initial_history_size'):
+                self.ui_tool.set_initial_history_size(initial_history_size)
 
             # Start streaming in a separate thread
             self.streaming_thread = threading.Thread(target=self._stream_data)
@@ -218,56 +187,26 @@ class DataService:
             logger.error(f"Error starting data streaming: {e}", exc_info=True)
             return False
 
-    def load_monitor_config(self, config_data: dict) -> bool:
-        """
-        Load a monitor configuration from a dictionary (parsed from JSON)
-
-        Args:
-            config_data: The monitor configuration dictionary
-
-        Returns:
-            bool: Success status
-        """
-        try:
-            logger.info(f"Loading monitor configuration: {config_data.get('test_name', 'Unnamed Config')}")
-
-            # Extract monitor and indicators
-            monitor_config = config_data.get('monitor', {})
-            indicators = config_data.get('indicators', [])
-
-            if not indicators:
-                logger.error("No indicators found in config")
-                return False
-
-            # Get symbols from data section if present
-            symbols = []
-            if 'data' in config_data and 'ticker' in config_data['data']:
-                symbols.append(config_data['data']['ticker'])
-
-            # Extract weights from triggers
-            weights = {}
-            if 'triggers' in monitor_config:
-                weights.update(monitor_config['triggers'])
-            if 'bear_triggers' in monitor_config:
-                weights.update(monitor_config['bear_triggers'])
-
-            # Start streaming with the new configuration
-            success = self.start(symbols, indicators, weights)
-
-            return success
-        except Exception as e:
-            logger.error(f"Error loading monitor configuration: {e}", exc_info=True)
-            return False
-
     def _stream_data(self):
         """
-        Stream data in a separate thread
+        Run the DataStreamer in a separate thread
         """
         try:
             logger.info("Starting data streaming thread")
-            self.data_streamer.run()
+            # Connect to streaming API and subscribe to symbols
+            if self.schwab_data_link.connect_stream():
+                for symbol in self.current_symbols:
+                    self.schwab_data_link.subscribe_charts([symbol], self.current_timeframe)
+                    logger.info(f"Subscribed to {symbol} with timeframe {self.current_timeframe}")
+
+                # Run the DataStreamer - this will process incoming data
+                self.data_streamer.run()
+            else:
+                logger.error("Failed to connect to streaming API")
         except Exception as e:
             logger.error(f"Error in data streaming thread: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.is_streaming = False
             logger.info("Data streaming thread stopped")
@@ -281,13 +220,13 @@ class DataService:
             return True
 
         try:
-            # If the data_streamer has a stop method, call it
-            if hasattr(self.data_streamer, 'stop'):
-                self.data_streamer.stop()
+            # Disconnect the WebSocket in the data link
+            if self.schwab_data_link and hasattr(self.schwab_data_link, 'disconnect'):
+                self.schwab_data_link.disconnect()
 
             # Wait for the thread to finish
             if self.streaming_thread:
-                self.streaming_thread.join(timeout=5)
+                self.streaming_thread.join(timeout=2)  # Short timeout for responsive UI
 
             self.is_streaming = False
             logger.info("Stopped data streaming")
@@ -296,77 +235,17 @@ class DataService:
             logger.error(f"Error stopping data streaming: {e}")
             return False
 
-    def add_symbols(self, symbols: List[str]) -> bool:
-        """
-        Add new symbols to the current streaming session
-
-        Args:
-            symbols: List of new symbols to add
-
-        Returns:
-            bool: True if symbols were added successfully, False otherwise
-        """
-        if not self.is_streaming:
-            logger.warning("Not currently streaming, cannot add symbols")
-            return False
-
-        # Add new symbols to current list
-        new_symbols = [s for s in symbols if s not in self.current_symbols]
-        if not new_symbols:
-            logger.info("No new symbols to add")
-            return True
-
-        try:
-            # Restart with combined symbol list
-            combined_symbols = self.current_symbols + new_symbols
-            return self.start(combined_symbols, self.current_indicators, self.current_weights)
-        except Exception as e:
-            logger.error(f"Error adding symbols: {e}")
-            return False
-
-    def remove_symbols(self, symbols: List[str]) -> bool:
-        """
-        Remove symbols from the current streaming session
-
-        Args:
-            symbols: List of symbols to remove
-
-        Returns:
-            bool: True if symbols were removed successfully, False otherwise
-        """
-        if not self.is_streaming:
-            logger.warning("Not currently streaming, cannot remove symbols")
-            return False
-
-        try:
-            # Remove symbols from current list
-            remaining_symbols = [s for s in self.current_symbols if s not in symbols]
-            if not remaining_symbols:
-                logger.warning("Cannot remove all symbols, stopping streaming instead")
-                return self.stop()
-
-            # Restart with reduced symbol list
-            return self.start(remaining_symbols, self.current_indicators, self.current_weights)
-        except Exception as e:
-            logger.error(f"Error removing symbols: {e}")
-            return False
-
     def update_weights(self, weights: Dict[str, float]) -> bool:
         """
         Update indicator weights
-
-        Args:
-            weights: Dictionary of indicator weights
-
-        Returns:
-            bool: True if weights were updated successfully, False otherwise
         """
         try:
             # Update current weights
             self.current_weights.update(weights)
 
             # Update UI tool
-            self.ui_tool.update_weights(self.current_weights)
+            if self.ui_tool and hasattr(self.ui_tool, 'update_weights'):
+                self.ui_tool.update_weights(self.current_weights)
 
             logger.info("Updated indicator weights")
             return True
@@ -377,19 +256,7 @@ class DataService:
     def get_ticker_data(self) -> Dict:
         """
         Get current ticker data
-
-        Returns:
-            Dictionary with all ticker data
         """
-        if self.ui_tool:
+        if self.ui_tool and hasattr(self.ui_tool, 'get_ticker_data'):
             return self.ui_tool.get_ticker_data()
         return {}
-
-    def is_active(self) -> bool:
-        """
-        Check if streaming is active
-
-        Returns:
-            bool: True if streaming is active, False otherwise
-        """
-        return self.is_streaming
