@@ -157,7 +157,11 @@ class DataStreamer:
 
             # Use next_tick to properly add to history
             self.preprocessor.next_tick(tick)
-            # No need to manually append as next_tick does this
+
+            # CRITICAL: Notify external tools about the completed candle
+            for external_tool in self.external_tool:
+                if hasattr(external_tool, 'handle_completed_candle'):
+                    external_tool.handle_completed_candle(tick.symbol, tick)
 
             # Process indicators
             if self.indicators:

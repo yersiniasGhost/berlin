@@ -131,18 +131,22 @@ class DataService:
                 "normalization": None  # No normalization for UI display
             }
 
-            # Convert indicator dictionaries to IndicatorDefinition objects
-            indicator_defs = []
-            for indicator in indicators:
-                indicator_def = self.IndicatorDefinition(
-                    name=indicator["name"],
-                    type=indicator["type"],
-                    function=indicator["function"],
-                    parameters=indicator["parameters"]
-                )
-                indicator_defs.append(indicator_def)
+            # Identify the type of indicators being passed in
+            if indicators and isinstance(indicators[0], dict):
+                # Indicators are dictionaries, convert them to IndicatorDefinition objects
+                indicator_defs = []
+                for indicator in indicators:
+                    indicator_def = self.IndicatorDefinition(
+                        name=indicator["name"],
+                        type=indicator["type"],
+                        function=indicator["function"],
+                        parameters=indicator["parameters"]
+                    )
+                    indicator_defs.append(indicator_def)
+            else:
+                # Indicators are already IndicatorDefinition objects
+                indicator_defs = indicators
 
-            # Create monitor configuration with proper objects
             monitor_config = self.MonitorConfiguration(
                 name="trading_signals",
                 indicators=indicator_defs

@@ -1,3 +1,4 @@
+import json
 import logging
 import numpy as np
 from typing import Dict, Optional, List, Any
@@ -116,8 +117,7 @@ class UIExternalTool:
         # Track progress
         self._check_progress()
 
-    def indicator_vector(self, indicators: Dict[str, float], tick, index: int,
-                         raw_indicators: Optional[Dict[str, float]] = None) -> None:
+    def indicator_vector(self, indicators, tick, index, raw_indicators=None):
         """
         Process new indicator results.
         Only update indicators on completed candles.
@@ -161,40 +161,29 @@ class UIExternalTool:
             'bear': bear_score
         }
 
-        # Prepare indicator details with the exact same format as test_initialization_run
-        indicator_details = {}
-        if raw_indicators:
-            for name, value in indicators.items():
-                indicator_details[name] = {
-                    'value': value,
-                    'raw_value': raw_indicators.get(name),
-                }
+        # Add this debug line to check what's being sent
+        print(
+            f"DEBUG - Emitting indicator update for {symbol}: {self.indicators[symbol]}, scores: {self.overall_scores[symbol]}")
 
-                # Add transformation info like in test_initialization_run
-                if name in raw_indicators and isinstance(raw_indicators[name], (int, float)) and value != 0:
-                    raw_value = raw_indicators[name]
-                    if raw_value != 0:
-                        ratio = value / raw_value
-                        indicator_details[name]['ratio'] = ratio
-                        indicator_details[name]['decay'] = ratio if abs(value) < abs(raw_value) else 1.0
-                        indicator_details[name]['strength_pct'] = int(ratio * 100) if ratio < 1 else 100
+        # Update the ticker data with these values
+        if not 'indicators' in self.ticker_data[symbol]:
+            self.ticker_data[symbol]['indicators'] = {}
 
-        # Emit update with detailed indicator information
-        self.socketio.emit('indicator_update', {
+        self.ticker_data[symbol]['indicators'] = self.indicators[symbol]
+        self.ticker_data[symbol]['overall_scores'] = self.overall_scores[symbol]
+
+        emit_data = {
             'symbol': symbol,
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
             'overall_scores': self.overall_scores[symbol],
-            'indicator_details': indicator_details,  # Added this field with detailed info
             'timestamp': tick.timestamp.isoformat() if isinstance(tick.timestamp, datetime) else str(tick.timestamp)
-        })
+        }
 
-        # Log the information similar to test_initialization_run for debugging
-        logger.info(f"Indicator update for {symbol}: {indicators}")
-        if raw_indicators:
-            logger.info(f"Raw indicator values: {raw_indicators}")
-        logger.info(f"Overall scores: Bull={bull_score:.2f}, Bear={bear_score:.2f}")
+        print(f"EXACT EMITTED DATA: {json.dumps(emit_data)}")
 
+        # Emit update
+        self.socketio.emit('indicator_update', emit_data)
 
     def _check_progress(self, is_indicator_update=False):
         """
@@ -320,24 +309,86 @@ class UIExternalTool:
         if len(self.history[symbol]) > max_history:
             self.history[symbol] = self.history[symbol][-max_history:]
 
+        # IMPORTANT: Update the ticker_data with candle information
+        self.ticker_data[symbol].update(candle_data)
+
+        # Print debug info
+        print(f"DEBUG - Ticker data for {symbol} updated with candle: {self.ticker_data[symbol]}")
+
         # Emit candle completion event
         self.socketio.emit('candle_completed', {
             'symbol': symbol,
             'candle': candle_data
         })
 
-        # Log candle info (similar to test_initialization_run)
-        logger.info(f"Completed candle for {symbol} @ {timestamp_str}: "
-                    f"OHLC({candle.open:.2f},{candle.high:.2f},{candle.low:.2f},{candle.close:.2f})")
-
-        # Update ticker data
-        self.ticker_data[symbol] = candle_data.copy()
-
-        # Emit ticker update
+        # Emit a ticker_update event as well for redundancy
         self.socketio.emit('ticker_update', {
             'symbol': symbol,
             'data': candle_data
         })
+
+    def calculate_weighted_score(self, indicators, weights):
+        """
+        Calculate weighted score for indicators.
+
+        Args:
+            indicators: Dictionary of indicator values
+            weights: Dictionary of weights for indicators
+
+        Returns:
+            float: Weighted score between 0 and 1
+        """
+        if not indicators:
+            return 0.0
+
+        total_weight = 0.0
+        weighted_sum = 0.0
+
+        for name, value in indicators.items():
+            # Get weight for this indicator (default to 1.0)
+            weight = weights.get(name, 1.0)
+            weighted_sum += value * weight
+            total_weight += weight
+
+        # Avoid division by zero
+        if total_weight == 0:
+            return 0.0
+
+        # Return normalized score
+        return weighted_sum / total_weight
+
+    def update_weights(self, weights):
+        """
+        Update the weights used for calculating overall scores.
+
+        Args:
+            weights: Dictionary of indicator weights
+        """
+        # Store weights for indicator calculations
+        for symbol in self.ticker_data:
+            self.weights[symbol] = weights
+
+        # Recalculate overall scores with new weights
+        for symbol in self.indicators:
+            # Skip if no indicators
+            if not self.indicators[symbol]:
+                continue
+
+            # Split indicators into bull and bear
+            bull_indicators = {k: v for k, v in self.indicators[symbol].items() if 'bear' not in k.lower()}
+            bear_indicators = {k: v for k, v in self.indicators[symbol].items() if 'bear' in k.lower()}
+
+            # Calculate weighted scores
+            bull_score = self.calculate_weighted_score(bull_indicators, weights)
+            bear_score = self.calculate_weighted_score(bear_indicators, weights)
+
+            self.overall_scores[symbol] = {
+                'bull': bull_score,
+                'bear': bear_score
+            }
+
+        logger.info(f"Updated weights: {weights}")
+        return True
 
     def clear_data(self) -> None:
         """
@@ -349,5 +400,5 @@ class UIExternalTool:
         self.raw_indicators = {}
         self.overall_scores = {}
 
-        # Emit clear event
+        # Emit clear eventF
         self.socketio.emit('clear_data')
