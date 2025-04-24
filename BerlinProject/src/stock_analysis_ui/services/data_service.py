@@ -104,15 +104,21 @@ class DataService:
             if not success:
                 raise ValueError("Failed to import required modules")
 
-        # Create monitor configuration
-        monitor_config = self.MonitorConfiguration(
-            name=config.get('test_name', f"{symbol}_config_{len(self.streaming_instances)}"),
+        # Fix: Import MonitorConfiguration directly here if needed
+        from models.monitor_configuration import MonitorConfiguration
+
+        # Create monitor configuration using the imported class directly
+        config_name = f"{symbol}_config_{len(self.streaming_instances)}"
+        if config is not None:
+            config_name = config.get('test_name', config_name)
+
+        monitor_config = MonitorConfiguration(
+            name=config_name,
             indicators=indicators
         )
 
         # Create unique ID using test_name if available
-        combination_id = self.create_combination_id(symbol, monitor_config, config)
-
+        combination_id = f"{symbol}-{config_name}"
         data_link = self.SchwabDataLink()
 
         # Get authentication credentials from the auth_manager

@@ -65,10 +65,68 @@
         </div>
     </div>
 </div>
+
+<!-- Add to dashboard.html -->
+<div class="modal fade" id="addCombinationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Ticker Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Symbol</label>
+                        <input type="text" class="form-control" id="newSymbolInput" placeholder="e.g., NVDA">
+                    </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Configuration</label>
+                    <select class="form-control" id="configSelect">
+                        <option value="default">Default Configuration</option>
+                        <option value="custom">Upload Custom Configuration</option>
+                    </select>
+                </div>
+
+                <div class="mb-3 d-none" id="customConfigDiv">
+                    <input type="file" class="form-control" id="configFile" accept=".json">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="addCombinationBtn">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add button to open modal -->
+<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCombinationModal">
+    <i class="fas fa-plus"></i> Add Ticker Configuration
+</button>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+    let socket;
+    if (!socket) {
+        socket = io();
+
+        // Register event handlers only once
+        socket.on('ticker_update', function(data) {
+            // Handler code...
+        });
+
+        socket.on('candle_completed', function(data) {
+            // Handler code...
+        });
+
+        socket.on('indicator_update', function(data) {
+            // Handler code...
+        });
+    }
+
 
     let activeCombinations = {};
 
@@ -104,7 +162,7 @@
     });
 
     socket.on('ticker_update', function(data) {
-        // Get combination ID (fall back to symbol if combination_id not provided)
+        // Check combination ID first, then fallback to symbol
         const combinationId = data.combination_id || data.symbol;
 
         // Initialize data structure if needed
@@ -117,21 +175,23 @@
             };
         }
 
-        // Store the ticker data
+        // Update with new data
         if (data.data) {
             Object.assign(activeCombinations[combinationId], data.data);
-        } else {
-            // Handle direct properties
-            const props = ['open', 'high', 'low', 'close', 'volume', 'timestamp'];
-            props.forEach(prop => {
-                if (data[prop] !== undefined) {
-                    activeCombinations[combinationId][prop] = data[prop];
-                }
-            });
+        }
+
+        // Also update indicators if present
+        if (data.indicators) {
+            activeCombinations[combinationId].indicators = data.indicators;
+        }
+
+        if (data.overall_scores) {
+            activeCombinations[combinationId].overall_scores = data.overall_scores;
         }
 
         // Update UI
         updateTickerUI();
+    });
 
     socket.on('candle_completed', function(data) {
         console.log('CANDLE COMPLETED:', data);
@@ -201,7 +261,6 @@
         return html;
     }
 
-    // Modify updateTickerUI to handle multiple combinations
     function updateTickerUI() {
         const container = document.getElementById('tickerContainer');
 
@@ -227,12 +286,6 @@
                 card.className = 'card ticker-card shadow-sm';
                 card.setAttribute('data-combination-id', combinationId);
                 card.setAttribute('data-symbol', data.symbol);
-
-                // Make card clickable to go to details page
-                card.style.cursor = 'pointer';
-                card.addEventListener('click', function() {
-                    window.location.href = `/ticker/${data.symbol}?combination=${combinationId}`;
-                });
 
                 col.appendChild(card);
                 container.appendChild(col);
@@ -414,36 +467,155 @@
             }
         });
 
-        // Add the test card button handler here
-        document.getElementById('testCardBtn').addEventListener('click', function() {
-            // Create test data for PLTR
-            const testData = {
-                PLTR: {
-                    symbol: 'PLTR',
-                    timestamp: new Date().toISOString(),
-                    open: 95.21,
-                    high: 96.30,
-                    low: 94.80,
-                    close: 95.50,
-                    volume: 1234567,
-                    indicators: {
-                        'macd_cross_bull': 0.3,
-                        'bollinger_bull': 0.1,
-                        'smaX_bull': 0.8,
-                        'bollinger_bear': 0.2
+    // Show/hide custom config upload based on selection
+    document.getElementById('configSelect').addEventListener('change', function() {
+        const customConfigDiv = document.getElementById('customConfigDiv');
+        if (this.value === 'custom') {
+            customConfigDiv.classList.remove('d-none');
+        } else {
+            customConfigDiv.classList.add('d-none');
+        }
+    });
+
+    document.getElementById('addCombinationBtn').addEventListener('click', function() {
+        console.log('Add combination button clicked');
+        const symbol = document.getElementById('newSymbolInput').value.trim().toUpperCase();
+        console.log('Symbol:', symbol);
+        if (!symbol) {
+            alert('Please enter a symbol');
+            return;
+        }
+
+        const configType = document.getElementById('configSelect').value;
+
+        if (configType === 'default') {
+            // Use default configuration
+            const defaultConfig = {
+                "test_name": `Default-${symbol}`,
+                "indicators": [
+                    {
+                        "name": "sma_crossover_bullish",
+                        "type": "Indicator",
+                        "function": "sma_crossover",
+                        "parameters": {
+                            "period": 20,
+                            "crossover_value": 0.002,
+                            "trend": "bullish",
+                            "lookback": 10
+                        }
                     },
-                    overall_scores: {
-                        bull: 0.4,
-                        bear: 0.1
-                    }
-                }
+                    // Add more default indicators as needed
+                ]
             };
 
-            // Directly set ticker data and update UI
-            console.log('Setting test data:', testData);
-            tickerData = testData;
-            updateTickerUI();
-        });
+            startCombination(symbol, defaultConfig);
+        } else {
+            // Use uploaded configuration
+            const fileInput = document.getElementById('configFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select a configuration file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    startCombination(symbol, config);
+                } catch (e) {
+                    alert('Invalid configuration file: ' + e.message);
+                }
+            };
+            reader.readAsText(fileInput.files[0]);
+        }
     });
+
+    // Function to start a new combination
+    function startCombination(symbol, config) {
+        fetch('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol: symbol,
+                config: config,
+                timeframe: '1m' // Or get from a dropdown
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addCombinationModal'));
+                modal.hide();
+
+                // Show success message
+                alert(`Started monitoring ${symbol} with ${config.test_name || 'custom'} configuration`);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+        // Add this to your JavaScript for testing
+    function startMultipleSymbols() {
+        const symbols = ["NVDA", "PLTR", "AAPL"];  // List of symbols to monitor
+        const config = {
+            "test_name": "Multi-Ticker-Test",
+            "indicators": [
+                {
+                    "name": "sma_crossover",
+                    "type": "Indicator",
+                    "function": "sma_crossover",
+                    "parameters": {
+                        "period": 20,
+                        "crossover_value": 0.002,
+                        "trend": "bullish",
+                        "lookback": 10
+                    }
+                },
+                {
+                    "name": "macd_signal",
+                    "type": "Indicator",
+                    "function": "macd_histogram_crossover",
+                    "parameters": {
+                        "fast": 12,
+                        "slow": 26,
+                        "signal": 9,
+                        "histogram_threshold": 0.1,
+                        "trend": "bullish",
+                        "lookback": 15
+                    }
+                }
+            ]
+        };
+
+        fetch('/api/start_multiple', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbols: symbols,
+                config: config,
+                timeframe: '1m'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Started multiple symbols:', data);
+            alert('Started monitoring multiple symbols');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error: ' + error.message);
+        });
+    }
+
+    // Add a button to your UI for testing
+    const testButton = document.createElement('button');
+    testButton.className = 'btn btn-info ml-2';
+    testButton.textContent = 'Start Multiple Tickers';
+    testButton.onclick = startMultipleSymbols;
+    document.querySelector('.row.mb-4 .col-md-4').appendChild(testButton);
 </script>
 {% endblock %}

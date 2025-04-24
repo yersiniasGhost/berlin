@@ -139,7 +139,7 @@ def start_streaming():
 
     symbol = data.get('symbol')
     config = data.get('config')
-    timeframe = data.get('timeframe', '1m')  # Keep the existing timeframe parameter
+    timeframe = data.get('timeframe', '1m')
 
     if not symbol or not config:
         return jsonify({"success": False, "error": "Missing symbol or configuration"})
@@ -173,6 +173,54 @@ def start_streaming():
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/start_multiple', methods=['POST'])
+def start_multiple():
+    """Start multiple symbol-monitor combinations"""
+    data = request.json
+
+    symbols = data.get('symbols', [])
+    config = data.get('config')
+    timeframe = data.get('timeframe', '1m')
+
+    if not symbols or not config:
+        return jsonify({"success": False, "error": "Missing symbols or configuration"})
+
+    results = {}
+
+    for symbol in symbols:
+        try:
+            # Process configuration to extract indicators
+            indicators = []
+            for indicator_dict in config.get('indicators', []):
+                indicator_def = IndicatorDefinition(
+                    name=indicator_dict["name"],
+                    type=indicator_dict.get("type", "Indicator"),
+                    function=indicator_dict["function"],
+                    parameters=indicator_dict["parameters"]
+                )
+                indicators.append(indicator_def)
+
+            # Get weights
+            weights = {}
+            monitor_dict = config.get('monitor', {})
+            if monitor_dict and 'triggers' in monitor_dict:
+                weights.update(monitor_dict['triggers'])
+            if monitor_dict and 'bear_triggers' in monitor_dict:
+                weights.update(monitor_dict['bear_triggers'])
+
+            # Start combination
+            combination_id = data_service.start_combination(symbol, indicators, weights, timeframe, config)
+            results[symbol] = {"success": True, "combination_id": combination_id}
+
+        except Exception as e:
+            results[symbol] = {"success": False, "error": str(e)}
+
+    return jsonify({
+        "success": True,
+        "results": results
+    })
 
 
 @app.route('/api/stop_combination', methods=['POST'])
