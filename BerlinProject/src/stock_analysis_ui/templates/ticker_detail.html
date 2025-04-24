@@ -549,93 +549,122 @@ function addCandleToTable(tbody, candle, isHistorical) {
     }
 }
 
-    function updateIndicatorUI() {
-        const container = document.getElementById('indicatorContainer');
+// Socket.IO event handler for indicator updates
+socket.on('indicator_update', function(data) {
+    if (data.symbol !== symbol) {
+        return;
+    }
 
-        // Clear loading spinner
-        container.innerHTML = '';
+    console.log('Received indicator update:', data);
 
-        if (!indicators || Object.keys(indicators).length === 0) {
-            container.innerHTML = `
-                <div class="col-12 text-center py-4">
-                    <div class="text-muted">No indicator data available</div>
-                </div>
-            `;
-            return;
+    // Store all indicator data
+    indicators = data.indicators || {};
+    rawIndicators = data.raw_indicators || {};
+    overallScores = data.overall_scores || { bull: 0, bear: 0 };
+
+    // Debug - check what indicators we're receiving
+    console.log('Indicator data received:', indicators);
+    console.log('Raw indicator data:', rawIndicators);
+
+    // Update UI with indicator data
+    updateIndicatorUI();
+
+    // Update overall scores
+    updateOverallScores();
+});
+
+// Function to update the indicator UI
+function updateIndicatorUI() {
+    const container = document.getElementById('indicatorContainer');
+
+    // Clear container first
+    container.innerHTML = '';
+
+    // Check if we have indicator data
+    if (!indicators || Object.keys(indicators).length === 0) {
+        container.innerHTML = `
+            <div class="col-12 text-center py-4">
+                <div class="text-muted">No indicator data available</div>
+            </div>
+        `;
+        return;
+    }
+
+    // Debug - log what indicators we're trying to display
+    console.log('Updating UI with indicators:', indicators);
+
+    // Create cards for each indicator
+    for (const [name, value] of Object.entries(indicators)) {
+        // Skip empty indicators
+        if (value === undefined || value === null) {
+            continue;
         }
 
-        // Create cards for each indicator
-        for (const [name, value] of Object.entries(indicators)) {
-            // Skip empty indicators
-            if (value === undefined || value === null) {
-                continue;
+        // Get raw value if available
+        const rawValue = rawIndicators[name];
+
+        // Create card column
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4 mb-3';
+
+        // Determine indicator color based on value
+        let indicatorColor = 'bg-secondary';
+        let textColor = 'text-muted';
+
+        // Check if this is a bullish or bearish indicator
+        const isBearish = name.toLowerCase().includes('bear');
+
+        if (isBearish) {
+            // Bearish indicators
+            if (value > 0.7) {
+                indicatorColor = 'bg-danger';
+                textColor = 'text-danger';
+            } else if (value > 0.3) {
+                indicatorColor = 'bg-warning';
+                textColor = 'text-warning';
             }
-
-            // Get raw value if available
-            const rawValue = rawIndicators[name];
-
-            // Create card column
-            const col = document.createElement('div');
-            col.className = 'col-md-6 col-lg-4 mb-3';
-
-            // Determine indicator color based on value
-            let indicatorColor = 'bg-secondary';
-            let textColor = 'text-muted';
-
-            // Check if this is a bullish or bearish indicator
-            const isBearish = name.toLowerCase().includes('bear');
-
-            if (isBearish) {
-                // Bearish indicators
-                if (value > 0.7) {
-                    indicatorColor = 'bg-danger';
-                    textColor = 'text-danger';
-                } else if (value > 0.3) {
-                    indicatorColor = 'bg-warning';
-                    textColor = 'text-warning';
-                }
-            } else {
-                // Bullish indicators
-                if (value > 0.7) {
-                    indicatorColor = 'bg-success';
-                    textColor = 'text-success';
-                } else if (value > 0.3) {
-                    indicatorColor = 'bg-info';
-                    textColor = 'text-primary';
-                }
+        } else {
+            // Bullish indicators
+            if (value > 0.7) {
+                indicatorColor = 'bg-success';
+                textColor = 'text-success';
+            } else if (value > 0.3) {
+                indicatorColor = 'bg-info';
+                textColor = 'text-primary';
             }
+        }
 
-            // Format display name
-            const displayName = name
-                .replace(/_/g, ' ')
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase());
+        // Format display name
+        const displayName = name
+            .replace(/_/g, ' ')
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, str => str.toUpperCase());
 
-            // Create card
-            col.innerHTML = `
-                <div class="card h-100 indicator-card">
-                    <div class="card-body">
-                        <h6 class="card-title">${displayName}</h6>
-                        <div class="badge ${isBearish ? 'bg-danger' : 'bg-success'} mb-1">
-                            ${isBearish ? 'Bearish' : 'Bullish'}
-                        </div>
-                        <div class="progress mb-2 indicator-progress">
-                            <div class="progress-bar ${indicatorColor}" role="progressbar"
-                                 style="width: ${value * 100}%"
-                                 aria-valuenow="${value * 100}"
-                                 aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <div class="indicator-value ${textColor} me-2">${(value * 100).toFixed(1)}%</div>
-                            ${rawValue !== undefined ? `<div class="raw-value text-muted">(Raw: ${rawValue})</div>` : ''}
-                        </div>
+        // Create card
+        col.innerHTML = `
+            <div class="card h-100 indicator-card">
+                <div class="card-body">
+                    <h6 class="card-title">${displayName}</h6>
+                    <div class="badge ${isBearish ? 'bg-danger' : 'bg-success'} mb-1">
+                        ${isBearish ? 'Bearish' : 'Bullish'}
+                    </div>
+                    <div class="progress mb-2 indicator-progress">
+                        <div class="progress-bar ${indicatorColor}" role="progressbar"
+                             style="width: ${value * 100}%"
+                             aria-valuenow="${value * 100}"
+                             aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="indicator-value ${textColor} me-2">${(value * 100).toFixed(1)}%</div>
+                        ${rawValue !== undefined ? `<div class="raw-value text-muted">(Raw: ${rawValue.toFixed(4)})</div>` : ''}
                     </div>
                 </div>
-            `;
+            </div>
+        `;
 
-            container.appendChild(col);
-        }
+        container.appendChild(col);
     }
+}
 
     function updateOverallScores() {
         // Update bull/bear scores
@@ -948,28 +977,6 @@ function addCandleToTable(tbody, candle, isHistorical) {
         document.getElementById('chartStatus').className = 'badge bg-success';
     });
 
-// Handler for indicator updates
-socket.on('indicator_update', function(data) {
-    if (data.symbol !== symbol) {
-        return;
-    }
-
-    console.log('Received indicator update:', data);
-
-    // Update indicators
-    indicators = data.indicators || {};
-    rawIndicators = data.raw_indicators || {};
-    overallScores = data.overall_scores || { bull: 0, bear: 0 };
-
-    // Get the detailed indicator information
-    const indicatorDetails = data.indicator_details || {};
-
-    // Update UI for indicators with detailed info
-    updateIndicatorUIWithDetails(indicatorDetails);
-
-    // Update overall scores
-    updateOverallScores();
-});
 
 // Function to update indicators with detailed information
 function updateIndicatorUIWithDetails(indicatorDetails) {

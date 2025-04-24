@@ -315,16 +315,9 @@ class UIExternalTool:
         # Print debug info
         print(f"DEBUG - Ticker data for {symbol} updated with candle: {self.ticker_data[symbol]}")
 
-        # Emit candle completion event
         self.socketio.emit('candle_completed', {
             'symbol': symbol,
             'candle': candle_data
-        })
-
-        # Emit a ticker_update event as well for redundancy
-        self.socketio.emit('ticker_update', {
-            'symbol': symbol,
-            'data': candle_data
         })
 
     def calculate_weighted_score(self, indicators, weights):
