@@ -331,39 +331,50 @@
     }
 
     function loadInitialData() {
-        console.log("Loading initial data for symbol:", symbol);
+        console.log(`Loading initial data for combination: ${combinationId}`);
 
-        fetch(`/api/tickers?symbol=${symbol}`)
+        fetch(`/api/tickers?symbol=${symbol}&combination=${combinationId}`)
             .then(response => response.json())
             .then(data => {
                 console.log("API data received:", data);
 
-                // Check if we have history
-                if (data.history && data.history[symbol]) {
-                    console.log(`Found ${data.history[symbol].length} historical candles`);
+                // Check if we have history for this combination
+                if (data.history && data.history[combinationId]) {
+                    console.log(`Found ${data.history[combinationId].length} historical candles`);
+                    updateChartWithHistoricalData(data.history[combinationId]);
+                    updateCandleTable(data.history[combinationId], true);
 
-                    // Update chart with history
-                    updateChartWithHistoricalData(data.history[symbol]);
-
-                    // Update candle table
-                    updateCandleTable(data.history[symbol], true);
-
-                    // Display the first few candles for debugging
-                    if (data.history[symbol].length > 0) {
-                        console.log("First candle:", data.history[symbol][0]);
-                        console.log("Last candle:", data.history[symbol][data.history[symbol].length - 1]);
-
-                        // Update ticker info from last candle
-                        const lastCandle = data.history[symbol][data.history[symbol].length - 1];
+                    // Update ticker info from last candle
+                    if (data.history[combinationId].length > 0) {
+                        const lastCandle = data.history[combinationId][data.history[combinationId].length - 1];
                         updateTickerInfo(lastCandle);
 
                         // Set last completed candle time
                         if (lastCandle.timestamp) {
                             lastCompletedCandleTime = new Date(lastCandle.timestamp);
-                            console.log("Set last completed candle time:", lastCompletedCandleTime);
                         }
 
                         // Update candle count
+                        const countElem = document.getElementById('candleCount');
+                        if (countElem) {
+                            countElem.textContent = data.history[combinationId].length;
+                        }
+                    }
+                } else if (data.history && data.history[symbol]) {
+                    // Fallback to just symbol if combination not found
+                    console.log(`Falling back to symbol: ${data.history[symbol].length} historical candles`);
+                    updateChartWithHistoricalData(data.history[symbol]);
+                    updateCandleTable(data.history[symbol], true);
+
+                    // Similar update for ticker info
+                    if (data.history[symbol].length > 0) {
+                        const lastCandle = data.history[symbol][data.history[symbol].length - 1];
+                        updateTickerInfo(lastCandle);
+
+                        if (lastCandle.timestamp) {
+                            lastCompletedCandleTime = new Date(lastCandle.timestamp);
+                        }
+
                         const countElem = document.getElementById('candleCount');
                         if (countElem) {
                             countElem.textContent = data.history[symbol].length;
@@ -373,8 +384,14 @@
                     console.warn("No historical data found in API response");
                 }
 
-                // Check if we have indicators
-                if (data.indicators && data.indicators[symbol]) {
+                // Check if we have indicators for this combination
+                if (data.indicators && data.indicators[combinationId]) {
+                    indicators = data.indicators[combinationId];
+                    rawIndicators = (data.raw_indicators && data.raw_indicators[combinationId])
+                        ? data.raw_indicators[combinationId] : {};
+                    updateIndicatorUI();
+                } else if (data.indicators && data.indicators[symbol]) {
+                    // Fallback to just symbol
                     indicators = data.indicators[symbol];
                     rawIndicators = (data.raw_indicators && data.raw_indicators[symbol])
                         ? data.raw_indicators[symbol] : {};
@@ -382,7 +399,10 @@
                 }
 
                 // Check if we have overall scores
-                if (data.overall_scores && data.overall_scores[symbol]) {
+                if (data.overall_scores && data.overall_scores[combinationId]) {
+                    overallScores = data.overall_scores[combinationId];
+                    updateOverallScores();
+                } else if (data.overall_scores && data.overall_scores[symbol]) {
                     overallScores = data.overall_scores[symbol];
                     updateOverallScores();
                 }
@@ -393,6 +413,79 @@
                 document.getElementById('chartStatus').className = 'badge bg-danger';
             });
     }
+
+    // Update Socket.IO event handlers to check for combinationId
+    socket.on('ticker_update', function(data) {
+        // Filter by combination_id if available, otherwise by symbol
+        if ((data.combination_id && data.combination_id !== combinationId) ||
+            (!data.combination_id && data.symbol !== symbol)) {
+            return;
+        }
+
+        console.log('Received ticker update:', data);
+
+        // Update ticker info display
+        if (data.data) {
+            updateTickerInfo(data.data);
+            updatePriceUpdatesTable(data.data);
+        }
+    });
+
+    socket.on('candle_completed', function(data) {
+        // Filter by combination_id if available, otherwise by symbol
+        if ((data.combination_id && data.combination_id !== combinationId) ||
+            (!data.combination_id && data.symbol !== symbol)) {
+            return;
+        }
+
+        console.log('Received completed candle:', data);
+
+        const candle = data.candle;
+
+        // Create date object from the timestamp string
+        const timestamp = new Date(candle.timestamp);
+
+        // Set last completed candle time
+        lastCompletedCandleTime = timestamp;
+
+        // Update the chart with the new completed candle
+        appendCandleToChart(candle);
+
+        // Update ticker display
+        updateTickerInfo(candle);
+
+        // Add to candle history table
+        updateCandleTable(candle, false);
+
+        // Update candle count
+        const countElem = document.getElementById('candleCount');
+        if (countElem) {
+            countElem.textContent = parseInt(countElem.textContent || '0') + 1;
+        }
+
+        // Update chart status
+        document.getElementById('chartStatus').textContent = 'Live data streaming';
+        document.getElementById('chartStatus').className = 'badge bg-success';
+    });
+
+    socket.on('indicator_update', function(data) {
+        // Filter by combination_id if available, otherwise by symbol
+        if ((data.combination_id && data.combination_id !== combinationId) ||
+            (!data.combination_id && data.symbol !== symbol)) {
+            return;
+        }
+
+        console.log('Received indicator update:', data);
+
+        // Update indicators
+        indicators = data.indicators || {};
+        rawIndicators = data.raw_indicators || {};
+        overallScores = data.overall_scores || { bull: 0, bear: 0 };
+
+        // Update UI
+        updateIndicatorUI();
+        updateOverallScores();
+    });
 
     function updateChartWithHistoricalData(candles) {
         console.log("Updating chart with historical data:", candles.length);
@@ -948,132 +1041,122 @@ function addCandleToTable(tbody, candle, isHistorical) {
         document.getElementById('chartStatus').className = 'badge bg-success';
     });
 
-// Handler for indicator updates
-socket.on('indicator_update', function(data) {
-    if (data.symbol !== symbol) {
-        return;
-    }
-
-    console.log('Received indicator update:', data);
-
-    // Update indicators
-    indicators = data.indicators || {};
-    rawIndicators = data.raw_indicators || {};
-    overallScores = data.overall_scores || { bull: 0, bear: 0 };
-
-    // Get the detailed indicator information
-    const indicatorDetails = data.indicator_details || {};
-
-    // Update UI for indicators with detailed info
-    updateIndicatorUIWithDetails(indicatorDetails);
-
-    // Update overall scores
-    updateOverallScores();
-});
-
-// Function to update indicators with detailed information
-function updateIndicatorUIWithDetails(indicatorDetails) {
-    const container = document.getElementById('indicatorContainer');
-
-    // Clear loading spinner
-    container.innerHTML = '';
-
-    if (Object.keys(indicatorDetails).length === 0) {
-        container.innerHTML = `
-            <div class="col-12 text-center py-4">
-                <div class="text-muted">No indicator data available</div>
-            </div>
-        `;
-        return;
-    }
-
-    // Create cards for each indicator with detailed information
-    for (const [name, details] of Object.entries(indicatorDetails)) {
-        // Skip empty indicators
-        if (details.value === undefined || details.value === null) {
-            continue;
+    // Socket.IO event handler for indicator updates
+    socket.on('indicator_update', function(data) {
+        if (data.symbol !== symbol) {
+            return;
         }
 
-        // Create card column
-        const col = document.createElement('div');
-        col.className = 'col-md-6 col-lg-4 mb-3';
+        console.log('Received indicator update:', data);
 
-        // Determine indicator color based on value
-        let indicatorColor = 'bg-secondary';
-        let textColor = 'text-muted';
+        // Store all indicator data
+        indicators = data.indicators || {};
+        rawIndicators = data.raw_indicators || {};
+        overallScores = data.overall_scores || { bull: 0, bear: 0 };
 
-        // Check if this is a bullish or bearish indicator
-        const isBearish = name.toLowerCase().includes('bear');
+        // Debug - check what indicators we're receiving
+        console.log('Indicator data received:', indicators);
+        console.log('Raw indicator data:', rawIndicators);
 
-        if (isBearish) {
-            // Bearish indicators
-            if (details.value > 0.7) {
-                indicatorColor = 'bg-danger';
-                textColor = 'text-danger';
-            } else if (details.value > 0.3) {
-                indicatorColor = 'bg-warning';
-                textColor = 'text-warning';
-            }
-        } else {
-            // Bullish indicators
-            if (details.value > 0.7) {
-                indicatorColor = 'bg-success';
-                textColor = 'text-success';
-            } else if (details.value > 0.3) {
-                indicatorColor = 'bg-info';
-                textColor = 'text-primary';
-            }
-        }
+        // Update UI with indicator data
+        updateIndicatorUI();
 
-        // Format display name
-        const displayName = name
-            .replace(/_/g, ' ')
-            .replace(/([A-Z])/g, ' $1')
-            .replace(/^./, str => str.toUpperCase());
+        // Update overall scores
+        updateOverallScores();
+    });
 
-        // Create card with detailed transformation info
-        let detailsHtml = '';
-        if (details.raw_value !== undefined) {
-            detailsHtml += `<div class="raw-value mb-1">Raw value: <strong>${typeof details.raw_value === 'number' ? details.raw_value.toFixed(4) : details.raw_value}</strong></div>`;
-        }
+    // Function to update the indicator UI
+    function updateIndicatorUI() {
+        const container = document.getElementById('indicatorContainer');
 
-        if (details.ratio !== undefined) {
-            detailsHtml += `<div class="small text-muted">Scaling factor: ${details.ratio.toFixed(4)}</div>`;
-        }
+        // Clear container first
+        container.innerHTML = '';
 
-        if (details.strength_pct !== undefined) {
-            detailsHtml += `<div class="small text-muted">Strength: ${details.strength_pct}%</div>`;
-        }
-
-        if (details.decay !== undefined && details.decay < 1) {
-            detailsHtml += `<div class="small text-muted">Time decay factor: ${details.decay.toFixed(4)}</div>`;
-        }
-
-        // Create card
-        col.innerHTML = `
-            <div class="card h-100 indicator-card">
-                <div class="card-body">
-                    <h6 class="card-title">${displayName}</h6>
-                    <div class="badge ${isBearish ? 'bg-danger' : 'bg-success'} mb-1">
-                        ${isBearish ? 'Bearish' : 'Bullish'}
-                    </div>
-                    <div class="progress mb-2 indicator-progress">
-                        <div class="progress-bar ${indicatorColor}" role="progressbar"
-                             style="width: ${details.value * 100}%"
-                             aria-valuenow="${details.value * 100}"
-                             aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <div class="d-flex align-items-center mb-1">
-                        <div class="indicator-value ${textColor} me-2">${(details.value * 100).toFixed(1)}%</div>
-                    </div>
-                    ${detailsHtml}
+        // Check if we have indicator data
+        if (!indicators || Object.keys(indicators).length === 0) {
+            container.innerHTML = `
+                <div class="col-12 text-center py-4">
+                    <div class="text-muted">No indicator data available</div>
                 </div>
-            </div>
-        `;
+            `;
+            return;
+        }
 
-        container.appendChild(col);
+        // Debug - log what indicators we're trying to display
+        console.log('Updating UI with indicators:', indicators);
+
+        // Create cards for each indicator
+        for (const [name, value] of Object.entries(indicators)) {
+            // Skip empty indicators
+            if (value === undefined || value === null) {
+                continue;
+            }
+
+            // Get raw value if available
+            const rawValue = rawIndicators[name];
+
+            // Create card column
+            const col = document.createElement('div');
+            col.className = 'col-md-6 col-lg-4 mb-3';
+
+            // Determine indicator color based on value
+            let indicatorColor = 'bg-secondary';
+            let textColor = 'text-muted';
+
+            // Check if this is a bullish or bearish indicator
+            const isBearish = name.toLowerCase().includes('bear');
+
+            if (isBearish) {
+                // Bearish indicators
+                if (value > 0.7) {
+                    indicatorColor = 'bg-danger';
+                    textColor = 'text-danger';
+                } else if (value > 0.3) {
+                    indicatorColor = 'bg-warning';
+                    textColor = 'text-warning';
+                }
+            } else {
+                // Bullish indicators
+                if (value > 0.7) {
+                    indicatorColor = 'bg-success';
+                    textColor = 'text-success';
+                } else if (value > 0.3) {
+                    indicatorColor = 'bg-info';
+                    textColor = 'text-primary';
+                }
+            }
+
+            // Format display name
+            const displayName = name
+                .replace(/_/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase());
+
+            // Create card
+            col.innerHTML = `
+                <div class="card h-100 indicator-card">
+                    <div class="card-body">
+                        <h6 class="card-title">${displayName}</h6>
+                        <div class="badge ${isBearish ? 'bg-danger' : 'bg-success'} mb-1">
+                            ${isBearish ? 'Bearish' : 'Bullish'}
+                        </div>
+                        <div class="progress mb-2 indicator-progress">
+                            <div class="progress-bar ${indicatorColor}" role="progressbar"
+                                 style="width: ${value * 100}%"
+                                 aria-valuenow="${value * 100}"
+                                 aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div class="indicator-value ${textColor} me-2">${(value * 100).toFixed(1)}%</div>
+                            ${rawValue !== undefined ? `<div class="raw-value text-muted">(Raw: ${rawValue.toFixed(4)})</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(col);
+        }
     }
-}
 
 </script>
 {% endblock %}

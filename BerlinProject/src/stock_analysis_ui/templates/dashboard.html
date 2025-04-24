@@ -70,6 +70,8 @@
 {% block scripts %}
 <script>
 
+    let activeCombinations = {};
+
         // Add this at the top of your script section
     socket.onAny((event, ...args) => {
       console.log(`SOCKET EVENT: ${event}`, args);
@@ -77,81 +79,59 @@
 
     let tickerData = {};
 
-    // Socket.IO event handlers
     socket.on('ticker_update', function(data) {
         console.log('TICKER UPDATE RECEIVED:', data);
 
-        // Store the data
-        if (!tickerData[data.symbol]) {
-            tickerData[data.symbol] = {};
-        }
+        // Get combination ID (fall back to symbol if combination_id not provided)
+        const combinationId = data.combination_id || data.symbol;
 
-        // Merge the data instead of replacing it
-        Object.assign(tickerData[data.symbol], data.data);
-
-        // Update the UI
-        updateTickerUI();
-    });
-
-    // Make sure your Socket.IO event handlers are properly structured
-    socket.on('indicator_update', function(data) {
-        console.log('INDICATOR UPDATE RECEIVED:', data);
-
-        // Check that data has the required structure
-        if (!data || !data.symbol) {
-            console.error('Invalid indicator data structure:', data);
-            return;
-        }
-
-        const symbol = data.symbol;
-
-        // Make sure the ticker exists in our data structure
-        if (!tickerData[symbol]) {
-            tickerData[symbol] = {
-                symbol: symbol,  // Ensure symbol is set
-                timestamp: data.timestamp || new Date().toISOString()
+        // Initialize data structure if needed
+        if (!activeCombinations[combinationId]) {
+            activeCombinations[combinationId] = {
+                symbol: data.symbol,
+                indicators: {},
+                overall_scores: { bull: 0, bear: 0 },
+                timestamp: null
             };
         }
 
-        // Explicitly assign all properties
-        tickerData[symbol].indicators = data.indicators;
-        tickerData[symbol].overall_scores = data.overall_scores;
+        // Store indicator data
+        activeCombinations[combinationId].indicators = data.indicators;
+        activeCombinations[combinationId].overall_scores = data.overall_scores;
 
-        // Make sure we have all the required data
-        console.log('Updated ticker data:', JSON.parse(JSON.stringify(tickerData)));
-
-        // Update the UI
+        // Update UI
         updateTickerUI();
     });
 
-    // Socket.IO event handlers
     socket.on('ticker_update', function(data) {
-        console.log('TICKER UPDATE RECEIVED:', data);
+        // Get combination ID (fall back to symbol if combination_id not provided)
+        const combinationId = data.combination_id || data.symbol;
 
-        // Store the data
-        if (!tickerData[data.symbol]) {
-            tickerData[data.symbol] = {};
+        // Initialize data structure if needed
+        if (!activeCombinations[combinationId]) {
+            activeCombinations[combinationId] = {
+                symbol: data.symbol,
+                indicators: {},
+                overall_scores: { bull: 0, bear: 0 },
+                timestamp: null
+            };
         }
 
-        // Copy the data properties
+        // Store the ticker data
         if (data.data) {
-            // If data is nested under 'data' property
-            Object.assign(tickerData[data.symbol], data.data);
+            Object.assign(activeCombinations[combinationId], data.data);
         } else {
-            // If data is at the root level
-            const candle_props = ['open', 'high', 'low', 'close', 'volume', 'timestamp'];
-            candle_props.forEach(prop => {
+            // Handle direct properties
+            const props = ['open', 'high', 'low', 'close', 'volume', 'timestamp'];
+            props.forEach(prop => {
                 if (data[prop] !== undefined) {
-                    tickerData[data.symbol][prop] = data[prop];
+                    activeCombinations[combinationId][prop] = data[prop];
                 }
             });
         }
 
-        console.log('Ticker data after update:', tickerData[data.symbol]);
-
-        // Update the UI
+        // Update UI
         updateTickerUI();
-    });
 
     socket.on('candle_completed', function(data) {
         console.log('CANDLE COMPLETED:', data);
@@ -221,138 +201,166 @@
         return html;
     }
 
-    // Function to update ticker cards
+    // Modify updateTickerUI to handle multiple combinations
     function updateTickerUI() {
-        console.log('Updating ticker UI with data:', tickerData);
         const container = document.getElementById('tickerContainer');
-        const symbols = Object.keys(tickerData);
-
-        // Debug: Check if we have any data
-        console.log('Symbols found:', symbols);
 
         // Clear empty dashboard if we have data
-        if (symbols.length > 0) {
+        if (Object.keys(activeCombinations).length > 0) {
             const emptyDashboard = container.querySelector('.empty-dashboard');
             if (emptyDashboard) {
                 container.innerHTML = '';
             }
         }
 
-        // Update or create cards for each ticker
-        symbols.forEach(symbol => {
-            const data = tickerData[symbol];
-
-<!--            // Skip if missing critical data-->
-<!--            if (!data || !data.close) {-->
-<!--                console.log('Missing data for ' + symbol, data);-->
-<!--                return;-->
-<!--            }-->
-
-            // Check if card exists
-            let card = container.querySelector(`[data-symbol="${symbol}"]`);
+        // Process each combination
+        for (const [combinationId, data] of Object.entries(activeCombinations)) {
+            // Check if we already have a card for this combination
+            let card = container.querySelector(`[data-combination-id="${combinationId}"]`);
 
             if (!card) {
                 // Create new card
-                console.log('Creating new card for ' + symbol);
                 const col = document.createElement('div');
                 col.className = 'col-md-4 col-lg-3';
 
                 card = document.createElement('div');
                 card.className = 'card ticker-card shadow-sm';
-                card.setAttribute('data-symbol', symbol);
+                card.setAttribute('data-combination-id', combinationId);
+                card.setAttribute('data-symbol', data.symbol);
 
                 // Make card clickable to go to details page
                 card.style.cursor = 'pointer';
                 card.addEventListener('click', function() {
-                    window.location.href = `/ticker/${symbol}`;
+                    window.location.href = `/ticker/${data.symbol}?combination=${combinationId}`;
                 });
 
                 col.appendChild(card);
                 container.appendChild(col);
             }
 
-            // Get price change direction
-            let changeDirection = '';
-            let changeClass = '';
-            if (data.previousClose && data.close > data.previousClose) {
-                changeDirection = '▲';
-                changeClass = 'ticker-change-up';
-            } else if (data.previousClose && data.close < data.previousClose) {
-                changeDirection = '▼';
-                changeClass = 'ticker-change-down';
-            }
+            // Now update the card content
+            updateCardContent(card, data, combinationId);
+        }
+    }
 
-            // Format price
-            const price = typeof data.close === 'number' ? data.close.toFixed(2) : data.close;
+    // New function to update card content
+    function updateCardContent(card, data, combinationId) {
+        // Get price change direction
+        let changeDirection = '';
+        let changeClass = '';
+        if (data.previousClose && data.close > data.previousClose) {
+            changeDirection = '▲';
+            changeClass = 'ticker-change-up';
+        } else if (data.previousClose && data.close < data.previousClose) {
+            changeDirection = '▼';
+            changeClass = 'ticker-change-down';
+        }
 
-            // Format timestamp
-            let timeStr = '';
-            if (data.timestamp) {
-                const time = new Date(data.timestamp);
-                timeStr = time.toLocaleTimeString();
-            }
+        // Format price
+        const price = typeof data.close === 'number' ? data.close.toFixed(2) : data.close;
 
-            // Progress bars - Get bullish/bearish scores
-            let bullScore = 0;
-            let bearScore = 0;
+        // Format timestamp
+        let timeStr = '';
+        if (data.timestamp) {
+            const time = new Date(data.timestamp);
+            timeStr = time.toLocaleTimeString();
+        }
 
-            if (data.overall_scores) {
-                bullScore = data.overall_scores.bull || 0;
-                bearScore = data.overall_scores.bear || 0;
-            }
+        // Get scores
+        const bullScore = data.overall_scores?.bull || 0;
+        const bearScore = data.overall_scores?.bear || 0;
 
-            // Update card content with all the necessary information
-            card.innerHTML = `
-                <div class="card-header d-flex justify-content-between align-items-center bg-light">
-                    <h5 class="mb-0">${symbol}</h5>
-                    <small class="text-muted">${timeStr}</small>
+        // Short name for the combination to display with symbol
+        const configName = combinationId.split('-')[1] || '';
+
+        // Update card content
+        card.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                <h5 class="mb-0">${data.symbol}</h5>
+                <small class="text-muted">${configName}</small>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="ticker-price ${changeClass}">${price} ${changeDirection}</span>
+                    <span class="badge bg-secondary">${data.volume ? data.volume.toLocaleString() : 'N/A'}</span>
                 </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="ticker-price ${changeClass}">${price} ${changeDirection}</span>
-                        <span class="badge bg-secondary">${data.volume ? data.volume.toLocaleString() : 'N/A'}</span>
-                    </div>
 
-                    <div class="mb-3">
-                        <label class="d-flex justify-content-between">
-                            <span>Bullish Signal</span>
-                            <span>${(bullScore * 100).toFixed(0)}%</span>
-                        </label>
-                        <div class="progress" style="height: 15px;">
-                            <div class="progress-bar progress-bull" role="progressbar"
-                                 style="width: ${bullScore * 100}%"
-                                 aria-valuenow="${bullScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
+                <div class="mb-3">
+                    <label class="d-flex justify-content-between">
+                        <span>Bullish Signal</span>
+                        <span>${(bullScore * 100).toFixed(0)}%</span>
+                    </label>
+                    <div class="progress" style="height: 15px;">
+                        <div class="progress-bar progress-bull" role="progressbar"
+                             style="width: ${bullScore * 100}%"
+                             aria-valuenow="${bullScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
-
-                    <div class="mb-2">
-                        <label class="d-flex justify-content-between">
-                            <span>Bearish Signal</span>
-                            <span>${(bearScore * 100).toFixed(0)}%</span>
-                        </label>
-                        <div class="progress" style="height: 15px;">
-                            <div class="progress-bar progress-bear" role="progressbar"
-                                 style="width: ${bearScore * 100}%"
-                                 aria-valuenow="${bearScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                    </div>
-
-                    ${data.indicators ? renderIndicatorsSummary(symbol) : ''}
                 </div>
-                <div class="card-footer bg-white">
-                    <div class="row small text-muted">
-                        <div class="col-6">
-                            <div>Open: ${data.open ? data.open.toFixed(2) : 'N/A'}</div>
-                            <div>Low: ${data.low ? data.low.toFixed(2) : 'N/A'}</div>
-                        </div>
-                        <div class="col-6 text-end">
-                            <div>High: ${data.high ? data.high.toFixed(2) : 'N/A'}</div>
-                            <div>Close: ${data.close ? data.close.toFixed(2) : 'N/A'}</div>
-                        </div>
+
+                <div class="mb-2">
+                    <label class="d-flex justify-content-between">
+                        <span>Bearish Signal</span>
+                        <span>${(bearScore * 100).toFixed(0)}%</span>
+                    </label>
+                    <div class="progress" style="height: 15px;">
+                        <div class="progress-bar progress-bear" role="progressbar"
+                             style="width: ${bearScore * 100}%"
+                             aria-valuenow="${bearScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
+                </div>
+
+                ${data.indicators ? renderIndicatorsSummary(data) : ''}
+            </div>
+            <div class="card-footer bg-white">
+                <div class="d-flex justify-content-between">
+                    <span class="small text-muted">Updated: ${timeStr}</span>
+                    <span class="small text-muted">${configName}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderIndicatorsSummary(data) {
+        if (!data.indicators || Object.keys(data.indicators).length === 0) {
+            return '';
+        }
+
+        const indicators = data.indicators;
+        let html = '<div class="mt-2 small">';
+
+        // Only show up to 3 top indicators in the card
+        const indicatorNames = Object.keys(indicators);
+        const topIndicators = indicatorNames.slice(0, 3);
+
+        for (const name of topIndicators) {
+            const value = indicators[name];
+
+            // Skip if not a numeric value
+            if (typeof value !== 'number') continue;
+
+            // Format with color based on value
+            let valueClass = 'text-muted';
+            if (value > 0.7) {
+                valueClass = name.toLowerCase().includes('bear') ? 'text-danger' : 'text-success';
+            } else if (value > 0.3) {
+                valueClass = name.toLowerCase().includes('bear') ? 'text-warning' : 'text-primary';
+            }
+
+            const displayName = name
+                .replace(/_/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase());
+
+            html += `
+                <div class="d-flex justify-content-between mb-1">
+                    <span>${displayName}:</span>
+                    <span class="${valueClass} fw-bold">${value.toFixed(2)}</span>
                 </div>
             `;
-        });
+        }
+
+        html += '</div>';
+        return html;
     }
 
     // Check if we have data already

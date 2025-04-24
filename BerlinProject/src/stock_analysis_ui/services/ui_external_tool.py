@@ -117,73 +117,52 @@ class UIExternalTool:
         # Track progress
         self._check_progress()
 
-    def indicator_vector(self, indicators, tick, index, raw_indicators=None):
-        """
-        Process new indicator results.
-        Only update indicators on completed candles.
-        """
+    def indicator_vector(self, indicators, tick, index, raw_indicators=None, combination_id=None):
+        """Process indicator results with combination ID"""
         if not hasattr(tick, 'symbol') or tick.symbol is None:
-            return
-
-        # Only proceed for completed candles
-        is_completed_candle = (hasattr(tick, 'open') and hasattr(tick, 'high') and
-                               hasattr(tick, 'low') and hasattr(tick, 'close') and
-                               not getattr(tick, 'is_current', False))
-
-        if not is_completed_candle:
             return
 
         symbol = tick.symbol
 
+        # Use combination_id if provided, otherwise fall back to just symbol
+        identifier = combination_id or symbol
+
         # Initialize data structures if needed
-        if symbol not in self.ticker_data:
-            self.ticker_data[symbol] = {}
-            self.history[symbol] = []
-            self.indicators[symbol] = {}
-            self.raw_indicators[symbol] = {}
-            self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
+        if identifier not in self.ticker_data:
+            self.ticker_data[identifier] = {}
+            self.history[identifier] = []
+            self.indicators[identifier] = {}
+            self.raw_indicators[identifier] = {}
+            self.overall_scores[identifier] = {'bull': 0.0, 'bear': 0.0}
 
-        # Store indicator results
-        self.indicators[symbol] = indicators.copy()
+        # Store indicator results for this combination
+        self.indicators[identifier] = indicators.copy()
         if raw_indicators:
-            self.raw_indicators[symbol] = raw_indicators.copy()
+            self.raw_indicators[identifier] = raw_indicators.copy()
 
-        # Calculate overall scores using weights
+        # Calculate overall scores
         bull_indicators = {k: v for k, v in indicators.items() if 'bear' not in k.lower()}
         bear_indicators = {k: v for k, v in indicators.items() if 'bear' in k.lower()}
 
-        # Apply weights
-        bull_score = self.calculate_weighted_score(bull_indicators, self.weights.get(symbol, {}))
-        bear_score = self.calculate_weighted_score(bear_indicators, self.weights.get(symbol, {}))
+        # Use weights specific to this combination
+        weights = self.weights.get(identifier, {})
+        bull_score = self.calculate_weighted_score(bull_indicators, weights)
+        bear_score = self.calculate_weighted_score(bear_indicators, weights)
 
-        self.overall_scores[symbol] = {
+        self.overall_scores[identifier] = {
             'bull': bull_score,
             'bear': bear_score
         }
 
-        # Add this debug line to check what's being sent
-        print(
-            f"DEBUG - Emitting indicator update for {symbol}: {self.indicators[symbol]}, scores: {self.overall_scores[symbol]}")
-
-        # Update the ticker data with these values
-        if not 'indicators' in self.ticker_data[symbol]:
-            self.ticker_data[symbol]['indicators'] = {}
-
-        self.ticker_data[symbol]['indicators'] = self.indicators[symbol]
-        self.ticker_data[symbol]['overall_scores'] = self.overall_scores[symbol]
-
-        emit_data = {
+        # Emit update with combination ID
+        self.socketio.emit('indicator_update', {
             'symbol': symbol,
-            'indicators': self.indicators[symbol],
-            'raw_indicators': self.raw_indicators[symbol],
-            'overall_scores': self.overall_scores[symbol],
+            'combination_id': identifier,
+            'indicators': self.indicators[identifier],
+            'raw_indicators': self.raw_indicators[identifier],
+            'overall_scores': self.overall_scores[identifier],
             'timestamp': tick.timestamp.isoformat() if isinstance(tick.timestamp, datetime) else str(tick.timestamp)
-        }
-
-        print(f"EXACT EMITTED DATA: {json.dumps(emit_data)}")
-
-        # Emit update
-        self.socketio.emit('indicator_update', emit_data)
+        })
 
     def _check_progress(self, is_indicator_update=False):
         """
@@ -275,16 +254,19 @@ class UIExternalTool:
         except Exception as e:
             logger.error(f"Error checking progress: {e}")
 
-    def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
+    def handle_completed_candle(self, symbol: str, candle: TickData, combination_id=None) -> None:
         """Handle a completed candle with improved history management"""
 
+        # Use combination_id if provided, otherwise fallback to symbol
+        identifier = combination_id or symbol
+
         # Initialize data structures if needed
-        if symbol not in self.ticker_data:
-            self.ticker_data[symbol] = {}
-            self.history[symbol] = []
-            self.indicators[symbol] = {}
-            self.raw_indicators[symbol] = {}
-            self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
+        if identifier not in self.ticker_data:
+            self.ticker_data[identifier] = {}
+            self.history[identifier] = []
+            self.indicators[identifier] = {}
+            self.raw_indicators[identifier] = {}
+            self.overall_scores[identifier] = {'bull': 0.0, 'bear': 0.0}
 
         # Format timestamp
         timestamp = candle.timestamp
@@ -301,30 +283,25 @@ class UIExternalTool:
             'symbol': symbol
         }
 
-        # Add to history
-        self.history[symbol].append(candle_data.copy())
+        # Add to history using identifier instead of symbol
+        self.history[identifier].append(candle_data.copy())
 
         # Limit history size for performance
         max_history = 1000
-        if len(self.history[symbol]) > max_history:
-            self.history[symbol] = self.history[symbol][-max_history:]
+        if len(self.history[identifier]) > max_history:
+            self.history[identifier] = self.history[identifier][-max_history:]
 
-        # IMPORTANT: Update the ticker_data with candle information
-        self.ticker_data[symbol].update(candle_data)
+        # Update the ticker_data with candle information
+        self.ticker_data[identifier].update(candle_data)
 
         # Print debug info
-        print(f"DEBUG - Ticker data for {symbol} updated with candle: {self.ticker_data[symbol]}")
+        print(f"DEBUG - Ticker data for {symbol} updated with candle: {self.ticker_data[identifier]}")
 
-        # Emit candle completion event
+        # Emit candle completion event with combination_id
         self.socketio.emit('candle_completed', {
             'symbol': symbol,
+            'combination_id': identifier,
             'candle': candle_data
-        })
-
-        # Emit a ticker_update event as well for redundancy
-        self.socketio.emit('ticker_update', {
-            'symbol': symbol,
-            'data': candle_data
         })
 
     def calculate_weighted_score(self, indicators, weights):
@@ -357,37 +334,45 @@ class UIExternalTool:
         # Return normalized score
         return weighted_sum / total_weight
 
-    def update_weights(self, weights):
+    def update_weights(self, weights, combination_id=None):
         """
         Update the weights used for calculating overall scores.
 
         Args:
             weights: Dictionary of indicator weights
+            combination_id: Optional identifier for specific symbol-monitor combination
         """
-        # Store weights for indicator calculations
-        for symbol in self.ticker_data:
-            self.weights[symbol] = weights
+        # If combination_id is provided, update weights just for that combination
+        if combination_id:
+            self.weights[combination_id] = weights
+        else:
+            # Otherwise, update weights for all symbols/combinations
+            for symbol in self.ticker_data:
+                self.weights[symbol] = weights
 
         # Recalculate overall scores with new weights
-        for symbol in self.indicators:
+        for identifier in self.indicators:
             # Skip if no indicators
-            if not self.indicators[symbol]:
+            if not self.indicators[identifier]:
                 continue
 
             # Split indicators into bull and bear
-            bull_indicators = {k: v for k, v in self.indicators[symbol].items() if 'bear' not in k.lower()}
-            bear_indicators = {k: v for k, v in self.indicators[symbol].items() if 'bear' in k.lower()}
+            bull_indicators = {k: v for k, v in self.indicators[identifier].items() if 'bear' not in k.lower()}
+            bear_indicators = {k: v for k, v in self.indicators[identifier].items() if 'bear' in k.lower()}
+
+            # Get weights for this specific identifier
+            identifier_weights = self.weights.get(identifier, weights)
 
             # Calculate weighted scores
-            bull_score = self.calculate_weighted_score(bull_indicators, weights)
-            bear_score = self.calculate_weighted_score(bear_indicators, weights)
+            bull_score = self.calculate_weighted_score(bull_indicators, identifier_weights)
+            bear_score = self.calculate_weighted_score(bear_indicators, identifier_weights)
 
-            self.overall_scores[symbol] = {
+            self.overall_scores[identifier] = {
                 'bull': bull_score,
                 'bear': bear_score
             }
 
-        logger.info(f"Updated weights: {weights}")
+        logger.info(f"Updated weights: {weights} for combination: {combination_id}")
         return True
 
     def clear_data(self) -> None:

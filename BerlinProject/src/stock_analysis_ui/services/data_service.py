@@ -7,6 +7,8 @@ import sys
 import time
 from datetime import datetime
 
+from models.monitor_configuration import MonitorConfiguration
+
 logger = logging.getLogger('DataService')
 
 
@@ -33,6 +35,9 @@ class DataService:
         self.current_indicators = []
         self.current_weights = {}
         self.current_timeframe = "1m"  # Default timeframe
+        # Add tracking for multiple streaming instances
+        self.streaming_instances = {}  # combination_id -> DataStreamer instance
+        self.data_links = {}  # combination_id -> DataLink instance
 
         # Add path to import project modules
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -82,162 +87,116 @@ class DataService:
             logger.error(f"Error importing project modules: {e}")
             return False
 
-    def start(self, symbols: List[str], indicators: List[Dict], weights: Dict[str, float] = None,
-              timeframe: str = "1m") -> bool:
-        """
-        Start data streaming for the specified symbols and indicators.
-        """
-        if self.is_streaming:
-            logger.info("Already streaming, stopping first")
-            self.stop()
+    def create_combination_id(self, symbol, monitor_config, config=None):
+        """Create a unique identifier for a symbol-monitor combination"""
+        # Try to use test_name from configuration if available
+        if config and 'test_name' in config:
+            return f"{symbol}-{config['test_name']}"
 
-        # Import required modules
+        # Fallback to monitor name or ID
+        monitor_id = monitor_config.name or str(hash(str(monitor_config.indicators)))
+        return f"{symbol}-{monitor_id}"
+
+    def start_combination(self, symbol, indicators, weights=None, timeframe="1m", config=None):
+        # Make sure modules are imported first
         if not hasattr(self, 'DataStreamer'):
             success = self._import_modules()
             if not success:
-                return False
+                raise ValueError("Failed to import required modules")
 
-        # Save current configuration
-        self.current_symbols = symbols
-        self.current_indicators = indicators
-        self.current_weights = weights or {}
-        self.current_timeframe = timeframe
+        # Create monitor configuration
+        monitor_config = self.MonitorConfiguration(
+            name=config.get('test_name', f"{symbol}_config_{len(self.streaming_instances)}"),
+            indicators=indicators
+        )
 
-        try:
-            # Get Schwab authentication
-            from .schwab_auth import SchwabAuthManager
-            auth_manager = SchwabAuthManager()
+        # Create unique ID using test_name if available
+        combination_id = self.create_combination_id(symbol, monitor_config, config)
 
-            if not auth_manager.is_authenticated():
-                logger.error("Not authenticated with Schwab API")
-                return False
+        data_link = self.SchwabDataLink()
 
-            # Create SchwabDataLink instance with authentication
-            self.schwab_data_link = self.SchwabDataLink()
+        # Get authentication credentials from the auth_manager
+        from .schwab_auth import SchwabAuthManager
+        auth_manager = SchwabAuthManager()
 
-            # Manually set authentication credentials from auth_manager
-            self.schwab_data_link.access_token = auth_manager.access_token
-            self.schwab_data_link.refresh_token = auth_manager.refresh_token
-            self.schwab_data_link.user_prefs = auth_manager.user_prefs
+        # Set authentication credentials
+        if auth_manager.is_authenticated():
+            data_link.access_token = auth_manager.access_token
+            data_link.refresh_token = auth_manager.refresh_token
+            data_link.user_prefs = auth_manager.user_prefs
+        else:
+            logger.error("Not authenticated with Schwab API")
+            return None
+        # Create DataStreamer for this combination
+        model_config = {
+            "feature_vector": [
+                {"name": "close"},
+                {"name": "open"},
+                {"name": "high"},
+                {"name": "low"}
+            ],
+            "normalization": None
+        }
 
-            # Create model configuration
-            model_config = {
-                "feature_vector": [
-                    {"name": "close"},
-                    {"name": "open"},
-                    {"name": "high"},
-                    {"name": "low"}
-                ],
-                "normalization": None  # No normalization for UI display
-            }
+        data_streamer = self.DataStreamer(
+            data_link=data_link,
+            model_configuration=model_config,
+            indicator_configuration=monitor_config,
+            combination_id=combination_id
+        )
 
-            # Identify the type of indicators being passed in
-            if indicators and isinstance(indicators[0], dict):
-                # Indicators are dictionaries, convert them to IndicatorDefinition objects
-                indicator_defs = []
-                for indicator in indicators:
-                    indicator_def = self.IndicatorDefinition(
-                        name=indicator["name"],
-                        type=indicator["type"],
-                        function=indicator["function"],
-                        parameters=indicator["parameters"]
-                    )
-                    indicator_defs.append(indicator_def)
-            else:
-                # Indicators are already IndicatorDefinition objects
-                indicator_defs = indicators
+        # Connect UI tool
+        data_streamer.connect_tool(self.ui_tool)
 
-            monitor_config = self.MonitorConfiguration(
-                name="trading_signals",
-                indicators=indicator_defs
-            )
+        # Update UI tool weights for this combination
+        if weights:
+            self.ui_tool.update_weights(weights, combination_id)
 
-            # Create DataStreamer with the direct data_link instance
-            self.data_streamer = self.DataStreamer(
-                data_link=self.schwab_data_link,
-                model_configuration=model_config,
-                indicator_configuration=monitor_config
-            )
+        # Initialize with historical data
+        data_streamer.initialize([symbol], timeframe)
 
-            # Connect UI tool to receive updates
-            self.data_streamer.connect_tool(self.ui_tool)
+        # Store instances
+        self.streaming_instances[combination_id] = data_streamer
+        self.data_links[combination_id] = data_link
 
-            # Update weights in UI tool
-            if weights:
-                self.ui_tool.update_weights(weights)
+        # Start streaming in a thread
+        threading.Thread(
+            target=self._stream_data,
+            args=(combination_id,),
+            daemon=True
+        ).start()
 
-            # Initialize data with historical data
-            logger.info(f"Initializing with historical data for symbols: {symbols}")
-            self.data_streamer.initialize(symbols, timeframe)
+        return combination_id
 
-            # Log initial history size
-            initial_history_size = len(self.data_streamer.preprocessor.history)
-            logger.info(f"Loaded {initial_history_size} historical data points")
+    def _stream_data(self, combination_id):
+        """Run streaming for a specific combination"""
+        data_streamer = self.streaming_instances.get(combination_id)
+        data_link = self.data_links.get(combination_id)
 
-            # Store in UI tool for reference
-            if hasattr(self.ui_tool, 'set_initial_history_size'):
-                self.ui_tool.set_initial_history_size(initial_history_size)
-
-            # Start streaming in a separate thread
-            self.streaming_thread = threading.Thread(target=self._stream_data)
-            self.streaming_thread.daemon = True
-            self.streaming_thread.start()
-
-            self.is_streaming = True
-            logger.info(f"Started streaming for symbols: {', '.join(symbols)} with timeframe: {timeframe}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error starting data streaming: {e}", exc_info=True)
-            return False
-
-    def _stream_data(self):
-        """
-        Run the DataStreamer in a separate thread
-        """
-        try:
-            logger.info("Starting data streaming thread")
-            # Connect to streaming API and subscribe to symbols
-            if self.schwab_data_link.connect_stream():
-                for symbol in self.current_symbols:
-                    self.schwab_data_link.subscribe_charts([symbol], self.current_timeframe)
-                    logger.info(f"Subscribed to {symbol} with timeframe {self.current_timeframe}")
-
-                # Run the DataStreamer - this will process incoming data
-                self.data_streamer.run()
-            else:
-                logger.error("Failed to connect to streaming API")
-        except Exception as e:
-            logger.error(f"Error in data streaming thread: {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            self.is_streaming = False
-            logger.info("Data streaming thread stopped")
-
-    def stop(self):
-        """
-        Stop data streaming
-        """
-        if not self.is_streaming:
-            logger.info("Not currently streaming")
-            return True
+        if not data_streamer or not data_link:
+            return
 
         try:
-            # Disconnect the WebSocket in the data link
-            if self.schwab_data_link and hasattr(self.schwab_data_link, 'disconnect'):
-                self.schwab_data_link.disconnect()
+            # Connect to streaming API for this combination
+            if data_link.connect_stream():
+                # Extract symbol from combination_id
+                symbol = combination_id.split('-')[0]
+                data_link.subscribe_charts([symbol], self.current_timeframe)
 
-            # Wait for the thread to finish
-            if self.streaming_thread:
-                self.streaming_thread.join(timeout=2)  # Short timeout for responsive UI
-
-            self.is_streaming = False
-            logger.info("Stopped data streaming")
-            return True
+                # Run the DataStreamer
+                data_streamer.run()
         except Exception as e:
-            logger.error(f"Error stopping data streaming: {e}")
-            return False
+            logger.error(f"Error in data streaming thread for {combination_id}: {e}")
+
+    def stop_combination(self, combination_id):
+        """Stop a specific combination"""
+        # Implementation to stop a specific streaming instance
+        pass
+
+    def stop_all(self):
+        """Stop all streaming combinations"""
+        # Implementation to stop all streaming instances
+        pass
 
     def update_weights(self, weights: Dict[str, float]) -> bool:
         """

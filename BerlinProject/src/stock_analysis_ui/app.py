@@ -134,21 +134,18 @@ def authenticate():
 # Inside app.py - update data service initialization
 @app.route('/api/start', methods=['POST'])
 def start_streaming():
-    """Start data streaming with configuration file"""
+    """Start a new symbol-monitor combination"""
     data = request.json
 
     symbol = data.get('symbol')
-    timeframe = data.get('timeframe', '1m')
     config = data.get('config')
+    timeframe = data.get('timeframe', '1m')  # Keep the existing timeframe parameter
 
-    if not symbol:
-        return jsonify({"success": False, "error": "No symbol provided"})
-
-    if not config:
-        return jsonify({"success": False, "error": "No configuration provided"})
+    if not symbol or not config:
+        return jsonify({"success": False, "error": "Missing symbol or configuration"})
 
     try:
-        # 1. Create indicator definitions as instances of IndicatorDefinition
+        # Process configuration to extract indicators
         indicators = []
         for indicator_dict in config.get('indicators', []):
             indicator_def = IndicatorDefinition(
@@ -159,13 +156,7 @@ def start_streaming():
             )
             indicators.append(indicator_def)
 
-        # 2. Create MonitorConfiguration with these indicators
-        monitor_config = MonitorConfiguration(
-            name=config.get('monitor', {}).get('name', 'Trading Signals'),
-            indicators=indicators
-        )
-
-        # 3. Get the weights from the 'triggers' sections
+        # Get weights from the config
         weights = {}
         monitor_dict = config.get('monitor', {})
         if 'triggers' in monitor_dict:
@@ -173,30 +164,27 @@ def start_streaming():
         if 'bear_triggers' in monitor_dict:
             weights.update(monitor_dict['bear_triggers'])
 
-        # 4. Extract symbols from 'data' section
-        symbols = []
-        data_config = config.get('data', {})
-        if 'ticker' in data_config:
-            symbols.append(data_config['ticker'])
-        # Start data service with symbol, indicators, and weights
-        success = data_service.start([symbol], indicators, weights, timeframe)
+        # Start a new combination with existing timeframe handling
+        combination_id = data_service.start_combination(symbol, indicators, weights, timeframe)
 
-        # Connect the UI tool to the data_streamer for progress tracking
-        if success and hasattr(ui_tool, 'set_data_streamer_ref') and hasattr(data_service, 'data_streamer'):
-            ui_tool.set_data_streamer_ref(data_service.data_streamer)
-
-        return jsonify({"success": success})
+        return jsonify({
+            "success": True,
+            "combination_id": combination_id
+        })
     except Exception as e:
-        logger.error(f"Error starting streaming: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
 
 
-@app.route('/api/stop', methods=['POST'])
-def stop_streaming():
-    """Stop data streaming"""
-    data_service.stop()
-    return jsonify({"success": True})
+@app.route('/api/stop_combination', methods=['POST'])
+def stop_combination():
+    """Stop a specific combination"""
+    combination_id = request.json.get('combination_id')
 
+    if not combination_id:
+        return jsonify({"success": False, "error": "Missing combination ID"})
+
+    success = data_service.stop_combination(combination_id)
+    return jsonify({"success": success})
 
 @app.route('/api/tickers', methods=['GET'])
 def get_tickers():

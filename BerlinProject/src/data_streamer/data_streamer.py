@@ -23,16 +23,16 @@ from .schwab_data_link import SchwabDataLink
 # TODO: reinstate feature vector in the future.
 
 class DataStreamer:
-    def __init__(self, data_link: DataLink, model_configuration: dict,
-                 indicator_configuration: Optional[MonitorConfiguration] = None):
+    def __init__(self, data_link, model_configuration, indicator_configuration=None, combination_id=None):
+        # Existing initialization
         self.preprocessor = DataPreprocessor(model_configuration)
-        # self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
-        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(
-            indicator_configuration) if indicator_configuration else None
-        self.data_link: DataLink = data_link
+        self.indicators = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
+        self.data_link = data_link
         self.data_link.add_chart_handler(self.chart_handler)
-        self.external_tool: List[ExternalTool] = []
-        self.reset_after_sample: bool = False
+        self.external_tool = []
+        self.reset_after_sample = False
+        self.last_processed_timestamps = {}
+        self.combination_id = combination_id
 
     def initialize(self, symbols: List[str], timeframe: str = "1m") -> bool:
         """
@@ -144,40 +144,48 @@ class DataStreamer:
             logger.error(f"Error converting chart data: {e}")
             return None
 
+    def __init__(self, data_link, model_configuration, indicator_configuration=None, combination_id=None):
+        # Existing initialization
+        self.preprocessor = DataPreprocessor(model_configuration)
+        self.indicators = IndicatorProcessor(indicator_configuration) if indicator_configuration else None
+        self.data_link = data_link
+        self.data_link.add_chart_handler(self.chart_handler)
+        self.external_tool = []
+        self.reset_after_sample = False
+
+        # Add combination ID
+        self.combination_id = combination_id
+
     def chart_handler(self, data: dict):
-        """
-        Process chart data from the data link.
-        Converts chart data to TickData, adds it to history, and processes indicators.
-        """
         try:
-            # Convert incoming data to TickData
             tick = self.tick_converter(data)
             if not tick:
                 return
 
-            # Use next_tick to properly add to history
             self.preprocessor.next_tick(tick)
 
-            # CRITICAL: Notify external tools about the completed candle
+            # For completed candles, notify external tools with combination ID
             for external_tool in self.external_tool:
                 if hasattr(external_tool, 'handle_completed_candle'):
-                    external_tool.handle_completed_candle(tick.symbol, tick)
+                    external_tool.handle_completed_candle(tick.symbol, tick, self.combination_id)
 
             # Process indicators
             if self.indicators:
-                # Calculate indicators for this tick
                 indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
 
-                # Notify external tools about the indicator results
+                # Notify external tools with combination ID
                 if indicator_results:
-                    # Use the full history length as the index
                     history_index = len(self.preprocessor.history) - 1
                     for external_tool in self.external_tool:
-                        external_tool.indicator_vector(indicator_results, tick, history_index, raw_indicators)
-
+                        external_tool.indicator_vector(
+                            indicator_results,
+                            tick,
+                            history_index,
+                            raw_indicators,
+                            self.combination_id
+                        )
         except Exception as e:
             print(f"Error in chart handler: {e}")
-            import traceback
             traceback.print_exc()
 
 
