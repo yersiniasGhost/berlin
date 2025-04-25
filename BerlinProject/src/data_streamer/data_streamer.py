@@ -144,12 +144,17 @@ class DataStreamer:
             logger.error(f"Error converting chart data: {e}")
             return None
 
-    def chart_handler(self, data: dict):
+    def chart_handler(self, data):
         """
         Process chart data from the data link.
         Converts chart data to TickData, adds it to history, and processes indicators.
         """
         try:
+            # Extract symbol from data and check if it's one we care about
+            symbol = data.get('key', '')
+            if not hasattr(self, 'configured_symbols') or symbol not in self.configured_symbols:
+                return  # Skip if this isn't one of our symbols
+
             # Convert incoming data to TickData
             tick = self.tick_converter(data)
             if not tick:
@@ -158,7 +163,7 @@ class DataStreamer:
             # Use next_tick to properly add to history
             self.preprocessor.next_tick(tick)
 
-            # CRITICAL: Notify external tools about the completed candle
+            # Notify external tools about the completed candle
             for external_tool in self.external_tool:
                 if hasattr(external_tool, 'handle_completed_candle'):
                     external_tool.handle_completed_candle(tick.symbol, tick)
