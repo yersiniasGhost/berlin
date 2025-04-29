@@ -264,3 +264,32 @@ class DataService:
         if self.ui_tool and hasattr(self.ui_tool, 'get_ticker_data'):
             return self.ui_tool.get_ticker_data()
         return {}
+
+    def create_streaming_manager(self):
+        """Create a new StreamingManager instance"""
+        # Initialize data link if needed
+        if not hasattr(self, 'schwab_data_link') or self.schwab_data_link is None:
+            from .schwab_auth import SchwabAuthManager
+            auth_manager = SchwabAuthManager()
+
+            if not auth_manager.is_authenticated():
+                logger.error("Not authenticated with Schwab API")
+                raise ValueError("Not authenticated with Schwab API")
+
+            from data_streamer.schwab_data_link import SchwabDataLink
+            self.schwab_data_link = SchwabDataLink()
+            self.schwab_data_link.access_token = auth_manager.access_token
+            self.schwab_data_link.refresh_token = auth_manager.refresh_token
+            self.schwab_data_link.user_prefs = auth_manager.user_prefs
+
+            # Connect to streaming API
+            if not self.schwab_data_link.connect_stream():
+                logger.error("Failed to connect to streaming API")
+                raise ValueError("Failed to connect to streaming API")
+
+        # Create StreamingManager
+        from .streaming_manager import StreamingManager
+        self.streaming_manager = StreamingManager(self.schwab_data_link)
+        logger.info("Created new StreamingManager")
+
+        return self.streaming_manager
