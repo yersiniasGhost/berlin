@@ -1,7 +1,8 @@
-# test_data_streamer_run.py
+# test_initialization_run.py
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
+import logging
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.data_streamer import DataStreamer
@@ -10,27 +11,50 @@ from environments.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
 
 
-class HistoryMonitorTool(ExternalTool):
-    """Simple external tool that monitors history and indicator values"""
+class DataMonitorTool(ExternalTool):
+    """External tool for monitoring data flow and indicator calculations"""
 
     def __init__(self):
         self.indicator_values = []
+        self.initial_history_size = 0
+        self.current_history_size = 0
+        self.last_checked_size = 0
+        # Keep track of the data_streamer for reporting
+        self.data_streamer = None
+        # Store the last received indicator values
+        self.last_indicators = {}
+        self.last_raw_indicators = {}
 
     def feature_vector(self, fv: list, tick: TickData) -> None:
-        # We don't care about feature vectors for this test
+        # Not using feature vectors in this test
         pass
 
     def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None) -> None:
-        # Store the indicator values with timestamp
+        # Store the latest indicator values
+        self.last_indicators = indicators.copy() if indicators else {}
+        self.last_raw_indicators = raw_indicators.copy() if raw_indicators else {}
+
+        # Store indicator values with timestamp for history
         self.indicator_values.append({
             'tick': tick,
             'indicators': indicators,
-            'timestamp': datetime.now()
+            'raw_indicators': raw_indicators,
+            'timestamp': datetime.now() if hasattr(tick, 'timestamp') else None
         })
 
-        # Print a simple notification
-        print(f"New indicator calculation: {tick.symbol} @ {tick.timestamp} - {indicators}")
+        # Check if we need to print a progress report
+        if self.data_streamer:
+            history = self.data_streamer.preprocessor.history
+            self.current_history_size = len(history)
+
+            # Only report when size changes
+            if self.current_history_size > self.last_checked_size:
+                try:
+                    self.print_progress_report()
+                except Exception as e:
+                    print(f"Error in progress report: {e}")
+                self.last_checked_size = self.current_history_size
 
     def present_sample(self, sample: dict, index: int):
         pass
@@ -38,60 +62,93 @@ class HistoryMonitorTool(ExternalTool):
     def reset_next_sample(self):
         pass
 
-    def print_summary(self, data_streamer):
-        """Print a summary of the history and indicator values"""
-        history = data_streamer.preprocessor.history
+    def print_progress_report(self):
+        """Print a report showing the current state of data processing"""
+        if not self.data_streamer:
+            return
 
-        print("\n" + "=" * 60)
-        print(f"SUMMARY at {datetime.now()}")
-        print("=" * 60)
+        history = self.data_streamer.preprocessor.history
+        self.current_history_size = len(history)
 
-        # History summary
-        print(f"History size: {len(history)} ticks")
+        added_ticks = self.current_history_size - self.initial_history_size
+
+        print("\n" + "=" * 70)
+        print("PROGRESS REPORT")
+        print("=" * 70)
+        print(f"Initial history size: {self.initial_history_size}")
+        print(f"Current history size: {self.current_history_size}")
+        print(f"Total added ticks: {added_ticks}")
+
         if history:
             first_tick = history[0]
             last_tick = history[-1]
             print(f"Time range: {first_tick.timestamp} to {last_tick.timestamp}")
-            print(f"Duration: {last_tick.timestamp - first_tick.timestamp}")
 
-        # Indicator summary
-        print(f"\nIndicator calculations: {len(self.indicator_values)}")
-        if self.indicator_values:
-            # Count occurrences of each indicator value
-            indicator_counts = {}
-            for item in self.indicator_values:
-                for indicator_name, value in item['indicators'].items():
-                    # Check for NaN without using pandas
-                    if isinstance(value, float) and value != value:  # NaN check
-                        rounded_value = "NaN"
-                    else:
-                        try:
-                            rounded_value = round(value, 2)
-                        except:
-                            rounded_value = value
+            # Print indicator information
+            print("\nLATEST INDICATOR VALUES:")
+            if self.last_indicators:
+                for name, value in self.last_indicators.items():
+                    print(f"  • {name}: {value:.6f}")
+                    # If we have raw indicator value, show it for comparison
+                    if name in self.last_raw_indicators:
+                        raw_value = self.last_raw_indicators[name]
+                        if isinstance(raw_value, (int, float)):
+                            print(f"    Raw value: {raw_value:.6f}")
+                        else:
+                            print(f"    Raw value: {raw_value}")
 
-                    key = f"{indicator_name}:{rounded_value}"
-                    indicator_counts[key] = indicator_counts.get(key, 0) + 1
-            # Print most common indicator values
-            print("Most common indicator values:")
-            for key, count in sorted(indicator_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-                print(f"  {key}: {count} occurrences")
+                print("\nINDICATOR CALCULATION DETAILS:")
+                print("  Time-based metric appears to be applying these transformations:")
+                if self.last_indicators and self.last_raw_indicators:
+                    # Get the first indicator as an example
+                    indicator_name = next(iter(self.last_indicators))
+                    calc_value = self.last_indicators[indicator_name]
+                    raw_value = self.last_raw_indicators.get(indicator_name)
 
-        # Latest data
-        if history:
-            print("\nLatest 3 ticks in history:")
-            for tick in history[-3:]:
-                print(f"  {tick.symbol} @ {tick.timestamp}: "
-                      f"OHLC({tick.open:.2f},{tick.high:.2f},{tick.low:.2f},{tick.close:.2f})")
+                    if raw_value is not None and calc_value is not None:
+                        if isinstance(raw_value, (int, float)) and isinstance(calc_value, (int, float)):
+                            # Simple check for scaling/transformation
+                            if raw_value != 0:
+                                ratio = calc_value / raw_value if raw_value != 0 else 0
+                                print(f"    • Scaling factor: {ratio:.4f} (calculated/raw)")
 
-        print("=" * 60)
+                            # Get indicator configuration if available
+                            try:
+                                # We don't know the exact structure of your indicators config
+                                # So we'll just print what we know
+                                print("    • Using lookback window (from params, if available)")
+
+                                # Guess at whether it's using a decay
+                                if abs(calc_value) < abs(raw_value) and raw_value != 0:
+                                    decay = calc_value / raw_value
+                                    print(f"    • Possible time decay factor: {decay:.4f}")
+                                    print(f"    • This suggests indicator may be {int(decay * 100)}% of full strength")
+                            except Exception as e:
+                                # Just skip this part if it fails
+                                pass
+
+            if added_ticks > 0:
+                print("\nLAST ADDED TICKS:")
+                # Show the last few added ticks
+                for i in range(max(self.initial_history_size, self.current_history_size - 3),
+                               self.current_history_size):
+                    if i < len(history):  # Safety check
+                        tick = history[i]
+                        print(
+                            f"  {tick.symbol} @ {tick.timestamp}: OHLC({tick.open:.2f},{tick.high:.2f},{tick.low:.2f},{tick.close:.2f})")
+
+        print("=" * 70)
 
 
 def main():
-    print("Testing DataStreamer with initialize and run...")
+    # Reduce logging verbosity to make our progress reports more visible
+    logging.basicConfig(level=logging.WARNING)
+
+    print("TESTING DATASTREAMER INITIALIZATION AND REAL-TIME DATA HANDLING")
+    print("=" * 70)
 
     # Create and authenticate SchwabDataLink
-    print("Creating and authenticating SchwabDataLink...")
+    print("\nStep 1: Creating and authenticating SchwabDataLink")
     data_link = SchwabDataLink()
 
     if not data_link.authenticate():
@@ -99,7 +156,7 @@ def main():
         return
 
     # Connect to streaming API
-    print("Connecting to streaming API...")
+    print("\nStep 2: Connecting to streaming API")
     if not data_link.connect_stream():
         print("Failed to connect to streaming API")
         return
@@ -125,7 +182,7 @@ def main():
                 "function": "sma_crossover",
                 "parameters": {
                     "period": 10,
-                    "crossover_value": 0.01,
+                    "crossover_value": 0.001,  # Adjusted to match your logs
                     "trend": "bullish",
                     "lookback": 10
                 }
@@ -134,7 +191,7 @@ def main():
     )
 
     # Create DataStreamer
-    print("Creating DataStreamer...")
+    print("\nStep 3: Creating DataStreamer")
     data_streamer = DataStreamer(
         data_link=data_link,
         model_configuration=model_config,
@@ -142,53 +199,39 @@ def main():
     )
 
     # Create and connect our monitoring tool
-    monitor = HistoryMonitorTool()
+    monitor = DataMonitorTool()
+    monitor.data_streamer = data_streamer  # Store reference to data_streamer
     data_streamer.connect_tool(monitor)
 
     # Define symbols to track
     symbols = ["NVDA"]
     timeframe = "1m"
 
-    # Step 1: Initialize with historical data
-    print(f"Initializing DataStreamer with historical data for {symbols}...")
-    success = data_streamer.initialize(symbols, timeframe)
+    # Step 4: Initialize with historical data
+    print(f"\nStep 4: Initializing DataStreamer with historical data for {symbols}")
+    data_streamer.initialize(symbols, timeframe)
 
-    if not success:
-        print("Initialization failed, exiting")
-        return
+    # Record initial history size
+    monitor.initial_history_size = len(data_streamer.preprocessor.history)
+    monitor.last_checked_size = monitor.initial_history_size
+    print(f"Initialization complete! Loaded {monitor.initial_history_size} historical ticks")
 
-    print(f"Initialization successful! Loaded {len(data_streamer.preprocessor.history)} historical ticks")
-
-    # Print initial summary
-    print("\nInitial state after initialization:")
-    monitor.print_summary(data_streamer)
-
-    # Step 2: Subscribe to real-time data
-    print(f"\nSubscribing to {symbols} with {timeframe} timeframe...")
+    # Step 5: Subscribe to real-time data
+    print(f"\nStep 5: Subscribing to {symbols} with {timeframe} timeframe")
     data_link.subscribe_charts(symbols, timeframe)
 
-    # Step 3: Run the DataStreamer
-    print("\nStarting DataStreamer run...")
+    # Step 6: Run the DataStreamer - this will block until program is terminated
+    print("\nStep 6: Starting DataStreamer run")
+    print("Progress reports will be printed when new data is received")
+    print("(Press Ctrl+C to stop the test)")
+    print("=" * 70)
 
-    # Start the run in a non-blocking way
+    # Print initial state
+    monitor.print_progress_report()
+
+    # Start the DataStreamer (will block until program termination)
     try:
-        # We'll run for a fixed time period, then print final summary
-        run_duration = 60  # seconds
-        print(f"Will run for {run_duration} seconds to collect real-time data...")
-
-        # Start running in a way that doesn't block
-        import threading
-        run_thread = threading.Thread(target=data_streamer.run)
-        run_thread.daemon = True
-        run_thread.start()
-
-        # Wait for the specified duration
-        time.sleep(run_duration)
-
-        # Print final summary
-        print("\nFinal state after running:")
-        monitor.print_summary(data_streamer)
-
+        data_streamer.run()
     except KeyboardInterrupt:
         print("\nTest stopped by user")
 

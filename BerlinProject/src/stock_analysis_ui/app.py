@@ -1,11 +1,17 @@
 import os
 import sys
 
+
 # Import path fixer - add this at the top
 import fix_imports
+from models import IndicatorDefinition
+from models.monitor_configuration import MonitorConfiguration
 
 fix_imports.setup_imports()
 
+from test_UI_connection import run_simulation_with_ui
+
+import time
 import json
 import logging
 from flask import Flask, render_template, request, jsonify, redirect, url_for
@@ -16,6 +22,7 @@ from datetime import datetime
 from services.schwab_auth import SchwabAuthManager
 from services.data_service import DataService
 from services.ui_external_tool import UIExternalTool
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -37,6 +44,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 auth_manager = None
 ui_tool = None
 data_service = None
+simulation = None
 
 # Default indicator configurations
 from ui_config.indicator_configs import DEFAULT_INDICATORS, AVAILABLE_INDICATORS
@@ -129,14 +137,13 @@ def authenticate():
         "message": "Already authenticated via command line"
     })
 
-
+# Inside app.py - update data service initialization
 @app.route('/api/start', methods=['POST'])
 def start_streaming():
     """Start data streaming with configuration file"""
     data = request.json
 
     symbol = data.get('symbol')
-    timeframe = data.get('timeframe', '1m')
     config = data.get('config')
 
     if not symbol:
@@ -146,28 +153,74 @@ def start_streaming():
         return jsonify({"success": False, "error": "No configuration provided"})
 
     try:
-        # Extract indicators from config
-        indicators = config.get('indicators', [])
-        if not indicators:
-            return jsonify({"success": False, "error": "No indicators found in configuration"})
+        logger.info(f"Starting configuration for symbol: {symbol}")
 
-        # Extract weights from monitor configuration
+        # 1. Create indicator definitions from config
+        indicators = []
+        for indicator_dict in config.get('indicators', []):
+            indicator_def = IndicatorDefinition(
+                name=indicator_dict["name"],
+                type=indicator_dict["type"],
+                function=indicator_dict["function"],
+                parameters=indicator_dict["parameters"]
+            )
+            indicators.append(indicator_def)
+
+        # 2. Create MonitorConfiguration
+        monitor_config = MonitorConfiguration(
+            name=config.get('monitor', {}).get('name', 'Trading Signals'),
+            indicators=indicators
+        )
+
+        # 3. Get weights if available
         weights = {}
-        monitor = config.get('monitor', {})
+        monitor_dict = config.get('monitor', {})
+        if 'triggers' in monitor_dict:
+            weights.update(monitor_dict['triggers'])
+        if 'bear_triggers' in monitor_dict:
+            weights.update(monitor_dict['bear_triggers'])
 
-        if 'triggers' in monitor:
-            weights.update(monitor['triggers'])
-        if 'bear_triggers' in monitor:
-            weights.update(monitor['bear_triggers'])
+        # 4. Check if we need to create a new StreamingManager or use existing
+        if not hasattr(data_service, 'streaming_manager'):
+            # Create new streaming manager
+            data_service.create_streaming_manager()
 
-        # Start data service with symbol, indicators, and weights
-        success = data_service.start([symbol], indicators, weights, timeframe)
+        # 5. Register streamer with StreamingManager
+        streamer_id = f"{symbol}_streamer"
+        streamer = data_service.streaming_manager.register_streamer(
+            streamer_id=streamer_id,
+            symbols=[symbol],
+            monitor_config=monitor_config,
+            model_config={
+                "feature_vector": [
+                    {"name": "open"},
+                    {"name": "high"},
+                    {"name": "low"},
+                    {"name": "close"}
+                ],
+                "normalization": None
+            }
+        )
 
-        return jsonify({"success": success})
+        # 6. Create and connect UI external tool
+        ui_tool = UIExternalTool(socketio)
+        streamer.connect_tool(ui_tool)
+
+        # 7. Update weights
+        if weights:
+            ui_tool.update_weights(weights)
+
+        # 8. Start streaming if not already started
+        if not data_service.is_streaming:
+            data_service.streaming_manager.start_streaming("1m")
+            data_service.is_streaming = True
+
+        return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error starting streaming: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
-
 
 @app.route('/api/stop', methods=['POST'])
 def stop_streaming():
@@ -262,7 +315,28 @@ def upload_config():
     if file and file.filename.endswith('.json'):
         try:
             config_data = json.load(file)
-            success = data_service.load_monitor_config(config_data)
+
+            # Extract monitoring configuration
+            indicators = config_data.get('indicators', [])
+            if not indicators:
+                return jsonify({"success": False, "error": "No indicators found in configuration"})
+
+            # Get symbols from data section
+            symbols = []
+            if 'data' in config_data and 'ticker' in config_data['data']:
+                symbols.append(config_data['data']['ticker'])
+
+            # Extract weights from triggers
+            weights = {}
+            monitor = config_data.get('monitor', {})
+            if 'triggers' in monitor:
+                weights.update(monitor['triggers'])
+            if 'bear_triggers' in monitor:
+                weights.update(monitor['bear_triggers'])
+
+            # Start data service with extracted configuration
+            success = data_service.start(symbols, indicators, weights)
+
             return jsonify({"success": success})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
@@ -314,6 +388,54 @@ def test_socket():
         'success': True,
         'message': 'Test events emitted'
     })
+
+
+@app.route('/api/start_multi', methods=['POST'])
+def start_multi_streaming():
+    """Start data streaming with multiple configurations"""
+    data = request.json
+    combinations = data.get('combinations', [])
+
+    if not combinations:
+        return jsonify({"success": False, "error": "No combinations provided"})
+
+    try:
+        # Initialize your StreamingManager
+        # For each combination, register a DataStreamer and connect a UIExternalTool
+        # Start the StreamingManager
+
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Error starting multi-streaming: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/start_simulation', methods=['POST'])
+def start_simulation():
+    """Start simulation with fake data"""
+    global simulation
+
+    data = request.json
+    symbols = data.get('symbols', ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"])
+
+    # Start simulation
+    simulation = run_simulation_with_ui(socketio, symbols)
+
+    return jsonify({"success": True, "message": f"Started simulation for {len(symbols)} symbols"})
+
+
+@app.route('/api/stop_simulation', methods=['POST'])
+def stop_simulation():
+    """Stop running simulation"""
+    global simulation
+
+    if simulation and 'data_link' in simulation:
+        simulation['data_link'].is_running = False
+        time.sleep(1)  # Give time for thread to stop
+        simulation = None
+        return jsonify({"success": True, "message": "Simulation stopped"})
+
+    return jsonify({"success": False, "message": "No simulation running"})
 
 
 # Main entry point

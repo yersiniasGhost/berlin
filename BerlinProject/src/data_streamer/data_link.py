@@ -87,3 +87,6 @@ class DataLink(ABC):
             Tuple of (sample_data, index) or (None, None) if not applicable
         """
         return None, None
+
+    def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
+        pass

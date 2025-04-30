@@ -2,7 +2,7 @@ from typing import Union
 import numpy as np
 from gymnasium import Env
 from gymnasium import spaces
-from data_streamer.data_streamer import DataStreamer
+from data_streamer.data_streamer_orig import DataStreamer
 from environments.simple_position import SimplePosition
 from environments.inout_position import InoutPosition, IN, OUT
 from environments.get_state_class import get_state_class

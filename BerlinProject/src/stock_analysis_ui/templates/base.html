@@ -54,6 +54,10 @@
                     <button id="authBtn" class="btn btn-sm btn-primary">
                         <i class="fas fa-key me-1"></i> Authenticate
                     </button>
+
+                    <button id="startSimulationBtn" class="btn btn-sm btn-outline-info ms-2">
+                        <i class="fas fa-robot me-1"></i> Simulation
+                    </button>
                 </div>
             </div>
         </div>
@@ -85,68 +89,75 @@
     </div>
 </div>
 
- <!-- Configuration Modal -->
+<!-- Configuration Modal - Simplified for Single Configuration -->
 <div class="modal fade" id="configModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Configuration</h5>
+                <h5 class="modal-title">Symbol Configuration</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <!-- Single Symbol Configuration -->
                 <div class="mb-3">
                     <label class="form-label">Ticker Symbol</label>
-                    <div class="input-group">
-                        <input type="text" id="symbolInput" class="form-control" placeholder="Enter symbol (e.g., AAPL)">
-                        <button class="btn btn-primary" id="addSymbolBtn">Set</button>
-                    </div>
-                    <div class="form-text">Enter the ticker symbol you want to analyze</div>
+                    <input type="text" id="symbolInput" class="form-control" placeholder="Enter symbol (e.g., AAPL)">
                 </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Current Symbol</label>
-                    <div id="activeSymbols" class="border rounded p-2 min-height-100">
-                        <div class="text-muted text-center">No symbol selected</div>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Candle Timeframe</label>
-                    <select class="form-select" id="timeframeSelect">
-                        <option value="1m">1 Minute</option>
-                        <option value="5m">5 Minutes</option>
-                        <option value="15m">15 Minutes</option>
-                        <option value="30m">30 Minutes</option>
-                        <option value="1h">1 Hour</option>
-                        <option value="1d">1 Day</option>
-                    </select>
-                    <div class="form-text">Select the candle timeframe for both historical and live data</div>
-                </div>
-
-                <hr>
 
                 <div class="mb-3">
                     <label class="form-label">Monitor Configuration</label>
                     <div class="input-group">
-                        <input type="file" class="form-control" id="configFileInput" accept=".json">
-                        <button class="btn btn-primary" id="loadConfigBtn">Load</button>
+                        <input type="file" id="configFileInput" class="form-control" accept=".json">
+                        <button id="loadConfigBtn" class="btn btn-outline-secondary">Load</button>
                     </div>
-                    <div class="form-text">Load monitor configuration from JSON file</div>
                 </div>
 
-                <div class="mb-3 mt-4">
+                <div class="mb-3">
                     <label class="form-label">Configuration Preview</label>
-                    <pre id="configPreview" class="border rounded p-3 bg-light" style="max-height: 300px; overflow-y: auto;">No configuration loaded</pre>
+                    <pre id="configPreview" class="border rounded p-2 bg-light" style="max-height: 300px; overflow-y: auto;">No configuration loaded</pre>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="saveConfigBtn">Apply Configuration</button>
+                <button type="button" id="applyConfigBtn" class="btn btn-primary">Apply Configuration</button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Add Configuration Button (to be placed on the dashboard) -->
+<button id="addConfigBtn" class="btn btn-outline-primary mb-3">
+    <i class="fas fa-plus me-1"></i> Add Configuration
+</button>
+
+<!-- Configuration Card Template (hidden) -->
+<template id="configCardTemplate">
+    <div class="card mb-3 config-combination">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Symbol Configuration</h6>
+            <button type="button" class="btn-close remove-combination" aria-label="Remove"></button>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Ticker Symbol</label>
+                <input type="text" class="form-control symbol-input" placeholder="Enter symbol (e.g., AAPL)">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Monitor Configuration</label>
+                <div class="input-group">
+                    <input type="file" class="form-control config-file-input" accept=".json">
+                    <button class="btn btn-outline-secondary load-config-btn">Load</button>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Configuration Preview</label>
+                <pre class="config-preview border rounded p-2 bg-light" style="max-height: 150px; overflow-y: auto;">No configuration loaded</pre>
+            </div>
+        </div>
+    </div>
+</template>
 
     <!-- Authentication Modal -->
     <div class="modal fade" id="authModal" tabindex="-1" aria-hidden="true">
@@ -170,20 +181,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- In the configuration modal, add this after the symbols section -->
-    <div class="mb-3">
-        <label class="form-label">Candle Timeframe</label>
-        <select class="form-select" id="timeframeSelect">
-            <option value="1m">1 Minute</option>
-            <option value="5m">5 Minutes</option>
-            <option value="15m">15 Minutes</option>
-            <option value="30m">30 Minutes</option>
-            <option value="1h">1 Hour</option>
-            <option value="1d">1 Day</option>
-        </select>
-        <div class="form-text">Select the candle timeframe for both historical and live data</div>
     </div>
 
     <!-- Bootstrap JS -->
@@ -316,26 +313,40 @@
     });
 
     // Configuration handling
-    document.getElementById('configFileInput').addEventListener('change', function() {
-        const file = this.files[0];
-        if (!file) return;
+    let configData = null;
 
-        const preview = document.getElementById('configPreview');
-        const reader = new FileReader();
+    // Add Configuration button on dashboard
+    document.getElementById('addConfigBtn').addEventListener('click', function() {
+        // Reset the modal fields
+        document.getElementById('symbolInput').value = '';
+        document.getElementById('configFileInput').value = '';
+        document.getElementById('configPreview').textContent = 'No configuration loaded';
+        configData = null;
 
-        reader.onload = function(e) {
-            try {
-                const config = JSON.parse(e.target.result);
-                preview.textContent = JSON.stringify(config, null, 2);
-            } catch (error) {
-                console.error('Error parsing JSON:', error);
-                preview.textContent = 'Error parsing JSON: ' + error.message;
-            }
-        };
-
-        reader.readAsText(file);
+        // Show the configuration modal
+        const configModal = new bootstrap.Modal(document.getElementById('configModal'));
+        configModal.show();
     });
 
+    // Start button opens the configuration modal
+    document.getElementById('startBtn').addEventListener('click', function() {
+        if (!authenticated) {
+            alert('Please authenticate first');
+            return;
+        }
+
+        // Reset the modal fields
+        document.getElementById('symbolInput').value = '';
+        document.getElementById('configFileInput').value = '';
+        document.getElementById('configPreview').textContent = 'No configuration loaded';
+        configData = null;
+
+        // Show the configuration modal
+        const configModal = new bootstrap.Modal(document.getElementById('configModal'));
+        configModal.show();
+    });
+
+    // Load configuration file
     document.getElementById('loadConfigBtn').addEventListener('click', function() {
         const fileInput = document.getElementById('configFileInput');
 
@@ -351,178 +362,439 @@
             try {
                 const config = JSON.parse(e.target.result);
 
+                // Store the config data
+                configData = config;
+
+                // Update preview
+                document.getElementById('configPreview').textContent = JSON.stringify(config, null, 2);
+
                 // Extract ticker from config if available
                 if (config.data && config.data.ticker) {
-                    const symbol = config.data.ticker;
-                    clearSymbols();
-                    addSymbolToUI(symbol);
+                    document.getElementById('symbolInput').value = config.data.ticker;
                 }
 
-                // Show success message
-                alert('Configuration loaded successfully');
+                console.log('Configuration loaded successfully:', config);
             } catch (error) {
                 console.error('Error parsing JSON:', error);
                 alert('Error loading configuration: ' + error.message);
+                configData = null;
+                document.getElementById('configPreview').textContent = 'Error parsing JSON: ' + error.message;
             }
         };
 
         reader.readAsText(file);
     });
 
-    // Symbol management (simplified)
-    document.getElementById('addSymbolBtn').addEventListener('click', function() {
-        const input = document.getElementById('symbolInput');
-        const symbolValue = input.value.trim().toUpperCase();
+    // Apply configuration
+    document.getElementById('applyConfigBtn').addEventListener('click', function() {
+        const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
 
-        if (!symbolValue) {
+        if (!symbol) {
+            alert('Please enter a symbol');
             return;
         }
 
-        clearSymbols();
-        addSymbolToUI(symbolValue);
-        input.value = '';
+        if (!configData) {
+            alert('Please load a configuration file');
+            return;
+        }
+
+        console.log('Applying configuration for symbol:', symbol);
+        console.log('Configuration data:', configData);
+
+        // Send to server
+        fetch('/api/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                symbol: symbol,
+                config: configData
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Hide modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
+                modal.hide();
+
+                // Notify user
+                console.log(`Configuration applied successfully for ${symbol}`);
+
+                // Add ticker card
+                addTickerCard(symbol);
+            } else {
+                alert('Error applying configuration: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error: ' + error.message);
+        });
     });
 
-    function addSymbolToUI(symbol) {
-        const container = document.getElementById('activeSymbols');
+    // Function to add a ticker card to the dashboard
+    function addTickerCard(symbol) {
+        const container = document.getElementById('tickerContainer');
 
-        // Create symbol tag
-        container.innerHTML = `
-            <span class="badge bg-primary symbol-tag p-2">
-                ${symbol} <i class="fas fa-times-circle ms-1 symbol-remove"></i>
-            </span>
+        if (!container) {
+            console.error('Ticker container not found');
+            return;
+        }
+
+        // Remove empty dashboard message if present
+        const emptyDashboard = container.querySelector('.empty-dashboard');
+        if (emptyDashboard) {
+            emptyDashboard.remove();
+        }
+
+        // Check if card already exists for this symbol
+        if (container.querySelector(`[data-symbol="${symbol}"]`)) {
+            console.log(`Card for ${symbol} already exists`);
+            return;
+        }
+
+        // Create new card
+        const col = document.createElement('div');
+        col.className = 'col-md-4 col-lg-3 mb-4';
+
+        col.innerHTML = `
+            <div class="card ticker-card shadow-sm" data-symbol="${symbol}">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="mb-0">${symbol}</h5>
+                    <small class="text-muted">Waiting for data...</small>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-center align-items-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <p class="text-center text-muted">Waiting for data...</p>
+                </div>
+            </div>
         `;
 
-        // Add remove event
-        container.querySelector('.symbol-remove').addEventListener('click', function() {
-            clearSymbols();
+        // Make card clickable to view details
+        const card = col.querySelector('.ticker-card');
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function() {
+            window.location.href = `/ticker/${symbol}`;
         });
+
+        // Add to container
+        container.appendChild(col);
+
+        console.log(`Added ticker card for ${symbol}`);
     }
 
-    function clearSymbols() {
-        const container = document.getElementById('activeSymbols');
-        container.innerHTML = '<div class="text-muted text-center">No symbol selected</div>';
-    }
-
-    // Save configuration
-    document.getElementById('saveConfigBtn').addEventListener('click', function() {
-        // Get the symbol
-        const symbolContainer = document.getElementById('activeSymbols');
-        const symbolTag = symbolContainer.querySelector('.symbol-tag');
-
-        if (!symbolTag) {
-            alert('Please select a ticker symbol first');
-            return;
-        }
-
-        const symbol = symbolTag.textContent.trim().split(' ')[0];
-
-        // Get the file input
-        const fileInput = document.getElementById('configFileInput');
-
-        if (!fileInput.files || fileInput.files.length === 0) {
-            alert('Please select a configuration file first');
-            return;
-        }
-
-        // Get selected timeframe
-        const timeframe = document.getElementById('timeframeSelect').value;
-
-        // Read the file and process it
-        const file = fileInput.files[0];
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            try {
-                const config = JSON.parse(e.target.result);
-
-                // Create the data to send
-                const data = {
-                    symbol: symbol,
-                    timeframe: timeframe,
-                    config: config
-                };
-
-                // Send it to the server
-                fetch('/api/start', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Hide modal
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
-                        modal.hide();
-
-                        // Notify user
-                        alert(`Configuration applied successfully for ${symbol}`);
-                    } else {
-                        alert('Error applying configuration: ' + (data.error || 'Unknown error'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error: ' + error.message);
-                });
-
-            } catch (error) {
-                console.error('Error parsing JSON:', error);
-                alert('Error loading configuration: ' + error.message);
-            }
-        };
-
-        reader.readAsText(file);
-    });
-
-    // Add Symbol Modal
-    document.getElementById('confirmAddSymbolBtn').addEventListener('click', function() {
-        const symbolInput = document.getElementById('newSymbolInput');
-        const symbol = symbolInput.value.trim().toUpperCase();
-
-        if (symbol) {
-            // Add to UI
-            addSymbolToUI(symbol);
-
-            // Clear input and close modal
-            symbolInput.value = '';
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addSymbolModal'));
-            modal.hide();
-        }
-    });
-
-    // Debug SocketIO connections
-    socket.on('connect', () => {
-        console.log('Socket.IO connected successfully');
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Socket.IO disconnected');
-    });
-
-    // Log all events received
+    // Debug Socket.IO events
     socket.onAny((event, ...args) => {
-        console.log('Socket.IO event received:', event, args);
-    });
+        console.log(`SOCKET EVENT: ${event}`, args);
 
-    // Initialize
-    window.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded, checking Socket.IO connection status...");
-
-        // Debug Socket.IO connection
-        if (typeof socket === 'undefined') {
-            console.error("ERROR: socket is undefined! Socket.IO not initialized properly");
-        } else {
-            console.log("Socket.IO object exists, connection state:", socket.connected);
+        // Process ticker updates
+        if (event === 'ticker_update') {
+            const data = args[0];
+            if (data && data.symbol) {
+                updateTickerCard(data);
+            }
         }
 
-        checkAuthentication();
+        // Process indicator updates
+        if (event === 'indicator_update') {
+            const data = args[0];
+            if (data && data.symbol) {
+                updateTickerCardIndicators(data);
+            }
+        }
+
+        // Process completed candles
+        if (event === 'candle_completed') {
+            const data = args[0];
+            if (data && data.symbol && data.candle) {
+                updateTickerCardWithCandle(data.symbol, data.candle);
+            }
+        }
     });
 
+    // Update ticker card with new data
+    function updateTickerCard(data) {
+        const symbol = data.symbol;
+        const card = document.querySelector(`.ticker-card[data-symbol="${symbol}"]`);
 
+        if (!card) {
+            console.warn(`Card for ${symbol} not found, creating new card`);
+            addTickerCard(symbol);
+            return;
+        }
+
+        // Extract candle data
+        const candle = data.data || data;
+        if (!candle || !candle.close) {
+            console.warn(`Invalid candle data for ${symbol}:`, candle);
+            return;
+        }
+
+        // Format price
+        const price = typeof candle.close === 'number' ? candle.close.toFixed(2) : candle.close;
+
+        // Update timestamp
+        const timestamp = candle.timestamp ? new Date(candle.timestamp).toLocaleTimeString() : 'Now';
+
+        // Update card content
+        const spinner = card.querySelector('.spinner-border');
+        if (spinner) {
+            spinner.parentElement.remove();
+        }
+
+        const waitingText = card.querySelector('.text-center.text-muted');
+        if (waitingText) {
+            waitingText.remove();
+        }
+
+        // Update header
+        card.querySelector('.card-header small').textContent = timestamp;
+
+        // Update or create price display
+        let priceDisplay = card.querySelector('.ticker-price');
+        if (!priceDisplay) {
+            const cardBody = card.querySelector('.card-body');
+            cardBody.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="ticker-price">${price}</span>
+                    <span class="badge bg-secondary">${candle.volume ? candle.volume.toLocaleString() : 'N/A'}</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="d-flex justify-content-between">
+                        <span>Bullish Signal</span>
+                        <span class="bull-score">0%</span>
+                    </label>
+                    <div class="progress" style="height: 15px;">
+                        <div class="progress-bar progress-bull" role="progressbar"
+                             style="width: 0%"
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="d-flex justify-content-between">
+                        <span>Bearish Signal</span>
+                        <span class="bear-score">0%</span>
+                    </label>
+                    <div class="progress" style="height: 15px;">
+                        <div class="progress-bar progress-bear" role="progressbar"
+                             style="width: 0%"
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+
+                <div class="indicators-summary mt-2 small"></div>
+            `;
+        } else {
+            priceDisplay.textContent = price;
+        }
+
+        console.log(`Updated ticker card for ${symbol} with price ${price}`);
+    }
+
+    // Update ticker card with indicator data
+    function updateTickerCardIndicators(data) {
+        const symbol = data.symbol;
+        const card = document.querySelector(`.ticker-card[data-symbol="${symbol}"]`);
+
+        if (!card) {
+            console.warn(`Card for ${symbol} not found when updating indicators`);
+            return;
+        }
+
+        // Update bull/bear scores
+        if (data.overall_scores) {
+            const bullScore = data.overall_scores.bull || 0;
+            const bearScore = data.overall_scores.bear || 0;
+
+            const bullScoreElem = card.querySelector('.bull-score');
+            const bearScoreElem = card.querySelector('.bear-score');
+            const bullProgress = card.querySelector('.progress-bull');
+            const bearProgress = card.querySelector('.progress-bear');
+
+            if (bullScoreElem) bullScoreElem.textContent = `${(bullScore * 100).toFixed(0)}%`;
+            if (bearScoreElem) bearScoreElem.textContent = `${(bearScore * 100).toFixed(0)}%`;
+            if (bullProgress) {
+                bullProgress.style.width = `${bullScore * 100}%`;
+                bullProgress.setAttribute('aria-valuenow', bullScore * 100);
+            }
+            if (bearProgress) {
+                bearProgress.style.width = `${bearScore * 100}%`;
+                bearProgress.setAttribute('aria-valuenow', bearScore * 100);
+            }
+        }
+
+        // Update indicators summary
+        if (data.indicators) {
+            const indicatorsSummary = card.querySelector('.indicators-summary');
+            if (indicatorsSummary) {
+                // Clear existing content
+                indicatorsSummary.innerHTML = '';
+
+                // Get top 3 indicators
+                const indicatorNames = Object.keys(data.indicators);
+                const topIndicators = indicatorNames.slice(0, 3);
+
+                if (topIndicators.length === 0) {
+                    indicatorsSummary.innerHTML = '<div class="text-muted">No indicators available</div>';
+                    return;
+                }
+
+                // Add each indicator
+                for (const name of topIndicators) {
+                    const value = data.indicators[name];
+
+                    // Skip if not a numeric value
+                    if (typeof value !== 'number') continue;
+
+                    // Format with color based on value
+                    let valueClass = 'text-muted';
+                    if (value > 0.7) {
+                        valueClass = name.toLowerCase().includes('bear') ? 'text-danger' : 'text-success';
+                    } else if (value > 0.3) {
+                        valueClass = name.toLowerCase().includes('bear') ? 'text-warning' : 'text-primary';
+                    }
+
+                    const displayName = name
+                        .replace(/_/g, ' ')
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, str => str.toUpperCase());
+
+                    indicatorsSummary.innerHTML += `
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>${displayName}:</span>
+                            <span class="${valueClass} fw-bold">${(value * 100).toFixed(0)}%</span>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        console.log(`Updated indicators for ${symbol}`);
+    }
+
+    // Update ticker card with candle data
+    function updateTickerCardWithCandle(symbol, candle) {
+        // This is similar to updateTickerCard but specifically for candle data
+        const data = {
+            symbol: symbol,
+            data: candle
+        };
+        updateTickerCard(data);
+    }
+
+    // Socket.IO connection management
+    function checkSocketConnection() {
+        console.log('Checking Socket.IO connection');
+        if (socket.connected) {
+            console.log('Socket.IO connected');
+        } else {
+            console.log('Socket.IO not connected, trying to connect...');
+            socket.connect();
+        }
+
+        // Try to load initial data
+        setTimeout(loadInitialData, 1000); // Wait for connection
+    }
+
+    // Load initial data
+    function loadInitialData() {
+        console.log('Loading initial ticker data...');
+
+        if (!socket.connected) {
+            console.log('Socket still not connected, trying again in 1 second...');
+            setTimeout(loadInitialData, 1000);
+            return;
+        }
+
+        fetch('/api/tickers')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Received initial data:', data);
+
+                // Check if we have any ticker data
+                if (data && data.data) {
+                    // Process ticker data
+                    for (const [symbol, tickerData] of Object.entries(data.data)) {
+                        addTickerCard(symbol);
+                        updateTickerCard({
+                            symbol: symbol,
+                            data: tickerData
+                        });
+                    }
+                }
+
+                // Check for indicator data
+                if (data && data.indicators) {
+                    for (const [symbol, indicators] of Object.entries(data.indicators)) {
+                        updateTickerCardIndicators({
+                            symbol: symbol,
+                            indicators: indicators,
+                            overall_scores: data.overall_scores?.[symbol] || { bull: 0, bear: 0 }
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading ticker data:', error);
+            });
+    }
+
+    // Initialize when DOM is loaded
+    window.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, checking Socket.IO connection...');
+        checkSocketConnection();
+
+        // Add test button functionality if it exists
+        const testCardBtn = document.getElementById('testCardBtn');
+        if (testCardBtn) {
+            testCardBtn.addEventListener('click', function() {
+                // Create test data
+                const symbols = ['AAPL', 'MSFT', 'GOOGL'];
+
+                symbols.forEach(symbol => {
+                    addTickerCard(symbol);
+
+                    // Simulate ticker data
+                    updateTickerCard({
+                        symbol: symbol,
+                        data: {
+                            timestamp: new Date().toISOString(),
+                            open: 100 + Math.random() * 10,
+                            high: 110 + Math.random() * 10,
+                            low: 90 + Math.random() * 10,
+                            close: 105 + Math.random() * 10,
+                            volume: Math.floor(Math.random() * 10000)
+                        }
+                    });
+
+                    // Simulate indicator data
+                    setTimeout(() => {
+                        updateTickerCardIndicators({
+                            symbol: symbol,
+                            indicators: {
+                                'macd_cross_bull': Math.random(),
+                                'bollinger_bull': Math.random(),
+                                'sma_cross_bull': Math.random()
+                            },
+                            overall_scores: {
+                                bull: Math.random(),
+                                bear: Math.random() * 0.3
+                            }
+                        });
+                    }, 500);
+                });
+            });
+        }
+    });
     </script>
 
     {% block scripts %}{% endblock %}

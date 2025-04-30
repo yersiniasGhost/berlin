@@ -24,15 +24,18 @@ def sma_crossover(tick_data: List[TickData], parameters: Dict[str, float]) -> np
 
     sma = sma_indicator(tick_data, parameters['period'])
     closes = np.array([tick.close for tick in tick_data])
+
     if parameters['trend'] == 'bullish':
         sma_threshold = sma * (1 + parameters['crossover_value'])
         crossovers = closes > sma_threshold
     elif parameters['trend'] == 'bearish':
         sma_threshold = sma * (1 - parameters['crossover_value'])
         crossovers = closes < sma_threshold
-        # Detect the moment of crossover (1 only when previous was 0 and current is 1)
+
+    # Detect the moment of crossover (1 only when previous was 0 and current is 1)
     result = np.zeros(len(tick_data))
     result[1:] = np.logical_and(crossovers[1:], ~crossovers[:-1])
+
     return result
 
 

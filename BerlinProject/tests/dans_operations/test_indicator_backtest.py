@@ -4,7 +4,7 @@ from datetime import datetime
 from environments.tick_data import TickData
 from mongo_tools.tick_history_tools import TickHistoryTools
 from operations.indicator_backtest import IndicatorBacktest, Trade
-from data_streamer.data_streamer import DataStreamer
+from data_streamer.data_streamer_orig import DataStreamer
 
 
 class TestIndicatorBackTest(unittest.TestCase):

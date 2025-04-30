@@ -15,6 +15,8 @@ class DataPreprocessor:
         self.normalized_tick: Optional[TickData] = None
         self.sample_stats = None
 
+
+    # TODO: delete this
     def initialize(self, data_link, symbols: List[str], timeframe: str = "1m") -> bool:
         """
         Initialize the preprocessor with historical data for the given symbols.
@@ -72,6 +74,14 @@ class DataPreprocessor:
         return self.tick, self.history
 
     def next_tick(self, tick: TickData):
+        # Skip duplicate ticks (same symbol and timestamp)
+        if self.history and hasattr(tick, 'symbol') and hasattr(tick, 'timestamp'):
+            last_tick = self.history[-1]
+            if (hasattr(last_tick, 'symbol') and hasattr(last_tick, 'timestamp') and
+                    last_tick.symbol == tick.symbol and last_tick.timestamp == tick.timestamp):
+                print(f"Skipping duplicate tick for {tick.symbol} @ {tick.timestamp}")
+                return
+
         # Perform any required normalization on historical data
         # If no normalization use raw tick
         self.history.append(tick)

@@ -28,16 +28,11 @@ class IndicatorProcessor:
 
         return metric
 
+
+
     def next_tick(self, data_preprocessor: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
         """
         Process the next tick for indicators.
-        This should only be called with completed candles.
-
-        Args:
-            data_preprocessor: The data preprocessor containing the current tick and history
-
-        Returns:
-            Tuple of (indicator_results, raw_indicators)
         """
         tick, history = data_preprocessor.get_data()  # get non-normalized data
 
@@ -47,15 +42,19 @@ class IndicatorProcessor:
             logger.warning("IndicatorProcessor received incomplete candle data")
             return {}, {}
 
-        # Use a reasonable history length but cap it to avoid performance issues
-        max_history = 50
-        history = history[-max_history:]
+        # Use the full history - don't limit it
+        # history = history[-max_history:]  <- Remove this line
+
+        print(f"Processing indicators with history size: {len(history)}")
 
         output = {}
-        raw_output = {}  # Add this to store raw indicator values
+        raw_output = {}
 
         for indicator in self.config.indicators:
             look_back = indicator.parameters.get('lookback', 10)
+
+            # Log the parameters for debugging
+            print(f"Indicator: {indicator.name}, function: {indicator.function}, params: {indicator.parameters}")
 
             # Candle stick patterns are using TALIB definitions
             if indicator.type == CANDLE_STICK_PATTERN:
