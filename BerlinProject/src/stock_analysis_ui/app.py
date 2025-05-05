@@ -137,7 +137,7 @@ def authenticate():
         "message": "Already authenticated via command line"
     })
 
-# Inside app.py - update data service initialization
+
 @app.route('/api/start', methods=['POST'])
 def start_streaming():
     """Start data streaming with configuration file"""
@@ -172,13 +172,11 @@ def start_streaming():
             indicators=indicators
         )
 
-        # 3. Get weights if available
-        weights = {}
+        # 3. Add the bars structure and other monitor properties
         monitor_dict = config.get('monitor', {})
-        if 'triggers' in monitor_dict:
-            weights.update(monitor_dict['triggers'])
-        if 'bear_triggers' in monitor_dict:
-            weights.update(monitor_dict['bear_triggers'])
+        if 'bars' in monitor_dict:
+            # Create a property for bars if it doesn't exist
+            monitor_config.bars = monitor_dict['bars']
 
         # 4. Check if we need to create a new StreamingManager or use existing
         if not hasattr(data_service, 'streaming_manager'):
@@ -202,13 +200,11 @@ def start_streaming():
             }
         )
 
-        # 6. Create and connect UI external tool
-        ui_tool = UIExternalTool(socketio)
-        streamer.connect_tool(ui_tool)
+        # 6. Create and connect UI external tool with the monitor
+        ui_tool = UIExternalTool(socketio, monitor_config)
 
-        # 7. Update weights
-        if weights:
-            ui_tool.update_weights(weights)
+        # 7. Connect the UI tool to the streamer
+        streamer.connect_tool(ui_tool)
 
         # 8. Start streaming if not already started
         if not data_service.is_streaming:

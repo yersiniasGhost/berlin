@@ -16,10 +16,11 @@ class UIExternalTool:
     Processes data from indicators and sends to the UI via Socket.IO.
     """
 
-    def __init__(self, socketio: SocketIO):
+    def __init__(self, socketio: SocketIO, monitor):
         """
         Initialize the UI external tool.
         """
+        self.monitor = monitor
         self.socketio = socketio
         self.ticker_data = {}  # Store latest data for each ticker
         self.history = {}  # Store historical data (limited amount)
@@ -27,6 +28,7 @@ class UIExternalTool:
         self.raw_indicators = {}  # Store raw indicator values by ticker
         self.overall_scores = {}  # Store overall bull/bear scores by ticker
         self.weights = {}  # Store weights for each ticker's indicators
+        self.bar_configs = {}
 
         # Added for tracking progress similar to test_initialization_run
         self.initial_history_size = 0
@@ -36,6 +38,9 @@ class UIExternalTool:
 
         # Configure history limits
         self.max_history_items = 600
+
+        if monitor:
+            self.setup_from_monitor(monitor)
 
         # Initialize logger
         if not logger.handlers:
@@ -319,6 +324,43 @@ class UIExternalTool:
             'symbol': symbol,
             'candle': candle_data
         })
+
+    def setup_from_monitor(self, monitor):
+        """
+        Set up the UI tool with configuration from the monitor object.
+
+        Extracts bar configurations and weights from the monitor
+
+        Args:
+            monitor: Monitor configuration object
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Check if monitor has bars configuration
+            if not hasattr(monitor, 'bars'):
+                logger.warning("No bars configuration in monitor")
+                return False
+
+            # Process bars and extract weights in one pass
+            self.weights = {}
+            self.bar_configs = {}
+
+            # Process each bar category (Bullish SignalX, Bearish SignalX, Bullish Momentum)
+            for bar_category, indicators in monitor.bars.items():
+                # Extract weights (add all indicators to the weights dictionary)
+                self.weights.update(indicators)
+
+                # Store bar configuration
+                self.bar_configs[bar_category] = {
+                    'indicators': indicators
+                }
+
+            return True
+        except Exception as e:
+            logger.error(f"Error setting up from monitor: {e}")
+            return False
 
     def calculate_weighted_score(self, indicators, weights):
         """

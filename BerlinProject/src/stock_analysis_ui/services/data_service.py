@@ -239,23 +239,23 @@ class DataService:
             logger.error(f"Error stopping data streaming: {e}")
             return False
 
-    def update_weights(self, weights: Dict[str, float]) -> bool:
-        """
-        Update indicator weights
-        """
-        try:
-            # Update current weights
-            self.current_weights.update(weights)
-
-            # Update UI tool
-            if self.ui_tool and hasattr(self.ui_tool, 'update_weights'):
-                self.ui_tool.update_weights(self.current_weights)
-
-            logger.info("Updated indicator weights")
-            return True
-        except Exception as e:
-            logger.error(f"Error updating weights: {e}")
-            return False
+    # def update_weights(self, weights: Dict[str, float]) -> bool:
+    #     """
+    #     Update indicator weights
+    #     """
+    #     try:
+    #         # Update current weights
+    #         self.current_weights.update(weights)
+    #
+    #         # Update UI tool
+    #         if self.ui_tool and hasattr(self.ui_tool, 'update_weights'):
+    #             self.ui_tool.update_weights(self.current_weights)
+    #
+    #         logger.info("Updated indicator weights")
+    #         return True
+    #     except Exception as e:
+    #         logger.error(f"Error updating weights: {e}")
+    #         return False
 
     def get_ticker_data(self) -> Dict:
         """
