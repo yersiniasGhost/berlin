@@ -26,9 +26,9 @@ class UIExternalTool:
         self.history = {}  # Store historical data (limited amount)
         self.indicators = {}  # Store indicator results by ticker
         self.raw_indicators = {}  # Store raw indicator values by ticker
-        self.overall_scores = {}  # Store overall bull/bear scores by ticker
         self.weights = {}  # Store weights for each ticker's indicators
         self.bar_configs = {}
+        self.bar_scores = {}
 
         # Added for tracking progress similar to test_initialization_run
         self.initial_history_size = 0
@@ -146,46 +146,38 @@ class UIExternalTool:
             self.history[symbol] = []
             self.indicators[symbol] = {}
             self.raw_indicators[symbol] = {}
-            self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
+            self.bar_scores[symbol] = {}
 
         # Store indicator results
         self.indicators[symbol] = indicators.copy()
         if raw_indicators:
             self.raw_indicators[symbol] = raw_indicators.copy()
 
-        # Calculate overall scores using weights
-        bull_indicators = {k: v for k, v in indicators.items() if 'bear' not in k.lower()}
-        bear_indicators = {k: v for k, v in indicators.items() if 'bear' in k.lower()}
+        # Calculate bar scores directly from monitor configuration
+        bar_scores = {}
+        if hasattr(self, 'monitor') and hasattr(self.monitor, 'bars'):
+            for bar_name, bar_indicators in self.monitor.bars.items():
+                # Get only the indicators relevant to this bar
+                relevant_indicators = {k: v for k, v in indicators.items() if k in bar_indicators}
+                # Calculate weighted score for this bar
+                bar_score = self.calculate_weighted_score(relevant_indicators, bar_indicators)
+                bar_scores[bar_name] = bar_score
 
-        # Apply weights
-        bull_score = self.calculate_weighted_score(bull_indicators, self.weights.get(symbol, {}))
-        bear_score = self.calculate_weighted_score(bear_indicators, self.weights.get(symbol, {}))
-
-        self.overall_scores[symbol] = {
-            'bull': bull_score,
-            'bear': bear_score
-        }
-
-        # Add this debug line to check what's being sent
-        print(
-            f"DEBUG - Emitting indicator update for {symbol}: {self.indicators[symbol]}, scores: {self.overall_scores[symbol]}")
+        self.bar_scores[symbol] = bar_scores
 
         # Update the ticker data with these values
-        if not 'indicators' in self.ticker_data[symbol]:
-            self.ticker_data[symbol]['indicators'] = {}
-
-        self.ticker_data[symbol]['indicators'] = self.indicators[symbol]
-        self.ticker_data[symbol]['overall_scores'] = self.overall_scores[symbol]
+        self.ticker_data[symbol].update({
+            'indicators': self.indicators[symbol],
+            'bar_scores': bar_scores
+        })
 
         emit_data = {
             'symbol': symbol,
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
-            'overall_scores': self.overall_scores[symbol],
+            'bar_scores': bar_scores,  # Only emit bar scores
             'timestamp': tick.timestamp.isoformat() if isinstance(tick.timestamp, datetime) else str(tick.timestamp)
         }
-
-        print(f"EXACT EMITTED DATA: {json.dumps(emit_data)}")
 
         # Emit update
         self.socketio.emit('indicator_update', emit_data)

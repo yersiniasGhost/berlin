@@ -16,14 +16,11 @@ class DataService:
     Integrates with DataStreamer, SchwabDataLink, and indicator processing.
     """
 
-    def __init__(self, ui_tool):
+    def __init__(self):
         """
-        Initialize the data service.
-
-        Args:
-            ui_tool: UI external tool for visualization
+        Initialize the data service without UI tool - tool will be passed later.
         """
-        self.ui_tool = ui_tool
+        self.ui_tool = None  # Will be set later when needed
         self.data_streamer = None
         self.schwab_data_link = None
         self.indicator_processor = None
@@ -33,6 +30,7 @@ class DataService:
         self.current_indicators = []
         self.current_weights = {}
         self.current_timeframe = "1m"  # Default timeframe
+        self.streaming_manager = None  # Will be created when needed
 
         # Add path to import project modules
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -83,9 +81,10 @@ class DataService:
             return False
 
     def start(self, symbols: List[str], indicators: List[Dict], weights: Dict[str, float] = None,
-              timeframe: str = "1m") -> bool:
+              timeframe: str = "1m", ui_tool=None) -> bool:
         """
         Start data streaming for the specified symbols and indicators.
+        Now accepts ui_tool as an optional parameter.
         """
         if self.is_streaming:
             logger.info("Already streaming, stopping first")
@@ -102,6 +101,10 @@ class DataService:
         self.current_indicators = indicators
         self.current_weights = weights or {}
         self.current_timeframe = timeframe
+
+        # Store UI tool if provided
+        if ui_tool:
+            self.ui_tool = ui_tool
 
         try:
             # Get Schwab authentication
@@ -159,12 +162,13 @@ class DataService:
                 indicator_configuration=monitor_config
             )
 
-            # Connect UI tool to receive updates
-            self.data_streamer.connect_tool(self.ui_tool)
+            # Connect UI tool if available
+            if self.ui_tool:
+                self.data_streamer.connect_tool(self.ui_tool)
 
-            # Update weights in UI tool
-            if weights:
-                self.ui_tool.update_weights(weights)
+                # Update weights in UI tool if available
+                if weights and hasattr(self.ui_tool, 'update_weights'):
+                    self.ui_tool.update_weights(weights)
 
             # Initialize data with historical data
             logger.info(f"Initializing with historical data for symbols: {symbols}")
@@ -174,8 +178,8 @@ class DataService:
             initial_history_size = len(self.data_streamer.preprocessor.history)
             logger.info(f"Loaded {initial_history_size} historical data points")
 
-            # Store in UI tool for reference
-            if hasattr(self.ui_tool, 'set_initial_history_size'):
+            # Store in UI tool for reference if available
+            if self.ui_tool and hasattr(self.ui_tool, 'set_initial_history_size'):
                 self.ui_tool.set_initial_history_size(initial_history_size)
 
             # Start streaming in a separate thread
@@ -239,27 +243,27 @@ class DataService:
             logger.error(f"Error stopping data streaming: {e}")
             return False
 
-    # def update_weights(self, weights: Dict[str, float]) -> bool:
-    #     """
-    #     Update indicator weights
-    #     """
-    #     try:
-    #         # Update current weights
-    #         self.current_weights.update(weights)
-    #
-    #         # Update UI tool
-    #         if self.ui_tool and hasattr(self.ui_tool, 'update_weights'):
-    #             self.ui_tool.update_weights(self.current_weights)
-    #
-    #         logger.info("Updated indicator weights")
-    #         return True
-    #     except Exception as e:
-    #         logger.error(f"Error updating weights: {e}")
-    #         return False
+    def update_weights(self, weights: Dict[str, float]) -> bool:
+        """
+        Update indicator weights
+        """
+        try:
+            # Update current weights
+            self.current_weights.update(weights)
+
+            # Update UI tool if available
+            if self.ui_tool and hasattr(self.ui_tool, 'update_weights'):
+                self.ui_tool.update_weights(self.current_weights)
+
+            logger.info("Updated indicator weights")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating weights: {e}")
+            return False
 
     def get_ticker_data(self) -> Dict:
         """
-        Get current ticker data
+        Get current ticker data from UI tool if available
         """
         if self.ui_tool and hasattr(self.ui_tool, 'get_ticker_data'):
             return self.ui_tool.get_ticker_data()

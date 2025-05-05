@@ -1,13 +1,10 @@
 import os
 import sys
 
-
 # Import path fixer - add this at the top
 import fix_imports
 from models import IndicatorDefinition
 from models.monitor_configuration import MonitorConfiguration
-
-fix_imports.setup_imports()
 
 from test_UI_connection import run_simulation_with_ui
 
@@ -22,7 +19,6 @@ from datetime import datetime
 from services.schwab_auth import SchwabAuthManager
 from services.data_service import DataService
 from services.ui_external_tool import UIExternalTool
-
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -42,8 +38,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Authentication manager will be set after authentication
 auth_manager = None
-ui_tool = None
-data_service = None
+data_service = None  # No ui_tool initialization here
 simulation = None
 
 # Default indicator configurations
@@ -52,7 +47,7 @@ from ui_config.indicator_configs import DEFAULT_INDICATORS, AVAILABLE_INDICATORS
 
 def authenticate_before_startup():
     """Authenticate with Schwab API before starting the web server"""
-    global auth_manager, ui_tool, data_service  # Declare globals at beginning of function
+    global auth_manager, data_service  # No ui_tool in globals
 
     # Check if we have already authenticated (for Flask debug mode restarts)
     token_path = "schwab_tokens.json"
@@ -67,13 +62,11 @@ def authenticate_before_startup():
                 auth_manager.access_token = tokens.get('access_token')
                 auth_manager.refresh_token = tokens.get('refresh_token')
 
-                # Try to get streamer info to verify token validity
                 if auth_manager._get_streamer_info():
                     print("\nUsing saved authentication. Starting web server...")
 
-                    # Initialize other services
-                    ui_tool = UIExternalTool(socketio)
-                    data_service = DataService(ui_tool)
+                    # Initialize data service without UI tool
+                    data_service = DataService()  # Modified to not require ui_tool
 
                     return True
         except Exception as e:
@@ -92,9 +85,8 @@ def authenticate_before_startup():
         # Store the authenticated manager globals for the app to use
         auth_manager = auth
 
-        # Initialize other services now that we have authentication
-        ui_tool = UIExternalTool(socketio)
-        data_service = DataService(ui_tool)
+        # Initialize data_service without UI tool
+        data_service = DataService()  # Modified to not require ui_tool
 
         # Save tokens for future app restarts
         try:
@@ -178,12 +170,20 @@ def start_streaming():
             # Create a property for bars if it doesn't exist
             monitor_config.bars = monitor_dict['bars']
 
-        # 4. Check if we need to create a new StreamingManager or use existing
-        if not hasattr(data_service, 'streaming_manager'):
-            # Create new streaming manager
+        # 4. Create the streaming manager if it doesn't exist
+        # This is the critical fix - explicitly create the streaming manager
+        if not hasattr(data_service, 'streaming_manager') or data_service.streaming_manager is None:
+            logger.info("Creating new streaming manager")
             data_service.create_streaming_manager()
 
-        # 5. Register streamer with StreamingManager
+        # Double check we have a streaming manager
+        if not data_service.streaming_manager:
+            return jsonify({"success": False, "error": "Failed to create streaming manager"})
+
+        # 5. Create UI tool here with the specific monitor configuration
+        ui_tool = UIExternalTool(socketio, monitor_config)
+
+        # 6. Register streamer with StreamingManager
         streamer_id = f"{symbol}_streamer"
         streamer = data_service.streaming_manager.register_streamer(
             streamer_id=streamer_id,
@@ -200,10 +200,7 @@ def start_streaming():
             }
         )
 
-        # 6. Create and connect UI external tool with the monitor
-        ui_tool = UIExternalTool(socketio, monitor_config)
-
-        # 7. Connect the UI tool to the streamer
+        # 7. Connect the UI tool directly to the streamer
         streamer.connect_tool(ui_tool)
 
         # 8. Start streaming if not already started
@@ -217,6 +214,7 @@ def start_streaming():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
+
 
 @app.route('/api/stop', methods=['POST'])
 def stop_streaming():
@@ -236,7 +234,7 @@ def get_tickers():
     # If symbol is specified, filter the data
     if symbol:
         filtered_data = {}
-        for key in ['data', 'indicators', 'overall_scores', 'history']:
+        for key in ['data', 'indicators', 'bar_scores', 'history']:  # Changed 'overall_scores' to 'bar_scores'
             if key in ticker_data and symbol in ticker_data[key]:
                 filtered_data[key] = {symbol: ticker_data[key][symbol]}
             else:
@@ -330,8 +328,18 @@ def upload_config():
             if 'bear_triggers' in monitor:
                 weights.update(monitor['bear_triggers'])
 
-            # Start data service with extracted configuration
-            success = data_service.start(symbols, indicators, weights)
+            # Create a UI tool for this specific config
+            monitor_config = MonitorConfiguration(
+                name=config_data.get('monitor', {}).get('name', 'Test Monitor'),
+                indicators=indicators,
+                bars=config_data.get('monitor', {}).get('bars', {})
+            )
+
+            # Create UI tool with the specific monitor config
+            ui_tool = UIExternalTool(socketio, monitor_config)
+
+            # Start data service with the created UI tool
+            success = data_service.start(symbols, indicators, weights, ui_tool=ui_tool)
 
             return jsonify({"success": success})
         except Exception as e:
@@ -396,9 +404,44 @@ def start_multi_streaming():
         return jsonify({"success": False, "error": "No combinations provided"})
 
     try:
-        # Initialize your StreamingManager
-        # For each combination, register a DataStreamer and connect a UIExternalTool
-        # Start the StreamingManager
+        # Create streaming manager if needed
+        if not hasattr(data_service, 'streaming_manager'):
+            data_service.create_streaming_manager()
+
+        for combo in combinations:
+            symbol = combo.get('symbol')
+            config = combo.get('config')
+
+            if not symbol or not config:
+                continue
+
+            # Create monitor config
+            monitor_config = MonitorConfiguration(
+                name=config.get('name', f'{symbol} Monitor'),
+                indicators=config.get('indicators', []),
+                bars=config.get('bars', {})
+            )
+
+            # Create UI tool for this config
+            ui_tool = UIExternalTool(socketio, monitor_config)
+
+            # Register streamer
+            streamer_id = f"{symbol}_streamer"
+            streamer = data_service.streaming_manager.register_streamer(
+                streamer_id=streamer_id,
+                symbols=[symbol],
+                monitor_config=monitor_config,
+                model_config={"feature_vector": [{"name": "open"}, {"name": "high"},
+                                                 {"name": "low"}, {"name": "close"}]}
+            )
+
+            # Connect UI tool
+            streamer.connect_tool(ui_tool)
+
+        # Start streaming once for all
+        if not data_service.is_streaming:
+            data_service.streaming_manager.start_streaming("1m")
+            data_service.is_streaming = True
 
         return jsonify({"success": True})
     except Exception as e:
