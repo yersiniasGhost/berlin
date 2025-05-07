@@ -1,0 +1,83 @@
+{
+  "test_name": "Dan-trial",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "user_id": "65f2d6666666666666666666",
+    "name": "My Test Strategy",
+    "description": "A test monitor using SMA and MACD for example.",
+    "threshold": 0.8,
+    "bear_threshold": 0.8,
+    "bars": {
+      "bull_momentum":
+      {
+        "macd_cross_bull": 1.0
+      },
+      "15m_momentum_bullish":
+      {"smaX_bull":  1.0},
+      "triggers": {
+        "bollinger_bull": 1.0,
+        "macd_cross_bull": 1.0,
+        "smaX_bull": 1.0
+      },
+      "bear_triggers": {
+        "bollinger_bear": 1.0
+      }
+    }
+  },
+  "indicators": [
+    {
+      "name": "macd_cross_bull",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "time_increment": "1m",
+      "parameters": {
+        "slow": 13,
+        "fast": 5,
+        "signal": 3,
+        "histogram_threshold": 0.08,
+        "lookback": 10,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "bollinger_bull",
+      "function": "bol_bands_lower_band_bounce",
+      "type": "Indicator",
+      "time_increment": "1m",
+      "parameters": {
+        "period": 25,
+        "sd": 2,
+        "candle_bounce_number": 3,
+        "bounce_trigger": 0.5,
+        "lookback": 10,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "smaX_bull",
+      "function": "sma_crossover",
+      "type": "Indicator",
+      "time_increment": "15m",
+      "parameters": {
+        "period": 10,
+        "crossover_value": 0.0005,
+        "lookback": 25,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "bollinger_bear",
+      "function": "bol_bands_lower_band_bounce",
+      "type": "Indicator",
+      "time_increment": "1m",
+      "parameters": {
+        "period": 10,
+        "sd": 2,
+        "candle_bounce_number": 5,
+        "bounce_trigger": 0.2,
+        "lookback": 10,
+        "trend": "bearish"
+      }
+    }
+  ]
+}
