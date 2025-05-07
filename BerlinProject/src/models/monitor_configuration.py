@@ -9,6 +9,10 @@ class MonitorConfiguration(BaseModel):
     name: str
     indicators: List[IndicatorDefinition]
 
+
+    # get time intervals function
+    # itterate through all indicators and collect their time intervals: return an array.
+
     @model_validator(mode='before')
     def validate_definition(cls, values):
         # Convert the list of dictionaries to a list of IndicatorDefinitions
