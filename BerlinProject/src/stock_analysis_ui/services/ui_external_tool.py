@@ -16,17 +16,19 @@ class UIExternalTool:
     Processes data from indicators and sends to the UI via Socket.IO.
     """
 
-    def __init__(self, socketio: SocketIO):
+    def __init__(self, socketio: SocketIO, monitor):
         """
         Initialize the UI external tool.
         """
+        self.monitor = monitor
         self.socketio = socketio
         self.ticker_data = {}  # Store latest data for each ticker
         self.history = {}  # Store historical data (limited amount)
         self.indicators = {}  # Store indicator results by ticker
         self.raw_indicators = {}  # Store raw indicator values by ticker
-        self.overall_scores = {}  # Store overall bull/bear scores by ticker
         self.weights = {}  # Store weights for each ticker's indicators
+        self.bar_configs = {}
+        self.bar_scores = {}
 
         # Added for tracking progress similar to test_initialization_run
         self.initial_history_size = 0
@@ -36,6 +38,9 @@ class UIExternalTool:
 
         # Configure history limits
         self.max_history_items = 600
+
+        if monitor:
+            self.setup_from_monitor(monitor)
 
         # Initialize logger
         if not logger.handlers:
@@ -141,46 +146,38 @@ class UIExternalTool:
             self.history[symbol] = []
             self.indicators[symbol] = {}
             self.raw_indicators[symbol] = {}
-            self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
+            self.bar_scores[symbol] = {}
 
         # Store indicator results
         self.indicators[symbol] = indicators.copy()
         if raw_indicators:
             self.raw_indicators[symbol] = raw_indicators.copy()
 
-        # Calculate overall scores using weights
-        bull_indicators = {k: v for k, v in indicators.items() if 'bear' not in k.lower()}
-        bear_indicators = {k: v for k, v in indicators.items() if 'bear' in k.lower()}
+        # Calculate bar scores directly from monitor configuration
+        bar_scores = {}
+        if hasattr(self, 'monitor') and hasattr(self.monitor, 'bars'):
+            for bar_name, bar_indicators in self.monitor.bars.items():
+                # Get only the indicators relevant to this bar
+                relevant_indicators = {k: v for k, v in indicators.items() if k in bar_indicators}
+                # Calculate weighted score for this bar
+                bar_score = self.calculate_weighted_score(relevant_indicators, bar_indicators)
+                bar_scores[bar_name] = bar_score
 
-        # Apply weights
-        bull_score = self.calculate_weighted_score(bull_indicators, self.weights.get(symbol, {}))
-        bear_score = self.calculate_weighted_score(bear_indicators, self.weights.get(symbol, {}))
-
-        self.overall_scores[symbol] = {
-            'bull': bull_score,
-            'bear': bear_score
-        }
-
-        # Add this debug line to check what's being sent
-        print(
-            f"DEBUG - Emitting indicator update for {symbol}: {self.indicators[symbol]}, scores: {self.overall_scores[symbol]}")
+        self.bar_scores[symbol] = bar_scores
 
         # Update the ticker data with these values
-        if not 'indicators' in self.ticker_data[symbol]:
-            self.ticker_data[symbol]['indicators'] = {}
-
-        self.ticker_data[symbol]['indicators'] = self.indicators[symbol]
-        self.ticker_data[symbol]['overall_scores'] = self.overall_scores[symbol]
+        self.ticker_data[symbol].update({
+            'indicators': self.indicators[symbol],
+            'bar_scores': bar_scores
+        })
 
         emit_data = {
             'symbol': symbol,
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
-            'overall_scores': self.overall_scores[symbol],
+            'bar_scores': bar_scores,  # Only emit bar scores
             'timestamp': tick.timestamp.isoformat() if isinstance(tick.timestamp, datetime) else str(tick.timestamp)
         }
-
-        print(f"EXACT EMITTED DATA: {json.dumps(emit_data)}")
 
         # Emit update
         self.socketio.emit('indicator_update', emit_data)
@@ -319,6 +316,43 @@ class UIExternalTool:
             'symbol': symbol,
             'candle': candle_data
         })
+
+    def setup_from_monitor(self, monitor):
+        """
+        Set up the UI tool with configuration from the monitor object.
+
+        Extracts bar configurations and weights from the monitor
+
+        Args:
+            monitor: Monitor configuration object
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Check if monitor has bars configuration
+            if not hasattr(monitor, 'bars'):
+                logger.warning("No bars configuration in monitor")
+                return False
+
+            # Process bars and extract weights in one pass
+            self.weights = {}
+            self.bar_configs = {}
+
+            # Process each bar category (Bullish SignalX, Bearish SignalX, Bullish Momentum)
+            for bar_category, indicators in monitor.bars.items():
+                # Extract weights (add all indicators to the weights dictionary)
+                self.weights.update(indicators)
+
+                # Store bar configuration
+                self.bar_configs[bar_category] = {
+                    'indicators': indicators
+                }
+
+            return True
+        except Exception as e:
+            logger.error(f"Error setting up from monitor: {e}")
+            return False
 
     def calculate_weighted_score(self, indicators, weights):
         """

@@ -93,7 +93,7 @@
         updateTickerUI();
     });
 
-    // Make sure your Socket.IO event handlers are properly structured
+   // Socket.IO event handlers
     socket.on('indicator_update', function(data) {
         console.log('INDICATOR UPDATE RECEIVED:', data);
 
@@ -115,7 +115,9 @@
 
         // Explicitly assign all properties
         tickerData[symbol].indicators = data.indicators;
-        tickerData[symbol].overall_scores = data.overall_scores;
+
+        // Store bar_scores from the update data
+        tickerData[symbol].bar_scores = data.bar_scores;
 
         // Make sure we have all the required data
         console.log('Updated ticker data:', JSON.parse(JSON.stringify(tickerData)));
@@ -221,7 +223,7 @@
         return html;
     }
 
-    // Function to update ticker cards
+
     function updateTickerUI() {
         console.log('Updating ticker UI with data:', tickerData);
         const container = document.getElementById('tickerContainer');
@@ -241,12 +243,6 @@
         // Update or create cards for each ticker
         symbols.forEach(symbol => {
             const data = tickerData[symbol];
-
-<!--            // Skip if missing critical data-->
-<!--            if (!data || !data.close) {-->
-<!--                console.log('Missing data for ' + symbol, data);-->
-<!--                return;-->
-<!--            }-->
 
             // Check if card exists
             let card = container.querySelector(`[data-symbol="${symbol}"]`);
@@ -292,13 +288,52 @@
                 timeStr = time.toLocaleTimeString();
             }
 
-            // Progress bars - Get bullish/bearish scores
-            let bullScore = 0;
-            let bearScore = 0;
+            // Progress bars - Handle dynamic bar scores from bar_scores
+            let barScoresHTML = '';
 
-            if (data.overall_scores) {
-                bullScore = data.overall_scores.bull || 0;
-                bearScore = data.overall_scores.bear || 0;
+            // Check if we have bar_scores
+            if (data.bar_scores && Object.keys(data.bar_scores).length > 0) {
+                // Generate a progress bar for each bar score
+                Object.entries(data.bar_scores).forEach(([barName, score]) => {
+                    // Format bar name for display (convert snake_case to Title Case)
+                    const displayName = barName
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, l => l.toUpperCase());
+
+                    // Determine bar color based on name
+                    let barClass = 'bg-secondary';
+                    if (barName.includes('bull')) {
+                        barClass = 'progress-bull';
+                    } else if (barName.includes('bear')) {
+                        barClass = 'progress-bear';
+                    } else if (barName === 'triggers') {
+                        barClass = 'bg-primary';
+                    }
+
+                    barScoresHTML += `
+                        <div class="mb-3">
+                            <label class="d-flex justify-content-between">
+                                <span>${displayName}</span>
+                                <span>${(score * 100).toFixed(0)}%</span>
+                            </label>
+                            <div class="progress" style="height: 15px;">
+                                <div class="${barClass}" role="progressbar"
+                                     style="width: ${score * 100}%"
+                                     aria-valuenow="${score * 100}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                // If no bar_scores yet, show a loading placeholder
+                barScoresHTML = `
+                    <div class="text-center py-2 mb-3">
+                        <div class="text-muted mb-2">Loading signal data...</div>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                `;
             }
 
             // Update card content with all the necessary information
@@ -313,29 +348,7 @@
                         <span class="badge bg-secondary">${data.volume ? data.volume.toLocaleString() : 'N/A'}</span>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="d-flex justify-content-between">
-                            <span>Bullish Signal</span>
-                            <span>${(bullScore * 100).toFixed(0)}%</span>
-                        </label>
-                        <div class="progress" style="height: 15px;">
-                            <div class="progress-bar progress-bull" role="progressbar"
-                                 style="width: ${bullScore * 100}%"
-                                 aria-valuenow="${bullScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                    </div>
-
-                    <div class="mb-2">
-                        <label class="d-flex justify-content-between">
-                            <span>Bearish Signal</span>
-                            <span>${(bearScore * 100).toFixed(0)}%</span>
-                        </label>
-                        <div class="progress" style="height: 15px;">
-                            <div class="progress-bar progress-bear" role="progressbar"
-                                 style="width: ${bearScore * 100}%"
-                                 aria-valuenow="${bearScore * 100}" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                    </div>
+                    ${barScoresHTML}
 
                     ${data.indicators ? renderIndicatorsSummary(symbol) : ''}
                 </div>
@@ -354,7 +367,6 @@
             `;
         });
     }
-
     // Check if we have data already
     function loadInitialData() {
         console.log('Loading initial ticker data...');

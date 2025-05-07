@@ -435,7 +435,7 @@
         });
     });
 
-    // Function to add a ticker card to the dashboard
+
     function addTickerCard(symbol) {
         const container = document.getElementById('tickerContainer');
 
@@ -467,12 +467,34 @@
                     <small class="text-muted">Waiting for data...</small>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex justify-content-center align-items-center py-4">
-                        <div class="spinner-border text-primary" role="status">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="ticker-price">--</span>
+                        <span class="badge bg-secondary">N/A</span>
+                    </div>
+
+                    <!-- Loading indicators for signal data -->
+                    <div class="text-center py-2 mb-3">
+                        <div class="text-muted mb-2">Loading signal data...</div>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
-                    <p class="text-center text-muted">Waiting for data...</p>
+
+                    <div class="indicators-summary mt-2 small">
+                        <div class="text-muted">No indicators available</div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white">
+                    <div class="row small text-muted">
+                        <div class="col-6">
+                            <div>Open: N/A</div>
+                            <div>Low: N/A</div>
+                        </div>
+                        <div class="col-6 text-end">
+                            <div>High: N/A</div>
+                            <div>Close: N/A</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -489,6 +511,7 @@
 
         console.log(`Added ticker card for ${symbol}`);
     }
+
 
     // Debug Socket.IO events
     socket.onAny((event, ...args) => {
@@ -610,71 +633,124 @@
             return;
         }
 
-        // Update bull/bear scores
-        if (data.overall_scores) {
-            const bullScore = data.overall_scores.bull || 0;
-            const bearScore = data.overall_scores.bear || 0;
+        // Get the card body to add bar scores
+        const cardBody = card.querySelector('.card-body');
+        if (!cardBody) {
+            console.warn(`Card body for ${symbol} not found`);
+            return;
+        }
 
-            const bullScoreElem = card.querySelector('.bull-score');
-            const bearScoreElem = card.querySelector('.bear-score');
-            const bullProgress = card.querySelector('.progress-bull');
-            const bearProgress = card.querySelector('.progress-bear');
-
-            if (bullScoreElem) bullScoreElem.textContent = `${(bullScore * 100).toFixed(0)}%`;
-            if (bearScoreElem) bearScoreElem.textContent = `${(bearScore * 100).toFixed(0)}%`;
-            if (bullProgress) {
-                bullProgress.style.width = `${bullScore * 100}%`;
-                bullProgress.setAttribute('aria-valuenow', bullScore * 100);
+        // Remove existing progress bars
+        const existingBars = cardBody.querySelectorAll('.progress');
+        existingBars.forEach(bar => {
+            const parentLabel = bar.previousElementSibling;
+            if (parentLabel && parentLabel.classList.contains('d-flex')) {
+                parentLabel.remove();
             }
-            if (bearProgress) {
-                bearProgress.style.width = `${bearScore * 100}%`;
-                bearProgress.setAttribute('aria-valuenow', bearScore * 100);
+            bar.remove();
+        });
+
+        // Update bar scores
+        if (data.bar_scores && Object.keys(data.bar_scores).length > 0) {
+            let barScoresHTML = '';
+
+            // Generate HTML for each bar score
+            Object.entries(data.bar_scores).forEach(([barName, score]) => {
+                // Format bar name for display (convert snake_case to Title Case)
+                const displayName = barName
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+
+                // Determine bar color based on name
+                let barClass = 'bg-secondary';
+                if (barName.includes('bull')) {
+                    barClass = 'progress-bull';
+                } else if (barName.includes('bear')) {
+                    barClass = 'progress-bear';
+                } else if (barName === 'triggers') {
+                    barClass = 'bg-primary';
+                }
+
+                barScoresHTML += `
+                    <label class="d-flex justify-content-between">
+                        <span>${displayName}</span>
+                        <span>${(score * 100).toFixed(0)}%</span>
+                    </label>
+                    <div class="progress mb-3" style="height: 15px;">
+                        <div class="progress-bar ${barClass}" role="progressbar"
+                             style="width: ${score * 100}%"
+                             aria-valuenow="${score * 100}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                `;
+            });
+
+            // Find where to insert the bars (after price display)
+            const priceDisplay = cardBody.querySelector('.d-flex.justify-content-between');
+            if (priceDisplay) {
+                // Create a container for the bars
+                const barContainer = document.createElement('div');
+                barContainer.className = 'bar-scores-container';
+                barContainer.innerHTML = barScoresHTML;
+
+                // Insert after price display
+                priceDisplay.after(barContainer);
+            } else {
+                // If price display not found, just append to card body
+                const barContainer = document.createElement('div');
+                barContainer.className = 'bar-scores-container';
+                barContainer.innerHTML = barScoresHTML;
+                cardBody.appendChild(barContainer);
             }
         }
 
         // Update indicators summary
         if (data.indicators) {
-            const indicatorsSummary = card.querySelector('.indicators-summary');
-            if (indicatorsSummary) {
-                // Clear existing content
-                indicatorsSummary.innerHTML = '';
+            // Find or create indicators summary container
+            let indicatorsSummary = cardBody.querySelector('.indicators-summary');
+            if (!indicatorsSummary) {
+                indicatorsSummary = document.createElement('div');
+                indicatorsSummary.className = 'indicators-summary mt-2 small';
+                cardBody.appendChild(indicatorsSummary);
+            }
 
-                // Get top 3 indicators
-                const indicatorNames = Object.keys(data.indicators);
-                const topIndicators = indicatorNames.slice(0, 3);
+            // Clear existing content
+            indicatorsSummary.innerHTML = '';
 
-                if (topIndicators.length === 0) {
-                    indicatorsSummary.innerHTML = '<div class="text-muted">No indicators available</div>';
-                    return;
+            // Get top 3 indicators
+            const indicatorNames = Object.keys(data.indicators);
+            const topIndicators = indicatorNames.slice(0, 3);
+
+            if (topIndicators.length === 0) {
+                indicatorsSummary.innerHTML = '<div class="text-muted">No indicators available</div>';
+                return;
+            }
+
+            // Add each indicator
+            for (const name of topIndicators) {
+                const value = data.indicators[name];
+
+                // Skip if not a numeric value
+                if (typeof value !== 'number') continue;
+
+                // Format with color based on value
+                let valueClass = 'text-muted';
+                if (value > 0.7) {
+                    valueClass = name.toLowerCase().includes('bear') ? 'text-danger' : 'text-success';
+                } else if (value > 0.3) {
+                    valueClass = name.toLowerCase().includes('bear') ? 'text-warning' : 'text-primary';
                 }
 
-                // Add each indicator
-                for (const name of topIndicators) {
-                    const value = data.indicators[name];
+                const displayName = name
+                    .replace(/_/g, ' ')
+                    .replace(/([A-Z])/g, ' $1')
+                    .replace(/^./, str => str.toUpperCase());
 
-                    // Skip if not a numeric value
-                    if (typeof value !== 'number') continue;
-
-                    // Format with color based on value
-                    let valueClass = 'text-muted';
-                    if (value > 0.7) {
-                        valueClass = name.toLowerCase().includes('bear') ? 'text-danger' : 'text-success';
-                    } else if (value > 0.3) {
-                        valueClass = name.toLowerCase().includes('bear') ? 'text-warning' : 'text-primary';
-                    }
-
-                    const displayName = name
-                        .replace(/_/g, ' ')
-                        .replace(/([A-Z])/g, ' $1')
-                        .replace(/^./, str => str.toUpperCase());
-
-                    indicatorsSummary.innerHTML += `
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>${displayName}:</span>
-                            <span class="${valueClass} fw-bold">${(value * 100).toFixed(0)}%</span>
-                        </div>
-                    `;
-                }
+                indicatorsSummary.innerHTML += `
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>${displayName}:</span>
+                        <span class="${valueClass} fw-bold">${(value * 100).toFixed(0)}%</span>
+                    </div>
+                `;
             }
         }
 

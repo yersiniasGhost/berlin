@@ -330,6 +330,7 @@
         document.getElementById('chartStatus').className = 'badge bg-success';
     }
 
+    // Load initial data
     function loadInitialData() {
         console.log("Loading initial data for symbol:", symbol);
 
@@ -381,9 +382,9 @@
                     updateIndicatorUI();
                 }
 
-                // Check if we have overall scores
-                if (data.overall_scores && data.overall_scores[symbol]) {
-                    overallScores = data.overall_scores[symbol];
+                // Check if we have bar_scores instead of overall_scores
+                if (data.bar_scores && data.bar_scores[symbol]) {
+                    overallScores = data.bar_scores[symbol];
                     updateOverallScores();
                 }
             })
@@ -549,29 +550,32 @@ function addCandleToTable(tbody, candle, isHistorical) {
     }
 }
 
-// Socket.IO event handler for indicator updates
-socket.on('indicator_update', function(data) {
-    if (data.symbol !== symbol) {
-        return;
-    }
+    // Socket.IO event handler for indicator updates
+    socket.on('indicator_update', function(data) {
+        if (data.symbol !== symbol) {
+            return;
+        }
 
-    console.log('Received indicator update:', data);
+        console.log('Received indicator update:', data);
 
-    // Store all indicator data
-    indicators = data.indicators || {};
-    rawIndicators = data.raw_indicators || {};
-    overallScores = data.overall_scores || { bull: 0, bear: 0 };
+        // Store all indicator data
+        indicators = data.indicators || {};
+        rawIndicators = data.raw_indicators || {};
 
-    // Debug - check what indicators we're receiving
-    console.log('Indicator data received:', indicators);
-    console.log('Raw indicator data:', rawIndicators);
+        // Update with bar_scores instead of overall_scores
+        overallScores = data.bar_scores || {};
 
-    // Update UI with indicator data
-    updateIndicatorUI();
+        // Debug - check what indicators we're receiving
+        console.log('Indicator data received:', indicators);
+        console.log('Raw indicator data:', rawIndicators);
+        console.log('Bar scores received:', overallScores);
 
-    // Update overall scores
-    updateOverallScores();
-});
+        // Update UI with indicator data
+        updateIndicatorUI();
+
+        // Update overall scores
+        updateOverallScores();
+    });
 
 // Function to update the indicator UI
 function updateIndicatorUI() {
@@ -666,38 +670,69 @@ function updateIndicatorUI() {
     }
 }
 
+
+    // Function to update overall scores display with fully dynamic bars
     function updateOverallScores() {
-        // Update bull/bear scores
-        const bullScore = overallScores.bull || 0;
-        const bearScore = overallScores.bear || 0;
+        // Get the container where scores will be displayed
+        const scoresContainer = document.querySelector('.card-body:has(#bullScore)');
+        if (!scoresContainer) return;
 
-        // Update UI
-        document.getElementById('bullScore').textContent = `${(bullScore * 100).toFixed(1)}%`;
-        document.getElementById('bullProgress').style.width = `${bullScore * 100}%`;
-        document.getElementById('bullProgress').setAttribute('aria-valuenow', bullScore * 100);
+        // Clear the container
+        scoresContainer.innerHTML = '';
 
-        document.getElementById('bearScore').textContent = `${(bearScore * 100).toFixed(1)}%`;
-        document.getElementById('bearProgress').style.width = `${bearScore * 100}%`;
-        document.getElementById('bearProgress').setAttribute('aria-valuenow', bearScore * 100);
-    }
+        // If no bar scores available, show a message
+        if (!overallScores || Object.keys(overallScores).length === 0) {
+            scoresContainer.innerHTML = `
+                <div class="text-center py-3">
+                    <div class="text-muted">Waiting for signal data...</div>
+                    <div class="spinner-border text-primary mt-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            `;
+            return;
+        }
 
-    function setupTimeframeSelector() {
-        const timeframeOptions = document.querySelectorAll('.timeframe-option');
-        const currentTimeframeElem = document.getElementById('currentTimeframe');
+        // Generate HTML for each bar score
+        Object.entries(overallScores).forEach(([barName, score]) => {
+            // Format the bar name for display (convert snake_case to Title Case)
+            const displayName = barName
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase());
 
-        timeframeOptions.forEach(option => {
-            option.addEventListener('click', function(e) {
-                e.preventDefault();
+            // Determine bar color based on name
+            let barClass = 'bg-secondary';
+            if (barName.includes('bull')) {
+                barClass = 'bg-success';
+            } else if (barName.includes('bear')) {
+                barClass = 'bg-danger';
+            } else if (barName === 'triggers') {
+                barClass = 'bg-primary';
+            }
 
-                const timeframe = this.getAttribute('data-timeframe');
-                currentTimeframeElem.textContent = timeframe;
+            // Create progress bar
+            const barHTML = `
+                <div class="mb-3">
+                    <label class="d-flex justify-content-between">
+                        <span>${displayName}</span>
+                        <span id="${barName}Score">${(score * 100).toFixed(1)}%</span>
+                    </label>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div id="${barName}Progress" class="progress-bar ${barClass}" role="progressbar"
+                             style="width: ${score * 100}%" aria-valuenow="${score * 100}"
+                             aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+            `;
 
-                // Reload data with new timeframe
-                console.log(`Changing timeframe to ${timeframe}`);
-                loadDataWithTimeframe(timeframe);
-            });
+            // Add to container
+            scoresContainer.innerHTML += barHTML;
         });
     }
+
+    // Initialize overallScores as an empty object - no assumptions about structure
+    let overallScores = {};
+
 
     function loadDataWithTimeframe(timeframe) {
         fetch(`/api/tickers?symbol=${symbol}&timeframe=${timeframe}`)
