@@ -16,8 +16,7 @@
       {"smaX_bull":  1.0},
       "triggers": {
         "bollinger_bull": 1.0,
-        "macd_cross_bull": 1.0,
-        "smaX_bull": 1.0
+        "macd_cross_bull": 1.0
       },
       "bear_triggers": {
         "bollinger_bear": 1.0

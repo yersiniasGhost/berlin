@@ -289,6 +289,42 @@ class SchwabDataLink(DataLink):
         logger.info("Sending login request to streamer")
         self.ws.send(json.dumps(login_request))
 
+    def save_chart_data(self, chart_data, filename=None):
+        """
+        Save chart data from the Schwab API to a text file
+
+        Args:
+            chart_data: Chart data from the Schwab API
+            filename: Optional filename to save to. If None, generates a filename based on symbol and time
+
+        Returns:
+            str: Path to the saved file
+        """
+
+        # Open the file and write the data
+        with open(filename, 'w') as f:
+            # # Write a header
+            # f.write("timestamp,datetime,open,high,low,close,volume,raw_json\n")
+
+            # Write each chart entry
+            for entry in chart_data:
+
+                # Format raw JSON
+                raw_json = json.dumps(entry).replace('"', '""')  # Escape quotes for CSV
+
+                # Write the data
+                f.write(
+                    f"{raw_json}\"\n,")
+
+        # Log that we've saved the file
+        if hasattr(self, 'logger'):
+            self.logger.info(f"Saved chart data to {filename}")
+        else:
+            print(f"Saved chart data to {filename}")
+
+        return filename
+
+    # add a collect flag and concat it into a text file. run it with the 1 and 15 min
     def _handle_message(self, message: str) -> None:
         """Handle messages from the streaming API"""
         try:

@@ -16,6 +16,7 @@ class UIExternalTool:
     Processes data from indicators and sends to the UI via Socket.IO.
     """
 
+    # First, add this to the __init__ method of UIExternalTool
     def __init__(self, socketio: SocketIO, monitor):
         """
         Initialize the UI external tool.
@@ -24,11 +25,19 @@ class UIExternalTool:
         self.socketio = socketio
         self.ticker_data = {}  # Store latest data for each ticker
         self.history = {}  # Store historical data (limited amount)
-        self.indicators = {}  # Store indicator results by ticker
-        self.raw_indicators = {}  # Store raw indicator values by ticker
+
+        # Enhanced storage with timeframe support
+        self.indicators_by_timeframe = {}  # Store indicator results by ticker and timeframe
+        self.raw_indicators_by_timeframe = {}  # Store raw indicator values by ticker and timeframe
+
+        # Keep the original structure for backward compatibility
+        self.indicators = {}  # Store latest indicator results by ticker (all timeframes combined)
+        self.raw_indicators = {}  # Store latest raw indicator values by ticker (all timeframes combined)
+
         self.weights = {}  # Store weights for each ticker's indicators
         self.bar_configs = {}
         self.bar_scores = {}
+        self.overall_scores = {}  # Add this line to initialize overall_scores
 
         # Added for tracking progress similar to test_initialization_run
         self.initial_history_size = 0
@@ -126,6 +135,7 @@ class UIExternalTool:
         """
         Process new indicator results.
         Only update indicators on completed candles.
+        Enhanced with timeframe support.
         """
         if not hasattr(tick, 'symbol') or tick.symbol is None:
             return
@@ -139,26 +149,61 @@ class UIExternalTool:
             return
 
         symbol = tick.symbol
+        timeframe = getattr(tick, 'time_increment', '1m')  # Get timeframe, default to 1m
+
+        # Make sure overall_scores exists
+        if not hasattr(self, 'overall_scores'):
+            self.overall_scores = {}
 
         # Initialize data structures if needed
         if symbol not in self.ticker_data:
             self.ticker_data[symbol] = {}
+        if symbol not in self.history:
             self.history[symbol] = []
+        if symbol not in self.indicators:
             self.indicators[symbol] = {}
+        if symbol not in self.raw_indicators:
             self.raw_indicators[symbol] = {}
+        if symbol not in self.indicators_by_timeframe:
+            self.indicators_by_timeframe[symbol] = {}
+        if symbol not in self.raw_indicators_by_timeframe:
+            self.raw_indicators_by_timeframe[symbol] = {}
+        if symbol not in self.bar_scores:
             self.bar_scores[symbol] = {}
+        if symbol not in self.overall_scores:
+            self.overall_scores[symbol] = {'bull': 0.0, 'bear': 0.0}
 
-        # Store indicator results
-        self.indicators[symbol] = indicators.copy()
+        # Initialize timeframe-specific storage if needed
+        if timeframe not in self.indicators_by_timeframe[symbol]:
+            self.indicators_by_timeframe[symbol][timeframe] = {}
+        if timeframe not in self.raw_indicators_by_timeframe[symbol]:
+            self.raw_indicators_by_timeframe[symbol][timeframe] = {}
+
+        # Store indicator results for this timeframe
+        self.indicators_by_timeframe[symbol][timeframe] = indicators.copy()
         if raw_indicators:
-            self.raw_indicators[symbol] = raw_indicators.copy()
+            self.raw_indicators_by_timeframe[symbol][timeframe] = raw_indicators.copy()
 
-        # Calculate bar scores directly from monitor configuration
+        # Also update the combined indicators dictionary for backward compatibility
+        self.indicators[symbol].update(indicators)
+        if raw_indicators:
+            self.raw_indicators[symbol].update(raw_indicators)
+
+        # Calculate bar scores using indicators from all timeframes
         bar_scores = {}
         if hasattr(self, 'monitor') and hasattr(self.monitor, 'bars'):
             for bar_name, bar_indicators in self.monitor.bars.items():
-                # Get only the indicators relevant to this bar
-                relevant_indicators = {k: v for k, v in indicators.items() if k in bar_indicators}
+                # Get only the indicators relevant to this bar from all timeframes
+                relevant_indicators = {}
+
+                # Search in all timeframes
+                for tf in self.indicators_by_timeframe[symbol]:
+                    tf_indicators = self.indicators_by_timeframe[symbol][tf]
+                    # Add indicators that are in this bar configuration
+                    for ind_name, ind_value in tf_indicators.items():
+                        if ind_name in bar_indicators:
+                            relevant_indicators[ind_name] = ind_value
+
                 # Calculate weighted score for this bar
                 bar_score = self.calculate_weighted_score(relevant_indicators, bar_indicators)
                 bar_scores[bar_name] = bar_score
@@ -168,19 +213,47 @@ class UIExternalTool:
         # Update the ticker data with these values
         self.ticker_data[symbol].update({
             'indicators': self.indicators[symbol],
-            'bar_scores': bar_scores
+            'bar_scores': bar_scores,
+            'timeframe_indicators': self.indicators_by_timeframe[symbol]  # Add timeframe-specific data
         })
 
+        # For UI display, create a structured object with timeframe information
         emit_data = {
             'symbol': symbol,
             'indicators': self.indicators[symbol],
             'raw_indicators': self.raw_indicators[symbol],
-            'bar_scores': bar_scores,  # Only emit bar scores
+            'bar_scores': bar_scores,
+            'timeframe': timeframe,  # Add current timeframe
+            'timeframe_indicators': self.indicators_by_timeframe[symbol],  # Add all timeframe indicators
             'timestamp': tick.timestamp.isoformat() if isinstance(tick.timestamp, datetime) else str(tick.timestamp)
         }
 
         # Emit update
         self.socketio.emit('indicator_update', emit_data)
+
+        # Also emit a timeframe-specific event for specialized UI components
+        self.socketio.emit(f'indicator_update_{timeframe}', emit_data)
+
+    def get_timeframe_indicators(self, symbol: str, timeframe: str = None):
+        """
+        Get indicators for a specific timeframe or all timeframes
+
+        Args:
+            symbol: Symbol to get indicators for
+            timeframe: Specific timeframe or None for all
+
+        Returns:
+            Dictionary of indicators by timeframe
+        """
+        if symbol not in self.indicators_by_timeframe:
+            return {}
+
+        if timeframe:
+            # Return indicators for specific timeframe
+            return self.indicators_by_timeframe[symbol].get(timeframe, {})
+        else:
+            # Return all timeframes
+            return self.indicators_by_timeframe[symbol]
 
     def _check_progress(self, is_indicator_update=False):
         """

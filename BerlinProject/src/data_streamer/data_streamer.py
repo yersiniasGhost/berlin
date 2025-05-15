@@ -1,6 +1,6 @@
 from datetime import datetime
 import time
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Tuple, Union, Set
 import logging
 
 from environments.tick_data import TickData
@@ -9,7 +9,8 @@ import traceback
 
 # Configure at module level
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('SchwabDataLink')  # Replace with appropriate name for each file
+logger = logging.getLogger('DataStreamer')
+
 from mongo_tools.tick_history_tools_copy import TickHistoryTools
 from .feature_vector_calculator import FeatureVectorCalculator
 from mongo_tools.sample_tools import SampleTools
@@ -20,7 +21,6 @@ from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
 from .schwab_data_link import SchwabDataLink
 
-# TODO: reinstate feature vector in the future.
 
 class DataStreamer:
     def __init__(self, data_link: DataLink, model_configuration: dict,
@@ -34,45 +34,51 @@ class DataStreamer:
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False
 
+        # Store the required timeframes for this streamer
+        if indicator_configuration:
+            self.required_timeframes = indicator_configuration.get_time_increments()
+        else:
+            self.required_timeframes = {"1m"}  # Default to 1-minute timeframe
+
     def initialize(self, symbols: List[str], timeframe: str = "1m") -> bool:
         """
+        Initialize the data streamer with historical data for all required timeframes
 
+        Args:
+            symbols: List of symbols to initialize
+            timeframe: Deprecated, kept for backward compatibility
         """
-        # Let's get the historical data from the DataLink.
-        # Then send tick by tick into the preprocessor
-        # then call the indicator processor with next tick
-        symbol = symbols[0]
-        history = self.data_link.load_historical_data(symbol, "1m")
+        # Log all required timeframes
+        logger.info(f"Initializing with timeframes: {self.required_timeframes}")
 
-        for tick in history:
-            self.preprocessor.next_tick(tick)
-            indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
+        # Initialize for each symbol
+        for symbol in symbols:
+            # Load and process historical data for each required timeframe
+            for time_increment in self.required_timeframes:
+                logger.info(f"Loading {time_increment} historical data for {symbol}")
+                history = self.data_link.load_historical_data(symbol, time_increment)
 
+                if not history:
+                    logger.warning(f"No {time_increment} historical data found for {symbol}")
+                    continue
 
-    def initialize_orig(self, symbols: List[str], timeframe: str = "1m") -> bool:
-        self.preprocessor.initialize(self.data_link, symbols, timeframe)
+                logger.info(f"Processing {len(history)} historical candles for {symbol} at {time_increment}")
 
-        # Now process the historical data through the indicator processor
-        if self.indicators:
-            try:
-                # Process each historical tick through indicators
-                for i, tick in enumerate(self.preprocessor.history):
+                # Add timeframe information to each tick if not already present
+                for tick in history:
+                    if not hasattr(tick, 'time_increment'):
+                        tick.time_increment = time_increment
 
-                    # Need to ensure the current tick is set before calculating indicators
-                    self.preprocessor.tick = tick
+                    # Process tick through the pipeline
+                    self.preprocessor.next_tick(tick)
 
-                    # Calculate indicators for this tick
-                    indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
+                    # Calculate indicators
+                    if self.indicators:
+                        indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
 
-                    # Important: Notify external tools about the indicator results
-                    if indicator_results:
+                        # Notify external tools about indicators
                         for external_tool in self.external_tool:
-                            external_tool.indicator_vector(indicator_results, tick, i, raw_indicators)
-
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return False
+                            external_tool.indicator_vector(indicator_results, tick, 0, raw_indicators)
 
         return True
 
@@ -83,20 +89,19 @@ class DataStreamer:
         # Register our chart handler with the data link
         self.data_link.add_chart_handler(self.chart_handler)
 
-        print("DataStreamer is now running and processing real-time data")
+        logger.info("DataStreamer is now running and processing real-time data")
 
         try:
             # This will keep the main thread alive
             # The chart_handler will be called in a background thread when data arrives
             while True:
-                time.sleep(0.5)  # Now this will work correctly
+                time.sleep(0.5)
         except KeyboardInterrupt:
-            print("DataStreamer stopped by user")
+            logger.info("DataStreamer stopped by user")
         except Exception as e:
-            print(f"Error in DataStreamer: {e}")
+            logger.error(f"Error in DataStreamer: {e}")
             import traceback
             traceback.print_exc()
-
 
     def tick_converter(self, data: dict) -> Optional[TickData]:
         """
@@ -126,7 +131,7 @@ class DataStreamer:
             close_price = float(data.get('5', 0.0))
             volume = float(data.get('6', 0))
 
-            # Create TickData object
+            # Create TickData object with default timeframe (1m for real-time data)
             tick = TickData(
                 symbol=symbol,
                 timestamp=timestamp,
@@ -134,7 +139,8 @@ class DataStreamer:
                 high=high_price,
                 low=low_price,
                 close=close_price,
-                volume=volume
+                volume=volume,
+                time_increment="1m"  # Default timeframe for real-time data
             )
 
             logger.info(f"Converted chart data for {symbol} at {timestamp}")
@@ -160,6 +166,10 @@ class DataStreamer:
             if not tick:
                 return
 
+            # Check if the timeframe is one we need
+            if tick.time_increment not in self.required_timeframes:
+                return  # Skip if this timeframe is not required by this streamer
+
             # Use next_tick to properly add to history
             self.preprocessor.next_tick(tick)
 
@@ -181,147 +191,26 @@ class DataStreamer:
                         external_tool.indicator_vector(indicator_results, tick, history_index, raw_indicators)
 
         except Exception as e:
-            print(f"Error in chart handler: {e}")
+            logger.error(f"Error in chart handler: {e}")
             import traceback
             traceback.print_exc()
 
-
-    # def run2(self, data_link):
-    #     """
-    #     Alternative method to run the data streaming process with Schwab data.
-    #     """
-    #     data_link = SchwabDataLink()
-    #
-    #     if not data_link.authenticate():
-    #         logger.error("Authentication failed, exiting")
-    #         return
-    #
-    #     # Connect to streaming API
-    #     if not data_link.connect_stream():
-    #         logger.error("Failed to connect to streaming API")
-    #         return
-
-    # Add this to your DataStreamer class:
-    # def run(self):
-    #     """
-    #     Main method to run the data streaming process.
-    #     Retrieves data from the configured data link and processes it.
-    #     """
-    #     if self.data_link is None:
-    #         raise ValueError("Data link is not initialized")
-    #     if not self.external_tool:
-    #         raise ValueError("External tool is not connected")
-    #
-    #     # Set the sample state on the data preprocessor so it can normalize the data
-    #     sample_stats = self.data_link.get_stats()
-    #     self.preprocessor.reset_state(sample_stats)
-    #
-    #     # Counter for ticks processed
-    #     index = 0
-    #
-    #     # Process each tick from the data link
-    #     try:
-    #         logger.info("DataStreamer: Starting to process data")
-    #         for result in self.data_link.serve_next_tick():
-    #             if result is None or result[0] is None:
-    #                 logger.debug("DataStreamer: Received None result, continuing")
-    #                 continue
-    #
-    #             # Unpack the result
-    #             tick, tick_index, day_index = result
-    #
-    #             # Skip if we received a None tick (end of episode marker)
-    #             if tick is None:
-    #                 logger.debug("DataStreamer: Received None tick (end of episode)")
-    #                 # End of sample or day boundary
-    #                 if self.reset_after_sample:
-    #                     index = 0
-    #                     for external_tool in self.external_tool:
-    #                         external_tool.reset_next_sample()
-    #                     self.preprocessor.reset_state(sample_stats)
-    #                 continue
-    #
-    #             # Ensure tick has a symbol
-    #             if hasattr(self.data_link, 'symbols') and day_index < len(self.data_link.symbols):
-    #                 symbol = self.data_link.symbols[day_index]
-    #                 # If tick doesn't have symbol attribute or it's not set
-    #                 if not hasattr(tick, 'symbol') or not tick.symbol:
-    #                     try:
-    #                         # Try to set symbol directly
-    #                         tick.symbol = symbol
-    #                     except AttributeError:
-    #                         # If can't set directly, add it as an attribute
-    #                         setattr(tick, 'symbol', symbol)
-    #
-    #             logger.debug(f"DataStreamer: Processing tick {index} for symbol: {getattr(tick, 'symbol', 'Unknown')}")
-    #
-    #             # Check if this is a completed candle
-    #             is_completed_candle = (hasattr(tick, 'open') and hasattr(tick, 'high') and
-    #                                    hasattr(tick, 'low') and hasattr(tick, 'close') and
-    #                                    not getattr(tick, 'is_current', False))
-    #
-    #             # Process the tick through the data pipeline
-    #             self.preprocessor.next_tick(tick)
-    #             feature_vector = self.feature_vector_calculator.next_tick(self.preprocessor)
-    #
-    #             # Process indicators only for completed candles
-    #             indicator_results = {}
-    #             raw_indicators = None
-    #             if is_completed_candle and self.indicators:
-    #                 indicator_results, raw_indicators = self.indicators.next_tick(self.preprocessor)
-    #
-    #             # Send feature vector to external tools if valid
-    #             if feature_vector and None not in feature_vector:
-    #                 for external_tool in self.external_tool:
-    #                     external_tool.feature_vector(feature_vector, tick)
-    #
-    #                 # Get and send sample data if available
-    #                 sample, sample_index = self.get_present_sample()
-    #                 if sample:
-    #                     for external_tool in self.external_tool:
-    #                         external_tool.present_sample(sample, sample_index)
-    #
-    #             # Send indicator results to external tools if available (only for completed candles)
-    #             if is_completed_candle and indicator_results:
-    #                 for external_tool in self.external_tool:
-    #                     external_tool.indicator_vector(indicator_results, tick, index, raw_indicators)
-    #
-    #             index += 1
-    #
-    #     except KeyboardInterrupt:
-    #         logger.info("DataStreamer: Data streaming interrupted by user")
-    #     except Exception as e:
-    #         logger.error(f"DataStreamer: Error during data streaming: {e}")
-    #         import traceback
-    #         traceback.print_exc()
-    #         raise
-
     def reset(self):
+        """Reset internal state"""
         self.data_link.reset_index()
         stats = self.data_link.get_stats()
         self.preprocessor.reset_state(stats)
 
-    # Used for training of the RL Agents
-    def get_next(self):
-        if self.data_link is None:
-            raise ValueError("Data link is not initialized")
-        bad_fv = True
-        while bad_fv:
-            tick = self.data_link.get_next2()
-            if tick is None:
-                return [None], None
-            self.preprocessor.next_tick(tick)
-            fv = self.feature_vector_calculator.next_tick(self.preprocessor)
-            bad_fv = None in fv
-        return fv, tick
-
     def connect_tool(self, external_tool: ExternalTool) -> None:
+        """Connect an external tool to the data streamer"""
         self.external_tool.append(external_tool)
 
     def replace_external_tools(self, et: ExternalTool) -> None:
+        """Replace all external tools with a single tool"""
         self.external_tool = [et]
 
     def get_present_sample(self) -> Tuple[dict, int]:
+        """Get the current sample and its index (for SampleTools only)"""
         if not isinstance(self.data_link, SampleTools):
             return None, None
         return self.data_link.get_present_sample_and_index()
