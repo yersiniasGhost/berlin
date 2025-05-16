@@ -5,17 +5,16 @@ from data_streamer.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from environments.tick_data import TickData
 
-logger = logging.getLogger("MinimalStreamingManager")
+logger = logging.getLogger("StreamingManager")
 
 
-class MinimalStreamingManager:
+class StreamingManager:
     """
-    Absolutely minimal streaming manager that does ONLY:
+    streaming manager that does ONLY:
     1. Maintain mappings between symbols, timeframes, DataStreamers, and CandleAggregators
     2. Route PIPs to CandleAggregators
     3. Route completed candles to the appropriate DataStreamers
 
-    That's it. Nothing more.
     """
 
     def __init__(self):
@@ -25,6 +24,8 @@ class MinimalStreamingManager:
 
         # Mapping of symbols to timeframe-specific CandleAggregators
         self.aggregators = {}  # {symbol: {timeframe: aggregator}}
+
+    #     Use a default dict for streamers_by_symbols
 
     def register_datastreamer(self, streamer, symbols: List[str], timeframes: Set[str]) -> None:
         """
@@ -89,6 +90,9 @@ class MinimalStreamingManager:
         # Process through all aggregators for this symbol
         for aggregator in self.aggregators[symbol].values():
             aggregator.process_pip(pip_data)
+
+
+    #         2
 
     def _route_completed_candle(self, symbol: str, candle: TickData, timeframe: str) -> None:
         """
