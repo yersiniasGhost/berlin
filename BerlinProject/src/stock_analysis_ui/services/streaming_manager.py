@@ -15,16 +15,8 @@ class StreamingManager:
     def __init__(self, data_link=None):
         # Data link for receiving PIPs
         self.data_link = data_link
-
-        # Track DataStreamers by (symbol, timeframe)
-        self.streamers_by_symbol_timeframe = defaultdict(list)
-
-        # CandleAggregators nested by symbol then timeframe
+        self.streamers_by_symbol = defaultdict(list)
         self.aggregators = defaultdict(dict)  # {symbol: {timeframe: CandleAggregator}}
-
-        # Track active symbols and timeframes
-        self.active_symbols = set()
-        self.active_timeframes = set()
 
     def register_streamer(self, symbol: str, monitor_config, data_streamer):
         """
@@ -35,24 +27,16 @@ class StreamingManager:
         required_timeframes = self._extract_timeframes_from_config(monitor_config)
 
         logger.info(f"Registering DataStreamer for {symbol} with timeframes: {required_timeframes}")
-
-        # Add to symbol tracking
-        self.active_symbols.add(symbol)
+        self.streamers_by_symbol[symbol].append(data_streamer)
 
         # Add to (symbol, timeframe) tracking and create aggregators
         for timeframe in required_timeframes:
-            # Track streamer for this (symbol, timeframe)
-            key = (symbol, timeframe)
-            self.streamers_by_symbol_timeframe[key].append(data_streamer)
-            self.active_timeframes.add(timeframe)
-
             # Create aggregator if it doesn't exist
             if timeframe not in self.aggregators[symbol]:
                 aggregator = CandleAggregator(symbol, timeframe)
                 self.aggregators[symbol][timeframe] = aggregator
                 logger.info(f"Created CandleAggregator for {symbol}-{timeframe}")
 
-        return data_streamer
 
     def _extract_timeframes_from_config(self, monitor_config) -> List[str]:
         """Extract unique timeframes from monitor configuration indicators"""
@@ -81,65 +65,17 @@ class StreamingManager:
         """
         # Extract symbol from PIP
         symbol = pip_data.get('key')
-        if not symbol or symbol not in self.active_symbols:
-            return
 
         # Send PIP to all aggregators for this symbol
         if symbol in self.aggregators:
-            for timeframe, aggregator in self.aggregators[symbol].items():
+            for aggregator in self.aggregators[symbol].values():
                 # Process PIP and get any completed candle
-                completed_candle = aggregator.process_pip(pip_data)
+                aggregator.process_pip(pip_data)
 
-                # If candle completed, route to appropriate DataStreamers
-                if completed_candle:
-                    self._handle_completed_candle(symbol, timeframe, completed_candle)
+        for streamer in self.streamers_by_symbol[symbol]:
+            streamer.process_tick(self.aggregators[symbol])
 
-    def _handle_completed_candle(self, symbol: str, timeframe: str, candle):
-        """
-        Route completed candle to all DataStreamers that need this (symbol, timeframe).
-        """
-        key = (symbol, timeframe)
 
-        # Get DataStreamers interested in this (symbol, timeframe)
-        interested_streamers = self.streamers_by_symbol_timeframe.get(key, [])
-
-        logger.info(f"Routing completed {timeframe} candle for {symbol} to {len(interested_streamers)} DataStreamers")
-
-        # Ensure candle has timestamp
-        if not hasattr(candle, 'timestamp') or candle.timestamp is None:
-            logger.warning(f"Candle missing timestamp: {candle}")
-            return
-
-        # Send candle to each interested DataStreamer
-        for data_streamer in interested_streamers:
-            try:
-                if hasattr(data_streamer, 'preprocessor') and hasattr(data_streamer.preprocessor, 'next_tick'):
-                    # Add debug info
-                    logger.debug(f"Sending {timeframe} candle to DataStreamer: {candle.timestamp}")
-
-                    # Call next_tick to add to preprocessor
-                    data_streamer.preprocessor.next_tick(candle)
-
-                    # Debug indicator processor directly
-                    if hasattr(data_streamer, 'indicators') and data_streamer.indicators:
-                        try:
-                            # Try to explicitly call indicators.next_tick
-                            indicator_results, raw_results = data_streamer.indicators.next_tick(
-                                data_streamer.preprocessor)
-
-                            if indicator_results:
-                                logger.info(f"INDICATOR RESULTS: {symbol} {timeframe} - {indicator_results}")
-                            else:
-                                logger.debug(f"No indicator results calculated for {symbol} {timeframe}")
-
-                        except Exception as e:
-                            logger.error(f"Error calculating indicators: {e}")
-                            import traceback
-                            traceback.print_exc()
-            except Exception as e:
-                logger.error(f"Error sending candle to DataStreamer: {e}")
-                import traceback
-                traceback.print_exc()
 
     def start_streaming(self):
         """
@@ -168,7 +104,7 @@ class StreamingManager:
         return {
             "active_symbols": list(self.active_symbols),
             "active_timeframes": list(self.active_timeframes),
-            "total_streamers": len(self.streamers_by_symbol_timeframe),
+            "total_streamers": len(self.streamers_by_symbol),
             "total_aggregators": sum(len(timeframes) for timeframes in self.aggregators.values()),
             "aggregators_by_symbol": {symbol: list(timeframes.keys()) for symbol, timeframes in
                                       self.aggregators.items()}

@@ -51,11 +51,16 @@ def test_single_aggregator(auth_manager):
         logger.error("No authentication, cannot proceed")
         return
 
-    # Create data link
+    # Create data link and properly initialize it
     data_link = SchwabDataLink()
     data_link.access_token = auth_manager.access_token
+    data_link.refresh_token = auth_manager.refresh_token
+    data_link.user_prefs = auth_manager.user_prefs  # Add this line
 
-    # Test parameters
+    # Get streamer info if needed
+    if not data_link.user_prefs:
+        data_link._get_streamer_info()
+
     symbol = "AAPL"
     timeframe = "1m"
 

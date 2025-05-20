@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from environments.tick_data import TickData
 
 
@@ -12,7 +12,7 @@ class CandleAggregator:
     def __init__(self, symbol: str, timeframe: str):
         self.symbol = symbol
         self.timeframe = timeframe
-        self.current_candle: TickData | None = None  # Current open candle
+        self.current_candle: Optional[TickData] = None  # Current open candle
         self.history: List[TickData] = []  # List of completed candles as TickData objects
 
     def process_pip(self, pip_data: Dict) -> Optional[TickData]:
@@ -41,7 +41,7 @@ class CandleAggregator:
         # If no current candle or new candle period
         if self.current_candle is None or self.current_candle.timestamp != candle_start:
             # Save completed candle to return
-            completed_candle = self.current_candle
+            completed_candle: Optional[TickData] = self.current_candle
 
             # Start new candle
             self.current_candle = TickData(
@@ -97,6 +97,9 @@ class CandleAggregator:
         """Get list of all completed candles"""
         return self.history
 
+    def get_data(self) -> Tuple[TickData, List[TickData]]:
+        return self.current_candle, self.history
+
     def get_latest_candle(self) -> Optional[TickData]:
         """Get most recent completed candle from history"""
         if self.history:
@@ -116,9 +119,6 @@ class CandleAggregator:
         # Load historical data for this symbol and timeframe
         historical_data = data_link.load_historical_data(self.symbol, self.timeframe)
 
-        if not historical_data:
-            return 0
-
         # Sort by timestamp to ensure chronological order
         historical_data.sort(key=lambda x: x.timestamp)
 
@@ -131,3 +131,4 @@ class CandleAggregator:
             self.current_candle = historical_data[-1]
 
         return len(historical_data)
+

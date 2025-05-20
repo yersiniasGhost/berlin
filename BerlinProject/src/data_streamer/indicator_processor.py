@@ -9,6 +9,7 @@ from config.types import CANDLE_STICK_PATTERN, PATTERN_MATCH, INDICATOR_TYPE
 from features.candle_patterns import CandlePatterns
 from models.indicator_definition import IndicatorDefinition
 from environments.tick_data import TickData
+from data_streamer.candle_aggregator import CandleAggregator
 
 from features.indicators import *
 
@@ -20,29 +21,10 @@ class IndicatorProcessor:
     def __init__(self, configuration: MonitorConfiguration):
         self.config: MonitorConfiguration = configuration
 
-        # Group indicators by timeframe
-        self.indicators_by_timeframe = self._group_indicators_by_timeframe()
-
         # Create a cache for the most recent calculated results for each indicator
         self.last_calculated_results = {}
         self.last_raw_results = {}
 
-    def _group_indicators_by_timeframe(self) -> Dict[str, List[IndicatorDefinition]]:
-        """Group indicators by their timeframe"""
-        result = {}
-
-        for indicator in self.config.indicators:
-            # Get the timeframe for this indicator (default to "1m")
-            timeframe = getattr(indicator, 'time_increment', "1m")
-
-            # Initialize the list for this timeframe if needed
-            if timeframe not in result:
-                result[timeframe] = []
-
-            # Add the indicator to its timeframe group
-            result[timeframe].append(indicator)
-
-        return result
 
     @staticmethod
     def calculate_time_based_metric(indicator_data: np.ndarray, lookback: int) -> float:
@@ -57,62 +39,15 @@ class IndicatorProcessor:
 
         return metric
 
-
-    # fix this and test it in isolation with the candlestick aggregator
-    # try to make candlestick get_data the same.
-    def next_tick(self, data_preprocessor: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
-        """
-        Process the next tick for indicators, taking timeframe into account.
-        Returns indicator results specific to the current tick's timeframe.
-        """
-        tick, history = data_preprocessor.get_data()  # get non-normalized data
-
-        # Skip if tick is None
-        if tick is None:
-            logger.debug("Received None tick")
-            return {}, {}
-
-        # Ensure we're working with a completed candle
-        is_completed_candle = (hasattr(tick, 'open') and hasattr(tick, 'high') and
-                               hasattr(tick, 'low') and hasattr(tick, 'close') and
-                               not getattr(tick, 'is_current', False))
-
-        if not is_completed_candle:
-            logger.debug("Received incomplete candle data")
-            # Return empty results for incomplete candles
-            return {}, {}
-
-        # Get the timeframe of the current tick (default to "1m")
-        # Explicitly check for time_increment attribute
-        current_timeframe = getattr(tick, 'time_increment', "1m") if hasattr(tick, 'time_increment') else "1m"
-
-        # Get indicators for the current timeframe
-        current_timeframe_indicators = self.indicators_by_timeframe.get(current_timeframe, [])
-
-        logger.info(f"Processing {len(current_timeframe_indicators)} indicators for timeframe {current_timeframe}")
-
-        if not current_timeframe_indicators:
-            logger.info(f"No indicators found for timeframe {current_timeframe}")
-            # If no indicators for this timeframe, return empty results
-            return {}, {}
-
-        # Filter history by the current timeframe
-        filtered_history = []
-        for hist_tick in history:
-            # Explicitly check if the tick has a time_increment attribute
-            hist_timeframe = getattr(hist_tick, 'time_increment', "1m") if hasattr(hist_tick,
-                                                                                   'time_increment') else "1m"
-            if hist_timeframe == current_timeframe:
-                filtered_history.append(hist_tick)
-
-        logger.info(f"Found {len(filtered_history)} historical points for timeframe {current_timeframe}")
-
-        # Process only indicators for the current timeframe
+    def next_tick(self, candle_aggregators: Dict[str, CandleAggregator]):
         output = {}  # Will store calculated indicators for this timeframe
         raw_output = {}  # Will store raw indicator values for this timeframe
 
-        for indicator in current_timeframe_indicators:
+        for indicator in self.config.indicators:
+            tf = indicator.get("time_increment", "1m")
             look_back = indicator.parameters.get('lookback', 10)
+            # get the appropriate data
+            tick, history = candle_aggregators[tf].get_data()
 
             # Log the parameters for debugging
             logger.debug(
@@ -122,7 +57,7 @@ class IndicatorProcessor:
             if indicator.type == CANDLE_STICK_PATTERN:
                 indicator_name = indicator.parameters['talib']
                 cp = CandlePatterns([indicator_name])
-                result = cp.process_tick_data(filtered_history, look_back)
+                result = cp.process_tick_data(history, look_back)
                 bull = indicator.parameters.get('bull', True)
                 metric = self.calculate_time_based_metric(result[indicator_name], look_back)
                 if bull is True and metric < 0:
@@ -132,38 +67,21 @@ class IndicatorProcessor:
                 output[indicator.name] = metric
                 raw_output[indicator.name] = result[indicator_name][-1] if len(result[indicator_name]) > 0 else 0.0
 
-            # Standard indicators
+                # Standard indicators
             elif indicator.type == INDICATOR_TYPE:
-                result = self.calculate_indicator(tick, filtered_history, indicator)
+                result = self.calculate_indicator(tick, history, indicator)
                 metric = self.calculate_time_based_metric(result[indicator.name], look_back)
                 output[indicator.name] = metric
                 raw_output[indicator.name] = result[indicator.name][-1] if len(result[indicator.name]) > 0 else 0.0
 
-            # Pattern matching (DTW)
+                # Pattern matching (DTW)
             elif indicator.type == PATTERN_MATCH:
                 pass
 
             logger.debug(
-                f"Calculated {indicator.name} = {output.get(indicator.name, 'N/A')} for timeframe {current_timeframe}")
+                f"Calculated {indicator.name} = {output.get(indicator.name, 'N/A')} for timeframe {tf}")
+        return output, raw_output
 
-        # Initialize timeframe-specific result dictionaries if they don't exist
-        if not hasattr(self, 'results_by_timeframe'):
-            self.results_by_timeframe = {}
-        if not hasattr(self, 'raw_results_by_timeframe'):
-            self.raw_results_by_timeframe = {}
-
-        # Initialize for this timeframe if needed
-        if current_timeframe not in self.results_by_timeframe:
-            self.results_by_timeframe[current_timeframe] = {}
-        if current_timeframe not in self.raw_results_by_timeframe:
-            self.raw_results_by_timeframe[current_timeframe] = {}
-
-        # Update the results for the current timeframe only
-        self.results_by_timeframe[current_timeframe] = output
-        self.raw_results_by_timeframe[current_timeframe] = raw_output
-
-        # Return only the results for the current timeframe
-        return self.results_by_timeframe[current_timeframe], self.raw_results_by_timeframe[current_timeframe]
 
     @staticmethod
     def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[
