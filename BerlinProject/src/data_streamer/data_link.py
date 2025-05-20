@@ -90,3 +90,4 @@ class DataLink(ABC):
 
     def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
         pass
+

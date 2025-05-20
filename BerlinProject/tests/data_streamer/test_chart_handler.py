@@ -1,12 +1,10 @@
 # test_chart_handler.py
 import time
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.data_streamer import DataStreamer
-from data_streamer.data_preprocessor import DataPreprocessor
-from data_streamer.indicator_processor import IndicatorProcessor
 from data_streamer.external_tool import ExternalTool
 from environments.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration

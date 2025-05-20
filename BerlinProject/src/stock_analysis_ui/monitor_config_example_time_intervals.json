@@ -56,7 +56,7 @@
       "name": "smaX_bull",
       "function": "sma_crossover",
       "type": "Indicator",
-      "time_increment": "15m",
+      "time_increment": "5m",
       "parameters": {
         "period": 10,
         "crossover_value": 0.0005,

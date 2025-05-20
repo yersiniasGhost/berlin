@@ -1,95 +1,137 @@
-import time
+import json
 import logging
 from datetime import datetime
 
-# Import your SimpleQuoteStreamer
-from data_streamer.historical_charles_schwab_link import SimpleQuoteStreamer
-from data_streamer.candle_aggregator import CandleAggregator
-
+# Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('CandleAggregatorTest')
 
+from data_streamer.candle_aggregator import CandleAggregator
 
-def test_multi_timeframe():
-    # Define the file path to your historical data
-    file_path = "quote_data/NVDA_quotes2.txt"
 
-    # Create the streamer
-    streamer = SimpleQuoteStreamer(file_path, replay_speed=20.0)
+def load_pip_data(file_path):
+    """Load PIP data from text file"""
+    try:
+        with open(file_path, 'r') as file:
+            content = file.read()
 
-    # Create aggregators for multiple timeframes
-    aggregators = {
-        "1m": CandleAggregator("1m"),
-        "5m": CandleAggregator("5m"),
-        "15m": CandleAggregator("15m"),
-        "30m": CandleAggregator("30m")
-    }
+        # Handle trailing commas
+        content = content.replace(",]", "]").replace(",}", "}")
 
-    # Track candle counts
-    candle_counts = {tf: 0 for tf in aggregators.keys()}
+        # Parse JSON
+        if content.strip().startswith('['):
+            data = json.loads(content)
+        elif content.strip().startswith('{'):
+            data = [json.loads(content)]
+        else:
+            # Try newline-separated JSON
+            data = []
+            for line in content.splitlines():
+                if line.strip():
+                    try:
+                        data.append(json.loads(line))
+                    except:
+                        pass
 
-    # Define candle completion handlers
-    def create_handler(timeframe):
-        def handler(symbol, candle):
-            candle_counts[timeframe] += 1
-            # Print all completed candles
-            logger.info(f"Completed {timeframe} candle for {symbol} @ {candle.timestamp}: "
-                        f"O:{candle.open:.2f} H:{candle.high:.2f} L:{candle.low:.2f} C:{candle.close:.2f} V:{candle.volume}")
+        logger.info(f"Loaded {len(data)} PIP records")
+        return data
+    except Exception as e:
+        logger.error(f"Error loading PIP data: {e}")
+        return []
 
-        return handler
 
-    # Register handlers for each timeframe
-    for tf, aggregator in aggregators.items():
-        aggregator.add_candle_handler(create_handler(tf))
+def test_single_timeframe_aggregators():
+    """Test multiple CandleAggregators each handling one timeframe"""
+    # Load test data
+    pip_file = "quote_data/NVDA_quotes2.txt"
+    pip_data = load_pip_data(pip_file)
 
-    # Create a PIP handler that feeds data to all aggregators
-    def process_quote(quote):
-        # Process through all aggregators
-        for aggregator in aggregators.values():
-            aggregator.process_pip(quote)
+    if not pip_data:
+        logger.error("Failed to load test data")
+        return
 
-    # Add the handler
-    streamer.add_handler(process_quote)
+    # Extract symbol from first PIP
+    symbol = pip_data[0].get('key', 'NVDA')
+    logger.info(f"Testing with symbol: {symbol}")
 
-    # Start streaming
-    logger.info("Starting to stream quotes...")
-    streamer.start()
+    # Create aggregators for different timeframes
+    timeframes = ["15m"]
+    aggregators = {}
+    completed_candles = {}
 
-    # Let it run until all quotes are processed
-    while streamer.is_running:
-        time.sleep(1)
+    for tf in timeframes:
+        aggregators[tf] = CandleAggregator(symbol, tf)
+        completed_candles[tf] = []
 
-    # Print summary
-    logger.info("\n--- SUMMARY ---")
-    for tf, count in candle_counts.items():
-        logger.info(f"{tf} candles created: {count}")
+    # Inspect first few PIPs
+    logger.info("\n--- SAMPLE PIP DATA ---")
+    for i, pip in enumerate(pip_data[:3]):
+        timestamp_ms = pip.get('38', 0)
+        price = pip.get('3', 0)
+        volume = pip.get('8', 0)
+        timestamp = datetime.fromtimestamp(timestamp_ms / 1000) if timestamp_ms > 0 else "INVALID"
+        logger.info(f"PIP {i + 1}: timestamp={timestamp}, price={price}, volume={volume}")
 
-    # Print the last few candles for each timeframe
-    symbol = "NVDA"
+    # Process subset of PIPs
+    test_pips = pip_data[:3000]
+    logger.info(f"Processing {len(test_pips)} PIPs across {len(timeframes)} timeframes")
 
-    logger.info("\n--- LAST CANDLES BY TIMEFRAME ---")
-    for tf, aggregator in aggregators.items():
-        candles = aggregator.get_candle_history(symbol)
-        if candles:
-            logger.info(f"\nLast 3 {tf} candles:")
-            for candle in candles[-3:]:
+    processed_count = 0
+
+    # Process each PIP through all aggregators
+    for i, pip in enumerate(test_pips):
+        pip_processed = False
+
+        # Send to each timeframe aggregator
+        for tf in timeframes:
+            completed_candle = aggregators[tf].process_pip(pip)
+            if completed_candle:
+                completed_candles[tf].append(completed_candle)
+                pip_processed = True
+
+        if pip_processed:
+            processed_count += 1
+
+        # Log progress
+        if (i + 1) % 200 == 0:
+            logger.info(f"Processed {i + 1}/{len(test_pips)} PIPs")
+
+    logger.info(f"Processed {processed_count} valid PIPs")
+
+    # Print results
+    logger.info("\n--- TEST RESULTS ---")
+    for tf in timeframes:
+        count = len(completed_candles[tf])
+        logger.info(f"{tf} candles completed: {count}")
+
+        # Show first few candles
+        if count > 0:
+            logger.info(f"  Sample {tf} candles:")
+            for i, candle in enumerate(completed_candles[tf][:2]):
                 logger.info(
-                    f"  {candle.timestamp}: O:{candle.open:.2f} H:{candle.high:.2f} L:{candle.low:.2f} C:{candle.close:.2f} V:{candle.volume}")
+                    f"    {i + 1}. {candle.timestamp}: O:{candle.open:.2f} H:{candle.high:.2f} L:{candle.low:.2f} C:{candle.close:.2f} V:{candle.volume}")
 
-    # Example of accessing candle data in a combined format
-    logger.info("\n--- COMBINED DATA STRUCTURE ---")
-    combined_data = {symbol: {}}
+    # Test current candles
+    logger.info("\n--- CURRENT CANDLES ---")
+    for tf in timeframes:
+        current = aggregators[tf].get_current_candle()
+        if current:
+            logger.info(
+                f"{tf} current: {current.timestamp}: O:{current.open:.2f} H:{current.high:.2f} L:{current.low:.2f} C:{current.close:.2f}")
+        else:
+            logger.info(f"{tf} current: None")
 
-    for tf, aggregator in aggregators.items():
-        combined_data[symbol][tf] = aggregator.get_candle_history(symbol)
+    # Validation
+    logger.info("\n--- VALIDATION ---")
+    for tf in timeframes:
+        if completed_candles[tf]:
+            candle = completed_candles[tf][0]
+            assert candle.symbol == symbol, f"Symbol mismatch in {tf}"
+            assert candle.time_increment == tf, f"Timeframe mismatch in {tf}"
+            logger.info(f"{tf}: ✓ Symbol and timeframe correct")
 
-    # Show the first and last candle of each timeframe
-    for tf, candles in combined_data[symbol].items():
-        if candles:
-            first_candle = candles[0]
-            last_candle = candles[-1]
-            logger.info(f"{tf} - {len(candles)} candles from {first_candle.timestamp} to {last_candle.timestamp}")
+    logger.info("Test completed successfully!")
 
 
 if __name__ == "__main__":
-    test_multi_timeframe()
+    test_single_timeframe_aggregators()

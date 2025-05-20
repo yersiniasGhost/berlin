@@ -57,6 +57,9 @@ class IndicatorProcessor:
 
         return metric
 
+
+    # fix this and test it in isolation with the candlestick aggregator
+    # try to make candlestick get_data the same.
     def next_tick(self, data_preprocessor: DataPreprocessor) -> Tuple[Dict[str, float], Dict[str, float]]:
         """
         Process the next tick for indicators, taking timeframe into account.

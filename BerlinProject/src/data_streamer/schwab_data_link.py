@@ -479,147 +479,85 @@ class SchwabDataLink(DataLink):
 
     def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
         """
-        Load historical candle data for ONLY the current trading day and convert to TickData objects
+        Simple function to load the last 5 hours of candle data for a given symbol and timeframe.
 
         Args:
             symbol: Stock symbol
-            timeframe: Candle timeframe (1m, 5m, 15m, 30m, 1h, 1d)
+            timeframe: Candle timeframe (1m, 5m, 15m, 30m, 1h)
 
         Returns:
-            List of TickData objects
+            List of TickData objects sorted by timestamp
         """
-        if not self.access_token:
-            logger.error("No access token available")
-            return []
-
-        # Get today's date
-        from datetime import datetime, timedelta
-        today = datetime.now().date()
-
-        # Calculate start time - Use today's pre-market (4 AM ET)
-        start_time = datetime.combine(today, datetime.min.time().replace(hour=4, minute=0))
-
-        # Convert to milliseconds timestamp for API
-        start_timestamp = int(start_time.timestamp() * 1000)
-
-        # Explicitly set end time to current time
-        end_time = datetime.now()
-        end_timestamp = int(end_time.timestamp() * 1000)
-
-        # Map timeframe string to API parameters
-        timeframe_mapping = {
-            "1m": {"periodType": "day", "period": 1, "frequencyType": "minute", "frequency": 1},
-            "5m": {"periodType": "day", "period": 1, "frequencyType": "minute", "frequency": 5},
-            "15m": {"periodType": "day", "period": 1, "frequencyType": "minute", "frequency": 15},
-            "30m": {"periodType": "day", "period": 1, "frequencyType": "minute", "frequency": 30},
-            "1h": {"periodType": "day", "period": 1, "frequencyType": "hour", "frequency": 1},
-            "1d": {"periodType": "month", "period": 1, "frequencyType": "daily", "frequency": 1}
-        }
-
-        tf_params = timeframe_mapping.get(timeframe, timeframe_mapping["1m"])
-
-        logger.info(f"Loading historical data for {symbol} with timeframe {timeframe}")
-        logger.info(f"Using time range: {start_time} to {end_time}")
-
         try:
-            url = "https://api.schwabapi.com/marketdata/v1/pricehistory"
+            # Calculate time range (last 5 hours)
+            from datetime import datetime, timedelta
+            end_time = datetime.now()
+            start_time = end_time - timedelta(hours=5)
 
+            logger.info(f"Loading {timeframe} data for {symbol} from {start_time} to {end_time}")
+
+            # API endpoint and auth
+            url = "https://api.schwabapi.com/marketdata/v1/pricehistory"
+            headers = {'Authorization': f'Bearer {self.access_token}'}
+
+            # Simple timeframe mapping
+            frequency_type = "minute"
+            frequency = 1
+
+            if timeframe == "5m":
+                frequency = 5
+            elif timeframe == "15m":
+                frequency = 15
+            elif timeframe == "30m":
+                frequency = 30
+            elif timeframe == "1h":
+                frequency_type = "hour"
+                frequency = 1
+
+            # API parameters
             params = {
                 'symbol': symbol,
-                'periodType': tf_params["periodType"],
-                'period': tf_params["period"],
-                'frequencyType': tf_params["frequencyType"],
-                'frequency': tf_params["frequency"],
-                'startDate': start_timestamp,
-                'endDate': end_timestamp,
+                'periodType': 'day',
+                'period': 1,
+                'frequencyType': frequency_type,
+                'frequency': frequency,
+                'startDate': int(start_time.timestamp() * 1000),
+                'endDate': int(end_time.timestamp() * 1000),
                 'needExtendedHoursData': True
             }
 
-            headers = {
-                'Authorization': f'Bearer {self.access_token}'
-            }
-
-            logger.info(f"Requesting historical data for {symbol} from {url}")
-
+            # Make request
             response = requests.get(url, headers=headers, params=params)
 
-            logger.info(f"Response status code: {response.status_code}")
-
-            if response.status_code == 200:
-                data = response.json()
-
-                if 'candles' in data:
-                    candles = data['candles']
-                    logger.info(f"Found {len(candles)} candles in response")
-
-                    processed_ticks = []
-                    for candle in candles:
-                        timestamp = datetime.fromtimestamp(candle['datetime'] / 1000)
-
-                        # Only include candles from today
-                        if timestamp.date() == today:
-                            # Create TickData object directly
-                            tick = TickData(
-                                symbol=symbol,
-                                timestamp=timestamp,
-                                open=candle['open'],
-                                high=candle['high'],
-                                low=candle['low'],
-                                close=candle['close'],
-                                volume=candle.get('volume', 0)
-                            )
-                            processed_ticks.append(tick)
-
-                    logger.info(f"Processed {len(processed_ticks)} candles for today ({today})")
-                    return processed_ticks
-                else:
-                    logger.warning(f"No 'candles' key in API response")
-                    return []
-            else:
-                logger.error(f"API returned error: {response.status_code} - {response.text}")
-
-                # Try without explicit endDate if we get a date range error
-                if "endDate" in response.text and "startDate" in response.text:
-                    logger.info("Retrying request without explicit endDate parameter")
-                    params.pop('endDate', None)
-
-                    response = requests.get(url, headers=headers, params=params)
-
-                    if response.status_code == 200:
-                        data = response.json()
-
-                        if 'candles' in data:
-                            candles = data['candles']
-                            logger.info(f"Found {len(candles)} candles in retry response")
-
-                            processed_ticks = []
-                            for candle in candles:
-                                timestamp = datetime.fromtimestamp(candle['datetime'] / 1000)
-
-                                # Only include candles from today
-                                if timestamp.date() == today:
-                                    # Create TickData object directly
-                                    tick = TickData(
-                                        symbol=symbol,
-                                        timestamp=timestamp,
-                                        open=candle['open'],
-                                        high=candle['high'],
-                                        low=candle['low'],
-                                        close=candle['close'],
-                                        volume=candle.get('volume', 0)
-                                    )
-                                    processed_ticks.append(tick)
-
-                            logger.info(f"Processed {len(processed_ticks)} candles for today ({today}) in retry")
-                            return processed_ticks
-
-                    else:
-                        logger.error(f"Retry also failed: {response.status_code} - {response.text}")
-
+            # Process response
+            if response.status_code != 200:
+                logger.error(f"API error: {response.status_code} - {response.text}")
                 return []
 
+            data = response.json()
+            candles = data.get('candles', [])
+
+            # Convert to TickData objects
+            result = []
+            for candle in candles:
+                # Create TickData with correct timeframe
+                tick = TickData(
+                    symbol=symbol,
+                    timestamp=datetime.fromtimestamp(candle['datetime'] / 1000),
+                    open=candle['open'],
+                    high=candle['high'],
+                    low=candle['low'],
+                    close=candle['close'],
+                    volume=candle.get('volume', 0),
+                    time_increment=timeframe
+                )
+                result.append(tick)
+
+            logger.info(f"Loaded {len(result)} {timeframe} candles for {symbol}")
+            return result
+
         except Exception as e:
-            logger.error(f"Exception during historical data loading: {e}")
+            logger.error(f"Error loading historical data: {e}")
             return []
 
     def disconnect(self) -> None:
