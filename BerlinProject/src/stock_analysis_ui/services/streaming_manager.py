@@ -86,7 +86,7 @@ class StreamingManager:
             # Register as chart data handler
             self.data_link.add_chart_handler(self.route_pip_data)
             logger.info(
-                f"Started streaming for {len(self.active_symbols)} symbols and {len(self.active_timeframes)} timeframes")
+                f"Started streaming for symbols / timeframes")
         else:
             logger.error("No data link configured")
 
@@ -102,8 +102,6 @@ class StreamingManager:
     def get_status(self) -> Dict:
         """Get current status of the streaming manager"""
         return {
-            "active_symbols": list(self.active_symbols),
-            "active_timeframes": list(self.active_timeframes),
             "total_streamers": len(self.streamers_by_symbol),
             "total_aggregators": sum(len(timeframes) for timeframes in self.aggregators.values()),
             "aggregators_by_symbol": {symbol: list(timeframes.keys()) for symbol, timeframes in

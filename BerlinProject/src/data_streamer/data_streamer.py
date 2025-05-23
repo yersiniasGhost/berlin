@@ -25,7 +25,6 @@ class DataStreamer:
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False
 
-
     def process_tick(self, candle_aggregators: Dict[str, CandleAggregator]):
         if self.indicators:
             # Calculate indicators for this tick
@@ -34,7 +33,6 @@ class DataStreamer:
                 # Use the full history length as the index
                 for external_tool in self.external_tool:
                     external_tool.indicator_vector(indicator_results, None, -1, raw_indicators)
-
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool to the data streamer"""

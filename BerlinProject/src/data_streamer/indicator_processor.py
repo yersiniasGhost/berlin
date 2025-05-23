@@ -44,14 +44,14 @@ class IndicatorProcessor:
         raw_output = {}  # Will store raw indicator values for this timeframe
 
         for indicator in self.config.indicators:
-            tf = indicator.get("time_increment", "1m")
+            tf = indicator.time_increment
             look_back = indicator.parameters.get('lookback', 10)
             # get the appropriate data
             tick, history = candle_aggregators[tf].get_data()
 
             # Log the parameters for debugging
             logger.debug(
-                f"Processing indicator: {indicator.name}, function: {indicator.function}, timeframe: {current_timeframe}")
+                f"Processing indicator: {indicator.name}, function: {indicator.function}")
 
             # Candle stick patterns (TALIB definitions)
             if indicator.type == CANDLE_STICK_PATTERN:
