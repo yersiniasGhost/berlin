@@ -7,16 +7,10 @@ logger = logging.getLogger("StreamingManager")
 
 
 class StreamingManager:
-    """
-    Manages multiple DataStreamers and CandleAggregators.
-    Routes PIPs to aggregators and completed candles to streamers.
-    """
-
     def __init__(self, data_link=None):
-        # Data link for receiving PIPs
-        self.data_link = data_link
         self.streamers_by_symbol = defaultdict(list)
-        self.aggregators = defaultdict(dict)  # {symbol: {timeframe: CandleAggregator}}
+        self.data_link = data_link
+        self.aggregators = defaultdict(dict)
 
     def register_streamer(self, symbol: str, monitor_config, data_streamer):
         """
@@ -58,7 +52,7 @@ class StreamingManager:
 
         return list(timeframes)
 
-    def route_pip_data(self, pip_data: Dict):
+    def route_pip_data_old(self, pip_data: Dict):
         """
         Route incoming PIP data to all relevant CandleAggregators.
         Handle completed candles returned by aggregators.
@@ -75,7 +69,15 @@ class StreamingManager:
         for streamer in self.streamers_by_symbol[symbol]:
             streamer.process_tick(self.aggregators[symbol])
 
+    def route_pip_data(self, pip_data: Dict):
+        symbol = pip_data.get('key')
 
+        csas = self.aggregators[symbol]
+
+        for csa in csas.values():
+            completed_candle = csa.process_pip(pip_data)
+            if completed_candle:
+                pass
 
     def start_streaming(self):
         """

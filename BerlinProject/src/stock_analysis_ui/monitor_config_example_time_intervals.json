@@ -26,7 +26,7 @@
       "name": "macd_cross_bull",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
-      "time_increment": "1m",
+      "time_increment": "5m",
       "parameters": {
         "slow": 13,
         "fast": 5,
