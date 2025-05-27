@@ -39,22 +39,38 @@ class IndicatorProcessor:
 
         return metric
 
-    def next_tick(self, candle_aggregators: Dict[str, CandleAggregator]):
-        output = {}  # Will store calculated indicators for this timeframe
-        raw_output = {}  # Will store raw indicator values for this timeframe
+    def calculate_bar_scores(self, indicators: Dict[str, float]) -> Dict[str, float]:
+        """Calculate weighted bar scores from individual indicators"""
+        bar_scores = {}
+
+        for bar_name, bar_weights in self.config.bars.items():
+            weighted_sum = 0.0
+            total_weight = 0.0
+
+            for indicator_name, weight in bar_weights.items():
+                if indicator_name in indicators:
+                    weighted_sum += indicators[indicator_name] * weight
+                    total_weight += weight
+
+            # Calculate weighted average (avoid division by zero)
+            bar_scores[bar_name] = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+        return bar_scores
+
+    def next_tick(self, candle_aggregators: Dict[str, CandleAggregator]) -> Tuple[
+        Dict[str, float], Dict[str, float], Dict[str, float]]:
+        """Now returns: indicators, raw_indicators, bar_scores"""
+        output = {}  # Individual indicator results
+        raw_output = {}  # Raw indicator values
 
         for indicator in self.config.indicators:
             tf = indicator.time_increment
             look_back = indicator.parameters.get('lookback', 10)
-            # get the appropriate data
             tick, history = candle_aggregators[tf].get_data()
 
-            # Log the parameters for debugging
-            logger.debug(
-                f"Processing indicator: {indicator.name}, function: {indicator.function}")
-
-            # Candle stick patterns (TALIB definitions)
+            # Calculate indicator (existing logic)
             if indicator.type == CANDLE_STICK_PATTERN:
+                # Your existing candlestick pattern logic
                 indicator_name = indicator.parameters['talib']
                 cp = CandlePatterns([indicator_name])
                 result = cp.process_tick_data(history, look_back)
@@ -67,21 +83,17 @@ class IndicatorProcessor:
                 output[indicator.name] = metric
                 raw_output[indicator.name] = result[indicator_name][-1] if len(result[indicator_name]) > 0 else 0.0
 
-                # Standard indicators
             elif indicator.type == INDICATOR_TYPE:
+                # Your existing indicator logic
                 result = self.calculate_indicator(tick, history, indicator)
                 metric = self.calculate_time_based_metric(result[indicator.name], look_back)
                 output[indicator.name] = metric
                 raw_output[indicator.name] = result[indicator.name][-1] if len(result[indicator.name]) > 0 else 0.0
 
-                # Pattern matching (DTW)
-            elif indicator.type == PATTERN_MATCH:
-                pass
+        # NEW: Calculate bar scores from individual indicators
+        bar_scores = self.calculate_bar_scores(output)
 
-            logger.debug(
-                f"Calculated {indicator.name} = {output.get(indicator.name, 'N/A')} for timeframe {tf}")
-        return output, raw_output
-
+        return output, raw_output, bar_scores
 
     @staticmethod
     def calculate_indicator(tick: TickData, history: List[TickData], indicator: IndicatorDefinition) -> Dict[

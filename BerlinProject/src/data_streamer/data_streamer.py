@@ -25,14 +25,27 @@ class DataStreamer:
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False
 
-    def process_tick(self, candle_aggregators: Dict[str, CandleAggregator]):
+    def process_tick(self, candle_aggregators: Dict[str, CandleAggregator]) -> None:
         if self.indicators:
-            # Calculate indicators for this tick
-            indicator_results, raw_indicators = self.indicators.next_tick(candle_aggregators)
+            indicator_results, raw_indicators, bar_scores = self.indicators.next_tick(candle_aggregators)
+
             if indicator_results:
-                # Use the full history length as the index
+                # Get tick with symbol info from aggregators
+                representative_tick: Optional[TickData] = None
+                for aggregator in candle_aggregators.values():
+                    current_candle: Optional[TickData] = aggregator.get_current_candle()
+                    if current_candle:
+                        representative_tick = current_candle
+                        break
+
                 for external_tool in self.external_tool:
-                    external_tool.indicator_vector(indicator_results, None, -1, raw_indicators)
+                    external_tool.indicator_vector(
+                        indicator_results,
+                        representative_tick,
+                        -1,
+                        raw_indicators,
+                        bar_scores
+                    )
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool to the data streamer"""
