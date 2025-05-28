@@ -45,7 +45,7 @@ def authenticate_before_startup():
     global data_service
 
     print("\n=== SCHWAB AUTHENTICATION REQUIRED ===")
-    print("You will be required to login to Schwab API (no saved tokens).")
+    print("You will be required to login to Schwab API (no saved token).")
 
     # Create auth manager and force fresh authentication
     auth_manager = SchwabAuthManager()
