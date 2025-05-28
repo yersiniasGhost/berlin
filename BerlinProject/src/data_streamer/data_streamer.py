@@ -25,27 +25,72 @@ class DataStreamer:
         self.external_tool: List[ExternalTool] = []
         self.reset_after_sample: bool = False
 
+        # Store reference to self for routing purposes
+        self.instance_id = id(self)
+
     def process_tick(self, candle_aggregators: Dict[str, CandleAggregator]) -> None:
+        """Process indicators for the given candle aggregators"""
+        logger.info(f"DataStreamer.process_tick() called with {len(candle_aggregators)} aggregators")
+
         if self.indicators:
-            indicator_results, raw_indicators, bar_scores = self.indicators.next_tick(candle_aggregators)
+            logger.info(
+                f"DataStreamer {self.instance_id}: Processing indicators with {len(candle_aggregators)} timeframes")
+
+            try:
+                indicator_results, raw_indicators, bar_scores = self.indicators.next_tick(candle_aggregators)
+                logger.info(
+                    f"DataStreamer {self.instance_id}: Got results - indicators: {len(indicator_results)}, bars: {len(bar_scores or {})}")
+            except Exception as e:
+                logger.error(f"Error in indicators.next_tick(): {e}")
+                import traceback
+                traceback.print_exc()
+                return
 
             if indicator_results:
                 # Get tick with symbol info from aggregators
                 representative_tick: Optional[TickData] = None
-                for aggregator in candle_aggregators.values():
+                for timeframe, aggregator in candle_aggregators.items():
                     current_candle: Optional[TickData] = aggregator.get_current_candle()
-                    if current_candle:
+                    if current_candle and hasattr(current_candle, 'symbol'):
                         representative_tick = current_candle
+                        logger.info(
+                            f"Using representative tick from {timeframe}: {current_candle.symbol} @ ${current_candle.close:.2f}")
                         break
 
-                for external_tool in self.external_tool:
-                    external_tool.indicator_vector(
-                        indicator_results,
-                        representative_tick,
-                        -1,
-                        raw_indicators,
-                        bar_scores
-                    )
+                if not representative_tick:
+                    logger.warning("No representative tick found")
+                    return
+
+                logger.info(f"Calling external tools: {len(self.external_tool)} tools")
+
+                # Call external tools with routing information
+                for i, external_tool in enumerate(self.external_tool):
+                    # Check if this is our special UIExternalTool that needs routing
+                    if hasattr(external_tool, 'indicator_vector_with_streamer'):
+                        logger.info(f"Calling UIExternalTool #{i} with streamer reference")
+                        # Call with streamer reference for routing
+                        external_tool.indicator_vector_with_streamer(
+                            indicators=indicator_results,
+                            tick=representative_tick,
+                            index=-1,
+                            raw_indicators=raw_indicators,
+                            bar_scores=bar_scores,
+                            data_streamer=self
+                        )
+                    else:
+                        logger.info(f"Calling standard external tool #{i}")
+                        # Standard call for other external tools
+                        external_tool.indicator_vector(
+                            indicator_results,
+                            representative_tick,
+                            -1,
+                            raw_indicators,
+                            bar_scores
+                        )
+            else:
+                logger.warning("No indicator results to process")
+        else:
+            logger.warning("No indicators processor configured")
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool to the data streamer"""

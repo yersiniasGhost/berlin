@@ -12,7 +12,7 @@ from environments.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
 from stock_analysis_ui.services.streaming_manager import StreamingManager
-from stock_analysis_ui.services.ui_external_tool import UIExternalTool
+from stock_analysis_ui.services.ui_external_tool_old import UIExternalTool
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

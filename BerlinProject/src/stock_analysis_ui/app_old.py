@@ -18,7 +18,7 @@ from datetime import datetime
 # Import from services
 from services.schwab_auth import SchwabAuthManager
 from services.data_service import DataService
-from services.ui_external_tool import UIExternalTool
+from services.ui_external_tool_old import UIExternalTool
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -109,7 +109,7 @@ def authenticate_before_startup():
 @app.route('/')
 def index():
     """Main dashboard view"""
-    return render_template('dashboard.html')
+    return render_template('dashboard_old.html')
 
 
 @app.route('/ticker/<symbol>')
