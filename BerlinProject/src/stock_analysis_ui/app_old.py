@@ -361,7 +361,7 @@ def handle_disconnect():
     logger.info('Client disconnected')
 
 
-# Add this to your Flask routes in app.py
+# Add this to your Flask routes in app_old.py
 @app.route('/api/test_socket')
 def test_socket():
     """Test Socket.IO event emission"""
