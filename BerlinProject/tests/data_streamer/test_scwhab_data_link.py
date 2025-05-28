@@ -23,6 +23,7 @@ def print_quote_data(quote_data):
     # Print raw data for debugging
     print(f"Raw quote data: {quote_data}")
 
+# save chart data... instead of print.
 
 def print_chart_data(chart_data):
     """Process and print chart data"""

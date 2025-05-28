@@ -11,4 +11,6 @@ class IndicatorDefinition(BaseModel):
     parameters: Optional[dict] = None
     ranges: Optional[dict] = None
     description: str = "NA"
+    # Add the time_increment field with default value
+    time_increment: Optional[str] = "1m"
 

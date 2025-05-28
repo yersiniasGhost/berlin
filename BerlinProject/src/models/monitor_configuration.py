@@ -1,5 +1,5 @@
 # models/monitor_configuration.py
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from config.types import PyObjectId
 from pydantic import BaseModel, Field as PydanticField, model_validator
 from models.indicator_definition import IndicatorDefinition
@@ -18,9 +18,32 @@ class MonitorConfiguration(BaseModel):
     @model_validator(mode='before')
     def validate_definition(cls, values):
         # Convert the list of dictionaries to a list of IndicatorDefinitions
-        if 'definition' in values and isinstance(values['indicators'], list):
-            values['definition'] = [IndicatorDefinition(**item) for item in values['indicators']]
+        if 'indicators' in values and isinstance(values['indicators'], list):
+            processed_indicators = []
+            for item in values['indicators']:
+                # Check if item is already an IndicatorDefinition
+                if isinstance(item, IndicatorDefinition):
+                    processed_indicators.append(item)
+                else:
+                    # Item is a dictionary, convert to IndicatorDefinition
+                    processed_indicators.append(IndicatorDefinition(**item))
+            values['indicators'] = processed_indicators
         return values
 
     def __eq__(self, other: "MonitorConfiguration"):
         return self.indicators == other.indicators
+
+    def get_time_increments(self) -> Set[str]:
+        """
+        Iterate through all indicators and collect their time intervals.
+        Returns a set of unique time increments used by indicators.
+        """
+        # Start with a default 1m timeframe
+        time_increments = {"1m"}
+
+        # Add time increments from individual indicators
+        for indicator in self.indicators:
+            if hasattr(indicator, 'time_increment') and indicator.time_increment:
+                time_increments.add(indicator.time_increment)
+
+        return time_increments

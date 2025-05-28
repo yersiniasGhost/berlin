@@ -1,85 +1,111 @@
-# streaming_manager.py
 import logging
-from typing import Dict, List, Set, Optional
-from data_streamer.data_streamer import DataStreamer
+from typing import Dict, List, Tuple
+from collections import defaultdict
+from data_streamer.candle_aggregator import CandleAggregator
 
 logger = logging.getLogger("StreamingManager")
 
 
 class StreamingManager:
-    def __init__(self, schwab_data_link):
-        self.data_link = schwab_data_link
-        self.streamers_by_id = {}        # id → DataStreamer
-        self.streamers_by_symbol = {}    # symbol → [DataStreamer]
-        self.symbol_set = set()          # unique set of all symbols
+    def __init__(self, data_link=None):
+        self.streamers_by_symbol = defaultdict(list)
+        self.data_link = data_link
+        self.aggregators = defaultdict(dict)
 
-    def register_streamer(self, streamer_id, symbols, monitor_config, model_config):
-        """Register a new DataStreamer for specific symbols with a configuration"""
-        # Create new DataStreamer
-        streamer = DataStreamer(
-            data_link=self.data_link,
-            model_configuration=model_config,
-            indicator_configuration=monitor_config
-        )
+    def register_streamer(self, symbol: str, monitor_config, data_streamer):
+        """
+        Register a DataStreamer with its symbol and monitor configuration.
+        Extract required timeframes from monitor config.
+        """
+        # Extract timeframes from monitor config indicators
+        required_timeframes = self._extract_timeframes_from_config(monitor_config)
 
-        # Store symbols directly in the streamer
-        streamer.configured_symbols = set(symbols)
+        logger.info(f"Registering DataStreamer for {symbol} with timeframes: {required_timeframes}")
+        self.streamers_by_symbol[symbol].append(data_streamer)
 
-        # Register this streamer
-        self.streamers_by_id[streamer_id] = streamer
+        # Add to (symbol, timeframe) tracking and create aggregators
+        for timeframe in required_timeframes:
+            # Create aggregator if it doesn't exist
+            if timeframe not in self.aggregators[symbol]:
+                aggregator = CandleAggregator(symbol, timeframe)
+                self.aggregators[symbol][timeframe] = aggregator
+                logger.info(f"Created CandleAggregator for {symbol}-{timeframe}")
 
-        # Update symbol mapping
-        for symbol in symbols:
-            if symbol not in self.streamers_by_symbol:
-                self.streamers_by_symbol[symbol] = []
-            self.streamers_by_symbol[symbol].append(streamer)
-            self.symbol_set.add(symbol)
 
-        return streamer
+    def _extract_timeframes_from_config(self, monitor_config) -> List[str]:
+        """Extract unique timeframes from monitor configuration indicators"""
+        timeframes = set()
 
-    def start_streaming(self, timeframe="1m"):
-        """Start streaming for all registered symbols"""
-        # Subscribe to all unique symbols
-        if self.symbol_set:
-            symbols_list = list(self.symbol_set)
-            logger.info(f"Subscribing to symbols: {', '.join(symbols_list)}")
-            self.data_link.subscribe_charts(symbols_list, timeframe)
+        # Check if monitor_config has indicators
+        if hasattr(monitor_config, 'indicators'):
+            for indicator in monitor_config.indicators:
+                # Check for time_increment attribute
+                if hasattr(indicator, 'time_increment'):
+                    timeframes.add(indicator.time_increment)
+                else:
+                    # Default to 1m if not specified
+                    timeframes.add("1m")
 
-        # Register a chart handler that routes data to the right streamers
-        self.data_link.add_chart_handler(self.route_chart_data)
+        # If no indicators found, default to 1m
+        if not timeframes:
+            timeframes.add("1m")
 
-        # Initialize historical data for each streamer
-        for symbol in self.symbol_set:
-            self.load_historical_data(symbol, timeframe)
+        return list(timeframes)
 
-    def load_historical_data(self, symbol, timeframe):
-        """Load historical data for a symbol and distribute to relevant streamers"""
-        logger.info(f"Loading historical data for {symbol}")
-        historical_data = self.data_link.load_historical_data(symbol, timeframe)
+    def route_pip_data_old(self, pip_data: Dict):
+        """
+        Route incoming PIP data to all relevant CandleAggregators.
+        Handle completed candles returned by aggregators.
+        """
+        # Extract symbol from PIP
+        symbol = pip_data.get('key')
 
-        if not historical_data:
-            logger.warning(f"No historical data found for {symbol}")
-            return
+        # Send PIP to all aggregators for this symbol
+        if symbol in self.aggregators:
+            for aggregator in self.aggregators[symbol].values():
+                # Process PIP and get any completed candle
+                aggregator.process_pip(pip_data)
 
-        logger.info(f"Loaded {len(historical_data)} historical candles for {symbol}")
-
-        # Distribute to all streamers for this symbol
-        for streamer in self.streamers_by_symbol.get(symbol, []):
-            for tick in historical_data:
-                streamer.preprocessor.next_tick(tick)
-                # Process indicators if configured
-                if streamer.indicators:
-                    indicator_results, raw_indicators = streamer.indicators.next_tick(streamer.preprocessor)
-
-    def route_chart_data(self, chart_data):
-        """Route chart data to appropriate streamers based on symbol"""
-        # Extract symbol from the chart data
-        symbol = chart_data.get('key', '')
-        if not symbol or symbol not in self.streamers_by_symbol:
-            return
-
-        # ONLY route this data to streamers that are registered for this symbol
         for streamer in self.streamers_by_symbol[symbol]:
-            # Only call chart_handler if this symbol is configured for this streamer
-            if symbol in streamer.configured_symbols:
-                streamer.chart_handler(chart_data)
+            streamer.process_tick(self.aggregators[symbol])
+
+    def route_pip_data(self, pip_data: Dict):
+        symbol = pip_data.get('key')
+
+        csas = self.aggregators[symbol]
+
+        for csa in csas.values():
+            completed_candle = csa.process_pip(pip_data)
+            if completed_candle:
+                pass
+
+    def start_streaming(self):
+        """
+        Start receiving PIP data from the data link.
+        Register this manager as a chart handler.
+        """
+        if self.data_link:
+            # Register as chart data handler
+            self.data_link.add_chart_handler(self.route_pip_data)
+            logger.info(
+                f"Started streaming for symbols / timeframes")
+        else:
+            logger.error("No data link configured")
+
+    def stop_streaming(self):
+        """Stop streaming and clear handlers"""
+        if self.data_link and hasattr(self.data_link, 'chart_handlers'):
+            # Remove this manager from chart handlers
+            if self.route_pip_data in self.data_link.chart_handlers:
+                self.data_link.chart_handlers.remove(self.route_pip_data)
+
+        logger.info("Stopped streaming")
+
+    def get_status(self) -> Dict:
+        """Get current status of the streaming manager"""
+        return {
+            "total_streamers": len(self.streamers_by_symbol),
+            "total_aggregators": sum(len(timeframes) for timeframes in self.aggregators.values()),
+            "aggregators_by_symbol": {symbol: list(timeframes.keys()) for symbol, timeframes in
+                                      self.aggregators.items()}
+        }

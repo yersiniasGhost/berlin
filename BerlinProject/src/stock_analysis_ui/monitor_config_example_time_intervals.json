@@ -12,12 +12,9 @@
       {
         "macd_cross_bull": 1.0
       },
-      "15m_momentum_bullish":
-      {"smaX_bull":  1.0},
       "triggers": {
         "bollinger_bull": 1.0,
-        "macd_cross_bull": 1.0,
-        "smaX_bull": 1.0
+        "macd_cross_bull": 1.0
       },
       "bear_triggers": {
         "bollinger_bear": 1.0
@@ -29,7 +26,7 @@
       "name": "macd_cross_bull",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
-      "time_increment": "1m",
+      "time_increment": "5m",
       "parameters": {
         "slow": 13,
         "fast": 5,
@@ -50,18 +47,6 @@
         "candle_bounce_number": 3,
         "bounce_trigger": 0.5,
         "lookback": 10,
-        "trend": "bullish"
-      }
-    },
-    {
-      "name": "smaX_bull",
-      "function": "sma_crossover",
-      "type": "Indicator",
-      "time_increment": "15m",
-      "parameters": {
-        "period": 10,
-        "crossover_value": 0.0005,
-        "lookback": 25,
         "trend": "bullish"
       }
     },

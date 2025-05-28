@@ -1,7 +1,6 @@
 # test_initialization_run.py
-import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import logging
 
 from data_streamer.schwab_data_link import SchwabDataLink
