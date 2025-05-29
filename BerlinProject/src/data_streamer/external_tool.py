@@ -12,7 +12,8 @@ class ExternalTool(ABC):
     @abstractmethod
     def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None,
-                         bar_scores: Optional[Dict[str, float]] = None) -> None:
+                         bar_scores: Optional[Dict[str, float]] = None,
+                         combination_id: Optional[str] = None) -> None:
         raise NotImplemented
 
     # Not required to be implemented

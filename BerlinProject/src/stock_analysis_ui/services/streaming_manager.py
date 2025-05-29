@@ -80,60 +80,13 @@ class StreamingManager:
                 pass
 
     def route_pip_data(self, pip_data: Dict):
-        """
-        Route incoming PIP data to ALL relevant CandleAggregators.
-        This handles both symbol-based and unique combination-based aggregators.
-        """
-        logger.info(f"🔥 ROUTE_PIP_DATA CALLED with data: {pip_data}")
-
-        # Extract symbol from PIP
         symbol = pip_data.get('key')
-        if not symbol:
-            logger.warning("No symbol in PIP data")
-            return
 
-        logger.info(f"🚀 Routing PIP data for {symbol}")
-
-        # Process ALL aggregators that should receive this symbol's data
-        aggregators_processed = 0
-        completed_candles = []
-
-        # Get all aggregator keys that should receive this symbol's data
-        relevant_keys = []
-
-        # 1. Direct symbol match
-        if symbol in self.aggregators:
-            relevant_keys.append(symbol)
-
-        # 2. Unique combination keys that start with this symbol
-        for key in self.aggregators.keys():
-            if key.startswith(f"{symbol}_") and key != symbol:
-                relevant_keys.append(key)
-
-        if not relevant_keys:
-            logger.warning(f"❌ No aggregators found for symbol {symbol}")
-            logger.warning(f"Available aggregator keys: {list(self.aggregators.keys())}")
-            return
-
-        logger.info(f"✅ Found {len(relevant_keys)} aggregator sets for {symbol}: {relevant_keys}")
-
-        # Process each relevant aggregator set
-        for aggregator_key in relevant_keys:
-            aggregator_set = self.aggregators[aggregator_key]
-
-            for timeframe, aggregator in aggregator_set.items():
-                completed_candle = aggregator.process_pip(pip_data)
-                aggregators_processed += 1
-
-                if completed_candle:
-                    logger.info(
-                        f"🕯️ Completed candle for {symbol} ({aggregator_key}) in {timeframe}: ${completed_candle.close:.2f}")
-                    completed_candles.append((aggregator_key, timeframe, completed_candle))
-
-        if completed_candles:
-            logger.info(f"📊 Generated {len(completed_candles)} completed candles for {symbol}")
-
-        logger.info(f"✅ Processed PIP for {symbol} across {aggregators_processed} aggregators")
+        # Update ALL aggregator sets that contain this symbol
+        for key, aggregator_set in self.aggregators.items():
+            if key == symbol or key.startswith(f"{symbol}_"):
+                for timeframe, aggregator in aggregator_set.items():
+                    aggregator.process_pip(pip_data)  # Update with live data
 
     def start_streaming(self):
         """

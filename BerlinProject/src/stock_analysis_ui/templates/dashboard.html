@@ -570,7 +570,7 @@
     </div>
 
     <script>
-        // WebSocket connection
+        // WebSocket connection - SINGLE DECLARATION
         const socket = io();
         let combinations = {};
 
@@ -585,46 +585,246 @@
             console.log('Disconnected from server');
         });
 
-        // Initial data
+        // Initial data from server
         socket.on('initial_data', function(data) {
             console.log('Received initial data:', data);
             updateStatus(data);
-            if (data.combinations) {
+
+            // Request data for each existing combination
+            if (data.combinations && data.combinations.length > 0) {
                 data.combinations.forEach(combo => {
                     requestCombinationData(combo.combination_id);
                 });
             }
         });
 
-        // Combination events
         socket.on('combination_registered', function(data) {
             console.log('New combination registered:', data);
             showMessage(`Added combination: ${data.symbol} + ${data.monitor_config_name}`, 'success');
+
+            // Immediately request data for this combination to create the card
             requestCombinationData(data.combination_id);
+
+            updateCombinationsCount();
         });
 
+        // Combination update with simple ID-based routing
         socket.on('combination_update', function(data) {
-            console.log('Combination update:', data);
-            updateCombinationCard(data);
+            console.log('Combination update received:', data);
+            const combinationId = data.combination_id;
+
+            if (combinationId) {
+                updateCombinationCard(combinationId, data);
+            } else {
+                console.warn('Received combination update without combination_id:', data);
+            }
         });
 
+        // Combination unregistered
         socket.on('combination_unregistered', function(data) {
             console.log('Combination unregistered:', data);
             removeCombinationCard(data.combination_id);
             showMessage(`Removed combination: ${data.combination_id}`, 'success');
+            updateCombinationsCount();
         });
 
-        socket.on('candle_completed', function(data) {
-            console.log('Candle completed:', data);
-            if (combinations[data.combination_id]) {
-                updateCandlePrice(data.combination_id, data.candle);
-            }
+        // Response to combination data request
+        socket.on('combination_data_response', function(data) {
+            console.log('Combination data response:', data);
+            const combinationId = data.combination_id;
+            combinations[combinationId] = data.data;
+            renderCombinationCard(combinationId, data.data);
         });
 
+        // Status updates
         socket.on('status_update', function(data) {
             console.log('Status update:', data);
             updateStatus(data);
         });
+
+        // Error handling
+        socket.on('error', function(data) {
+            console.error('Socket error:', data);
+            showMessage(`Error: ${data.message}`, 'error');
+        });
+
+        // UI Update Functions
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+
+            if (connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = 'Connected';
+            } else {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        function updateStatus(data) {
+            const streamingStatus = document.getElementById('streamingStatus');
+            const streamingText = document.getElementById('streamingText');
+
+            if (data.streaming) {
+                streamingStatus.className = 'status-dot connected';
+                streamingText.textContent = 'Streaming';
+            } else {
+                streamingStatus.className = 'status-dot disconnected';
+                streamingText.textContent = 'Not Streaming';
+            }
+
+            updateCombinationsCount(data.combinations ? data.combinations.length : 0);
+        }
+
+        function updateCombinationsCount(count = null) {
+            const combinationsCount = document.getElementById('combinationsCount');
+
+            if (count === null) {
+                // Count existing cards
+                count = document.querySelectorAll('.trading-card').length;
+            }
+
+            combinationsCount.textContent = `${count} Combination${count !== 1 ? 's' : ''}`;
+        }
+
+        function requestCombinationData(combinationId) {
+            console.log('Requesting data for combination:', combinationId);
+            socket.emit('request_combination_data', { combination_id: combinationId });
+        }
+
+        function renderCombinationCard(combinationId, data) {
+            const container = document.getElementById('cardsContainer');
+
+            // Remove loading message
+            const loading = container.querySelector('.loading');
+            if (loading) {
+                loading.remove();
+            }
+
+            // Remove existing card if it exists
+            const existingCard = document.getElementById(`card-${combinationId}`);
+            if (existingCard) {
+                existingCard.remove();
+            }
+
+            const card = document.createElement('div');
+            card.className = 'trading-card';
+            card.id = `card-${combinationId}`;
+
+            const info = data.combination_info || {};
+            const current = data.current || {};
+            const barScores = data.bar_scores || {};
+            const indicators = data.indicators || {};
+
+            const price = current.price || 0;
+            const priceClass = price >= 0 ? '' : 'negative';
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">${info.symbol || 'Unknown'}</div>
+                        <div class="card-subtitle">${info.monitor_config_name || 'Unknown Config'}</div>
+                    </div>
+                    <button class="card-close" onclick="removeCombination('${combinationId}')">&times;</button>
+                </div>
+
+                <div class="price-display ${priceClass}">
+                    $${price.toFixed(2)}
+                </div>
+
+                <div class="bars-container" id="bars-${combinationId}">
+                    ${renderBarScores(barScores)}
+                </div>
+
+                <div class="indicators-summary">
+                    ${Object.keys(indicators).length} Active Indicators
+                </div>
+            `;
+
+            container.appendChild(card);
+            updateCombinationsCount();
+        }
+
+        function renderBarScores(barScores) {
+            if (!barScores || Object.keys(barScores).length === 0) {
+                return '<div class="bar-item"><span class="bar-label">No bar data</span></div>';
+            }
+
+            return Object.entries(barScores).map(([name, value]) => {
+                const valueClass = value > 0.1 ? 'positive' : value < -0.1 ? 'negative' : 'neutral';
+                return `
+                    <div class="bar-item">
+                        <span class="bar-label">${formatBarName(name)}</span>
+                        <span class="bar-value ${valueClass}">${value.toFixed(3)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatBarName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function updateCombinationCard(combinationId, data) {
+            const card = document.getElementById(`card-${combinationId}`);
+
+            if (!card) {
+                console.warn(`Card not found for combination: ${combinationId}, creating it now`);
+                // Create the card with the data we have
+                renderCombinationCard(combinationId, {
+                    combination_info: {
+                        symbol: data.symbol,
+                        monitor_config_name: data.monitor_config_name
+                    },
+                    current: { price: data.current_price || 0 },
+                    bar_scores: data.bar_scores || {},
+                    indicators: data.indicators || {}
+                });
+                return;
+            }
+
+            // Update existing card...
+            const priceDisplay = card.querySelector('.price-display');
+            if (priceDisplay && data.current_price !== undefined) {
+                const priceClass = data.current_price >= 0 ? '' : 'negative';
+                priceDisplay.className = `price-display ${priceClass}`;
+                priceDisplay.textContent = `$${data.current_price.toFixed(2)}`;
+            }
+
+            // Update bar scores
+            const barsContainer = card.querySelector('.bars-container');
+            if (barsContainer && data.bar_scores) {
+                barsContainer.innerHTML = renderBarScores(data.bar_scores);
+            }
+
+            // Add updating animation
+            card.classList.add('updating');
+            setTimeout(() => card.classList.remove('updating'), 1000);
+
+            // Store updated data
+            combinations[combinationId] = data;
+        }
+
+        function removeCombinationCard(combinationId) {
+            const card = document.getElementById(`card-${combinationId}`);
+            if (card) {
+                card.remove();
+                delete combinations[combinationId];
+                updateCombinationsCount();
+
+                // Show loading message if no cards left
+                const container = document.getElementById('cardsContainer');
+                if (container.children.length === 0) {
+                    container.innerHTML = `
+                        <div class="loading">
+                            <p>No trading combinations active.</p>
+                            <p>Add a combination above to start monitoring indicators.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
 
         // File Browser Functions
         function openFileBrowser() {
@@ -696,179 +896,7 @@
             showMessage(`Selected config: ${fileName}`, 'success');
         }
 
-        // UI Functions
-        function updateConnectionStatus(connected) {
-            const statusDot = document.getElementById('connectionStatus');
-            const statusText = document.getElementById('connectionText');
-
-            if (connected) {
-                statusDot.className = 'status-dot connected';
-                statusText.textContent = 'Connected';
-            } else {
-                statusDot.className = 'status-dot disconnected';
-                statusText.textContent = 'Disconnected';
-            }
-        }
-
-        function updateStatus(data) {
-            const streamingStatus = document.getElementById('streamingStatus');
-            const streamingText = document.getElementById('streamingText');
-            const combinationsCount = document.getElementById('combinationsCount');
-
-            if (data.streaming) {
-                streamingStatus.className = 'status-dot connected';
-                streamingText.textContent = 'Streaming';
-            } else {
-                streamingStatus.className = 'status-dot disconnected';
-                streamingText.textContent = 'Not Streaming';
-            }
-
-            const count = data.combinations ? data.combinations.length : 0;
-            combinationsCount.textContent = `${count} Combination${count !== 1 ? 's' : ''}`;
-        }
-
-        function requestCombinationData(combinationId) {
-            socket.emit('request_combination_data', { combination_id: combinationId });
-        }
-
-        socket.on('combination_data_response', function(data) {
-            console.log('Combination data response:', data);
-            combinations[data.combination_id] = data.data;
-            renderCombinationCard(data.combination_id, data.data);
-        });
-
-        function renderCombinationCard(combinationId, data) {
-            const container = document.getElementById('cardsContainer');
-
-            // Remove loading message
-            const loading = container.querySelector('.loading');
-            if (loading) {
-                loading.remove();
-            }
-
-            // Remove existing card if it exists
-            const existingCard = document.getElementById(`card-${combinationId}`);
-            if (existingCard) {
-                existingCard.remove();
-            }
-
-            const card = document.createElement('div');
-            card.className = 'trading-card';
-            card.id = `card-${combinationId}`;
-
-            const info = data.combination_info;
-            const current = data.current || {};
-            const barScores = data.bar_scores || {};
-            const indicators = data.indicators || {};
-
-            const price = current.price || 0;
-            const priceClass = price >= 0 ? '' : 'negative';
-
-            card.innerHTML = `
-                <div class="card-header">
-                    <div>
-                        <div class="card-title">${info.symbol}</div>
-                        <div class="card-subtitle">${info.monitor_config_name}</div>
-                    </div>
-                    <button class="card-close" onclick="removeCombination('${combinationId}')">&times;</button>
-                </div>
-
-                <div class="price-display ${priceClass}">
-                    $${price.toFixed(2)}
-                </div>
-
-                <div class="bars-container" id="bars-${combinationId}">
-                    ${renderBarScores(barScores)}
-                </div>
-
-                <div class="indicators-summary">
-                    ${Object.keys(indicators).length} Active Indicators
-                </div>
-            `;
-
-            container.appendChild(card);
-        }
-
-        function renderBarScores(barScores) {
-            if (!barScores || Object.keys(barScores).length === 0) {
-                return '<div class="bar-item"><span class="bar-label">No bar data</span></div>';
-            }
-
-            return Object.entries(barScores).map(([name, value]) => {
-                const valueClass = value > 0.1 ? 'positive' : value < -0.1 ? 'negative' : 'neutral';
-                return `
-                    <div class="bar-item">
-                        <span class="bar-label">${formatBarName(name)}</span>
-                        <span class="bar-value ${valueClass}">${value.toFixed(3)}</span>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function formatBarName(name) {
-            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }
-
-        function updateCombinationCard(data) {
-            const combinationId = data.combination_id;
-            const card = document.getElementById(`card-${combinationId}`);
-
-            if (!card) return;
-
-            // Update price
-            const priceDisplay = card.querySelector('.price-display');
-            if (priceDisplay && data.current_price) {
-                const priceClass = data.current_price >= 0 ? '' : 'negative';
-                priceDisplay.className = `price-display ${priceClass}`;
-                priceDisplay.textContent = `$${data.current_price.toFixed(2)}`;
-            }
-
-            // Update bar scores
-            const barsContainer = card.querySelector('.bars-container');
-            if (barsContainer && data.bar_scores) {
-                barsContainer.innerHTML = renderBarScores(data.bar_scores);
-            }
-
-            // Add updating animation
-            card.classList.add('updating');
-            setTimeout(() => card.classList.remove('updating'), 1000);
-
-            // Store updated data
-            combinations[combinationId] = data;
-        }
-
-        function updateCandlePrice(combinationId, candle) {
-            const card = document.getElementById(`card-${combinationId}`);
-            if (!card) return;
-
-            const priceDisplay = card.querySelector('.price-display');
-            if (priceDisplay) {
-                const priceClass = candle.close >= candle.open ? '' : 'negative';
-                priceDisplay.className = `price-display ${priceClass}`;
-                priceDisplay.textContent = `$${candle.close.toFixed(2)}`;
-            }
-        }
-
-        function removeCombinationCard(combinationId) {
-            const card = document.getElementById(`card-${combinationId}`);
-            if (card) {
-                card.remove();
-                delete combinations[combinationId];
-
-                // Show loading message if no cards left
-                const container = document.getElementById('cardsContainer');
-                if (container.children.length === 0) {
-                    container.innerHTML = `
-                        <div class="loading">
-                            <p>No trading combinations active.</p>
-                            <p>Add a combination above to start monitoring indicators.</p>
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        // API Functions
+        // Main API Functions
         async function addCombination() {
             const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
             const configFile = document.getElementById('configSelect').value;
@@ -934,21 +962,7 @@
             }
         }
 
-        function showMessage(message, type) {
-            const messagesDiv = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `${type}-message`;
-            messageDiv.textContent = message;
-
-            messagesDiv.appendChild(messageDiv);
-
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                messageDiv.remove();
-            }, 5000);
-        }
-
-        // Debug function to manually trigger indicator processing
+        // Debug Functions
         async function debugProcessIndicators() {
             try {
                 const response = await fetch('/api/debug/process', {
@@ -971,7 +985,6 @@
             }
         }
 
-        // Debug function to check live data flow
         async function debugLiveData() {
             try {
                 const response = await fetch('/api/debug/live-data', {
@@ -985,6 +998,7 @@
 
                 if (result.success) {
                     showMessage('Live data debug info logged to terminal', 'success');
+                    console.log('Live data debug result:', result);
                 } else {
                     showMessage(`Debug failed: ${result.error}`, 'error');
                 }
@@ -993,7 +1007,22 @@
             }
         }
 
-        // Allow Enter key to add combination
+        // Utility Functions
+        function showMessage(message, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `${type}-message`;
+            messageDiv.textContent = message;
+
+            messagesDiv.appendChild(messageDiv);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
+        // Event Listeners
         document.getElementById('symbolInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 addCombination();
@@ -1008,296 +1037,11 @@
             }
         }
 
-            // Client-Side Routing for Simple ID-Based Updates
-    // Add this to your dashboard.html <script> section
-
-    // WebSocket connection (existing)
-    const socket = io();
-    let combinations = {};
-
-    // Connection handling (existing - no changes needed)
-    socket.on('connect', function() {
-        updateConnectionStatus(true);
-        console.log('Connected to server');
-    });
-
-    socket.on('disconnect', function() {
-        updateConnectionStatus(false);
-        console.log('Disconnected from server');
-    });
-
-    // NEW: Simple ID-based routing for combination updates
-    socket.on('combination_update', function(data) {
-        console.log('Received combination update:', data);
-
-        const combinationId = data.combination_id;
-
-        if (!combinationId) {
-            console.error('No combination_id in update data:', data);
-            return;
-        }
-
-        // Store the combination data
-        combinations[combinationId] = data;
-
-        // Route to the correct card using combination_id
-        const cardElement = document.getElementById(`card-${combinationId}`);
-
-        if (cardElement) {
-            updateCard(cardElement, data);
-            console.log(`Updated card for combination_id: ${combinationId}`);
-        } else {
-            console.warn(`Card not found for combination_id: ${combinationId}. Available cards:`,
-                        Array.from(document.querySelectorAll('[id^="card-"]')).map(el => el.id));
-        }
-    });
-
-    // NEW: Handle combination registration (when new combinations are added)
-    socket.on('combination_registered', function(data) {
-        console.log('New combination registered:', data);
-
-        const combinationId = data.combination_id;
-        const metadata = data.metadata;
-
-        // Create new card for this combination
-        createCombinationCard(combinationId, metadata);
-
-        showMessage(`Added combination: ${metadata.symbol} + ${metadata.monitor_config_name}`, 'success');
-    });
-
-    // NEW: Handle combination unregistration (when combinations are removed)
-    socket.on('combination_unregistered', function(data) {
-        console.log('Combination unregistered:', data);
-
-        const combinationId = data.combination_id;
-
-        // Remove the card
-        const cardElement = document.getElementById(`card-${combinationId}`);
-        if (cardElement) {
-            cardElement.remove();
-            console.log(`Removed card for combination_id: ${combinationId}`);
-        }
-
-        // Remove from combinations storage
-        if (combinations[combinationId]) {
-            delete combinations[combinationId];
-        }
-
-        showMessage(`Removed combination: ${combinationId}`, 'success');
-
-        // Show loading message if no cards left
-        checkAndShowLoadingMessage();
-    });
-
-    // Function to create a new combination card
-    function createCombinationCard(combinationId, metadata) {
-        const container = document.getElementById('cardsContainer');
-
-        // Remove loading message if it exists
-        const loading = container.querySelector('.loading');
-        if (loading) {
-            loading.remove();
-        }
-
-        // Create card element
-        const card = document.createElement('div');
-        card.className = 'trading-card';
-        card.id = `card-${combinationId}`;
-
-        // Initial card HTML
-        card.innerHTML = `
-            <div class="card-header">
-                <div>
-                    <div class="card-title">${metadata.symbol}</div>
-                    <div class="card-subtitle">${metadata.monitor_config_name}</div>
-                </div>
-                <button class="card-close" onclick="removeCombination('${combinationId}')">&times;</button>
-            </div>
-
-            <div class="price-display">
-                $0.00
-            </div>
-
-            <div class="bars-container" id="bars-${combinationId}">
-                <div class="bar-item">
-                    <span class="bar-label">Loading...</span>
-                    <span class="bar-value neutral">0.000</span>
-                </div>
-            </div>
-
-            <div class="indicators-summary">
-                ${metadata.indicators_count || 0} Active Indicators
-            </div>
-        `;
-
-        container.appendChild(card);
-        console.log(`Created card for combination_id: ${combinationId}`);
-    }
-
-    // Updated function to update card with new data
-    function updateCard(cardElement, data) {
-        try {
-            // Update price
-            const priceDisplay = cardElement.querySelector('.price-display');
-            if (priceDisplay && data.price !== undefined) {
-                const priceClass = data.price >= 0 ? '' : ' negative';
-                priceDisplay.className = `price-display${priceClass}`;
-                priceDisplay.textContent = `$${parseFloat(data.price).toFixed(2)}`;
-            }
-
-            // Update bar scores
-            const barsContainer = cardElement.querySelector('.bars-container');
-            if (barsContainer && data.bar_scores) {
-                barsContainer.innerHTML = renderBarScores(data.bar_scores);
-            }
-
-            // Update indicators summary if available
-            const indicatorsSummary = cardElement.querySelector('.indicators-summary');
-            if (indicatorsSummary && data.indicators) {
-                const indicatorCount = Object.keys(data.indicators).length;
-                indicatorsSummary.textContent = `${indicatorCount} Active Indicators`;
-            }
-
-            // Add updating animation
-            cardElement.classList.add('updating');
-            setTimeout(() => cardElement.classList.remove('updating'), 1000);
-
-            console.log(`Updated card ${cardElement.id} with price: $${data.price}`);
-
-        } catch (error) {
-            console.error('Error updating card:', error, data);
-        }
-    }
-
-    // Function to render bar scores (existing function - no changes needed)
-    function renderBarScores(barScores) {
-        if (!barScores || Object.keys(barScores).length === 0) {
-            return '<div class="bar-item"><span class="bar-label">No bar data</span></div>';
-        }
-
-        return Object.entries(barScores).map(([name, value]) => {
-            const numValue = parseFloat(value);
-            const valueClass = numValue > 0.1 ? 'positive' : numValue < -0.1 ? 'negative' : 'neutral';
-            return `
-                <div class="bar-item">
-                    <span class="bar-label">${formatBarName(name)}</span>
-                    <span class="bar-value ${valueClass}">${numValue.toFixed(3)}</span>
-                </div>
-            `;
-        }).join('');
-    }
-
-    // Function to format bar names (existing function - no changes needed)
-    function formatBarName(name) {
-        return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    }
-
-    // Function to check and show loading message when no cards exist
-    function checkAndShowLoadingMessage() {
-        const container = document.getElementById('cardsContainer');
-        const cards = container.querySelectorAll('.trading-card');
-
-        if (cards.length === 0) {
-            container.innerHTML = `
-                <div class="loading">
-                    <p>No trading combinations active.</p>
-                    <p>Add a combination above to start monitoring indicators.</p>
-                </div>
-            `;
-        }
-    }
-
-    // Updated remove combination function
-    async function removeCombination(combinationId) {
-        if (!confirm('Are you sure you want to remove this combination?')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/combinations/${combinationId}`, {
-                method: 'DELETE'
-            });
-
-            const result = await response.json();
-
-            if (!result.success) {
-                showMessage(`Error removing combination: ${result.error}`, 'error');
-            }
-            // Success case is handled by the 'combination_unregistered' event
-
-        } catch (error) {
-            showMessage(`Error removing combination: ${error.message}`, 'error');
-        }
-    }
-
-    // Status update handler (updated to handle new data structure)
-    socket.on('status_update', function(data) {
-        console.log('Status update:', data);
-        updateStatus(data);
-    });
-
-    // Handle initial data when connecting (updated)
-    socket.on('initial_data', function(data) {
-        console.log('Received initial data:', data);
-        updateStatus(data);
-
-        // Create cards for existing combinations
-        if (data.combinations && data.combinations.length > 0) {
-            data.combinations.forEach(combo => {
-                createCombinationCard(combo.combination_id, {
-                    symbol: combo.symbol,
-                    monitor_config_name: combo.monitor_config_name,
-                    indicators_count: 0  // Will be updated when data comes in
-                });
-
-                // Request initial data for this combination
-                requestCombinationData(combo.combination_id);
-            });
-        }
-    });
-
-    // Request data for a specific combination
-    function requestCombinationData(combinationId) {
-        socket.emit('request_combination_data', { combination_id: combinationId });
-    }
-
-    // Handle combination data response
-    socket.on('combination_data_response', function(data) {
-        console.log('Combination data response:', data);
-
-        const combinationId = data.combination_id;
-        const combinationData = data.data;
-
-        if (combinationData && combinationData.current_data) {
-            // Update the card with the received data
-            const cardElement = document.getElementById(`card-${combinationId}`);
-            if (cardElement) {
-                // Format the data to match the combination_update structure
-                const updateData = {
-                    combination_id: combinationId,
-                    symbol: combinationData.current_data.symbol || 'UNKNOWN',
-                    price: combinationData.current_data.current_price || 0,
-                    indicators: combinationData.current_data.indicators || {},
-                    bar_scores: combinationData.current_data.bar_scores || {},
-                    timestamp: combinationData.current_data.last_update || new Date().toISOString()
-                };
-
-                updateCard(cardElement, updateData);
-            }
-        }
-    });
-
-    // Debug function to log current state
-    function debugClientState() {
-        console.log('=== CLIENT DEBUG STATE ===');
-        console.log('Active combinations:', Object.keys(combinations));
-        console.log('Cards in DOM:', Array.from(document.querySelectorAll('[id^="card-"]')).map(el => el.id));
-        console.log('Socket connected:', socket.connected);
-        console.log('=== END DEBUG ===');
-    }
-
-    // Add debug function to window for testing
-    window.debugClientState = debugClientState;
-        </script>
+        // Request initial status on page load
+        window.addEventListener('load', function() {
+            // Request status update
+            socket.emit('request_status');
+        });
+    </script>
 </body>
 </html>

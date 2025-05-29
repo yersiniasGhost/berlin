@@ -1,89 +1,89 @@
-import logging
-from typing import Optional, Set
-from datetime import datetime
+# File: BerlinProject/src/stock_analysis_ui/services/trading_combination.py
 
+"""
+TradingCombination wrapper class for encapsulating DataStreamer + metadata
+"""
+
+import uuid
+from typing import Dict, Set, Optional
 from data_streamer.data_streamer import DataStreamer
+from data_streamer.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
-
-logger = logging.getLogger('TradingCombination')
 
 
 class TradingCombination:
     """
-    Wrapper for a trading combination with simple ID routing
-    Represents one symbol + monitor config combination
+    Wrapper class that encapsulates a DataStreamer with its metadata and unique identifiers
     """
 
-    def __init__(self, symbol: str, monitor_config: MonitorConfiguration, card_id: Optional[str] = None):
-        # Generate simple combination_id
-        self.combination_id = card_id or f"{symbol}_{monitor_config.name}_{id(self)}"
-        self.symbol = symbol
-        self.monitor_config = monitor_config
+    def __init__(self, symbol: str, monitor_config: MonitorConfiguration,
+                 config_file: str = None, card_id: Optional[str] = None):
+        """
+        Initialize a trading combination
 
-        # Create DataStreamer with combination_id
-        self.data_streamer = DataStreamer(
-            combination_id=self.combination_id,  # Pass the ID to DataStreamer
-            model_configuration={"feature_vector": [{"name": "close"}]},
-            indicator_configuration=monitor_config
-        )
+        Args:
+            symbol: Stock symbol (e.g., "AAPL")
+            monitor_config: MonitorConfiguration object
+            config_file: Path to config file (optional, for metadata)
+            card_id: Optional custom card ID
+        """
+        self.symbol: str = symbol
+        self.monitor_config: MonitorConfiguration = monitor_config
+        self.config_file: str = config_file or "unknown"
 
-        # Unique aggregator key for StreamingManager routing
-        self.unique_aggregator_key = f"{symbol}_{self.combination_id}"
+        # Generate unique identifiers
+        self.combination_id: str = card_id or self._generate_combination_id()
+        self.card_id: str = self.combination_id  # Same as combination_id for simplicity
+        self.unique_aggregator_key: str = f"{symbol}_{self.combination_id}"
 
-        # Extract timeframes from monitor config
+        # Get timeframes from monitor config
         self.timeframes: Set[str] = monitor_config.get_time_increments()
 
-        # Metadata for UI and management
-        self.metadata = {
-            'combination_id': self.combination_id,
-            'symbol': symbol,
-            'monitor_config_name': monitor_config.name,
-            'timeframes': list(self.timeframes),
-            'unique_aggregator_key': self.unique_aggregator_key,
-            'created_at': datetime.now().isoformat(),
-            'indicators_count': len(monitor_config.indicators) if monitor_config.indicators else 0,
-            'bars_config': getattr(monitor_config, 'bars', {})
+        # Will be populated later
+        self.aggregators: Dict[str, CandleAggregator] = {}
+        self.data_streamer: Optional[DataStreamer] = None
+
+    def _generate_combination_id(self) -> str:
+        """Generate a unique combination ID"""
+        short_uuid = str(uuid.uuid4())[:8]
+        return f"{self.symbol}_{self.monitor_config.name}_{short_uuid}".replace(' ', '_')
+
+    def create_data_streamer(self) -> DataStreamer:
+        """Create and return a DataStreamer with combination_id for routing"""
+        model_config = {
+            "feature_vector": [
+                {"name": "close"},
+                {"name": "open"},
+                {"name": "high"},
+                {"name": "low"}
+            ]
         }
 
-        logger.info(f"Created TradingCombination with ID: {self.combination_id} ({symbol})")
+        # Create DataStreamer with combination_id for routing
+        self.data_streamer = DataStreamer(
+            combination_id=self.combination_id,
+            model_configuration=model_config,
+            indicator_configuration=self.monitor_config
+        )
 
-    def get_combination_id(self) -> str:
-        """Get the combination ID"""
-        return self.combination_id
+        return self.data_streamer
 
-    def get_symbol(self) -> str:
-        """Get the symbol"""
-        return self.symbol
-
-    def get_timeframes(self) -> Set[str]:
-        """Get required timeframes"""
-        return self.timeframes
-
-    def get_unique_aggregator_key(self) -> str:
-        """Get the unique aggregator key for StreamingManager"""
-        return self.unique_aggregator_key
-
-    def get_metadata(self) -> dict:
+    def get_metadata(self) -> Dict:
         """Get combination metadata"""
-        return self.metadata.copy()
-
-    def connect_to_external_tool(self, external_tool) -> None:
-        """Connect the DataStreamer to an external tool"""
-        self.data_streamer.connect_tool(external_tool)
-        logger.info(f"Connected {self.combination_id} to external tool")
-
-    def process_indicators(self, aggregators: dict) -> None:
-        """Process indicators using the provided aggregators"""
-        try:
-            self.data_streamer.process_tick(aggregators)
-            logger.debug(f"Processed indicators for {self.combination_id}")
-        except Exception as e:
-            logger.error(f"Error processing indicators for {self.combination_id}: {e}")
-            raise
+        return {
+            'combination_id': self.combination_id,
+            'symbol': self.symbol,
+            'monitor_config_name': self.monitor_config.name,
+            'config_file': self.config_file,
+            'card_id': self.card_id,
+            'unique_aggregator_key': self.unique_aggregator_key,
+            'timeframes': list(self.timeframes),
+            'has_data_streamer': self.data_streamer is not None,
+            'aggregators_count': len(self.aggregators)
+        }
 
     def __str__(self) -> str:
-        return f"TradingCombination({self.combination_id}: {self.symbol} + {self.monitor_config.name})"
+        return f"TradingCombination(id={self.combination_id}, symbol={self.symbol}, config={self.monitor_config.name})"
 
     def __repr__(self) -> str:
-        return (f"TradingCombination(combination_id='{self.combination_id}', "
-                f"symbol='{self.symbol}', config='{self.monitor_config.name}')")
+        return self.__str__()
