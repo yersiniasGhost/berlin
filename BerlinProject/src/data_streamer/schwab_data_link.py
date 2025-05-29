@@ -370,13 +370,36 @@ class SchwabDataLink(DataLink):
 
     def _handle_quote_data(self, data: List[Dict]) -> None:
         """Process quote data and pass to handlers"""
+        logger.info(f"Received quote data: {len(data)} quotes")
+
         for quote in data:
             try:
-                # Call all registered quote handlers
-                for handler in self.quote_handlers:
-                    handler(quote)
+                symbol = quote.get('key', 'UNKNOWN')
+                price = quote.get('3', None)  # Last price
+
+                # Skip quotes with no price data
+                if price is None or price == 'N/A':
+                    logger.debug(f"Skipping quote for {symbol}: no price data")
+                    continue
+
+                price_float = float(price)
+                logger.info(f"Processing quote for {symbol}: ${price_float}")
+
+                # Call all registered quote handlers with the quote data
+                for i, handler in enumerate(self.quote_handlers):
+                    logger.debug(f"Calling quote handler #{i} for {symbol}")
+                    try:
+                        # Pass the raw quote data to the handler
+                        handler(quote)
+                    except Exception as handler_error:
+                        logger.error(f"Error in quote handler #{i} for {symbol}: {handler_error}")
+
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error processing quote data: {e}")
             except Exception as e:
-                logger.error(f"Error in quote handler: {e}")
+                logger.error(f"Unexpected error in quote handler: {e}")
+                import traceback
+                traceback.print_exc()
 
     def _handle_chart_data(self, data: List[Dict]) -> None:
         """Process chart data and pass to handlers"""

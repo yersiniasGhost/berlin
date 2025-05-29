@@ -1,5 +1,5 @@
 """
-WebSocket event handlers for real-time communication
+WebSocket event handlers for real-time communication with simple ID routing
 """
 
 import logging
@@ -21,12 +21,8 @@ def register_websocket_events(socketio, app_service):
             # Get current combinations
             combinations_data = app_service.get_combinations() if hasattr(app_service, 'get_combinations') else {'combinations': [], 'total': 0}
 
-            # Get streaming status - check multiple attributes
-            is_streaming = False
-            if hasattr(app_service, 'is_streaming'):
-                is_streaming = app_service.is_streaming
-            elif hasattr(app_service, 'streaming_manager') and app_service.streaming_manager:
-                is_streaming = True
+            # Get streaming status
+            is_streaming = getattr(app_service, 'is_streaming', False)
 
             # Get authentication status
             is_authenticated = True
@@ -38,28 +34,13 @@ def register_websocket_events(socketio, app_service):
                 'combinations': combinations_data.get('combinations', []),
                 'streaming': is_streaming,
                 'authenticated': is_authenticated,
-                'message': 'Connected to trading dashboard'
+                'message': 'Connected to trading dashboard',
+                'timestamp': datetime.now().isoformat() if 'datetime' in globals() else None
             }
 
             logger.info(f"Sending initial data: {len(initial_data['combinations'])} combinations, streaming: {is_streaming}")
 
             emit('initial_data', initial_data)
-
-            # Send individual combination data for each existing combination
-            if hasattr(app_service, 'ui_tool') and app_service.ui_tool:
-                for combo in initial_data['combinations']:
-                    combination_id = combo.get('combination_id')
-                    if combination_id:
-                        try:
-                            combo_data = app_service.ui_tool.get_combination_data(combination_id)
-                            if combo_data:
-                                emit('combination_data_response', {
-                                    'combination_id': combination_id,
-                                    'data': combo_data
-                                })
-                                logger.info(f"Sent data for existing combination: {combination_id}")
-                        except Exception as e:
-                            logger.error(f"Error sending data for combination {combination_id}: {e}")
 
         except Exception as e:
             logger.error(f"Error sending initial data: {e}")
@@ -88,11 +69,11 @@ def register_websocket_events(socketio, app_service):
                 emit('error', {'message': 'combination_id is required'})
                 return
 
-            if not hasattr(app_service, 'ui_tool'):
+            if not hasattr(app_service, 'master_ui_tool'):
                 emit('error', {'message': 'UI tool not available'})
                 return
 
-            combination_data = app_service.ui_tool.get_combination_data(combination_id)
+            combination_data = app_service.master_ui_tool.get_combination_data(combination_id)
 
             if combination_data:
                 emit('combination_data_response', {
@@ -111,11 +92,11 @@ def register_websocket_events(socketio, app_service):
     def handle_all_data_request():
         """Handle request for all combinations data"""
         try:
-            if not hasattr(app_service, 'ui_tool'):
+            if not hasattr(app_service, 'master_ui_tool'):
                 emit('error', {'message': 'UI tool not available'})
                 return
 
-            all_data = app_service.ui_tool.get_all_combinations_data()
+            all_data = app_service.master_ui_tool.get_all_combinations_data()
             emit('all_data_response', all_data)
 
         except Exception as e:
@@ -133,7 +114,7 @@ def register_websocket_events(socketio, app_service):
         try:
             combinations_data = app_service.get_combinations()
             status = {
-                'streaming': app_service.is_streaming if hasattr(app_service, 'is_streaming') else False,
+                'streaming': getattr(app_service, 'is_streaming', False),
                 'authenticated': app_service.auth_manager.is_authenticated() if app_service.auth_manager else True,
                 'combinations': combinations_data.get('combinations', []),
                 'total_combinations': combinations_data.get('total', 0)
@@ -144,4 +125,22 @@ def register_websocket_events(socketio, app_service):
             logger.error(f"Error handling status request: {e}")
             emit('error', {'message': str(e)})
 
-    logger.info("WebSocket events registered")
+    @socketio.on('debug_client_state')
+    def handle_debug_client_state():
+        """Handle debug request from client"""
+        try:
+            debug_info = {
+                'server_combinations': list(app_service.combinations.keys()) if hasattr(app_service, 'combinations') else [],
+                'streaming_active': getattr(app_service, 'is_streaming', False),
+                'aggregator_keys': list(app_service.streaming_manager.aggregators.keys()) if hasattr(app_service, 'streaming_manager') else [],
+                'ui_tool_combinations': list(app_service.master_ui_tool.registered_combinations.keys()) if hasattr(app_service, 'master_ui_tool') else []
+            }
+
+            emit('debug_server_state', debug_info)
+            logger.info(f"Sent debug info: {debug_info}")
+
+        except Exception as e:
+            logger.error(f"Error handling debug request: {e}")
+            emit('error', {'message': str(e)})
+
+    logger.info("WebSocket events registered with simple ID routing support")
