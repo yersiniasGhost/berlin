@@ -1,100 +1,122 @@
-from datetime import datetime
-import time
-from typing import List, Optional, Tuple, Dict
+# File: BerlinProject/src/data_streamer/data_streamer.py
+
+"""
+Simplified DataStreamer - back to basics with card_id
+"""
+
 import logging
-from data_streamer.candle_aggregator import CandleAggregator
+from typing import List, Optional
+from datetime import datetime
 
 from environments.tick_data import TickData
-
-# Configure at module level
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('DataStreamer')
-
-from mongo_tools.sample_tools import SampleTools
 from data_streamer.indicator_processor import IndicatorProcessor
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
 
+logger = logging.getLogger('DataStreamer')
+
 
 class DataStreamer:
-    def __init__(self, combination_id: str, model_configuration: dict,
-                 indicator_configuration: Optional[MonitorConfiguration] = None):
+    """
+    Simplified DataStreamer with card_id for routing
+    """
+
+    def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration):
         """
-        Initialize DataStreamer with combination_id for simple routing
+        Initialize simplified DataStreamer
 
         Args:
-            combination_id: Unique identifier for this combination
-            model_configuration: Model configuration
-            indicator_configuration: Optional indicator configuration
+            card_id: Unique card identifier (card1, card2, etc.)
+            symbol: Stock symbol
+            monitor_config: Monitor configuration
         """
-        self.combination_id: str = combination_id
-        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(
-            indicator_configuration) if indicator_configuration else None
-        self.external_tool: List[ExternalTool] = []
-        self.reset_after_sample: bool = False
+        self.card_id: str = card_id
+        self.symbol: str = symbol
+        self.monitor_config: MonitorConfiguration = monitor_config
 
-        logger.info(f"DataStreamer initialized with combination_id: {combination_id}")
+        # Create indicator processor
+        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(monitor_config) if monitor_config else None
 
-    def process_tick(self, candle_aggregators: Dict[str, CandleAggregator]) -> None:
-        """Process indicators for the given candle aggregators"""
-        logger.info(f"DataStreamer {self.combination_id}: Processing tick with {len(candle_aggregators)} aggregators")
+        # External tools
+        self.external_tools: List[ExternalTool] = []
 
-        if self.indicators:
+        # Store recent data for indicator calculation
+        self.recent_ticks: List[TickData] = []
+        self.max_history: int = 500
+
+        logger.info(f"DataStreamer initialized: {card_id} ({symbol})")
+
+    def process_tick(self, tick: TickData) -> None:
+        """
+        Process a single tick - calculate indicators and send to UI
+
+        Args:
+            tick: Latest tick data
+        """
+        if not tick:
+            return
+
+        # Ensure tick has symbol
+        if not hasattr(tick, 'symbol') or not tick.symbol:
+            tick.symbol = self.symbol
+
+        # Add to recent ticks for indicator calculation
+        self.recent_ticks.append(tick)
+
+        # Limit history size
+        if len(self.recent_ticks) > self.max_history:
+            self.recent_ticks = self.recent_ticks[-self.max_history:]
+
+        logger.debug(f"DataStreamer {self.card_id}: Processing tick for {self.symbol} @ ${tick.close:.2f}")
+
+        # Calculate indicators if we have enough data
+        if self.indicators and len(self.recent_ticks) >= 20:  # Need minimum data for indicators
             try:
-                # Calculate indicators using the provided aggregators
-                indicator_results, raw_indicators, bar_scores = self.indicators.next_tick(candle_aggregators)
-                logger.info(f"DataStreamer {self.combination_id}: Got results - "
+                # Calculate indicators using recent tick history
+                indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators(self.recent_ticks)
+
+                logger.info(f"DataStreamer {self.card_id}: Calculated indicators - "
                             f"indicators: {len(indicator_results)}, bars: {len(bar_scores or {})}")
+
+                # Send to external tools
+                for tool in self.external_tools:
+                    tool.indicator_vector(
+                        card_id=self.card_id,
+                        symbol=self.symbol,
+                        tick=tick,
+                        indicators=indicator_results,
+                        bar_scores=bar_scores,
+                        raw_indicators=raw_indicators
+                    )
+
             except Exception as e:
-                logger.error(f"Error in indicators.next_tick() for {self.combination_id}: {e}")
+                logger.error(f"Error calculating indicators for {self.card_id}: {e}")
                 import traceback
                 traceback.print_exc()
-                return
-
-            if indicator_results:
-                # Get representative tick from aggregators
-                representative_tick: Optional[TickData] = None
-                for timeframe, aggregator in candle_aggregators.items():
-                    current_candle: Optional[TickData] = aggregator.get_current_candle()
-                    if current_candle and hasattr(current_candle, 'symbol'):
-                        representative_tick = current_candle
-                        logger.info(f"Using representative tick from {timeframe}: "
-                                    f"{current_candle.symbol} @ ${current_candle.close:.2f}")
-                        break
-
-                if not representative_tick:
-                    logger.warning(f"No representative tick found for {self.combination_id}")
-                    return
-
-                logger.info(f"Calling external tools for {self.combination_id}: {len(self.external_tool)} tools")
-
-                # Call external tools with combination_id for simple routing
-                for i, external_tool in enumerate(self.external_tool):
-                    try:
-                        logger.info(f"Calling external tool #{i} for {self.combination_id}")
-                        external_tool.indicator_vector(
-                            indicators=indicator_results,
-                            tick=representative_tick,
-                            index=-1,
-                            raw_indicators=raw_indicators,
-                            bar_scores=bar_scores,
-                            combination_id=self.combination_id  # Pass combination_id for routing
-                        )
-                    except Exception as e:
-                        logger.error(f"Error calling external tool #{i} for {self.combination_id}: {e}")
-                        import traceback
-                        traceback.print_exc()
-            else:
-                logger.warning(f"No indicator results to process for {self.combination_id}")
         else:
-            logger.warning(f"No indicators processor configured for {self.combination_id}")
+            # Not enough data for indicators yet, just send price update
+            for tool in self.external_tools:
+                tool.price_update(
+                    card_id=self.card_id,
+                    symbol=self.symbol,
+                    tick=tick
+                )
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
-        """Connect an external tool to the data streamer"""
-        self.external_tool.append(external_tool)
-        logger.info(f"Connected external tool to DataStreamer {self.combination_id}")
+        """Connect an external tool"""
+        self.external_tools.append(external_tool)
+        logger.info(f"Connected external tool to DataStreamer {self.card_id}")
 
-    def replace_external_tools(self, et: ExternalTool) -> None:
-        """Replace all external tools with a single tool"""
-        self.external_tool = [et]
-        logger.info(f"Replaced external tools for DataStreamer {self.combination_id}")
+    def get_current_price(self) -> float:
+        """Get current price"""
+        if self.recent_ticks:
+            return self.recent_ticks[-1].close
+        return 0.0
+
+    def get_symbol(self) -> str:
+        """Get symbol"""
+        return self.symbol
+
+    def get_card_id(self) -> str:
+        """Get card ID"""
+        return self.card_id

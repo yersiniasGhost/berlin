@@ -1,46 +1,98 @@
+# File: BerlinProject/src/stock_analysis_ui/services/ui_external_tool.py
+
+"""
+Simplified UIExternalTool - just passes data to browser
+"""
+
+import logging
 from typing import Dict, Optional
-from abc import ABC, abstractmethod
-import numpy as np
+from datetime import datetime
+from flask_socketio import SocketIO
+
 from environments.tick_data import TickData
 
+logger = logging.getLogger('UIExternalTool')
 
-class ExternalTool(ABC):
-    @abstractmethod
-    def indicator_vector(self, combination_id: str, indicators: Dict[str, float],
-                         tick: TickData, raw_indicators: Optional[Dict[str, float]] = None,
-                         bar_scores: Optional[Dict[str, float]] = None) -> None:
+
+class UIExternalTool:
+    """
+    Simplified UI External Tool - just routes data to browser by card_id
+    """
+
+    def __init__(self, socketio: SocketIO):
+        self.socketio: SocketIO = socketio
+        logger.info("UIExternalTool initialized - simplified version")
+
+    def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
+                         indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
+                         raw_indicators: Dict[str, float] = None) -> None:
         """
-        Handle indicator updates with combination_id for routing
+        Send indicator data to browser
 
         Args:
-            combination_id: Unique identifier for the trading combination
-            indicators: Dictionary of indicator results
+            card_id: Card identifier (card1, card2, etc.)
+            symbol: Stock symbol
             tick: Current tick data
-            raw_indicators: Raw indicator values (optional)
-            bar_scores: Calculated bar scores (optional)
+            indicators: Calculated indicators
+            bar_scores: Bar scores
+            raw_indicators: Raw indicator values
         """
-        raise NotImplementedError
+        try:
+            # Prepare data for browser
+            update_data = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'price': tick.close,
+                'timestamp': self._format_timestamp(tick.timestamp),
+                'ohlc': [tick.open, tick.high, tick.low, tick.close],
+                'volume': tick.volume,
+                'indicators': indicators or {},
+                'bar_scores': bar_scores or {},
+                'raw_indicators': raw_indicators or {}
+            }
 
-    def feature_vector(self, combination_id: str, fv: np.array, tick: TickData) -> None:
+            logger.info(f"🚀 EMITTING card_update: {card_id} ({symbol}) @ ${tick.close:.2f} "
+                        f"with {len(bar_scores or {})} bars")
+
+            # Send to browser
+            self.socketio.emit('card_update', update_data)
+
+        except Exception as e:
+            logger.error(f"Error sending indicator data for {card_id}: {e}")
+
+    def price_update(self, card_id: str, symbol: str, tick: TickData) -> None:
         """
-        Handle feature vector updates with combination_id for routing
+        Send price update to browser (when indicators aren't ready yet)
 
         Args:
-            combination_id: Unique identifier for the trading combination
-            fv: Feature vector array
+            card_id: Card identifier
+            symbol: Stock symbol
             tick: Current tick data
         """
-        pass
+        try:
+            # Prepare simple price update
+            update_data = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'price': tick.close,
+                'timestamp': self._format_timestamp(tick.timestamp),
+                'ohlc': [tick.open, tick.high, tick.low, tick.close],
+                'volume': tick.volume,
+                'indicators': {},
+                'bar_scores': {},
+                'raw_indicators': {}
+            }
 
-    # Optional methods that can be implemented by subclasses
-    def present_sample(self, combination_id: str, sample: dict, index: int):
-        """Handle sample presentation (optional)"""
-        pass
+            logger.debug(f"💰 EMITTING price_update: {card_id} ({symbol}) @ ${tick.close:.2f}")
 
-    def reset_next_sample(self, combination_id: str):
-        """Reset state for next sample (optional)"""
-        pass
+            # Send to browser
+            self.socketio.emit('card_update', update_data)
 
-    def handle_completed_candle(self, combination_id: str, symbol: str, candle: TickData) -> None:
-        """Handle completed candle data (optional)"""
-        pass
+        except Exception as e:
+            logger.error(f"Error sending price update for {card_id}: {e}")
+
+    def _format_timestamp(self, timestamp) -> str:
+        """Format timestamp for JSON serialization"""
+        if isinstance(timestamp, datetime):
+            return timestamp.isoformat()
+        return str(timestamp)

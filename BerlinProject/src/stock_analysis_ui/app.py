@@ -1,7 +1,9 @@
+# File: BerlinProject/src/stock_analysis_ui/app.py
+# REPLACE YOUR app.py WITH THIS
+
 #!/usr/bin/env python3
 """
-Main Flask application entry point
-Handles authentication and starts the web server
+Main Flask application entry point - SIMPLIFIED VERSION
 """
 
 import os
@@ -15,7 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..'))
 
 from services.schwab_auth import SchwabAuthManager
-from services.app_service import AppService
+from services.app_service import AppService  # CHANGED FROM DataService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,7 +48,7 @@ def authenticate_before_startup() -> bool:
         return False
 
     # Create app service with authenticated manager
-    app_service = AppService(socketio, auth_manager)
+    app_service = AppService(socketio, auth_manager)  # CHANGED FROM DataService
 
     # Start streaming infrastructure immediately
     print("Starting streaming infrastructure...")
