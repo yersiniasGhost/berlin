@@ -1,7 +1,8 @@
 # File: BerlinProject/src/data_streamer/indicator_processor.py
+# PRODUCTION VERSION - Clean, no debug code
 
 """
-Simplified IndicatorProcessor - works with list of TickData
+Indicator processor for calculating technical indicators
 """
 
 import logging
@@ -17,7 +18,7 @@ logger = logging.getLogger('IndicatorProcessor')
 
 class IndicatorProcessor:
     """
-    Simplified indicator processor that works with a list of TickData
+    Indicator processor that calculates indicators from tick history
     """
 
     def __init__(self, configuration: MonitorConfiguration):
@@ -69,7 +70,6 @@ class IndicatorProcessor:
             # Calculate bar scores
             bar_scores = self._calculate_bar_scores(indicators)
 
-            logger.debug(f"Calculated {len(indicators)} indicators, {len(bar_scores)} bar scores")
             return indicators, raw_indicators, bar_scores
 
         except Exception as e:

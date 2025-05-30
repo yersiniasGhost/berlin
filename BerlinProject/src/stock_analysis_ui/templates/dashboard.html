@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Dashboard - Simplified</title>
+    <title>Trading Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         * {
@@ -335,7 +335,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>Trading Dashboard - Simplified</h1>
+        <h1>Trading Dashboard</h1>
         <div class="status-bar">
             <div class="status-item">
                 <div class="status-dot disconnected" id="connectionStatus"></div>
@@ -390,35 +390,28 @@
         // Connection handling
         socket.on('connect', function() {
             updateConnectionStatus(true);
-            console.log('✅ Connected to server');
         });
 
         socket.on('disconnect', function() {
             updateConnectionStatus(false);
-            console.log('❌ Disconnected from server');
         });
 
-        // Card update - SIMPLE routing by card_id
+        // Card update
         socket.on('card_update', function(data) {
-            console.log('📊 Card update received:', data);
             const cardId = data.card_id;
 
             if (cardId) {
                 updateOrCreateCard(cardId, data);
-            } else {
-                console.warn('⚠️ Card update without card_id:', data);
             }
         });
 
         // Status updates
         socket.on('status_update', function(data) {
-            console.log('📈 Status update:', data);
             updateStatus(data);
         });
 
         // Error handling
         socket.on('error', function(data) {
-            console.error('❌ Socket error:', data);
             showMessage(`Error: ${data.message}`, 'error');
         });
 
@@ -465,10 +458,7 @@
             let card = document.getElementById(cardId);
 
             if (!card) {
-                console.log(`🆕 Creating new card: ${cardId}`);
                 card = createCard(cardId, data);
-            } else {
-                console.log(`🔄 Updating existing card: ${cardId}`);
             }
 
             updateCardData(card, data);
@@ -521,7 +511,7 @@
             if (priceDisplay && data.price !== undefined) {
                 const priceClass = data.price >= 0 ? '' : 'negative';
                 priceDisplay.className = `price-display ${priceClass}`;
-                priceDisplay.textContent = `$${data.price.toFixed(2)}`;
+                priceDisplay.textContent = `${data.price.toFixed(2)}`;
             }
 
             // Update bar scores
@@ -670,7 +660,6 @@
 
         // Request initial status on page load
         window.addEventListener('load', function() {
-            console.log('🚀 Page loaded, requesting status...');
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => updateStatus(data))

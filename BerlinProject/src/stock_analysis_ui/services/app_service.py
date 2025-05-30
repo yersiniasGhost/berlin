@@ -1,15 +1,14 @@
 # File: BerlinProject/src/stock_analysis_ui/services/app_service.py
-# UPDATED VERSION with proper candle aggregation
+# PRODUCTION VERSION - All debug code removed
 
 """
-Simplified application service with proper candle aggregation
+Application service with proper candle aggregation
 """
 
 import os
 import sys
 import json
 import logging
-import threading
 from typing import Dict, List, Optional
 from datetime import datetime
 from flask_socketio import SocketIO
@@ -26,13 +25,14 @@ from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+from environments.tick_data import TickData
 
 logger = logging.getLogger('AppService')
 
 
 class AppService:
     """
-    Simplified application service with proper candle aggregation
+    Application service with candle aggregation and indicator processing
     """
 
     def __init__(self, socketio: SocketIO, auth_manager: SchwabAuthManager):
@@ -43,21 +43,20 @@ class AppService:
         self.data_link: Optional[SchwabDataLink] = None
         self.ui_tool: UIExternalTool = UIExternalTool(socketio)
 
-        # Simple state tracking
+        # State tracking
         self.is_streaming: bool = False
-        self.combinations: Dict[str, Dict] = {}  # card_id -> combination data
+        self.combinations: Dict[str, Dict] = {}
         self.card_counter: int = 0
         self.subscribed_symbols: set = set()
 
         # Candle aggregators: symbol -> {timeframe -> CandleAggregator}
         self.aggregators: Dict[str, Dict[str, CandleAggregator]] = defaultdict(dict)
 
-        logger.info("AppService initialized - simplified version with candle aggregation")
+        logger.info("AppService initialized")
 
     def start_streaming(self) -> bool:
         """Initialize streaming infrastructure"""
         if self.is_streaming:
-            logger.info("Streaming already active")
             return True
 
         try:
@@ -79,15 +78,11 @@ class AppService:
 
         except Exception as e:
             logger.error(f"Error starting streaming: {e}")
-            import traceback
-            traceback.print_exc()
             self.is_streaming = False
             return False
 
     def add_combination(self, symbol: str, config_file: str) -> Dict:
-        """
-        Add a new combination with proper candle aggregation
-        """
+        """Add a new combination with candle aggregation"""
         try:
             if not self.is_streaming:
                 if not self.start_streaming():
@@ -102,11 +97,8 @@ class AppService:
             if not monitor_config:
                 return {"success": False, "error": f"Failed to load config: {config_file}"}
 
-            logger.info(f"Creating combination {card_id} for {symbol}")
-
             # Get required timeframes from indicators
             timeframes = monitor_config.get_time_increments()
-            logger.info(f"Required timeframes for {symbol}: {timeframes}")
 
             # Create aggregators for each required timeframe
             if symbol not in self.aggregators:
@@ -120,7 +112,7 @@ class AppService:
                     self.aggregators[symbol][timeframe] = aggregator
                     logger.info(f"Created aggregator for {symbol}-{timeframe}, loaded {count} candles")
 
-            # Create simple DataStreamer
+            # Create DataStreamer
             data_streamer = DataStreamer(
                 card_id=card_id,
                 symbol=symbol,
@@ -140,7 +132,7 @@ class AppService:
                 'timeframes': timeframes
             }
 
-            # Subscribe to quotes for this symbol (only once per symbol)
+            # Subscribe to quotes for this symbol
             self._ensure_symbol_subscription(symbol)
 
             # Send initial data to UI
@@ -157,8 +149,6 @@ class AppService:
 
         except Exception as e:
             logger.error(f"Error adding combination: {e}")
-            import traceback
-            traceback.print_exc()
             return {"success": False, "error": str(e)}
 
     def _send_initial_data(self, card_id: str, symbol: str):
@@ -179,13 +169,12 @@ class AppService:
                     symbol=symbol,
                     tick=self._create_mock_tick(symbol, current_price)
                 )
-                logger.info(f"Sent initial price for {card_id}: ${current_price:.2f}")
+
         except Exception as e:
             logger.error(f"Error sending initial data for {card_id}: {e}")
 
-    def _create_mock_tick(self, symbol: str, price: float):
+    def _create_mock_tick(self, symbol: str, price: float) -> TickData:
         """Create a mock tick for initial data"""
-        from environments.tick_data import TickData
         return TickData(
             symbol=symbol,
             timestamp=datetime.now(),
@@ -230,20 +219,17 @@ class AppService:
         """Subscribe to quotes for symbol and set up PIP processing"""
         try:
             if symbol not in self.subscribed_symbols:
-                # Subscribe to ALL symbols at once to avoid replacement
                 self.subscribed_symbols.add(symbol)
                 all_symbols = list(self.subscribed_symbols)
 
-                logger.info(f"Subscribing to all symbols: {all_symbols}")
                 self.data_link.subscribe_quotes(all_symbols)
 
-                # Set up quote handler for this symbol (only once)
+                # Set up quote handler for this symbol
                 def quote_handler(quote_data):
                     if quote_data.get('key') == symbol:
                         self._process_pip_for_symbol(symbol, quote_data)
 
                 self.data_link.add_quote_handler(quote_handler)
-                logger.info(f"Added quote handler for {symbol}")
 
         except Exception as e:
             logger.error(f"Error subscribing to symbol {symbol}: {e}")
@@ -258,11 +244,10 @@ class AppService:
                     completed_candle = aggregator.process_pip(quote_data)
 
                     if completed_candle:
-                        logger.info(f"Completed {timeframe} candle for {symbol}: ${completed_candle.close:.2f}")
                         # Process indicators for combinations that use this timeframe
                         self._process_completed_candle(symbol, timeframe, completed_candle)
 
-            # Also send current price updates to UI (for real-time price display)
+            # Also send current price updates to UI
             self._send_current_price_updates(symbol, quote_data)
 
         except Exception as e:
@@ -281,16 +266,8 @@ class AppService:
                     )
 
                     if has_timeframe_indicators:
-                        logger.info(f"Processing indicators for {card_id} on {timeframe} candle completion")
-
                         # Get all historical data for this combination's timeframes
                         historical_data = self._get_historical_data_for_combination(symbol, combination['timeframes'])
-
-                        # DEBUG: Check what we're passing
-                        logger.info(f"🔍 Passing {len(historical_data)} historical candles to {card_id}")
-                        if historical_data:
-                            logger.info(
-                                f"🔍 Sample candle: {historical_data[-1].symbol} @ ${historical_data[-1].close:.2f}")
 
                         # Process indicators
                         data_streamer = combination['data_streamer']
@@ -298,8 +275,6 @@ class AppService:
 
         except Exception as e:
             logger.error(f"Error processing completed candle: {e}")
-            import traceback
-            traceback.print_exc()
 
     def _send_current_price_updates(self, symbol: str, quote_data: Dict):
         """Send current price updates to UI for real-time display"""
@@ -342,11 +317,9 @@ class AppService:
                 aggregator = self.aggregators[symbol][timeframe]
                 history = aggregator.get_history()
                 historical_data.extend(history)
-                logger.info(f"🔍 Added {len(history)} {timeframe} candles for {symbol}")
 
         # Sort by timestamp
         historical_data.sort(key=lambda x: x.timestamp)
-        logger.info(f"🔍 Total historical data for {symbol}: {len(historical_data)} candles")
         return historical_data
 
     def _load_monitor_config(self, config_file: str) -> Optional[MonitorConfiguration]:
@@ -398,7 +371,6 @@ class AppService:
             if 'bars' in monitor_data:
                 monitor_config.bars = monitor_data['bars']
 
-            logger.info(f"Loaded monitor config: {monitor_config.name} with {len(indicators)} indicators")
             return monitor_config
 
         except Exception as e:

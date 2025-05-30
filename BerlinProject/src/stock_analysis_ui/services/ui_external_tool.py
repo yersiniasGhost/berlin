@@ -1,7 +1,8 @@
 # File: BerlinProject/src/stock_analysis_ui/services/ui_external_tool.py
+# PRODUCTION VERSION - Clean, no debug code
 
 """
-Simplified UIExternalTool - just passes data to browser
+UIExternalTool for sending data to browser via WebSocket
 """
 
 import logging
@@ -16,12 +17,12 @@ logger = logging.getLogger('UIExternalTool')
 
 class UIExternalTool:
     """
-    Simplified UI External Tool - just routes data to browser by card_id
+    UI External Tool - sends indicator and price data to browser
     """
 
     def __init__(self, socketio: SocketIO):
         self.socketio: SocketIO = socketio
-        logger.info("UIExternalTool initialized - simplified version")
+        self.last_meaningful_data: Dict[str, Dict] = {}
 
     def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
                          indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
@@ -30,7 +31,7 @@ class UIExternalTool:
         Send indicator data to browser
 
         Args:
-            card_id: Card identifier (card1, card2, etc.)
+            card_id: Card identifier
             symbol: Stock symbol
             tick: Current tick data
             indicators: Calculated indicators
@@ -38,7 +39,10 @@ class UIExternalTool:
             raw_indicators: Raw indicator values
         """
         try:
-            # Prepare data for browser
+            # Check if this update has bar data (even if values are 0.0)
+            has_bar_data = bool(bar_scores and len(bar_scores) > 0)
+
+            # Prepare data
             update_data = {
                 'card_id': card_id,
                 'symbol': symbol,
@@ -51,18 +55,30 @@ class UIExternalTool:
                 'raw_indicators': raw_indicators or {}
             }
 
-            logger.info(f"🚀 EMITTING card_update: {card_id} ({symbol}) @ ${tick.close:.2f} "
-                        f"with {len(bar_scores or {})} bars")
+            if has_bar_data:
+                # Store and emit meaningful data
+                self.last_meaningful_data[card_id] = update_data.copy()
+                self.socketio.emit('card_update', update_data)
+            else:
+                # Preserve previous bar scores if available
+                if card_id in self.last_meaningful_data:
+                    meaningful_data = self.last_meaningful_data[card_id].copy()
+                    meaningful_data['price'] = tick.close
+                    meaningful_data['timestamp'] = update_data['timestamp']
+                    meaningful_data['ohlc'] = update_data['ohlc']
+                    meaningful_data['volume'] = update_data['volume']
 
-            # Send to browser
-            self.socketio.emit('card_update', update_data)
+                    self.socketio.emit('card_update', meaningful_data)
+                else:
+                    # No previous data - send as-is
+                    self.socketio.emit('card_update', update_data)
 
         except Exception as e:
             logger.error(f"Error sending indicator data for {card_id}: {e}")
 
     def price_update(self, card_id: str, symbol: str, tick: TickData) -> None:
         """
-        Send price update to browser (when indicators aren't ready yet)
+        Send price update to browser
 
         Args:
             card_id: Card identifier
@@ -70,23 +86,30 @@ class UIExternalTool:
             tick: Current tick data
         """
         try:
-            # Prepare simple price update
-            update_data = {
-                'card_id': card_id,
-                'symbol': symbol,
-                'price': tick.close,
-                'timestamp': self._format_timestamp(tick.timestamp),
-                'ohlc': [tick.open, tick.high, tick.low, tick.close],
-                'volume': tick.volume,
-                'indicators': {},
-                'bar_scores': {},
-                'raw_indicators': {}
-            }
+            # Preserve bar scores if available
+            if card_id in self.last_meaningful_data:
+                meaningful_data = self.last_meaningful_data[card_id].copy()
+                meaningful_data['price'] = tick.close
+                meaningful_data['timestamp'] = self._format_timestamp(tick.timestamp)
+                meaningful_data['ohlc'] = [tick.open, tick.high, tick.low, tick.close]
+                meaningful_data['volume'] = tick.volume
 
-            logger.debug(f"💰 EMITTING price_update: {card_id} ({symbol}) @ ${tick.close:.2f}")
+                self.socketio.emit('card_update', meaningful_data)
+            else:
+                # Send basic price update
+                update_data = {
+                    'card_id': card_id,
+                    'symbol': symbol,
+                    'price': tick.close,
+                    'timestamp': self._format_timestamp(tick.timestamp),
+                    'ohlc': [tick.open, tick.high, tick.low, tick.close],
+                    'volume': tick.volume,
+                    'indicators': {},
+                    'bar_scores': {},
+                    'raw_indicators': {}
+                }
 
-            # Send to browser
-            self.socketio.emit('card_update', update_data)
+                self.socketio.emit('card_update', update_data)
 
         except Exception as e:
             logger.error(f"Error sending price update for {card_id}: {e}")
@@ -96,3 +119,10 @@ class UIExternalTool:
         if isinstance(timestamp, datetime):
             return timestamp.isoformat()
         return str(timestamp)
+
+    def clear_meaningful_data(self, card_id: str = None) -> None:
+        """Clear stored meaningful data"""
+        if card_id:
+            self.last_meaningful_data.pop(card_id, None)
+        else:
+            self.last_meaningful_data.clear()

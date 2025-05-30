@@ -1,8 +1,8 @@
 # File: BerlinProject/src/data_streamer/data_streamer.py
-# UPDATED VERSION for proper candle-based indicator calculation
+# PRODUCTION VERSION - Clean, no debug code
 
 """
-DataStreamer with proper candle-based indicator processing
+DataStreamer with candle-based indicator processing
 """
 
 import logging
@@ -27,7 +27,7 @@ class DataStreamer:
         Initialize DataStreamer
 
         Args:
-            card_id: Unique card identifier (card1, card2, etc.)
+            card_id: Unique card identifier
             symbol: Stock symbol
             monitor_config: Monitor configuration
         """
@@ -41,11 +41,9 @@ class DataStreamer:
         # External tools
         self.external_tools: List[ExternalTool] = []
 
-        logger.info(f"DataStreamer initialized: {card_id} ({symbol})")
-
     def process_candle_completion(self, historical_data: List[TickData], completed_candle: TickData) -> None:
         """
-        Process indicators when a candle completes (not on every PIP)
+        Process indicators when a candle completes
 
         Args:
             historical_data: Historical candle data for indicator calculation
@@ -55,16 +53,11 @@ class DataStreamer:
             return
 
         try:
-            logger.info(f"DataStreamer {self.card_id}: Processing candle completion for {self.symbol}")
-
             # Use historical data + completed candle for indicator calculation
             full_history = historical_data + [completed_candle]
 
             # Calculate indicators using the full history
             indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators(full_history)
-
-            logger.info(f"DataStreamer {self.card_id}: Calculated indicators on candle completion - "
-                        f"indicators: {len(indicator_results)}, bars: {len(bar_scores or {})}")
 
             # Send to external tools
             for tool in self.external_tools:
@@ -79,13 +72,13 @@ class DataStreamer:
 
         except Exception as e:
             logger.error(f"Error processing candle completion for {self.card_id}: {e}")
-            import traceback
-            traceback.print_exc()
 
     def process_tick(self, tick: TickData) -> None:
         """
-        Legacy method - now only used for initial data processing
-        For live data, use process_candle_completion() instead
+        Process initial tick data (for backward compatibility)
+
+        Args:
+            tick: TickData to process
         """
         if not tick:
             return
@@ -94,17 +87,13 @@ class DataStreamer:
         if not hasattr(tick, 'symbol') or not tick.symbol:
             tick.symbol = self.symbol
 
-        logger.debug(f"DataStreamer {self.card_id}: Processing initial tick for {self.symbol} @ ${tick.close:.2f}")
-
-        # For initial data processing, still calculate indicators
+        # For initial data processing, calculate indicators
         if self.indicators:
             try:
-                # Calculate indicators using just this tick (for initial display)
+                # Calculate indicators using just this tick
                 indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators([tick])
 
                 if indicator_results:
-                    logger.info(f"DataStreamer {self.card_id}: Calculated initial indicators")
-
                     # Send to external tools
                     for tool in self.external_tools:
                         tool.indicator_vector(
@@ -130,7 +119,6 @@ class DataStreamer:
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool"""
         self.external_tools.append(external_tool)
-        logger.info(f"Connected external tool to DataStreamer {self.card_id}")
 
     def get_symbol(self) -> str:
         """Get symbol"""
