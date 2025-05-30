@@ -1,7 +1,8 @@
 # File: BerlinProject/src/data_streamer/data_streamer.py
+# UPDATED VERSION for proper candle-based indicator calculation
 
 """
-Simplified DataStreamer - back to basics with card_id
+DataStreamer with proper candle-based indicator processing
 """
 
 import logging
@@ -18,12 +19,12 @@ logger = logging.getLogger('DataStreamer')
 
 class DataStreamer:
     """
-    Simplified DataStreamer with card_id for routing
+    DataStreamer that processes indicators only on candle completion
     """
 
     def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration):
         """
-        Initialize simplified DataStreamer
+        Initialize DataStreamer
 
         Args:
             card_id: Unique card identifier (card1, card2, etc.)
@@ -40,18 +41,51 @@ class DataStreamer:
         # External tools
         self.external_tools: List[ExternalTool] = []
 
-        # Store recent data for indicator calculation
-        self.recent_ticks: List[TickData] = []
-        self.max_history: int = 500
-
         logger.info(f"DataStreamer initialized: {card_id} ({symbol})")
+
+    def process_candle_completion(self, historical_data: List[TickData], completed_candle: TickData) -> None:
+        """
+        Process indicators when a candle completes (not on every PIP)
+
+        Args:
+            historical_data: Historical candle data for indicator calculation
+            completed_candle: The newly completed candle
+        """
+        if not self.indicators or not historical_data:
+            return
+
+        try:
+            logger.info(f"DataStreamer {self.card_id}: Processing candle completion for {self.symbol}")
+
+            # Use historical data + completed candle for indicator calculation
+            full_history = historical_data + [completed_candle]
+
+            # Calculate indicators using the full history
+            indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators(full_history)
+
+            logger.info(f"DataStreamer {self.card_id}: Calculated indicators on candle completion - "
+                        f"indicators: {len(indicator_results)}, bars: {len(bar_scores or {})}")
+
+            # Send to external tools
+            for tool in self.external_tools:
+                tool.indicator_vector(
+                    card_id=self.card_id,
+                    symbol=self.symbol,
+                    tick=completed_candle,
+                    indicators=indicator_results,
+                    bar_scores=bar_scores,
+                    raw_indicators=raw_indicators
+                )
+
+        except Exception as e:
+            logger.error(f"Error processing candle completion for {self.card_id}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def process_tick(self, tick: TickData) -> None:
         """
-        Process a single tick - calculate indicators and send to UI
-
-        Args:
-            tick: Latest tick data
+        Legacy method - now only used for initial data processing
+        For live data, use process_candle_completion() instead
         """
         if not tick:
             return
@@ -60,41 +94,32 @@ class DataStreamer:
         if not hasattr(tick, 'symbol') or not tick.symbol:
             tick.symbol = self.symbol
 
-        # Add to recent ticks for indicator calculation
-        self.recent_ticks.append(tick)
+        logger.debug(f"DataStreamer {self.card_id}: Processing initial tick for {self.symbol} @ ${tick.close:.2f}")
 
-        # Limit history size
-        if len(self.recent_ticks) > self.max_history:
-            self.recent_ticks = self.recent_ticks[-self.max_history:]
-
-        logger.debug(f"DataStreamer {self.card_id}: Processing tick for {self.symbol} @ ${tick.close:.2f}")
-
-        # Calculate indicators if we have enough data
-        if self.indicators and len(self.recent_ticks) >= 20:  # Need minimum data for indicators
+        # For initial data processing, still calculate indicators
+        if self.indicators:
             try:
-                # Calculate indicators using recent tick history
-                indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators(self.recent_ticks)
+                # Calculate indicators using just this tick (for initial display)
+                indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators([tick])
 
-                logger.info(f"DataStreamer {self.card_id}: Calculated indicators - "
-                            f"indicators: {len(indicator_results)}, bars: {len(bar_scores or {})}")
+                if indicator_results:
+                    logger.info(f"DataStreamer {self.card_id}: Calculated initial indicators")
 
-                # Send to external tools
-                for tool in self.external_tools:
-                    tool.indicator_vector(
-                        card_id=self.card_id,
-                        symbol=self.symbol,
-                        tick=tick,
-                        indicators=indicator_results,
-                        bar_scores=bar_scores,
-                        raw_indicators=raw_indicators
-                    )
+                    # Send to external tools
+                    for tool in self.external_tools:
+                        tool.indicator_vector(
+                            card_id=self.card_id,
+                            symbol=self.symbol,
+                            tick=tick,
+                            indicators=indicator_results,
+                            bar_scores=bar_scores,
+                            raw_indicators=raw_indicators
+                        )
 
             except Exception as e:
-                logger.error(f"Error calculating indicators for {self.card_id}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"Error calculating initial indicators for {self.card_id}: {e}")
         else:
-            # Not enough data for indicators yet, just send price update
+            # No indicators, just send price update
             for tool in self.external_tools:
                 tool.price_update(
                     card_id=self.card_id,
@@ -106,12 +131,6 @@ class DataStreamer:
         """Connect an external tool"""
         self.external_tools.append(external_tool)
         logger.info(f"Connected external tool to DataStreamer {self.card_id}")
-
-    def get_current_price(self) -> float:
-        """Get current price"""
-        if self.recent_ticks:
-            return self.recent_ticks[-1].close
-        return 0.0
 
     def get_symbol(self) -> str:
         """Get symbol"""

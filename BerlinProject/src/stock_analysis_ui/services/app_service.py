@@ -1,8 +1,8 @@
 # File: BerlinProject/src/stock_analysis_ui/services/app_service.py
-# REPLACE YOUR ENTIRE data_service.py FILE WITH THIS
+# UPDATED VERSION with proper candle aggregation
 
 """
-Simplified application service - replaces the complex DataService
+Simplified application service with proper candle aggregation
 """
 
 import os
@@ -13,6 +13,7 @@ import threading
 from typing import Dict, List, Optional
 from datetime import datetime
 from flask_socketio import SocketIO
+from collections import defaultdict
 
 # Add project path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +21,7 @@ sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.data_streamer import DataStreamer
+from data_streamer.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
@@ -30,7 +32,7 @@ logger = logging.getLogger('AppService')
 
 class AppService:
     """
-    Simplified application service - replaces DataService
+    Simplified application service with proper candle aggregation
     """
 
     def __init__(self, socketio: SocketIO, auth_manager: SchwabAuthManager):
@@ -47,7 +49,10 @@ class AppService:
         self.card_counter: int = 0
         self.subscribed_symbols: set = set()
 
-        logger.info("AppService initialized - simplified version")
+        # Candle aggregators: symbol -> {timeframe -> CandleAggregator}
+        self.aggregators: Dict[str, Dict[str, CandleAggregator]] = defaultdict(dict)
+
+        logger.info("AppService initialized - simplified version with candle aggregation")
 
     def start_streaming(self) -> bool:
         """Initialize streaming infrastructure"""
@@ -81,7 +86,7 @@ class AppService:
 
     def add_combination(self, symbol: str, config_file: str) -> Dict:
         """
-        Add a new combination - auto-generate card ID
+        Add a new combination with proper candle aggregation
         """
         try:
             if not self.is_streaming:
@@ -99,6 +104,22 @@ class AppService:
 
             logger.info(f"Creating combination {card_id} for {symbol}")
 
+            # Get required timeframes from indicators
+            timeframes = monitor_config.get_time_increments()
+            logger.info(f"Required timeframes for {symbol}: {timeframes}")
+
+            # Create aggregators for each required timeframe
+            if symbol not in self.aggregators:
+                self.aggregators[symbol] = {}
+
+            for timeframe in timeframes:
+                if timeframe not in self.aggregators[symbol]:
+                    aggregator = CandleAggregator(symbol, timeframe)
+                    # Load historical data
+                    count = aggregator.prepopulate_data(self.data_link)
+                    self.aggregators[symbol][timeframe] = aggregator
+                    logger.info(f"Created aggregator for {symbol}-{timeframe}, loaded {count} candles")
+
             # Create simple DataStreamer
             data_streamer = DataStreamer(
                 card_id=card_id,
@@ -115,14 +136,15 @@ class AppService:
                 'symbol': symbol,
                 'config_file': config_file,
                 'monitor_config': monitor_config,
-                'data_streamer': data_streamer
+                'data_streamer': data_streamer,
+                'timeframes': timeframes
             }
 
-            # Subscribe to quotes for this symbol
+            # Subscribe to quotes for this symbol (only once per symbol)
             self._ensure_symbol_subscription(symbol)
 
-            # Start processing for this combination
-            self._start_combination_processing(card_id)
+            # Send initial data to UI
+            self._send_initial_data(card_id, symbol)
 
             logger.info(f"Successfully added combination: {card_id} ({symbol})")
 
@@ -138,6 +160,42 @@ class AppService:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}
+
+    def _send_initial_data(self, card_id: str, symbol: str):
+        """Send initial price data to UI"""
+        try:
+            # Get current price from any aggregator
+            current_price = 0.0
+            for timeframe, aggregator in self.aggregators[symbol].items():
+                current_candle = aggregator.get_current_candle()
+                if current_candle and current_candle.close > 0:
+                    current_price = current_candle.close
+                    break
+
+            if current_price > 0:
+                # Send initial price update
+                self.ui_tool.price_update(
+                    card_id=card_id,
+                    symbol=symbol,
+                    tick=self._create_mock_tick(symbol, current_price)
+                )
+                logger.info(f"Sent initial price for {card_id}: ${current_price:.2f}")
+        except Exception as e:
+            logger.error(f"Error sending initial data for {card_id}: {e}")
+
+    def _create_mock_tick(self, symbol: str, price: float):
+        """Create a mock tick for initial data"""
+        from environments.tick_data import TickData
+        return TickData(
+            symbol=symbol,
+            timestamp=datetime.now(),
+            open=price,
+            high=price,
+            low=price,
+            close=price,
+            volume=1000,
+            time_increment="1m"
+        )
 
     def remove_combination(self, card_id: str) -> Dict:
         """Remove a combination"""
@@ -168,47 +226,86 @@ class AppService:
             "total": len(self.combinations)
         }
 
-    def _start_combination_processing(self, card_id: str):
-        """Start processing for a specific combination"""
-
-        def process_combination():
-            combination = self.combinations[card_id]
-            symbol = combination['symbol']
-            data_streamer = combination['data_streamer']
-
-            # Load historical data
-            historical_data = self.data_link.load_historical_data(symbol, "1m")
-            if historical_data:
-                logger.info(f"Loaded {len(historical_data)} historical candles for {symbol}")
-
-                # Process with latest data to get initial values
-                if historical_data:
-                    latest_tick = historical_data[-1]
-                    data_streamer.process_tick(latest_tick)
-
-            # Set up live data processing
-            def quote_handler(quote_data):
-                if quote_data.get('key') == symbol:
-                    # Convert quote to tick data
-                    tick = self._quote_to_tick(quote_data)
-                    if tick:
-                        data_streamer.process_tick(tick)
-
-            self.data_link.add_quote_handler(quote_handler)
-
-        # Start in background thread
-        thread = threading.Thread(target=process_combination, daemon=True)
-        thread.start()
-
-    def _quote_to_tick(self, quote_data: Dict):
-        """Convert Schwab quote data to TickData"""
+    def _ensure_symbol_subscription(self, symbol: str):
+        """Subscribe to quotes for symbol and set up PIP processing"""
         try:
-            from environments.tick_data import TickData
+            if symbol not in self.subscribed_symbols:
+                # Subscribe to ALL symbols at once to avoid replacement
+                self.subscribed_symbols.add(symbol)
+                all_symbols = list(self.subscribed_symbols)
 
-            symbol = quote_data.get('key', '')
+                logger.info(f"Subscribing to all symbols: {all_symbols}")
+                self.data_link.subscribe_quotes(all_symbols)
+
+                # Set up quote handler for this symbol (only once)
+                def quote_handler(quote_data):
+                    if quote_data.get('key') == symbol:
+                        self._process_pip_for_symbol(symbol, quote_data)
+
+                self.data_link.add_quote_handler(quote_handler)
+                logger.info(f"Added quote handler for {symbol}")
+
+        except Exception as e:
+            logger.error(f"Error subscribing to symbol {symbol}: {e}")
+
+    def _process_pip_for_symbol(self, symbol: str, quote_data: Dict):
+        """Process PIP data for a symbol - aggregate into candles"""
+        try:
+            # Process PIP through all aggregators for this symbol
+            if symbol in self.aggregators:
+                for timeframe, aggregator in self.aggregators[symbol].items():
+                    # Process PIP and check if candle completed
+                    completed_candle = aggregator.process_pip(quote_data)
+
+                    if completed_candle:
+                        logger.info(f"Completed {timeframe} candle for {symbol}: ${completed_candle.close:.2f}")
+                        # Process indicators for combinations that use this timeframe
+                        self._process_completed_candle(symbol, timeframe, completed_candle)
+
+            # Also send current price updates to UI (for real-time price display)
+            self._send_current_price_updates(symbol, quote_data)
+
+        except Exception as e:
+            logger.error(f"Error processing PIP for {symbol}: {e}")
+
+    def _process_completed_candle(self, symbol: str, timeframe: str, completed_candle):
+        """Process indicators when a candle completes"""
+        try:
+            # Find combinations that use this symbol and have indicators for this timeframe
+            for card_id, combination in self.combinations.items():
+                if combination['symbol'] == symbol:
+                    # Check if this combination has indicators for this timeframe
+                    has_timeframe_indicators = any(
+                        getattr(ind, 'time_increment', '1m') == timeframe
+                        for ind in combination['monitor_config'].indicators
+                    )
+
+                    if has_timeframe_indicators:
+                        logger.info(f"Processing indicators for {card_id} on {timeframe} candle completion")
+
+                        # Get all historical data for this combination's timeframes
+                        historical_data = self._get_historical_data_for_combination(symbol, combination['timeframes'])
+
+                        # DEBUG: Check what we're passing
+                        logger.info(f"🔍 Passing {len(historical_data)} historical candles to {card_id}")
+                        if historical_data:
+                            logger.info(
+                                f"🔍 Sample candle: {historical_data[-1].symbol} @ ${historical_data[-1].close:.2f}")
+
+                        # Process indicators
+                        data_streamer = combination['data_streamer']
+                        data_streamer.process_candle_completion(historical_data, completed_candle)
+
+        except Exception as e:
+            logger.error(f"Error processing completed candle: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _send_current_price_updates(self, symbol: str, quote_data: Dict):
+        """Send current price updates to UI for real-time display"""
+        try:
+            # Extract price from quote
             price = None
-
-            # Try different price fields
             for field in ['3', '2', '1', '5']:
                 if field in quote_data:
                     try:
@@ -219,36 +316,38 @@ class AppService:
                         continue
 
             if not price:
-                return None
+                return
 
-            return TickData(
-                symbol=symbol,
-                timestamp=datetime.now(),
-                open=price,
-                high=price,
-                low=price,
-                close=price,
-                volume=int(quote_data.get('8', 0)),
-                time_increment="1m"
-            )
-        except Exception as e:
-            logger.error(f"Error converting quote to tick: {e}")
-            return None
+            # Create current tick
+            current_tick = self._create_mock_tick(symbol, price)
 
-    def _ensure_symbol_subscription(self, symbol: str):
-        """Subscribe to quotes for symbol"""
-        try:
-            if symbol not in self.subscribed_symbols:
-                # Subscribe to ALL symbols at once to avoid replacement
-                self.subscribed_symbols.add(symbol)
-                all_symbols = list(self.subscribed_symbols)
-
-                logger.info(f"Subscribing to all symbols: {all_symbols}")
-                self.data_link.subscribe_quotes(all_symbols)
-                logger.info(f"Subscribed to symbol: {symbol}")
+            # Send to all combinations with this symbol
+            for card_id, combination in self.combinations.items():
+                if combination['symbol'] == symbol:
+                    self.ui_tool.price_update(
+                        card_id=card_id,
+                        symbol=symbol,
+                        tick=current_tick
+                    )
 
         except Exception as e:
-            logger.error(f"Error subscribing to symbol {symbol}: {e}")
+            logger.error(f"Error sending current price updates: {e}")
+
+    def _get_historical_data_for_combination(self, symbol: str, timeframes: set) -> List:
+        """Get historical data for all timeframes used by a combination"""
+        historical_data = []
+
+        for timeframe in timeframes:
+            if symbol in self.aggregators and timeframe in self.aggregators[symbol]:
+                aggregator = self.aggregators[symbol][timeframe]
+                history = aggregator.get_history()
+                historical_data.extend(history)
+                logger.info(f"🔍 Added {len(history)} {timeframe} candles for {symbol}")
+
+        # Sort by timestamp
+        historical_data.sort(key=lambda x: x.timestamp)
+        logger.info(f"🔍 Total historical data for {symbol}: {len(historical_data)} candles")
+        return historical_data
 
     def _load_monitor_config(self, config_file: str) -> Optional[MonitorConfiguration]:
         """Load monitor configuration from JSON file"""
