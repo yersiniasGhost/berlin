@@ -148,6 +148,98 @@
             box-shadow: 0 4px 8px rgba(35, 134, 54, 0.3);
         }
 
+        .btn-secondary {
+            background: #21262d;
+            color: #e6edf3;
+            border-color: #30363d;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+            border-color: #484f58;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+
+        /* File Browser Styles */
+        .file-browser-section {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+        }
+
+        .file-browser-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .file-browser-header h4 {
+            color: #f0f6fc;
+            font-size: 1rem;
+        }
+
+        .file-path {
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: #161b22;
+            border-radius: 4px;
+        }
+
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            background: #0d1117;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #21262d;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-item:hover {
+            background: #161b22;
+        }
+
+        .file-item.selected {
+            background: #1f6feb;
+            color: #ffffff;
+        }
+
+        .file-icon {
+            margin-right: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .file-name {
+            flex: 1;
+            font-size: 0.875rem;
+        }
+
+        .file-info {
+            font-size: 0.75rem;
+            color: #7d8590;
+        }
+
         .cards-container {
             padding: 2rem;
             display: grid;
@@ -331,6 +423,10 @@
         .updating {
             animation: pulse 1.5s ease-in-out infinite;
         }
+
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -363,12 +459,28 @@
                     <label for="configSelect">Monitor Configuration</label>
                     <select id="configSelect">
                         <option value="">Select configuration...</option>
-                        {% for config in available_configs %}
-                        <option value="{{ config }}">{{ config }}</option>
-                        {% endfor %}
                     </select>
                 </div>
                 <button class="btn btn-primary" onclick="addCombination()">Add Card</button>
+            </div>
+
+            <!-- File Browser Section -->
+            <div class="file-browser-section">
+                <div class="file-browser-header">
+                    <h4>📁 Browse Configuration Files</h4>
+                    <button class="btn btn-secondary btn-small" onclick="refreshFileList()">🔄 Refresh</button>
+                </div>
+                <div class="file-path" id="currentPath">Loading...</div>
+                <div class="file-list" id="fileList">
+                    <div class="file-item">
+                        <span class="file-icon">📄</span>
+                        <span class="file-name">Loading files...</span>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button class="btn btn-secondary btn-small" onclick="goUpDirectory()" id="upButton">⬆️ Up</button>
+                    <button class="btn btn-primary btn-small" onclick="selectCurrentFile()" id="selectButton" disabled>✅ Select File</button>
+                </div>
             </div>
         </div>
     </div>
@@ -386,10 +498,14 @@
         // WebSocket connection
         const socket = io();
         let cards = {};
+        let currentDirectory = '';
+        let selectedFile = null;
+        let fileList = [];
 
         // Connection handling
         socket.on('connect', function() {
             updateConnectionStatus(true);
+            loadInitialData();
         });
 
         socket.on('disconnect', function() {
@@ -399,7 +515,6 @@
         // Card update
         socket.on('card_update', function(data) {
             const cardId = data.card_id;
-
             if (cardId) {
                 updateOrCreateCard(cardId, data);
             }
@@ -415,7 +530,173 @@
             showMessage(`Error: ${data.message}`, 'error');
         });
 
-        // UI Functions
+        // File Browser Functions
+        async function loadInitialData() {
+            await loadAvailableConfigs();
+            await refreshFileList();
+        }
+
+        async function loadAvailableConfigs() {
+            try {
+                const response = await fetch('/api/configs');
+                const data = await response.json();
+
+                const select = document.getElementById('configSelect');
+                select.innerHTML = '<option value="">Select configuration...</option>';
+
+                if (data.success && data.configs) {
+                    data.configs.forEach(config => {
+                        const option = document.createElement('option');
+                        option.value = config;
+                        option.textContent = config;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading configs:', error);
+            }
+        }
+
+        async function refreshFileList(path = '') {
+            try {
+                const response = await fetch(`/api/files/browse?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    showMessage(`Error browsing files: ${data.error}`, 'error');
+                    return;
+                }
+
+                currentDirectory = data.current_path;
+                document.getElementById('currentPath').textContent = currentDirectory || 'Select a directory';
+
+                renderFileList(data);
+
+                // Update up button
+                const upButton = document.getElementById('upButton');
+                upButton.disabled = !data.parent_path;
+
+            } catch (error) {
+                console.error('Error refreshing file list:', error);
+                showMessage('Error loading file list', 'error');
+            }
+        }
+
+        function renderFileList(data) {
+            const fileListContainer = document.getElementById('fileList');
+            fileListContainer.innerHTML = '';
+
+            // Add directories
+            if (data.directories) {
+                data.directories.forEach(dir => {
+                    const item = createFileItem('📁', dir.name, 'Directory', dir.path, 'directory');
+                    fileListContainer.appendChild(item);
+                });
+            }
+
+            // Add JSON files
+            if (data.files) {
+                data.files.forEach(file => {
+                    const icon = file.is_config ? '⚙️' : '📄';
+                    const size = file.size ? `${(file.size / 1024).toFixed(1)}KB` : '';
+                    const item = createFileItem(icon, file.name, size, file.path, 'file');
+                    fileListContainer.appendChild(item);
+                });
+            }
+
+            if ((!data.directories || data.directories.length === 0) &&
+                (!data.files || data.files.length === 0)) {
+                const emptyItem = document.createElement('div');
+                emptyItem.className = 'file-item';
+                emptyItem.innerHTML = '<span class="file-icon">📂</span><span class="file-name">No files found</span>';
+                fileListContainer.appendChild(emptyItem);
+            }
+        }
+
+        function createFileItem(icon, name, info, path, type) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.dataset.path = path;
+            item.dataset.type = type;
+            item.dataset.name = name;
+
+            item.innerHTML = `
+                <span class="file-icon">${icon}</span>
+                <span class="file-name">${name}</span>
+                <span class="file-info">${info}</span>
+            `;
+
+            item.addEventListener('click', () => {
+                if (type === 'directory') {
+                    refreshFileList(path);
+                } else {
+                    selectFile(item, name, path);
+                }
+            });
+
+            return item;
+        }
+
+        function selectFile(item, name, path) {
+            // Remove previous selection
+            document.querySelectorAll('.file-item').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Select current item
+            item.classList.add('selected');
+            selectedFile = { name, path };
+
+            // Enable select button
+            const selectButton = document.getElementById('selectButton');
+            selectButton.disabled = false;
+            selectButton.textContent = `✅ Select ${name}`;
+        }
+
+        function goUpDirectory() {
+            const pathParts = currentDirectory.split('/');
+            pathParts.pop();
+            const parentPath = pathParts.join('/');
+            refreshFileList(parentPath);
+        }
+
+        async function selectCurrentFile() {
+            if (!selectedFile) return;
+
+            try {
+                // Validate the file
+                const response = await fetch('/api/files/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        file_path: selectedFile.path
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.valid) {
+                    // Add to dropdown
+                    const select = document.getElementById('configSelect');
+                    const option = document.createElement('option');
+                    option.value = selectedFile.path;
+                    option.textContent = `${selectedFile.name} (${result.summary.name})`;
+                    option.selected = true;
+                    select.appendChild(option);
+
+                    showMessage(`Selected: ${selectedFile.name} (${result.summary.indicators} indicators, ${result.summary.bars.length} bars)`, 'success');
+                } else {
+                    showMessage(`Invalid config file: ${result.error}`, 'error');
+                }
+
+            } catch (error) {
+                showMessage(`Error validating file: ${error.message}`, 'error');
+            }
+        }
+
+        // Rest of your existing UI functions...
         function updateConnectionStatus(connected) {
             const statusDot = document.getElementById('connectionStatus');
             const statusText = document.getElementById('connectionText');
@@ -464,46 +745,70 @@
             updateCardData(card, data);
         }
 
-        function createCard(cardId, data) {
-            const container = document.getElementById('cardsContainer');
+    function createCard(cardId, data) {
+        const container = document.getElementById('cardsContainer');
 
-            // Remove loading message
-            const loading = container.querySelector('.loading');
-            if (loading) {
-                loading.remove();
+        // Remove loading message
+        const loading = container.querySelector('.loading');
+        if (loading) {
+            loading.remove();
+        }
+
+        const card = document.createElement('div');
+        card.className = 'trading-card';
+        card.id = cardId;
+
+        // ADD: Make card clickable
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function(e) {
+            // Don't trigger on close button
+            if (!e.target.classList.contains('card-close')) {
+                openCardDetails(cardId);
+            }
+        });
+
+        card.innerHTML = `
+            <div class="card-header">
+                <div>
+                    <div class="card-title">${data.symbol || 'Unknown'}</div>
+                    <div class="card-subtitle">Trading Signals - Click for details</div>
+                    <div class="card-id">${cardId}</div>
+                </div>
+                <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
+            </div>
+            <!-- rest of card HTML -->
+        `;
+
+        container.appendChild(card);
+        updateCardsCount();
+        return card;
+    }
+
+    # ADD: Function to open card details
+    async function openCardDetails(cardId) {
+        try {
+            // Show loading indicator
+            showMessage(`Loading details for ${cardId}...`, 'info');
+
+            // Fetch card details
+            const response = await fetch(`/api/combinations/${cardId}/details`);
+            const data = await response.json();
+
+            if (data.success) {
+                // Navigate to details page
+                window.location.href = `/card-details.html?card_id=${cardId}`;
+
+                // Or open in new tab:
+                // window.open(`/card-details.html?card_id=${cardId}`, '_blank');
+
+            } else {
+                showMessage(`Error loading details: ${data.error}`, 'error');
             }
 
-            const card = document.createElement('div');
-            card.className = 'trading-card';
-            card.id = cardId;
-
-            card.innerHTML = `
-                <div class="card-header">
-                    <div>
-                        <div class="card-title">${data.symbol || 'Unknown'}</div>
-                        <div class="card-subtitle">Trading Signals</div>
-                        <div class="card-id">${cardId}</div>
-                    </div>
-                    <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
-                </div>
-
-                <div class="price-display">
-                    $0.00
-                </div>
-
-                <div class="bars-container" id="bars-${cardId}">
-                    <div class="bar-item"><span class="bar-label">Loading...</span></div>
-                </div>
-
-                <div class="indicators-summary">
-                    0 Active Indicators
-                </div>
-            `;
-
-            container.appendChild(card);
-            updateCardsCount();
-            return card;
+        } catch (error) {
+            showMessage(`Error: ${error.message}`, 'error');
         }
+    }
 
         function updateCardData(card, data) {
             // Update price
@@ -511,7 +816,7 @@
             if (priceDisplay && data.price !== undefined) {
                 const priceClass = data.price >= 0 ? '' : 'negative';
                 priceDisplay.className = `price-display ${priceClass}`;
-                priceDisplay.textContent = `${data.price.toFixed(2)}`;
+                priceDisplay.textContent = `$${data.price.toFixed(2)}`;
             }
 
             // Update bar scores
@@ -588,7 +893,7 @@
                     showMessage(`Successfully added ${symbol} as ${result.card_id}`, 'success');
                     // Clear form
                     document.getElementById('symbolInput').value = '';
-                    document.getElementById('configSelect').value = '';
+                    document.getElementById('configSelect').selectedIndex = 0;
                 } else {
                     showMessage(`Error: ${result.error}`, 'error');
                 }
@@ -658,7 +963,7 @@
             }
         });
 
-        // Request initial status on page load
+        // Load initial status
         window.addEventListener('load', function() {
             fetch('/api/status')
                 .then(response => response.json())

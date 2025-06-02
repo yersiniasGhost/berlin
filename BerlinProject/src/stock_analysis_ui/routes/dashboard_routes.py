@@ -33,3 +33,9 @@ def combination_detail(combination_id: str):
 
     return render_template('combination_detail.html',
                            combination_data=combination_data)
+
+
+@dashboard_bp.route('/card-details.html')
+def card_details():
+    """Serve the card details page"""
+    return render_template('card_details.html')

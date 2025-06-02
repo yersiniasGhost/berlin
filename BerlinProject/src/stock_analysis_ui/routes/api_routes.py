@@ -6,7 +6,11 @@ Simplified API routes for AppService
 """
 
 import logging
+from datetime import datetime
+
 from flask import Blueprint, request, jsonify, current_app
+
+from data_streamer import IndicatorProcessor
 
 logger = logging.getLogger('APIRoutes')
 api_bp = Blueprint('api', __name__)
@@ -146,4 +150,89 @@ def stop_streaming():
 
     except Exception as e:
         logger.error(f"Error stopping streaming: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/combinations/<card_id>/details')
+def get_card_details(card_id: str):
+    """Get detailed indicator history and current values for a specific card"""
+    try:
+        app_service = current_app.app_service
+
+        # Check if card exists
+        if card_id not in app_service.combinations:
+            return jsonify({'success': False, 'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        symbol = combination['symbol']
+        monitor_config = combination['monitor_config']
+        data_streamer = combination['data_streamer']
+
+        # Get all historical data across timeframes
+        all_historical_data = []
+        aggregator_info = {}
+
+        for timeframe in combination['timeframes']:
+            if symbol in app_service.aggregators and timeframe in app_service.aggregators[symbol]:
+                aggregator = app_service.aggregators[symbol][timeframe]
+                history = aggregator.get_history()
+                current_candle = aggregator.get_current_candle()
+
+                # Store aggregator info
+                aggregator_info[timeframe] = {
+                    'history_count': len(history),
+                    'current_price': current_candle.close if current_candle else 0,
+                    'latest_timestamp': history[-1].timestamp.isoformat() if history else None
+                }
+
+                # Add to combined history
+                all_historical_data.extend(history)
+
+        # Sort historical data by timestamp
+        all_historical_data.sort(key=lambda x: x.timestamp)
+
+        # Calculate indicator history over time
+        indicator_history = app_service._calculate_indicator_history(
+            all_historical_data, monitor_config, lookback_periods=50
+        )
+
+        # Get current indicator values
+        processor = IndicatorProcessor(monitor_config)
+        current_indicators, current_raw, current_bars = processor.calculate_indicators(all_historical_data)
+
+        # Build response
+        response_data = {
+            'success': True,
+            'card_info': {
+                'card_id': card_id,
+                'symbol': symbol,
+                'config_name': monitor_config.name,
+                'timeframes': list(combination['timeframes']),
+                'total_indicators': len(monitor_config.indicators)
+            },
+            'aggregator_info': aggregator_info,
+            'current_values': {
+                'indicators': current_indicators,
+                'raw_indicators': current_raw,
+                'bar_scores': current_bars,
+                'timestamp': datetime.now().isoformat()
+            },
+            'indicator_history': indicator_history,
+            'indicator_definitions': [
+                {
+                    'name': ind.name,
+                    'function': ind.function,
+                    'timeframe': getattr(ind, 'time_increment', '1m'),
+                    'parameters': ind.parameters
+                }
+                for ind in monitor_config.indicators
+            ]
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        logger.error(f"Error getting card details for {card_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
