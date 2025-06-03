@@ -323,24 +323,30 @@
             color: #da3633;
         }
 
+        /* UPDATED BAR STYLES FOR RESPONSIVE VISUAL BARS */
         .bars-container {
             margin-bottom: 1.5rem;
         }
 
-        .bar-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.75rem;
+        .responsive-bar {
+            margin-bottom: 1rem;
             padding: 0.75rem;
             background: #0d1117;
             border: 1px solid #21262d;
             border-radius: 8px;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
         }
 
-        .bar-item:hover {
+        .responsive-bar:hover {
             border-color: #30363d;
+            transform: scale(1.02);
+        }
+
+        .bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
         }
 
         .bar-label {
@@ -349,32 +355,85 @@
             font-size: 0.875rem;
         }
 
-        .bar-value {
+        .bar-value-text {
             font-weight: 600;
-            padding: 0.375rem 0.75rem;
-            border-radius: 6px;
-            min-width: 70px;
-            text-align: center;
-            font-size: 0.875rem;
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.75rem;
         }
 
-        .bar-value.positive {
-            background: rgba(35, 134, 54, 0.15);
-            color: #238636;
-            border: 1px solid rgba(35, 134, 54, 0.3);
+        .bar-track {
+            height: 12px;
+            background: #21262d;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #30363d;
         }
 
-        .bar-value.negative {
-            background: rgba(218, 54, 51, 0.15);
-            color: #da3633;
-            border: 1px solid rgba(218, 54, 51, 0.3);
+        .bar-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: all 0.5s ease;
+            position: relative;
+            background: linear-gradient(90deg, var(--bar-color) 0%, var(--bar-color-light) 100%);
+            box-shadow: 0 0 8px rgba(var(--bar-glow), 0.3);
         }
 
-        .bar-value.neutral {
-            background: rgba(125, 133, 144, 0.15);
-            color: #7d8590;
-            border: 1px solid rgba(125, 133, 144, 0.3);
+        .bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* Color classes for different value ranges */
+        .bar-green {
+            --bar-color: #238636;
+            --bar-color-light: #2ea043;
+            --bar-glow: 35, 134, 54;
+        }
+
+        .bar-green .bar-value-text {
+            color: #56d364;
+        }
+
+        .bar-yellow {
+            --bar-color: #d4a017;
+            --bar-color-light: #f9c74f;
+            --bar-glow: 212, 160, 23;
+        }
+
+        .bar-yellow .bar-value-text {
+            color: #f9c74f;
+        }
+
+        .bar-neutral {
+            --bar-color: #7d8590;
+            --bar-color-light: #8b949e;
+            --bar-glow: 125, 133, 144;
+        }
+
+        .bar-neutral .bar-value-text {
+            color: #8b949e;
+        }
+
+        .bar-red {
+            --bar-color: #da3633;
+            --bar-color-light: #ff7b72;
+            --bar-glow: 218, 54, 51;
+        }
+
+        .bar-red .bar-value-text {
+            color: #ff7b72;
         }
 
         .indicators-summary {
@@ -529,6 +588,40 @@
         socket.on('error', function(data) {
             showMessage(`Error: ${data.message}`, 'error');
         });
+
+        // UPDATED: Responsive Bar Rendering Function
+        function renderBarScores(barScores) {
+            if (!barScores || Object.keys(barScores).length === 0) {
+                return '<div class="responsive-bar"><div class="bar-header"><span class="bar-label">No bar data</span></div></div>';
+            }
+
+            return Object.entries(barScores).map(([name, value]) => {
+                // Determine color class based on value
+                let colorClass = 'bar-neutral';
+                if (value >= 0.7) {
+                    colorClass = 'bar-green';
+                } else if (value >= 0.3) {
+                    colorClass = 'bar-yellow';
+                } else if (value < 0) {
+                    colorClass = 'bar-red';
+                }
+
+                // Calculate bar width (0-100%)
+                const barWidth = Math.min(Math.abs(value) * 100, 100);
+
+                return `
+                    <div class="responsive-bar ${colorClass}">
+                        <div class="bar-header">
+                            <span class="bar-label">${formatBarName(name)}</span>
+                            <span class="bar-value-text">${value.toFixed(3)}</span>
+                        </div>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width: ${barWidth}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
 
         // File Browser Functions
         async function loadInitialData() {
@@ -840,22 +933,6 @@
 
             // Store card data
             cards[card.id] = data;
-        }
-
-        function renderBarScores(barScores) {
-            if (!barScores || Object.keys(barScores).length === 0) {
-                return '<div class="bar-item"><span class="bar-label">No bar data</span></div>';
-            }
-
-            return Object.entries(barScores).map(([name, value]) => {
-                const valueClass = value > 0.1 ? 'positive' : value < -0.1 ? 'negative' : 'neutral';
-                return `
-                    <div class="bar-item">
-                        <span class="bar-label">${formatBarName(name)}</span>
-                        <span class="bar-value ${valueClass}">${value.toFixed(3)}</span>
-                    </div>
-                `;
-            }).join('');
         }
 
         function formatBarName(name) {
