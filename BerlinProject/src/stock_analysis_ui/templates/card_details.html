@@ -196,6 +196,13 @@
                         legend: { display: true }
                     },
                     scales: {
+                        x: {
+                            ticks: {
+                                // Show EVERY tick (every minute)
+                                maxTicksLimit: 200,  // Allow many more ticks
+                                maxRotation: 90      // Rotate vertically to fit
+                            }
+                        },
                         y: { beginAtZero: true }
                     }
                 }
@@ -225,6 +232,13 @@
                         legend: { display: true }
                     },
                     scales: {
+                        x: {
+                            ticks: {
+                                // Show EVERY tick (every minute)
+                                maxTicksLimit: 200,  // Allow many more ticks
+                                maxRotation: 90      // Rotate vertically to fit
+                            }
+                        },
                         y: { beginAtZero: true }
                     }
                 }

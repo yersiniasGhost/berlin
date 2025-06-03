@@ -14,7 +14,7 @@ from datetime import datetime
 from flask_socketio import SocketIO
 from collections import defaultdict
 
-from data_streamer import IndicatorProcessor
+from data_streamer.indicator_processor import IndicatorProcessor
 
 # Add project path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -260,40 +260,34 @@ class AppService:
         try:
             print(f"🕯️ {symbol}-{timeframe} candle completed @ ${completed_candle.close:.2f}")
 
-            processed_combinations = 0
             for card_id, combination in self.combinations.items():
                 if combination['symbol'] == symbol:
 
-                    # NEW LOGIC: Only process indicators that match THIS timeframe
+                    # ONLY process indicators that match THIS specific timeframe
                     timeframe_indicators = [
                         ind for ind in combination['monitor_config'].indicators
                         if getattr(ind, 'time_increment', '1m') == timeframe
                     ]
 
                     if timeframe_indicators:
-                        processed_combinations += 1
-
                         print(f"⚙️ Processing {len(timeframe_indicators)} {timeframe} indicators for {card_id}")
-                        for ind in timeframe_indicators:
-                            print(f"   📊 {ind.name} ({timeframe})")
 
-                        # Get historical data for ALL timeframes (for context)
-                        historical_data = self._get_historical_data_for_combination(symbol, combination['timeframes'])
+                        # Get PURE timeframe-specific historical data
+                        historical_data = self._get_pure_timeframe_data(symbol, timeframe)
 
-                        # Create a timeframe-specific processor
+                        # Create timeframe-specific monitor config
                         timeframe_config = MonitorConfiguration(
                             name=f"{combination['monitor_config'].name}_{timeframe}",
                             indicators=timeframe_indicators
                         )
-                        # Copy bars configuration
                         if hasattr(combination['monitor_config'], 'bars'):
                             timeframe_config.bars = combination['monitor_config'].bars
 
-                        # Process only these indicators
+                        # Process indicators using ONLY this timeframe's data
                         processor = IndicatorProcessor(timeframe_config)
                         indicator_results, raw_indicators, bar_scores = processor.calculate_indicators(historical_data)
 
-                        # Send to UI tool
+                        # Send results to UI
                         for tool in combination['data_streamer'].external_tools:
                             tool.indicator_vector(
                                 card_id=card_id,
@@ -303,8 +297,6 @@ class AppService:
                                 bar_scores=bar_scores,
                                 raw_indicators=raw_indicators
                             )
-
-            print(f"🔄 Processed {processed_combinations} combinations for {symbol}-{timeframe}")
 
         except Exception as e:
             logger.error(f"Error processing completed candle: {e}")
@@ -449,19 +441,23 @@ class AppService:
             logger.error(f"Error stopping streaming: {e}")
             return False
 
+
+
     def _calculate_indicator_history(self, historical_data: List[TickData],
                                      monitor_config: MonitorConfiguration,
-                                     lookback_periods: int = 50) -> Dict:
-        """Calculate indicator values over historical periods"""
+                                     lookback_periods: int = 120) -> Dict:
+        """
+        Calculate indicator values with TRUE 1-minute granularity
+        """
         try:
-            if len(historical_data) < lookback_periods:
-                lookback_periods = len(historical_data)
+            if len(historical_data) < 30:
+                return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}
 
             indicator_history = {
                 'timestamps': [],
                 'indicators': {},
                 'bar_scores': {},
-                'periods': lookback_periods
+                'periods': 0
             }
 
             # Initialize indicator arrays
@@ -473,34 +469,75 @@ class AppService:
                 for bar_name in monitor_config.bars.keys():
                     indicator_history['bar_scores'][bar_name] = []
 
-            # Calculate indicators for each historical period
             processor = IndicatorProcessor(monitor_config)
 
-            # Sample historical data at regular intervals
-            step_size = max(1, len(historical_data) // lookback_periods)
+            # FIXED: Process EVERY data point from recent history
+            # This ensures 1-minute granularity in the results
+            min_data_for_calculation = 30
 
-            for i in range(lookback_periods, len(historical_data), step_size):
+            # Take the last N data points for minute-by-minute sampling
+            recent_data_size = min(lookback_periods, len(historical_data) - min_data_for_calculation)
+            start_index = len(historical_data) - recent_data_size
+
+            print(f"📊 Processing {recent_data_size} recent data points for minute-by-minute history")
+
+            # Process EVERY recent data point (no skipping!)
+            for i in range(start_index, len(historical_data)):
                 # Get data up to this point
-                data_slice = historical_data[:i]
+                data_slice = historical_data[:i + 1]
 
-                if len(data_slice) > 20:  # Ensure enough data for calculation
-                    indicators, raw_indicators, bar_scores = processor.calculate_indicators(data_slice)
+                if len(data_slice) >= min_data_for_calculation:
+                    try:
+                        indicators, raw_indicators, bar_scores = processor.calculate_indicators(data_slice)
 
-                    # Store timestamp
-                    indicator_history['timestamps'].append(data_slice[-1].timestamp.isoformat())
+                        # Store timestamp
+                        timestamp = data_slice[-1].timestamp
+                        indicator_history['timestamps'].append(timestamp.isoformat())
 
-                    # Store indicator values
-                    for indicator_name in indicator_history['indicators'].keys():
-                        value = indicators.get(indicator_name, 0.0)
-                        indicator_history['indicators'][indicator_name].append(value)
+                        # Store indicator values
+                        for indicator_name in indicator_history['indicators'].keys():
+                            value = indicators.get(indicator_name, 0.0)
+                            indicator_history['indicators'][indicator_name].append(value)
 
-                    # Store bar scores
-                    for bar_name in indicator_history['bar_scores'].keys():
-                        value = bar_scores.get(bar_name, 0.0)
-                        indicator_history['bar_scores'][bar_name].append(value)
+                        # Store bar scores
+                        for bar_name in indicator_history['bar_scores'].keys():
+                            value = bar_scores.get(bar_name, 0.0)
+                            indicator_history['bar_scores'][bar_name].append(value)
+
+                    except Exception as e:
+                        logger.error(f"Error calculating indicators for history point {i}: {e}")
+
+            indicator_history['periods'] = len(indicator_history['timestamps'])
+            print(f"📈 Generated {indicator_history['periods']} minute-by-minute history points")
 
             return indicator_history
 
         except Exception as e:
             logger.error(f"Error calculating indicator history: {e}")
             return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}
+
+    def _get_pure_timeframe_data(self, symbol: str, timeframe: str) -> List[TickData]:
+        """
+        Get PURE historical data for ONE specific timeframe only
+
+        For 15m indicator: Returns ONLY 15m candles
+        """
+        if symbol not in self.aggregators or timeframe not in self.aggregators[symbol]:
+            return []
+
+        aggregator = self.aggregators[symbol][timeframe]
+
+        # Get pure timeframe history
+        history = aggregator.get_history().copy()
+
+        # Add current candle if exists
+        current = aggregator.get_current_candle()
+        if current:
+            history.append(current)
+
+        # Ensure all ticks have correct timeframe marker
+        for tick in history:
+            tick.time_increment = timeframe
+
+        print(f"📊 Pure {timeframe} data: {len(history)} candles for {symbol}")
+        return history

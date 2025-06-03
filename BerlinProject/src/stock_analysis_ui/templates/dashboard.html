@@ -745,70 +745,72 @@
             updateCardData(card, data);
         }
 
-    function createCard(cardId, data) {
-        const container = document.getElementById('cardsContainer');
+        function createCard(cardId, data) {
+            const container = document.getElementById('cardsContainer');
 
-        // Remove loading message
-        const loading = container.querySelector('.loading');
-        if (loading) {
-            loading.remove();
-        }
-
-        const card = document.createElement('div');
-        card.className = 'trading-card';
-        card.id = cardId;
-
-        // ADD: Make card clickable
-        card.style.cursor = 'pointer';
-        card.addEventListener('click', function(e) {
-            // Don't trigger on close button
-            if (!e.target.classList.contains('card-close')) {
-                openCardDetails(cardId);
+            // Remove loading message
+            const loading = container.querySelector('.loading');
+            if (loading) {
+                loading.remove();
             }
-        });
 
-        card.innerHTML = `
-            <div class="card-header">
-                <div>
-                    <div class="card-title">${data.symbol || 'Unknown'}</div>
-                    <div class="card-subtitle">Trading Signals - Click for details</div>
-                    <div class="card-id">${cardId}</div>
+            const card = document.createElement('div');
+            card.className = 'trading-card';
+            card.id = cardId;
+
+            // Make card clickable
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', function(e) {
+                // Don't trigger on close button
+                if (!e.target.classList.contains('card-close')) {
+                    openCardDetails(cardId);
+                }
+            });
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">${data.symbol || 'Unknown'}</div>
+                        <div class="card-subtitle">Trading Signals - Click for details</div>
+                        <div class="card-id">${cardId}</div>
+                    </div>
+                    <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
                 </div>
-                <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
-            </div>
-            <!-- rest of card HTML -->
-        `;
+                <div class="price-display">$0.00</div>
+                <div class="bars-container"></div>
+                <div class="indicators-summary">0 Active Indicators</div>
+            `;
 
-        container.appendChild(card);
-        updateCardsCount();
-        return card;
-    }
-
-    # ADD: Function to open card details
-    async function openCardDetails(cardId) {
-        try {
-            // Show loading indicator
-            showMessage(`Loading details for ${cardId}...`, 'info');
-
-            // Fetch card details
-            const response = await fetch(`/api/combinations/${cardId}/details`);
-            const data = await response.json();
-
-            if (data.success) {
-                // Navigate to details page
-                window.location.href = `/card-details.html?card_id=${cardId}`;
-
-                // Or open in new tab:
-                // window.open(`/card-details.html?card_id=${cardId}`, '_blank');
-
-            } else {
-                showMessage(`Error loading details: ${data.error}`, 'error');
-            }
-
-        } catch (error) {
-            showMessage(`Error: ${error.message}`, 'error');
+            container.appendChild(card);
+            updateCardsCount();
+            return card;
         }
-    }
+
+        // Function to open card details
+        async function openCardDetails(cardId) {
+            try {
+                // Show loading indicator
+                showMessage(`Loading details for ${cardId}...`, 'info');
+
+                // Fetch card details
+                const response = await fetch(`/api/combinations/${cardId}/details`);
+                const data = await response.json();
+
+                if (data.success) {
+                    // Navigate to details page
+                    window.location.href = `/card-details.html?card_id=${cardId}`;
+
+                    // Or open in new tab:
+                    // window.open(`/card-details.html?card_id=${cardId}`, '_blank');
+
+                } else {
+                    showMessage(`Error loading details: ${data.error}`, 'error');
+                }
+
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
 
         function updateCardData(card, data) {
             // Update price

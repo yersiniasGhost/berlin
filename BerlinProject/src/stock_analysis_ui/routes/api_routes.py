@@ -10,7 +10,7 @@ from datetime import datetime
 
 from flask import Blueprint, request, jsonify, current_app
 
-from data_streamer import IndicatorProcessor
+from data_streamer.indicator_processor import IndicatorProcessor
 
 logger = logging.getLogger('APIRoutes')
 api_bp = Blueprint('api', __name__)

@@ -3,6 +3,7 @@ WebSocket event handlers for real-time communication with simple ID routing
 """
 
 import logging
+from datetime import datetime
 from flask_socketio import emit
 
 logger = logging.getLogger('WebSocketRoutes')
@@ -35,7 +36,7 @@ def register_websocket_events(socketio, app_service):
                 'streaming': is_streaming,
                 'authenticated': is_authenticated,
                 'message': 'Connected to trading dashboard',
-                'timestamp': datetime.now().isoformat() if 'datetime' in globals() else None
+                'timestamp': datetime.now().isoformat()
             }
 
             logger.info(f"Sending initial data: {len(initial_data['combinations'])} combinations, streaming: {is_streaming}")
