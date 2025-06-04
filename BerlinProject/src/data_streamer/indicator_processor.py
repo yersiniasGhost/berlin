@@ -51,15 +51,21 @@ class IndicatorProcessor:
         """
         Calculate fresh values for indicators that match the completed timeframe
         """
+        print(f"🔧 CALCULATING FRESH INDICATORS for {completed_timeframe}")  # DEBUG
+
         for indicator_def in self.config.indicators:
             indicator_timeframe = getattr(indicator_def, 'time_increment', '1m')
+            print(
+                f"🔧 Checking indicator: {indicator_def.name} ({indicator_timeframe}) vs completed: {completed_timeframe}")  # DEBUG
 
             # Only calculate if this indicator matches the completed timeframe
             if indicator_timeframe == completed_timeframe:
+                print(f"🔧 ✅ TIMEFRAME MATCH! Calculating {indicator_def.name}")  # DEBUG
 
                 # Get the appropriate candle data for this timeframe
                 if indicator_timeframe in all_candle_data:
                     candle_data = all_candle_data[indicator_timeframe]
+                    print(f"🔧 Using {len(candle_data)} {indicator_timeframe} candles for {indicator_def.name}")  # DEBUG
 
                     if len(candle_data) >= 20:  # Minimum data required
                         try:
@@ -67,24 +73,78 @@ class IndicatorProcessor:
                             result = self._calculate_single_indicator(candle_data, indicator_def)
 
                             if result is not None and isinstance(result, np.ndarray) and len(result) > 0:
-                                raw_value = float(result[-1])
+                                # NEW LOGIC: Look for ANY trigger in the recent periods, not just current
+                                current_value = float(result[-1])
 
-                                # Store the fresh calculation
+                                # Look for triggers in the last few periods
+                                lookback_periods = min(3, len(result))  # Look back 3 periods
+                                recent_values = result[-lookback_periods:]
+
+                                # Check if ANY recent value had a trigger
+                                has_recent_trigger = np.any(recent_values > 0)
+
+                                if has_recent_trigger:
+                                    # TRIGGER FOUND! Set to 1.0 and reset timestamp
+                                    stored_value = 1.0
+                                    timestamp = datetime.now()  # Fresh timestamp for new trigger
+                                    print(
+                                        f"🔧 ⚡ RECENT TRIGGER! {indicator_def.name} = 1.0 (recent values: {recent_values})")  # DEBUG
+                                else:
+                                    # No recent trigger, keep existing value and timestamp for decay
+                                    if indicator_def.name in self.stored_values:
+                                        # Keep existing value and timestamp to allow proper decay
+                                        stored_value = self.stored_values[indicator_def.name]['value']
+                                        timestamp = self.stored_values[indicator_def.name]['timestamp']
+                                        print(
+                                            f"🔧 📉 No recent trigger, keeping: {indicator_def.name} = {stored_value}")  # DEBUG
+                                    else:
+                                        # No existing value, set to 0
+                                        stored_value = 0.0
+                                        timestamp = datetime.now()
+                                        print(f"🔧 💤 No trigger, no history: {indicator_def.name} = 0.0")  # DEBUG
+
+                                # Store the calculation
                                 self.stored_values[indicator_def.name] = {
-                                    'value': raw_value,
-                                    'raw_value': raw_value,
-                                    'timestamp': datetime.now(),
+                                    'value': stored_value,
+                                    'raw_value': current_value,
+                                    'timestamp': timestamp,  # Use appropriate timestamp
                                     'timeframe': indicator_timeframe
                                 }
 
-                                logger.debug(f"Fresh calculation: {indicator_def.name} = {raw_value}")
+                            else:
+                                print(f"🔧 ❌ Invalid result for {indicator_def.name}: {result}")  # DEBUG
 
                         except Exception as e:
-                            logger.error(f"Error calculating {indicator_def.name}: {e}")
+                            print(f"🔧 ❌ ERROR calculating {indicator_def.name}: {e}")  # DEBUG
+                    else:
+                        print(f"🔧 ❌ Not enough data for {indicator_def.name}: {len(candle_data)} < 20")  # DEBUG
+                else:
+                    print(f"🔧 ❌ No {indicator_timeframe} data available for {indicator_def.name}")  # DEBUG
+            else:
+                print(f"🔧 ⏭️  SKIP: {indicator_def.name} timeframe mismatch")  # DEBUG
+
+    def _apply_decay(self, original_value: float, minutes_elapsed: float, timeframe_minutes: int) -> float:
+        """
+        CLEAN decay: 1.0 → 0.9 → 0.8 → 0.7 → ... → 0.0
+        Uses INTEGER periods only
+        """
+        if original_value <= 0.0:
+            return 0.0
+
+        # How many COMPLETE periods have passed?
+        periods_elapsed = int(minutes_elapsed // timeframe_minutes)  # INTEGER periods only!
+
+        # Simple decay: subtract 0.1 per COMPLETE period
+        decayed_value = original_value - (periods_elapsed * 0.1)
+
+        # Don't go below 0
+        decayed_value = max(0.0, decayed_value)
+
+        return decayed_value
 
     def _get_current_decayed_values(self) -> Tuple[Dict[str, float], Dict[str, float]]:
         """
-        Get current indicator values with time-based decay applied
+        Get current indicator values with CLEAN integer-based decay
         """
         current_indicators = {}
         current_raw = {}
@@ -100,12 +160,17 @@ class IndicatorProcessor:
             timeframe = stored_data['timeframe']
             timeframe_minutes = self._get_timeframe_minutes(timeframe)
 
-            # Apply decay
+            # Apply CLEAN decay
             original_value = stored_data['value']
             decayed_value = self._apply_decay(original_value, minutes_elapsed, timeframe_minutes)
 
             current_indicators[indicator_name] = decayed_value
             current_raw[indicator_name] = stored_data['raw_value']
+
+            # Debug output - only show if value > 0
+            if decayed_value > 0:
+                complete_periods = int(minutes_elapsed // timeframe_minutes)
+                print(f"🔧 DECAY: {indicator_name} = {decayed_value:.1f} (complete periods: {complete_periods})")
 
         return current_indicators, current_raw
 
@@ -119,30 +184,6 @@ class IndicatorProcessor:
             "1h": 60
         }
         return timeframe_map.get(timeframe, 1)
-
-    def _apply_decay(self, original_value: float, minutes_elapsed: float, timeframe_minutes: int) -> float:
-        """
-        Apply time-based decay to indicator values
-
-        Decay model:
-        - Value decreases by 0.1 per timeframe period
-        - Dies completely after 10 periods
-        """
-        if original_value == 0.0:
-            return 0.0
-
-        # Calculate periods elapsed
-        periods_elapsed = minutes_elapsed / timeframe_minutes
-
-        # Die after 10 periods
-        if periods_elapsed >= 10:
-            return 0.0
-
-        # Linear decay: 0.1 per period
-        decay_factor = 1.0 - (periods_elapsed * 0.1)
-        decay_factor = max(0.0, decay_factor)
-
-        return original_value * decay_factor
 
     def _calculate_single_indicator(self, tick_history: List[TickData], indicator_def) -> np.ndarray:
         """Calculate a single indicator"""

@@ -69,17 +69,32 @@ class DataStreamer:
         """
         try:
             logger.info(f"🕯️ {self.symbol}-{timeframe} candle completed @ ${completed_candle.close:.2f}")
+            print(f"🔧 CANDLE COMPLETED: {self.symbol}-{timeframe} @ ${completed_candle.close:.2f}")  # DEBUG
 
             # Get all candle data from aggregators
             all_candle_data = self._get_all_candle_data()
+            print(f"🔧 All candle data timeframes: {list(all_candle_data.keys())}")  # DEBUG
+
+            for tf, data in all_candle_data.items():
+                print(f"🔧 {tf}: {len(data)} candles")  # DEBUG
+
+            # Check what indicators we have
+            print(f"🔧 Monitor config has {len(self.monitor_config.indicators)} indicators")  # DEBUG
+            for ind in self.monitor_config.indicators:
+                print(f"🔧 Indicator: {ind.name} ({getattr(ind, 'time_increment', '1m')})")  # DEBUG
 
             # Calculate indicators using all available data
             indicators, raw_indicators, bar_scores = self.indicator_processor.calculate_indicators(
                 all_candle_data, timeframe  # Pass which timeframe just completed
             )
 
+            print(f"🔧 CALCULATED INDICATORS: {indicators}")  # DEBUG
+            print(f"🔧 RAW INDICATORS: {raw_indicators}")  # DEBUG
+            print(f"🔧 BAR SCORES: {bar_scores}")  # DEBUG
+
             # Send results to external tools
             for tool in self.external_tools:
+                print(f"🔧 Sending to external tool: {type(tool).__name__}")  # DEBUG
                 tool.indicator_vector(
                     card_id=self.card_id,
                     symbol=self.symbol,
@@ -91,6 +106,9 @@ class DataStreamer:
 
         except Exception as e:
             logger.error(f"Error handling completed candle: {e}")
+            print(f"🔧 ERROR in handle_completed_candle: {e}")  # DEBUG
+            import traceback
+            traceback.print_exc()
 
     def _get_all_candle_data(self) -> Dict[str, List[TickData]]:
         """

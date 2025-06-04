@@ -199,6 +199,8 @@ class AppService:
     def _load_monitor_config(self, config_file: str) -> Optional[MonitorConfiguration]:
         """Load monitor configuration from JSON file"""
         try:
+            print(f"🔧 Loading config file: {config_file}")  # DEBUG
+
             # Try different paths
             possible_paths = [
                 config_file,
@@ -210,18 +212,24 @@ class AppService:
             for path in possible_paths:
                 if os.path.exists(path):
                     config_path = path
+                    print(f"🔧 Found config at: {path}")  # DEBUG
                     break
 
             if not config_path:
                 logger.error(f"Config file not found: {config_file}")
+                print(f"🔧 ERROR: Config file not found")  # DEBUG
                 return None
 
             with open(config_path, 'r') as f:
                 config_data = json.load(f)
 
+            print(f"🔧 Config data keys: {list(config_data.keys())}")  # DEBUG
+
             # Extract monitor and indicators
             monitor_data = config_data.get('monitor', {})
             indicators_data = config_data.get('indicators', [])
+
+            print(f"🔧 Found {len(indicators_data)} indicators in config")  # DEBUG
 
             # Create IndicatorDefinition objects
             indicators = []
@@ -234,6 +242,8 @@ class AppService:
                     time_increment=ind_data.get('time_increment', '1m')
                 )
                 indicators.append(indicator)
+                print(
+                    f"🔧 Loaded indicator: {indicator.name} ({indicator.time_increment}) - {indicator.function}")  # DEBUG
 
             # Create MonitorConfiguration
             monitor_config = MonitorConfiguration(
@@ -244,11 +254,14 @@ class AppService:
             # Add bars if present
             if 'bars' in monitor_data:
                 monitor_config.bars = monitor_data['bars']
+                print(f"🔧 Loaded {len(monitor_data['bars'])} bars: {list(monitor_data['bars'].keys())}")  # DEBUG
 
+            print(f"🔧 Monitor config created with {len(indicators)} indicators")  # DEBUG
             return monitor_config
 
         except Exception as e:
             logger.error(f"Error loading monitor config: {e}")
+            print(f"🔧 ERROR loading config: {e}")  # DEBUG
             return None
 
     def get_available_configs(self) -> List[str]:

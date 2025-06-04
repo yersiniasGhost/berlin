@@ -8,6 +8,7 @@ Simplified API routes for AppService
 import logging
 from datetime import datetime
 
+import numpy as np
 from flask import Blueprint, request, jsonify, current_app
 
 from data_streamer.indicator_processor import IndicatorProcessor
@@ -233,7 +234,7 @@ def get_card_details(card_id: str):
 
 def _calculate_simple_indicator_history(all_candle_data: dict, monitor_config, lookback_periods: int = 60) -> dict:
     """
-    Calculate a simple indicator history using available candle data
+    Calculate indicator history showing trigger events properly
     """
     try:
         # Use 1m data if available, otherwise use the smallest timeframe
@@ -264,9 +265,6 @@ def _calculate_simple_indicator_history(all_candle_data: dict, monitor_config, l
             for bar_name in monitor_config.bars.keys():
                 indicator_history['bar_scores'][bar_name] = []
 
-        # Create a simple processor for history calculation
-        processor = IndicatorProcessor(monitor_config)
-
         # Take the last N data points for sampling
         recent_data_size = min(lookback_periods, len(historical_data) - 20)
         start_index = len(historical_data) - recent_data_size
@@ -276,41 +274,114 @@ def _calculate_simple_indicator_history(all_candle_data: dict, monitor_config, l
 
         logger.info(f"Calculating history: {recent_data_size} points, sampling every {sample_interval}")
 
+        # CALCULATE INDICATORS ONLY ONCE for each timeframe
+        timeframe_results = {}
+
+        for tf in all_candle_data.keys():
+            tf_data = all_candle_data[tf]
+            if len(tf_data) >= 20:
+                print(f"🔧 HISTORY: Calculating {tf} indicators with {len(tf_data)} candles")
+
+                # Get indicators that match this timeframe
+                tf_indicators = [ind for ind in monitor_config.indicators
+                                 if getattr(ind, 'time_increment', '1m') == tf]
+
+                if tf_indicators:
+                    # Calculate each indicator for this timeframe
+                    tf_results = {}
+
+                    for indicator_def in tf_indicators:
+                        try:
+                            from data_streamer.indicator_processor import IndicatorProcessor
+                            processor = IndicatorProcessor(monitor_config)
+                            result = processor._calculate_single_indicator(tf_data, indicator_def)
+
+                            if result is not None and isinstance(result, np.ndarray):
+                                tf_results[indicator_def.name] = result
+                                print(f"🔧 HISTORY: {indicator_def.name} calculated, max value: {np.max(result)}")
+
+                        except Exception as e:
+                            logger.error(f"Error calculating history for {indicator_def.name}: {e}")
+                            tf_results[indicator_def.name] = np.zeros(len(tf_data))
+
+                    timeframe_results[tf] = tf_results
+
+        # Now sample the results at specific time points
         for i in range(start_index, len(historical_data), sample_interval):
-            # Create a data slice up to this point for each timeframe
-            data_slice = {}
-            for tf, tf_data in all_candle_data.items():
-                # Get proportional slice for this timeframe
-                tf_index = min(i, len(tf_data) - 1)
-                data_slice[tf] = tf_data[:tf_index + 1]
+            try:
+                # Get timestamp from the main timeframe
+                timestamp = historical_data[i].timestamp
+                indicator_history['timestamps'].append(timestamp.isoformat())
 
-            if any(len(tf_data) >= 20 for tf_data in data_slice.values()):
-                try:
-                    # Calculate indicators for this point in time
-                    indicators, raw_indicators, bar_scores = processor.calculate_indicators(data_slice, None)
+                # Sample indicator values at this time point
+                current_indicators = {}
 
-                    # Store timestamp
-                    timestamp = historical_data[i].timestamp
-                    indicator_history['timestamps'].append(timestamp.isoformat())
+                for tf, tf_results in timeframe_results.items():
+                    tf_data = all_candle_data[tf]
 
-                    # Store indicator values
-                    for indicator_name in indicator_history['indicators'].keys():
-                        value = indicators.get(indicator_name, 0.0)
-                        indicator_history['indicators'][indicator_name].append(value)
+                    # Find the corresponding index in this timeframe
+                    tf_index = min(i // (len(historical_data) // len(tf_data)), len(tf_data) - 1)
+                    tf_index = max(0, tf_index)
 
-                    # Store bar scores
-                    for bar_name in indicator_history['bar_scores'].keys():
-                        value = bar_scores.get(bar_name, 0.0)
-                        indicator_history['bar_scores'][bar_name].append(value)
+                    for indicator_name, result_array in tf_results.items():
+                        if tf_index < len(result_array):
+                            # FIXED: Look for recent triggers, not just current value
+                            current_value = float(result_array[tf_index])
 
-                except Exception as e:
-                    logger.error(f"Error calculating indicators for history point {i}: {e}")
+                            # Look back up to 10 periods for triggers
+                            lookback_start = max(0, tf_index - 10)
+                            recent_values = result_array[lookback_start:tf_index + 1]
+
+                            # Find most recent trigger
+                            trigger_strength = 0.0
+                            for j, val in enumerate(reversed(recent_values)):
+                                if val > 0:
+                                    periods_since = j
+                                    # Apply decay: 1.0 - (periods * 0.1)
+                                    trigger_strength = max(0.0, 1.0 - (periods_since * 0.1))
+                                    break
+
+                            current_indicators[indicator_name] = trigger_strength
+
+                # Store indicator values for this time point
+                for indicator_name in indicator_history['indicators'].keys():
+                    value = current_indicators.get(indicator_name, 0.0)
+                    indicator_history['indicators'][indicator_name].append(value)
+
+                # Calculate bar scores from current indicator values
+                current_bars = {}
+                if hasattr(monitor_config, 'bars') and monitor_config.bars:
+                    for bar_name, bar_weights in monitor_config.bars.items():
+                        weighted_sum = 0.0
+                        total_weight = 0.0
+                        for indicator_name, weight in bar_weights.items():
+                            if indicator_name in current_indicators:
+                                weighted_sum += current_indicators[indicator_name] * weight
+                                total_weight += weight
+                        current_bars[bar_name] = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+                # Store bar scores
+                for bar_name in indicator_history['bar_scores'].keys():
+                    value = current_bars.get(bar_name, 0.0)
+                    indicator_history['bar_scores'][bar_name].append(value)
+
+            except Exception as e:
+                logger.error(f"Error calculating indicators for history point {i}: {e}")
 
         indicator_history['periods'] = len(indicator_history['timestamps'])
-        logger.info(f"Generated {indicator_history['periods']} history points")
+
+        # Debug output
+        for indicator_name, values in indicator_history['indicators'].items():
+            max_val = max(values) if values else 0
+            trigger_count = sum(1 for v in values if v > 0.1)
+            print(f"🔧 HISTORY RESULT: {indicator_name} - max: {max_val:.3f}, triggers: {trigger_count}")
+
+        logger.info(f"Generated {indicator_history['periods']} history points with trigger awareness")
 
         return indicator_history
 
     except Exception as e:
         logger.error(f"Error calculating indicator history: {e}")
+        import traceback
+        traceback.print_exc()
         return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}
