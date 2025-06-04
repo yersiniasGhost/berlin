@@ -1,16 +1,17 @@
 # File: BerlinProject/src/data_streamer/data_streamer.py
-# PRODUCTION VERSION - Clean, no debug code
+# SIMPLE VERSION - Back to basics
 
 """
-DataStreamer with candle-based indicator processing
+Simple DataStreamer that owns a CandleAggregator and processes indicators
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Dict, Optional
 from datetime import datetime
 
 from environments.tick_data import TickData
 from data_streamer.indicator_processor import IndicatorProcessor
+from data_streamer.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
 
@@ -19,102 +20,131 @@ logger = logging.getLogger('DataStreamer')
 
 class DataStreamer:
     """
-    DataStreamer that processes indicators only on candle completion
+    Simple DataStreamer that owns candle aggregation for one symbol
     """
 
     def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration):
-        """
-        Initialize DataStreamer
-
-        Args:
-            card_id: Unique card identifier
-            symbol: Stock symbol
-            monitor_config: Monitor configuration
-        """
         self.card_id: str = card_id
         self.symbol: str = symbol
         self.monitor_config: MonitorConfiguration = monitor_config
 
+        # Own candle aggregators for this symbol
+        self.aggregators: Dict[str, CandleAggregator] = {}
+
+        # Create aggregators for each timeframe needed
+        required_timeframes = monitor_config.get_time_increments()
+        for timeframe in required_timeframes:
+            self.aggregators[timeframe] = CandleAggregator(symbol, timeframe)
+
         # Create indicator processor
-        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(monitor_config) if monitor_config else None
+        self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
 
         # External tools
         self.external_tools: List[ExternalTool] = []
 
-    def process_candle_completion(self, historical_data: List[TickData], completed_candle: TickData) -> None:
-        """
-        Process indicators when a candle completes
+        logger.info(f"Created DataStreamer for {symbol} with timeframes: {list(required_timeframes)}")
 
-        Args:
-            historical_data: Historical candle data for indicator calculation
-            completed_candle: The newly completed candle
+    def process_pip(self, pip_data: Dict) -> None:
         """
-        if not self.indicators or not historical_data:
+        Process PIP data - send to aggregators and handle completed candles
+        """
+        symbol = pip_data.get('key')
+        if symbol != self.symbol:
             return
 
+        # Send PIP to all aggregators
+        for timeframe, aggregator in self.aggregators.items():
+            completed_candle = aggregator.process_pip(pip_data)
+
+            if completed_candle:
+                # A candle completed in this timeframe
+                self._handle_completed_candle(timeframe, completed_candle)
+
+        # Always send current price update to UI
+        self._send_price_update(pip_data)
+
+    def _handle_completed_candle(self, timeframe: str, completed_candle: TickData) -> None:
+        """
+        Handle when a candle completes - calculate indicators and send to UI
+        """
         try:
-            # Use historical data + completed candle for indicator calculation
-            full_history = historical_data + [completed_candle]
+            logger.info(f"🕯️ {self.symbol}-{timeframe} candle completed @ ${completed_candle.close:.2f}")
 
-            # Calculate indicators using the full history
-            indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators(full_history)
+            # Get all candle data from aggregators
+            all_candle_data = self._get_all_candle_data()
 
-            # Send to external tools
+            # Calculate indicators using all available data
+            indicators, raw_indicators, bar_scores = self.indicator_processor.calculate_indicators(
+                all_candle_data, timeframe  # Pass which timeframe just completed
+            )
+
+            # Send results to external tools
             for tool in self.external_tools:
                 tool.indicator_vector(
                     card_id=self.card_id,
                     symbol=self.symbol,
                     tick=completed_candle,
-                    indicators=indicator_results,
+                    indicators=indicators,
                     bar_scores=bar_scores,
                     raw_indicators=raw_indicators
                 )
 
         except Exception as e:
-            logger.error(f"Error processing candle completion for {self.card_id}: {e}")
+            logger.error(f"Error handling completed candle: {e}")
 
-    def process_tick(self, tick: TickData) -> None:
+    def _get_all_candle_data(self) -> Dict[str, List[TickData]]:
         """
-        Process initial tick data (for backward compatibility)
-
-        Args:
-            tick: TickData to process
+        Get all candle data from all aggregators
+        Returns: {timeframe: [candles]}
         """
-        if not tick:
-            return
+        all_data = {}
+        for timeframe, aggregator in self.aggregators.items():
+            history = aggregator.get_history().copy()
+            current = aggregator.get_current_candle()
+            if current:
+                history.append(current)
+            all_data[timeframe] = history
+        return all_data
 
-        # Ensure tick has symbol
-        if not hasattr(tick, 'symbol') or not tick.symbol:
-            tick.symbol = self.symbol
+    def _send_price_update(self, pip_data: Dict) -> None:
+        """
+        Send current price update to UI
+        """
+        try:
+            price = float(pip_data.get('3', 0.0))  # Last price
+            if price <= 0:
+                return
 
-        # For initial data processing, calculate indicators
-        if self.indicators:
-            try:
-                # Calculate indicators using just this tick
-                indicator_results, raw_indicators, bar_scores = self.indicators.calculate_indicators([tick])
+            # Create simple tick for price update
+            current_tick = TickData(
+                symbol=self.symbol,
+                timestamp=datetime.now(),
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=1000,
+                time_increment="1m"
+            )
 
-                if indicator_results:
-                    # Send to external tools
-                    for tool in self.external_tools:
-                        tool.indicator_vector(
-                            card_id=self.card_id,
-                            symbol=self.symbol,
-                            tick=tick,
-                            indicators=indicator_results,
-                            bar_scores=bar_scores,
-                            raw_indicators=raw_indicators
-                        )
-
-            except Exception as e:
-                logger.error(f"Error calculating initial indicators for {self.card_id}: {e}")
-        else:
-            # No indicators, just send price update
+            # Send to external tools
             for tool in self.external_tools:
                 tool.price_update(
                     card_id=self.card_id,
                     symbol=self.symbol,
-                    tick=tick
+                    tick=current_tick
                 )
+
+        except Exception as e:
+            logger.error(f"Error sending price update: {e}")
+
+    def load_historical_data(self, data_link) -> None:
+        """
+        Load historical data for all timeframes
+        """
+        for timeframe, aggregator in self.aggregators.items():
+            count = aggregator.prepopulate_data(data_link)
+            logger.info(f"Loaded {count} {timeframe} candles for {self.symbol}")
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool"""

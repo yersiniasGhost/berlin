@@ -1,5 +1,5 @@
 # File: BerlinProject/src/stock_analysis_ui/routes/api_routes.py
-# REPLACE YOUR ENTIRE api_routes.py WITH THIS
+# FIXED VERSION for simplified architecture
 
 """
 Simplified API routes for AppService
@@ -168,37 +168,30 @@ def get_card_details(card_id: str):
         monitor_config = combination['monitor_config']
         data_streamer = combination['data_streamer']
 
-        # Get all historical data across timeframes
-        all_historical_data = []
+        # Get timeframes from the monitor config
+        timeframes = monitor_config.get_time_increments()
+
+        # Get all candle data from the DataStreamer's aggregators
+        all_candle_data = data_streamer._get_all_candle_data()
+
+        # Build aggregator info
         aggregator_info = {}
-
-        for timeframe in combination['timeframes']:
-            if symbol in app_service.aggregators and timeframe in app_service.aggregators[symbol]:
-                aggregator = app_service.aggregators[symbol][timeframe]
-                history = aggregator.get_history()
-                current_candle = aggregator.get_current_candle()
-
-                # Store aggregator info
+        for timeframe in timeframes:
+            if timeframe in all_candle_data:
+                candles = all_candle_data[timeframe]
                 aggregator_info[timeframe] = {
-                    'history_count': len(history),
-                    'current_price': current_candle.close if current_candle else 0,
-                    'latest_timestamp': history[-1].timestamp.isoformat() if history else None
+                    'history_count': len(candles),
+                    'current_price': candles[-1].close if candles else 0,
+                    'latest_timestamp': candles[-1].timestamp.isoformat() if candles else None
                 }
 
-                # Add to combined history
-                all_historical_data.extend(history)
-
-        # Sort historical data by timestamp
-        all_historical_data.sort(key=lambda x: x.timestamp)
-
-        # Calculate indicator history over time
-        indicator_history = app_service._calculate_indicator_history(
-            all_historical_data, monitor_config, lookback_periods=50
+        # Calculate current indicator values
+        current_indicators, current_raw, current_bars = data_streamer.indicator_processor.calculate_indicators(
+            all_candle_data, None  # No specific timeframe completed
         )
 
-        # Get current indicator values
-        processor = IndicatorProcessor(monitor_config)
-        current_indicators, current_raw, current_bars = processor.calculate_indicators(all_historical_data)
+        # Calculate indicator history over time (simplified version)
+        indicator_history = _calculate_simple_indicator_history(all_candle_data, monitor_config)
 
         # Build response
         response_data = {
@@ -207,7 +200,7 @@ def get_card_details(card_id: str):
                 'card_id': card_id,
                 'symbol': symbol,
                 'config_name': monitor_config.name,
-                'timeframes': list(combination['timeframes']),
+                'timeframes': list(timeframes),
                 'total_indicators': len(monitor_config.indicators)
             },
             'aggregator_info': aggregator_info,
@@ -236,3 +229,88 @@ def get_card_details(card_id: str):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _calculate_simple_indicator_history(all_candle_data: dict, monitor_config, lookback_periods: int = 60) -> dict:
+    """
+    Calculate a simple indicator history using available candle data
+    """
+    try:
+        # Use 1m data if available, otherwise use the smallest timeframe
+        timeframes = sorted(all_candle_data.keys())
+        if not timeframes:
+            return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}
+
+        # Prefer 1m data for history, fall back to smallest timeframe
+        history_timeframe = "1m" if "1m" in all_candle_data else timeframes[0]
+        historical_data = all_candle_data[history_timeframe]
+
+        if len(historical_data) < 30:
+            return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}
+
+        indicator_history = {
+            'timestamps': [],
+            'indicators': {},
+            'bar_scores': {},
+            'periods': 0
+        }
+
+        # Initialize indicator arrays
+        for indicator in monitor_config.indicators:
+            indicator_history['indicators'][indicator.name] = []
+
+        # Initialize bar arrays
+        if hasattr(monitor_config, 'bars'):
+            for bar_name in monitor_config.bars.keys():
+                indicator_history['bar_scores'][bar_name] = []
+
+        # Create a simple processor for history calculation
+        processor = IndicatorProcessor(monitor_config)
+
+        # Take the last N data points for sampling
+        recent_data_size = min(lookback_periods, len(historical_data) - 20)
+        start_index = len(historical_data) - recent_data_size
+
+        # Sample every few data points to avoid too much computation
+        sample_interval = max(1, recent_data_size // 50)  # Aim for ~50 data points
+
+        logger.info(f"Calculating history: {recent_data_size} points, sampling every {sample_interval}")
+
+        for i in range(start_index, len(historical_data), sample_interval):
+            # Create a data slice up to this point for each timeframe
+            data_slice = {}
+            for tf, tf_data in all_candle_data.items():
+                # Get proportional slice for this timeframe
+                tf_index = min(i, len(tf_data) - 1)
+                data_slice[tf] = tf_data[:tf_index + 1]
+
+            if any(len(tf_data) >= 20 for tf_data in data_slice.values()):
+                try:
+                    # Calculate indicators for this point in time
+                    indicators, raw_indicators, bar_scores = processor.calculate_indicators(data_slice, None)
+
+                    # Store timestamp
+                    timestamp = historical_data[i].timestamp
+                    indicator_history['timestamps'].append(timestamp.isoformat())
+
+                    # Store indicator values
+                    for indicator_name in indicator_history['indicators'].keys():
+                        value = indicators.get(indicator_name, 0.0)
+                        indicator_history['indicators'][indicator_name].append(value)
+
+                    # Store bar scores
+                    for bar_name in indicator_history['bar_scores'].keys():
+                        value = bar_scores.get(bar_name, 0.0)
+                        indicator_history['bar_scores'][bar_name].append(value)
+
+                except Exception as e:
+                    logger.error(f"Error calculating indicators for history point {i}: {e}")
+
+        indicator_history['periods'] = len(indicator_history['timestamps'])
+        logger.info(f"Generated {indicator_history['periods']} history points")
+
+        return indicator_history
+
+    except Exception as e:
+        logger.error(f"Error calculating indicator history: {e}")
+        return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}

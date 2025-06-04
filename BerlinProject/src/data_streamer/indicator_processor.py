@@ -1,17 +1,14 @@
-# File: BerlinProject/src/data_streamer/indicator_processor.py
-# PRODUCTION VERSION - Clean, no debug code
 
 """
-Indicator processor for calculating technical indicators
+Simple indicator processor that manages timeframe-specific indicators with decay
 """
 
 import logging
-from typing import List, Dict, Tuple
-import numpy as np
+from typing import Tuple, Dict
+from datetime import datetime
 
 from features.indicators2 import support_level, resistance_level
 from models.monitor_configuration import MonitorConfiguration
-from environments.tick_data import TickData
 from features.indicators import *
 
 logger = logging.getLogger('IndicatorProcessor')
@@ -21,104 +18,134 @@ class IndicatorProcessor:
     def __init__(self, configuration: MonitorConfiguration):
         self.config: MonitorConfiguration = configuration
 
-    def calculate_indicators(self, tick_history: List[TickData]) -> Tuple[
+        # Store last calculated values with timestamps
+        # {indicator_name: {'value': float, 'raw_value': float, 'timestamp': datetime, 'timeframe': str}}
+        self.stored_values: Dict[str, Dict] = {}
+
+    def calculate_indicators(self, all_candle_data: Dict[str, List[TickData]],
+                             completed_timeframe: str = None) -> Tuple[
         Dict[str, float], Dict[str, float], Dict[str, float]]:
         """
-        Calculate indicators from PURE timeframe-specific tick history
-        No more filtering needed - data is already pure!
+        Calculate indicators using appropriate timeframe data
+
+        Args:
+            all_candle_data: {timeframe: [candles]} from all aggregators
+            completed_timeframe: Which timeframe just completed (for fresh calculations)
         """
-        if not tick_history or len(tick_history) < 20:
-            return {}, {}, {}
+        current_indicators = {}
+        current_raw = {}
 
-        try:
-            indicators = {}
-            raw_indicators = {}
+        # Only recalculate indicators that match the completed timeframe
+        if completed_timeframe:
+            self._calculate_fresh_indicators(all_candle_data, completed_timeframe)
 
-            for indicator_def in self.config.indicators:
-                try:
-                    # Use the pure tick history directly (no filtering!)
-                    result = self._calculate_single_indicator(tick_history, indicator_def)
+        # Apply decay to all stored indicators
+        current_indicators, current_raw = self._get_current_decayed_values()
 
-                    if result is not None and isinstance(result, np.ndarray) and len(result) > 0:
-                        raw_value = result[-1]
-                        raw_indicators[indicator_def.name] = float(raw_value)
+        # Calculate bar scores from current indicator values
+        bar_scores = self._calculate_bar_scores(current_indicators)
 
-                        # Apply timeframe-aware decay
-                        timeframe = getattr(indicator_def, 'time_increment', '1m')
-                        lookback = indicator_def.parameters.get('lookback', 10)
+        return current_indicators, current_raw, bar_scores
 
-                        metric = self._calculate_timeframe_decay(
-                            result, lookback, timeframe
-                        )
-                        indicators[indicator_def.name] = float(metric)
-                    else:
-                        indicators[indicator_def.name] = 0.0
-                        raw_indicators[indicator_def.name] = 0.0
-
-                except Exception as e:
-                    logger.error(f"Error calculating indicator {indicator_def.name}: {e}")
-                    indicators[indicator_def.name] = 0.0
-                    raw_indicators[indicator_def.name] = 0.0
-
-            bar_scores = self._calculate_bar_scores(indicators)
-            return indicators, raw_indicators, bar_scores
-
-        except Exception as e:
-            logger.error(f"Error in calculate_indicators: {e}")
-            return {}, {}, {}
-
-    def _calculate_timeframe_decay(self, indicator_data: np.ndarray, lookback: int, timeframe: str) -> float:
+    def _calculate_fresh_indicators(self, all_candle_data: Dict[str, List[TickData]], completed_timeframe: str) -> None:
         """
-        Calculate timeframe decay that decreases by 0.1 per time period
-        Signal dies after exactly 10 periods regardless of timeframe
-
-        Expected behavior:
-        - Signal triggers → value = 1.0
-        - 1 period later → value = 0.9
-        - 2 periods later → value = 0.8
-        - 3 periods later → value = 0.7
-        - ...
-        - 10 periods later → value = 0.0 (dead)
+        Calculate fresh values for indicators that match the completed timeframe
         """
-        try:
-            if len(indicator_data) == 0:
-                return 0.0
+        for indicator_def in self.config.indicators:
+            indicator_timeframe = getattr(indicator_def, 'time_increment', '1m')
 
-            # Search in the entire array for signals
-            non_zero_indices = np.nonzero(indicator_data)[0]
+            # Only calculate if this indicator matches the completed timeframe
+            if indicator_timeframe == completed_timeframe:
 
-            if non_zero_indices.size == 0:
-                return 0.0
+                # Get the appropriate candle data for this timeframe
+                if indicator_timeframe in all_candle_data:
+                    candle_data = all_candle_data[indicator_timeframe]
 
-            # Get the most recent signal from the entire array
-            most_recent_signal_index = non_zero_indices[-1]
-            signal_value = indicator_data[most_recent_signal_index]
+                    if len(candle_data) >= 20:  # Minimum data required
+                        try:
+                            # Calculate the indicator
+                            result = self._calculate_single_indicator(candle_data, indicator_def)
 
-            # Calculate how many periods have passed since the signal
-            periods_since_signal = len(indicator_data) - most_recent_signal_index - 1
+                            if result is not None and isinstance(result, np.ndarray) and len(result) > 0:
+                                raw_value = float(result[-1])
 
-            # Signal dies after exactly 10 periods for ALL timeframes
-            if periods_since_signal >= 10:
-                return 0.0
+                                # Store the fresh calculation
+                                self.stored_values[indicator_def.name] = {
+                                    'value': raw_value,
+                                    'raw_value': raw_value,
+                                    'timestamp': datetime.now(),
+                                    'timeframe': indicator_timeframe
+                                }
 
-            # Linear decay: decrease by 0.1 per period
-            decay_amount = periods_since_signal * 0.1
-            current_value = 1.0 - decay_amount
+                                logger.debug(f"Fresh calculation: {indicator_def.name} = {raw_value}")
 
-            # Don't go below 0
-            current_value = max(0.0, current_value)
+                        except Exception as e:
+                            logger.error(f"Error calculating {indicator_def.name}: {e}")
 
-            # Apply sign of original signal
-            result = current_value * np.sign(signal_value)
+    def _get_current_decayed_values(self) -> Tuple[Dict[str, float], Dict[str, float]]:
+        """
+        Get current indicator values with time-based decay applied
+        """
+        current_indicators = {}
+        current_raw = {}
+        now = datetime.now()
 
-            return float(result)
+        for indicator_name, stored_data in self.stored_values.items():
+            # Calculate time since last update
+            last_update = stored_data['timestamp']
+            time_elapsed = now - last_update
+            minutes_elapsed = time_elapsed.total_seconds() / 60
 
-        except Exception as e:
-            logger.error(f"Error calculating timeframe decay: {e}")
+            # Get timeframe for this indicator
+            timeframe = stored_data['timeframe']
+            timeframe_minutes = self._get_timeframe_minutes(timeframe)
+
+            # Apply decay
+            original_value = stored_data['value']
+            decayed_value = self._apply_decay(original_value, minutes_elapsed, timeframe_minutes)
+
+            current_indicators[indicator_name] = decayed_value
+            current_raw[indicator_name] = stored_data['raw_value']
+
+        return current_indicators, current_raw
+
+    def _get_timeframe_minutes(self, timeframe: str) -> int:
+        """Convert timeframe string to minutes"""
+        timeframe_map = {
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60
+        }
+        return timeframe_map.get(timeframe, 1)
+
+    def _apply_decay(self, original_value: float, minutes_elapsed: float, timeframe_minutes: int) -> float:
+        """
+        Apply time-based decay to indicator values
+
+        Decay model:
+        - Value decreases by 0.1 per timeframe period
+        - Dies completely after 10 periods
+        """
+        if original_value == 0.0:
             return 0.0
 
+        # Calculate periods elapsed
+        periods_elapsed = minutes_elapsed / timeframe_minutes
+
+        # Die after 10 periods
+        if periods_elapsed >= 10:
+            return 0.0
+
+        # Linear decay: 0.1 per period
+        decay_factor = 1.0 - (periods_elapsed * 0.1)
+        decay_factor = max(0.0, decay_factor)
+
+        return original_value * decay_factor
+
     def _calculate_single_indicator(self, tick_history: List[TickData], indicator_def) -> np.ndarray:
-        """Calculate indicator using pure timeframe data"""
+        """Calculate a single indicator"""
         try:
             if indicator_def.function == 'sma_crossover':
                 return sma_crossover(tick_history, indicator_def.parameters)
