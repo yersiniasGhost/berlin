@@ -33,7 +33,6 @@ class Portfolio:
     trade_history: List[Trade] = field(default_factory=list)
 
     def buy(self, time: int, price: float, reason: TradeReason, size: float) -> None:
-
         # Update position
         self.position_size += size
 
@@ -49,19 +48,20 @@ class Portfolio:
     def exit_long(self, time: int, price: float, reason: TradeReason = TradeReason.EXIT_LONG) -> None:
         trade = Trade(
             time=time,
-            size=self.position_size,
+            size=self.position_size,  # Negative size for exit
             price=price,
             reason=reason
         )
         self.trade_history.append(trade)
 
-    def sell(self, time: int, price: float, reason: TradeReason, size: float) -> None:
+        self.position_size = 0.0
 
+    def sell(self, time: int, price: float, reason: TradeReason, size: float) -> None:
         self.position_size -= size
 
         trade = Trade(
             time=time,
-            size=size,
+            size=size,  # Negative size to indicate selling
             price=price,
             reason=reason
         )

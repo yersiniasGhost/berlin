@@ -99,21 +99,3 @@ class TradeExecutorSimple(TradeExecutor):
 
         except Exception as e:
             logger.error(f"Error processing indicators: {e}")
-
-    def get_portfolio(self) -> Portfolio:
-        """Get the portfolio owned by this executor"""
-        return self.portfolio
-
-    def reset_portfolio(self) -> None:
-        """Reset the portfolio to initial state"""
-        self.portfolio.reset()
-        self.trailing_stop_price = 0.0
-
-    def get_status(self) -> Dict:
-        """Get current status for monitoring/debugging"""
-        return {
-            'position_size': self.portfolio.position_size,
-            'total_trades': len(self.portfolio.trade_history),
-            'trailing_stop_price': self.trailing_stop_price,
-            'stop_loss_pct': self.stop_loss_pct
-        }
