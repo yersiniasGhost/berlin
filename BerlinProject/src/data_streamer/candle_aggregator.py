@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List, Tuple, Any
 from environments.tick_data import TickData
 
 
@@ -15,60 +15,93 @@ class CandleAggregator:
         self.current_candle: Optional[TickData] = None  # Current open candle
         self.history: List[TickData] = []  # List of completed candles as TickData objects
 
-    def process_pip(self, pip_data: Dict) -> Optional[TickData]:
-        """Process a PIP, return completed candle if timeframe ended"""
-        # Extract and validate data from PIP
+    def process_pip(self, pip_data: Dict[str, Any]) -> Optional[TickData]:
+        """
+        Process a PIP, return completed candle if timeframe ended
+
+        Args:
+            pip_data: Dictionary containing PIP data from Schwab
+
+        Returns:
+            TickData object if candle completed, None otherwise
+        """
         try:
-            timestamp_ms = int(pip_data.get('38', 0))
-            price = float(pip_data.get('3', 0.0))
-            volume = int(pip_data.get('8', 0))
-        except (ValueError, TypeError):
+            # Extract and validate data from PIP
+            timestamp_ms: int = int(pip_data.get('38', 0))
+            price: float = float(pip_data.get('3', 0.0))
+            volume: int = int(pip_data.get('8', 0))
+
+            # Basic validation
+            if timestamp_ms == 0 or price <= 0:
+                print(f"AGGREGATOR {self.timeframe}: Invalid PIP data - timestamp: {timestamp_ms}, price: {price}")
+                return None
+
+            timestamp: datetime = datetime.fromtimestamp(timestamp_ms / 1000)
+
+            # Sanity check timestamp (must be after year 2000)
+            if timestamp.year < 2000:
+                print(f"AGGREGATOR {self.timeframe}: Invalid timestamp year: {timestamp.year}")
+                return None
+
+            # Get candle start time for this timeframe
+            candle_start: datetime = self._get_candle_start_time(timestamp)
+
+            # Debug logging
+            print(
+                f"AGGREGATOR {self.timeframe}: PIP at {timestamp.strftime('%H:%M:%S')} -> candle start {candle_start.strftime('%H:%M:%S')}")
+
+            # If no current candle or new candle period
+            if self.current_candle is None or self.current_candle.timestamp != candle_start:
+                print(f"AGGREGATOR {self.timeframe}: NEW CANDLE PERIOD DETECTED!")
+
+                # Save completed candle to return
+                completed_candle: Optional[TickData] = self.current_candle
+
+                # Start new candle
+                self.current_candle = TickData(
+                    open=price,
+                    high=price,
+                    low=price,
+                    close=price,
+                    volume=volume,
+                    timestamp=candle_start,
+                    symbol=self.symbol,
+                    time_increment=self.timeframe
+                )
+
+                print(
+                    f"AGGREGATOR {self.timeframe}: Created new candle at {candle_start.strftime('%H:%M:%S')} with price ${price}")
+
+                # Add completed candle to history if it exists
+                if completed_candle:
+                    self.history.append(completed_candle)
+                    print(
+                        f"AGGREGATOR {self.timeframe}: CANDLE COMPLETED! Added to history (total: {len(self.history)})")
+                    print(
+                        f"AGGREGATOR {self.timeframe}: Completed candle - O:{completed_candle.open} H:{completed_candle.high} L:{completed_candle.low} C:{completed_candle.close}")
+
+                # Return completed candle (None for first candle)
+                return completed_candle
+            else:
+                # Update existing candle
+                self.current_candle.high = max(self.current_candle.high, price)
+                self.current_candle.low = min(self.current_candle.low, price)
+                self.current_candle.close = price
+                self.current_candle.volume += volume
+
+                print(
+                    f"AGGREGATOR {self.timeframe}: Updated existing candle - H:{self.current_candle.high} L:{self.current_candle.low} C:{self.current_candle.close}")
+
+                # No completed candle
+                return None
+
+        except (ValueError, TypeError) as e:
+            print(f"AGGREGATOR {self.timeframe}: Error processing PIP data: {e}")
             return None
-
-        # Basic validation
-        if timestamp_ms == 0 or price <= 0:
-            return None
-
-        timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
-
-        # Sanity check timestamp (must be after year 2000)
-        if timestamp.year < 2000:
-            return None
-
-        # Get candle start time for this timeframe
-        candle_start = self._get_candle_start_time(timestamp)
-
-        # If no current candle or new candle period
-        if self.current_candle is None or self.current_candle.timestamp != candle_start:
-            # Save completed candle to return
-            completed_candle: Optional[TickData] = self.current_candle
-
-            # Start new candle
-            self.current_candle = TickData(
-                open=price,
-                high=price,
-                low=price,
-                close=price,
-                volume=volume,
-                timestamp=candle_start,
-                symbol=self.symbol,
-                time_increment=self.timeframe
-            )
-
-            # Add completed candle to history if it exists
-            if completed_candle:
-                self.history.append(completed_candle)
-
-            # Return completed candle (None for first candle)
-            return completed_candle
-        else:
-            # Update existing candle
-            self.current_candle.high = max(self.current_candle.high, price)
-            self.current_candle.low = min(self.current_candle.low, price)
-            self.current_candle.close = price
-            self.current_candle.volume += volume
-
-            # No completed candle
+        except Exception as e:
+            print(f"AGGREGATOR {self.timeframe}: Unexpected error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _get_candle_start_time(self, timestamp: datetime) -> datetime:
