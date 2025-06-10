@@ -268,13 +268,21 @@ class ImprovedPIPDataCollector:
 
                 # Different timeout behavior based on market hours
                 if is_market_hours:
-                    # During market hours, expect regular data
-                    if time_since_data.total_seconds() > self.data_timeout:
+                    # During market hours (including after-hours), expect some data
+                    timeout_threshold = self.data_timeout  # 10 minutes
+
+                    # But be more lenient during after-hours
+                    current_time = datetime.now()
+                    hour = current_time.hour
+                    if hour >= 16:  # After 4 PM, extend timeout for after-hours
+                        timeout_threshold = self.data_timeout * 2  # 20 minutes
+
+                    if time_since_data.total_seconds() > timeout_threshold:
                         self.logger.warning(f"No data received for {time_since_data} during market hours, attempting reconnection...")
                         self._attempt_reconnection()
                 else:
-                    # During non-market hours, be more lenient
-                    extended_timeout = self.data_timeout * 3  # 30 minutes instead of 10
+                    # During non-market hours, be very lenient
+                    extended_timeout = self.data_timeout * 6  # 60 minutes instead of 10
                     if time_since_data.total_seconds() > extended_timeout:
                         self.logger.info(f"No data for {time_since_data} (market closed - this is normal)")
                         # Only reconnect if connection is actually broken
@@ -297,7 +305,7 @@ class ImprovedPIPDataCollector:
         self.heartbeat_timer.start()
 
     def _attempt_reconnection(self) -> bool:
-        """Attempt to reconnect to the data stream"""
+        """Attempt to reconnect to the data stream with token refresh and fallback authentication"""
         if self.connection_attempts >= self.max_connection_attempts:
             self.logger.error("Max reconnection attempts reached, giving up")
             self.shutdown()
@@ -317,10 +325,30 @@ class ImprovedPIPDataCollector:
             # Wait a bit
             time.sleep(10)
 
-            # Check token first
-            if not self._check_token_refresh():
-                self.logger.error("Token refresh failed during reconnection")
-                return False
+            # ALWAYS try to refresh tokens before reconnecting
+            self.logger.info("Refreshing tokens before reconnection attempt...")
+            if not self.auth_manager.refresh_auth_token():
+                self.logger.warning("Token refresh failed!")
+
+                # If we're on attempt 3+, try full re-authentication
+                if self.connection_attempts >= 3:
+                    self.logger.info("Multiple failures - attempting full re-authentication...")
+                    print("\n" + "="*60)
+                    print("TOKEN REFRESH FAILED - INTERACTIVE LOGIN REQUIRED")
+                    print("Please complete authentication in your browser.")
+                    print("="*60 + "\n")
+
+                    if self.auth_manager.authenticate():
+                        self.logger.info("Re-authentication successful")
+                        self.last_token_refresh = datetime.now()
+                    else:
+                        self.logger.error("Re-authentication failed")
+                        return False
+                else:
+                    self.logger.info("Trying with existing tokens...")
+            else:
+                self.logger.info("Token refresh successful")
+                self.last_token_refresh = datetime.now()
 
             # Attempt new connection
             if self._setup_data_link():

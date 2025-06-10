@@ -12,6 +12,7 @@ import numpy as np
 from flask import Blueprint, request, jsonify, current_app
 
 from data_streamer.indicator_processor import IndicatorProcessor
+from environments.tick_data import TickData
 
 logger = logging.getLogger('APIRoutes')
 api_bp = Blueprint('api', __name__)
@@ -151,6 +152,114 @@ def stop_streaming():
 
     except Exception as e:
         logger.error(f"Error stopping streaming: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/<card_id>')
+def debug_card(card_id: str):
+    """Debug endpoint to see what's happening with a specific card"""
+    try:
+        app_service = current_app.app_service
+
+        if card_id not in app_service.combinations:
+            return jsonify({'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        data_streamer = combination['data_streamer']
+
+        # Get debug status
+        debug_info = data_streamer.debug_status()
+
+        # Get current indicator calculations (force a calculation)
+        all_candle_data = data_streamer._get_all_candle_data()
+        current_indicators, current_raw, current_bars = data_streamer.indicator_processor.calculate_indicators(
+            all_candle_data, None  # No specific completed timeframe
+        )
+
+        debug_info['current_calculation'] = {
+            'indicators': current_indicators,
+            'raw_indicators': current_raw,
+            'bar_scores': current_bars,
+            'calculation_time': datetime.now().isoformat()
+        }
+
+        # Test individual indicators
+        debug_info['indicator_tests'] = {}
+        for indicator_def in data_streamer.monitor_config.indicators:
+            timeframe = getattr(indicator_def, 'time_increment', '1m')
+            if timeframe in all_candle_data:
+                candles = all_candle_data[timeframe]
+                try:
+                    result = data_streamer.indicator_processor._calculate_single_indicator(candles, indicator_def)
+                    recent_results = result[-10:] if len(result) > 10 else result
+                    debug_info['indicator_tests'][indicator_def.name] = {
+                        'success': True,
+                        'result_length': len(result),
+                        'recent_values': recent_results.tolist() if hasattr(recent_results, 'tolist') else list(
+                            recent_results),
+                        'trigger_count': int(np.sum(result > 0)) if hasattr(result, '__len__') else 0,
+                        'max_value': float(np.max(result)) if hasattr(result, '__len__') and len(result) > 0 else 0
+                    }
+                except Exception as e:
+                    debug_info['indicator_tests'][indicator_def.name] = {
+                        'success': False,
+                        'error': str(e)
+                    }
+
+        return jsonify({
+            'success': True,
+            'debug_info': debug_info
+        })
+
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/trigger-test/<card_id>')
+def trigger_test(card_id: str):
+    """Force trigger test for debugging"""
+    try:
+        app_service = current_app.app_service
+
+        if card_id not in app_service.combinations:
+            return jsonify({'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        data_streamer = combination['data_streamer']
+
+        # Force set a trigger for testing
+        data_streamer.indicator_processor.stored_values['test_trigger'] = {
+            'value': 1.0,
+            'raw_value': 1.0,
+            'timestamp': datetime.now(),
+            'timeframe': '1m'
+        }
+
+        # Force send to UI
+        for tool in data_streamer.external_tools:
+            tool.indicator_vector(
+                card_id=card_id,
+                symbol=data_streamer.symbol,
+                tick=TickData(
+                    symbol=data_streamer.symbol,
+                    timestamp=datetime.now(),
+                    open=100.0, high=100.0, low=100.0, close=100.0,
+                    volume=1000, time_increment="1m"
+                ),
+                indicators={'test_trigger': 1.0},
+                bar_scores={'test_bar': 1.0},
+                raw_indicators={'test_trigger': 1.0}
+            )
+
+        return jsonify({
+            'success': True,
+            'message': 'Test trigger sent'
+        })
+
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -385,3 +494,4 @@ def _calculate_simple_indicator_history(all_candle_data: dict, monitor_config, l
         import traceback
         traceback.print_exc()
         return {'timestamps': [], 'indicators': {}, 'bar_scores': {}, 'periods': 0}
+
