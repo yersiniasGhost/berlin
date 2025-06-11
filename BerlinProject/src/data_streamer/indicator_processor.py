@@ -152,18 +152,15 @@ class IndicatorProcessor:
         return current_indicators, current_raw
 
     def _apply_decay(self, original_value: float, minutes_elapsed: float, timeframe_minutes: int) -> float:
-        """
-        Apply step-based decay to indicator values
-        """
         if original_value <= 0.0:
             return 0.0
 
-        decay_steps: int = int(minutes_elapsed / timeframe_minutes)
-        decayed_value: float = original_value - (decay_steps * 0.1)
+        # Continuous decay instead of step-based
+        decay_rate = 0.1 / timeframe_minutes  # 0.1 per timeframe period
+        decayed_value = original_value - (minutes_elapsed * decay_rate)
         decayed_value = max(0.0, decayed_value)
-        decayed_value = round(decayed_value, 1)
 
-        return decayed_value
+        return round(decayed_value, 1)
 
     def _get_timeframe_minutes(self, timeframe: str) -> int:
         """
