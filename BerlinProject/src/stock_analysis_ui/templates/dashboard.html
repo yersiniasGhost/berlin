@@ -589,13 +589,17 @@
             showMessage(`Error: ${data.message}`, 'error');
         });
 
-        // UPDATED: Responsive Bar Rendering Function
         function renderBarScores(barScores) {
+            console.log("RENDER BAR SCORES - Input:", barScores);  // ADD THIS DEBUG
+
             if (!barScores || Object.keys(barScores).length === 0) {
+                console.log("RENDER BAR SCORES - No bar data");  // ADD THIS DEBUG
                 return '<div class="responsive-bar"><div class="bar-header"><span class="bar-label">No bar data</span></div></div>';
             }
 
             return Object.entries(barScores).map(([name, value]) => {
+                console.log(`RENDER BAR SCORES - Processing: ${name} = ${value}`);  // ADD THIS DEBUG
+
                 // Determine color class based on value
                 let colorClass = 'bar-neutral';
                 if (value >= 0.7) {
@@ -608,6 +612,7 @@
 
                 // Calculate bar width (0-100%)
                 const barWidth = Math.min(Math.abs(value) * 100, 100);
+                console.log(`RENDER BAR SCORES - ${name}: value=${value}, barWidth=${barWidth}%`);  // ADD THIS DEBUG
 
                 return `
                     <div class="responsive-bar ${colorClass}">
@@ -906,6 +911,8 @@
         }
 
         function updateCardData(card, data) {
+            console.log("UPDATE CARD DATA - Received data:", data);  // ADD THIS DEBUG
+
             // Update price
             const priceDisplay = card.querySelector('.price-display');
             if (priceDisplay && data.price !== undefined) {
@@ -917,6 +924,7 @@
             // Update bar scores
             const barsContainer = card.querySelector('.bars-container');
             if (barsContainer && data.bar_scores) {
+                console.log("UPDATE CARD DATA - Updating bars with:", data.bar_scores);  // ADD THIS DEBUG
                 barsContainer.innerHTML = renderBarScores(data.bar_scores);
             }
 

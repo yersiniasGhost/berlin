@@ -6,7 +6,7 @@ UIExternalTool for sending data to browser via WebSocket
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from datetime import datetime
 from flask_socketio import SocketIO
 
@@ -39,11 +39,15 @@ class UIExternalTool:
             raw_indicators: Raw indicator values
         """
         try:
+            # Debug: Log what we're sending
+            print(f"UI TOOL - SENDING TO {card_id}: bar_scores = {bar_scores}")  # ADD THIS DEBUG
+            print(f"UI TOOL - indicators = {indicators}")  # ADD THIS DEBUG
+
             # Check if this update has bar data (even if values are 0.0)
-            has_bar_data = bool(bar_scores and len(bar_scores) > 0)
+            has_bar_data: bool = bool(bar_scores and len(bar_scores) > 0)
 
             # Prepare data
-            update_data = {
+            update_data: Dict[str, Any] = {
                 'card_id': card_id,
                 'symbol': symbol,
                 'price': tick.close,
@@ -58,19 +62,22 @@ class UIExternalTool:
             if has_bar_data:
                 # Store and emit meaningful data
                 self.last_meaningful_data[card_id] = update_data.copy()
+                print(f"UI TOOL - EMITTING: {update_data['bar_scores']}")  # ADD THIS DEBUG
                 self.socketio.emit('card_update', update_data)
             else:
                 # Preserve previous bar scores if available
                 if card_id in self.last_meaningful_data:
-                    meaningful_data = self.last_meaningful_data[card_id].copy()
+                    meaningful_data: Dict[str, Any] = self.last_meaningful_data[card_id].copy()
                     meaningful_data['price'] = tick.close
                     meaningful_data['timestamp'] = update_data['timestamp']
                     meaningful_data['ohlc'] = update_data['ohlc']
                     meaningful_data['volume'] = update_data['volume']
 
+                    print(f"UI TOOL - USING CACHED: {meaningful_data['bar_scores']}")  # ADD THIS DEBUG
                     self.socketio.emit('card_update', meaningful_data)
                 else:
                     # No previous data - send as-is
+                    print(f"UI TOOL - NO CACHE, SENDING: {update_data['bar_scores']}")  # ADD THIS DEBUG
                     self.socketio.emit('card_update', update_data)
 
         except Exception as e:
