@@ -1,9 +1,6 @@
-# File: BerlinProject/src/stock_analysis_ui/app.py
-# REPLACE YOUR app.py WITH THIS
-
 #!/usr/bin/env python3
 """
-Main Flask application entry point - SIMPLIFIED VERSION
+Main Flask application entry point - SIMPLIFIED VERSION with proper type hints
 """
 
 import os
@@ -17,7 +14,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..'))
 
 from services.schwab_auth import SchwabAuthManager
-from services.app_service import AppService  # CHANGED FROM DataService
+from services.app_service import AppService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +45,7 @@ def authenticate_before_startup() -> bool:
         return False
 
     # Create app service with authenticated manager
-    app_service = AppService(socketio, auth_manager)  # CHANGED FROM DataService
+    app_service = AppService(socketio, auth_manager)
 
     # Start streaming infrastructure immediately
     print("Starting streaming infrastructure...")
@@ -80,8 +77,13 @@ def create_app():
     """Create and configure the Flask application"""
     register_routes()
 
-    # Make app_service available to routes
+    # Make app_service available to routes with proper typing
     app.app_service = app_service
+
+    # Add type annotation for IDE support (this fixes the yellow underline)
+    if not hasattr(app, '__annotations__'):
+        app.__annotations__ = {}
+    app.__annotations__['app_service'] = AppService
 
     return app
 

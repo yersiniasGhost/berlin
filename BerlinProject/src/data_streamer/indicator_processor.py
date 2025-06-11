@@ -1,5 +1,5 @@
 """
-Simplified IndicatorProcessor with proper typing and clean bar score calculation
+Enhanced IndicatorProcessor with proper history tracking - no synthetic data
 """
 
 import logging
@@ -17,12 +17,18 @@ logger = logging.getLogger('IndicatorProcessor')
 
 class IndicatorProcessor:
     """
-    Processes indicators for completed candles with time-based decay
+    Processes indicators for completed candles with time-based decay and history tracking
     """
 
     def __init__(self, configuration: MonitorConfiguration) -> None:
         self.config: MonitorConfiguration = configuration
         self.stored_values: Dict[str, Dict[str, any]] = {}
+
+        # Add history tracking
+        self.indicator_history: Dict[str, List[float]] = {}
+        self.bar_history: Dict[str, List[float]] = {}
+        self.timestamp_history: List[datetime] = []
+        self.max_history_length: int = 100  # Keep last 100 data points
 
         logger.info(f"IndicatorProcessor initialized with {len(self.config.indicators)} indicators")
 
@@ -31,19 +37,16 @@ class IndicatorProcessor:
                            completed_timeframe: str = None) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
         """
         Calculate indicators using appropriate timeframe data
-
-        Args:
-            all_candle_data: Dictionary mapping timeframe to candle list
-            completed_timeframe: Which timeframe just completed
-
-        Returns:
-            Tuple of (indicators, raw_indicators, bar_scores)
         """
         if completed_timeframe:
             self._calculate_fresh_indicators(all_candle_data, completed_timeframe)
 
         current_indicators, current_raw = self._get_current_decayed_values()
         bar_scores = self._calculate_bar_scores(current_indicators)
+
+        # Store in history when we have completed timeframe
+        if completed_timeframe:
+            self._store_history_snapshot(current_indicators, bar_scores)
 
         return current_indicators, current_raw, bar_scores
 
@@ -73,11 +76,10 @@ class IndicatorProcessor:
                 if result is not None and isinstance(result, np.ndarray) and len(result) > 0:
                     current_value: float = float(result[-1])
 
+                    # Check for recent triggers (last 5 values)
                     lookback_periods: int = min(5, len(result))
                     recent_values: np.ndarray = result[-lookback_periods:]
-
-                    trigger_indices: np.ndarray = np.where(recent_values > 0)[0]
-                    has_recent_trigger: bool = len(trigger_indices) > 0
+                    has_recent_trigger: bool = np.any(recent_values > 0)
 
                     if has_recent_trigger:
                         stored_value: float = 1.0
@@ -152,23 +154,19 @@ class IndicatorProcessor:
         return current_indicators, current_raw
 
     def _apply_decay(self, original_value: float, minutes_elapsed: float, timeframe_minutes: int) -> float:
-        """
-        Apply step-based decay to indicator values
-        """
+        """Apply time-based decay to indicator values"""
         if original_value <= 0.0:
             return 0.0
 
-        decay_steps: int = int(minutes_elapsed / timeframe_minutes)
-        decayed_value: float = original_value - (decay_steps * 0.1)
+        # Continuous decay instead of step-based
+        decay_rate = 0.1 / timeframe_minutes  # 0.1 per timeframe period
+        decayed_value = original_value - (minutes_elapsed * decay_rate)
         decayed_value = max(0.0, decayed_value)
-        decayed_value = round(decayed_value, 1)
 
-        return decayed_value
+        return round(decayed_value, 1)
 
     def _get_timeframe_minutes(self, timeframe: str) -> int:
-        """
-        Convert timeframe string to minutes
-        """
+        """Convert timeframe string to minutes"""
         timeframe_map: Dict[str, int] = {
             "1m": 1,
             "5m": 5,
@@ -179,9 +177,7 @@ class IndicatorProcessor:
         return timeframe_map.get(timeframe, 1)
 
     def _calculate_bar_scores(self, indicators: Dict[str, float]) -> Dict[str, float]:
-        """
-        Calculate weighted bar scores from indicator values
-        """
+        """Calculate weighted bar scores from indicator values"""
         bar_scores: Dict[str, float] = {}
 
         if not hasattr(self.config, 'bars') or not self.config.bars:
@@ -206,3 +202,51 @@ class IndicatorProcessor:
             bar_scores[bar_name] = final_score
 
         return bar_scores
+
+    def _store_history_snapshot(self, indicators: Dict[str, float], bar_scores: Dict[str, float]) -> None:
+        """Store current indicator and bar values in history"""
+        current_time = datetime.now()
+
+        # Add timestamp to history
+        self.timestamp_history.append(current_time)
+
+        # Store indicator values
+        for indicator_name, value in indicators.items():
+            if indicator_name not in self.indicator_history:
+                self.indicator_history[indicator_name] = []
+            self.indicator_history[indicator_name].append(value)
+
+        # Store bar scores
+        for bar_name, value in bar_scores.items():
+            if bar_name not in self.bar_history:
+                self.bar_history[bar_name] = []
+            self.bar_history[bar_name].append(value)
+
+        # Trim history to max length
+        if len(self.timestamp_history) > self.max_history_length:
+            # Remove oldest entries
+            excess = len(self.timestamp_history) - self.max_history_length
+            self.timestamp_history = self.timestamp_history[excess:]
+
+            for indicator_name in self.indicator_history:
+                self.indicator_history[indicator_name] = self.indicator_history[indicator_name][excess:]
+
+            for bar_name in self.bar_history:
+                self.bar_history[bar_name] = self.bar_history[bar_name][excess:]
+
+    def get_history_data(self) -> Dict:
+        """Get formatted history data for UI"""
+        if not self.timestamp_history:
+            return {
+                'timestamps': [],
+                'indicators': {},
+                'bar_scores': {},
+                'periods': 0
+            }
+
+        return {
+            'timestamps': [ts.isoformat() for ts in self.timestamp_history],
+            'indicators': self.indicator_history.copy(),
+            'bar_scores': self.bar_history.copy(),
+            'periods': len(self.timestamp_history)
+        }
