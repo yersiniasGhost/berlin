@@ -14,6 +14,7 @@ class CandleAggregator:
         self.timeframe = timeframe
         self.current_candle: Optional[TickData] = None  # Current open candle
         self.history: List[TickData] = []  # List of completed candles as TickData objects
+        self.completed_candle: Optional[TickData] = None
 
     def process_pip(self, pip_data: Dict[str, Any]) -> Optional[TickData]:
         """
@@ -55,7 +56,7 @@ class CandleAggregator:
                 print(f"AGGREGATOR {self.timeframe}: NEW CANDLE PERIOD DETECTED!")
 
                 # Save completed candle to return
-                completed_candle: Optional[TickData] = self.current_candle
+                self.completed_candle = self.current_candle
 
                 # Start new candle
                 self.current_candle = TickData(
@@ -73,21 +74,22 @@ class CandleAggregator:
                     f"AGGREGATOR {self.timeframe}: Created new candle at {candle_start.strftime('%H:%M:%S')} with price ${price}")
 
                 # Add completed candle to history if it exists
-                if completed_candle:
-                    self.history.append(completed_candle)
+                if self.completed_candle:
+                    self.history.append(self.completed_candle)
                     print(
                         f"AGGREGATOR {self.timeframe}: CANDLE COMPLETED! Added to history (total: {len(self.history)})")
                     print(
-                        f"AGGREGATOR {self.timeframe}: Completed candle - O:{completed_candle.open} H:{completed_candle.high} L:{completed_candle.low} C:{completed_candle.close}")
+                        f"AGGREGATOR {self.timeframe}: Completed candle - O:{self.completed_candle.open} H:{completed_candle.high} L:{completed_candle.low} C:{completed_candle.close}")
 
                 # Return completed candle (None for first candle)
-                return completed_candle
+                return self.completed_candle
             else:
                 # Update existing candle
                 self.current_candle.high = max(self.current_candle.high, price)
                 self.current_candle.low = min(self.current_candle.low, price)
                 self.current_candle.close = price
                 self.current_candle.volume += volume
+                self.completed_candle = None
 
                 print(
                     f"AGGREGATOR {self.timeframe}: Updated existing candle - H:{self.current_candle.high} L:{self.current_candle.low} C:{self.current_candle.close}")

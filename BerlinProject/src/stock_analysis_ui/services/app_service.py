@@ -11,12 +11,10 @@ from flask_socketio import SocketIO
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.data_streamer import DataStreamer
-from models.monitor_configuration import MonitorConfiguration
-from models.indicator_definition import IndicatorDefinition
+from models.monitor_configuration import MonitorConfiguration, load_monitor_config
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 
-logger = logging.getLogger('AppService')
 
 
 class AppService:
@@ -37,8 +35,8 @@ class AppService:
         self.combinations: Dict[str, Dict[str, Any]] = {}
         self.card_counter: int = 0
         self.subscribed_symbols: set = set()
-
-        logger.info("AppService initialized")
+        self.logger = logging.getLogger('AppService')
+        self.logger.info("AppService initialized")
 
     def start_streaming(self) -> bool:
         """Initialize streaming infrastructure"""
@@ -46,7 +44,7 @@ class AppService:
             return True
 
         try:
-            logger.info("Starting streaming infrastructure")
+            self.logger.info("Starting streaming infrastructure")
 
             self.data_link = SchwabDataLink()
             self.data_link.access_token = self.auth_manager.access_token
@@ -54,15 +52,15 @@ class AppService:
             self.data_link.user_prefs = self.auth_manager.user_prefs
 
             if not self.data_link.connect_stream():
-                logger.error("Failed to connect to Schwab streaming")
+                self.logger.error("Failed to connect to Schwab streaming")
                 return False
 
             self.is_streaming = True
-            logger.info("Streaming infrastructure started successfully")
+            self.logger.info("Streaming infrastructure started successfully")
             return True
 
         except Exception as e:
-            logger.error(f"Error starting streaming: {e}")
+            self.logger.error(f"Error starting streaming: {e}")
             self.is_streaming = False
             return False
 
@@ -76,7 +74,7 @@ class AppService:
             self.card_counter += 1
             card_id: str = f"card{self.card_counter}"
 
-            monitor_config: Optional[MonitorConfiguration] = self._load_monitor_config(config_file)
+            monitor_config: Optional[MonitorConfiguration] = load_monitor_config(config_file)
             if not monitor_config:
                 return {"success": False, "error": f"Failed to load config: {config_file}"}
 
@@ -85,9 +83,10 @@ class AppService:
                 symbol=symbol,
                 monitor_config=monitor_config
             )
-
             data_streamer.load_historical_data(self.data_link)
             data_streamer.connect_tool(self.ui_tool)
+            self.data_link.add_data_streamer(symbol, data_streamer)
+
 
             self.combinations[card_id] = {
                 'card_id': card_id,
@@ -96,10 +95,9 @@ class AppService:
                 'monitor_config': monitor_config,
                 'data_streamer': data_streamer
             }
+            self.data_link.add_symbol_subscription(symbol)
 
-            self._ensure_symbol_subscription(symbol)
-
-            logger.info(f"Successfully added combination: {card_id} ({symbol})")
+            self.logger.info(f"Successfully added combination: {card_id} ({symbol})")
 
             return {
                 "success": True,
@@ -109,59 +107,37 @@ class AppService:
             }
 
         except Exception as e:
-            logger.error(f"Error adding combination: {e}")
+            self.logger.error(f"Error adding combination: {e}")
             return {"success": False, "error": str(e)}
 
-    def _ensure_symbol_subscription(self, symbol: str) -> None:
-        """Subscribe to quotes for symbol and set up routing"""
-        try:
-            if symbol not in self.subscribed_symbols:
-                self.subscribed_symbols.add(symbol)
-                all_symbols: List[str] = list(self.subscribed_symbols)
+    # def _ensure_symbol_subscription(self, symbol: str) -> None:
+    #     """Subscribe to quotes for symbol and set up routing"""
+    #     try:
+    #         if symbol not in self.subscribed_symbols:
+    #             self.subscribed_symbols.add(symbol)
+    #             all_symbols: List[str] = list(self.subscribed_symbols)
+    #
+    #             self.data_link.subscribe_quotes(all_symbols)
+    #
+    #             def quote_handler(quote_data: Dict[str, Any]) -> None:
+    #                 symbol_from_pip = quote_data.get('key')
+    #                 if symbol_from_pip:
+    #                     # Add timestamp if missing  MOVE To SCHWAB
+    #                     if '38' not in quote_data:
+    #                         from datetime import datetime
+    #                         quote_data['38'] = int(datetime.now().timestamp() * 1000)
+    #                         print(f"ADDED TIMESTAMP: {quote_data['38']}")  # DEBUG
+    #                     else:
+    #                         print(f"EXISTING TIMESTAMP: {quote_data['38']}")  # DEBUG
+    #
+    #                     self._route_pip_to_streamers(quote_data)
+    #
+    #             self.data_link.add_quote_handler(quote_handler)
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"Error subscribing to symbol {symbol}: {e}")
 
-                self.data_link.subscribe_quotes(all_symbols)
-
-                def quote_handler(quote_data: Dict[str, Any]) -> None:
-                    symbol_from_pip = quote_data.get('key')
-                    if symbol_from_pip:
-                        # Add timestamp if missing
-                        if '38' not in quote_data:
-                            from datetime import datetime
-                            quote_data['38'] = int(datetime.now().timestamp() * 1000)
-                            print(f"ADDED TIMESTAMP: {quote_data['38']}")  # DEBUG
-                        else:
-                            print(f"EXISTING TIMESTAMP: {quote_data['38']}")  # DEBUG
-
-                        self._route_pip_to_streamers(quote_data)
-
-                self.data_link.add_quote_handler(quote_handler)
-
-        except Exception as e:
-            logger.error(f"Error subscribing to symbol {symbol}: {e}")
-
-    def _route_pip_to_streamers(self, quote_data: Dict[str, Any]) -> None:
-        symbol: Optional[str] = quote_data.get('key')
-        print(f"ROUTING PIP: {symbol} @ ${quote_data.get('3', 0)}")  # ADD THIS
-
-        for combination in self.combinations.values():
-            if combination['symbol'] == symbol:
-                print(f"SENDING PIP to DataStreamer: {combination['card_id']}")  # ADD THIS
-                combination['data_streamer'].process_pip(quote_data)
-
-    def remove_combination(self, card_id: str) -> Dict[str, Any]:
-        """Remove a combination"""
-        try:
-            if card_id not in self.combinations:
-                return {"success": False, "error": "Combination not found"}
-
-            del self.combinations[card_id]
-            logger.info(f"Removed combination: {card_id}")
-
-            return {"success": True}
-
-        except Exception as e:
-            logger.error(f"Error removing combination: {e}")
-            return {"success": False, "error": str(e)}
+    # This should GO
 
     def get_combinations(self) -> Dict[str, Any]:
         """Get all active combinations"""
@@ -185,62 +161,13 @@ class AppService:
             if self.data_link:
                 self.data_link.disconnect()
 
-            logger.info("Streaming stopped")
+            self.logger.info("Streaming stopped")
             return True
 
         except Exception as e:
-            logger.error(f"Error stopping streaming: {e}")
+            self.logger.error(f"Error stopping streaming: {e}")
             return False
 
-    def _load_monitor_config(self, config_file: str) -> Optional[MonitorConfiguration]:
-        """Load monitor configuration from JSON file"""
-        try:
-            possible_paths: List[str] = [
-                config_file,
-                os.path.join(os.path.dirname(__file__), '..', config_file),
-                os.path.join(os.path.dirname(__file__), '..', '..', config_file)
-            ]
-
-            config_path: Optional[str] = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    config_path = path
-                    break
-
-            if not config_path:
-                logger.error(f"Config file not found: {config_file}")
-                return None
-
-            with open(config_path, 'r') as f:
-                config_data: Dict[str, Any] = json.load(f)
-
-            monitor_data: Dict[str, Any] = config_data.get('monitor', {})
-            indicators_data: List[Dict[str, Any]] = config_data.get('indicators', [])
-
-            indicators: List[IndicatorDefinition] = []
-            for ind_data in indicators_data:
-                indicator = IndicatorDefinition(
-                    name=ind_data['name'],
-                    type=ind_data['type'],
-                    function=ind_data['function'],
-                    parameters=ind_data['parameters'],
-                    time_increment=ind_data.get('time_increment', '1m')
-                )
-                indicators.append(indicator)
-
-            monitor_config = MonitorConfiguration(
-                name=monitor_data.get('name', 'Trading Signals'),
-                indicators=indicators
-            )
-
-            if 'bars' in monitor_data:
-                monitor_config.bars = monitor_data['bars']
-
-            return monitor_config
-
-        except Exception as e:
-            logger.error(f"Error loading monitor config: {e}")
-            return None
 
     def get_available_configs(self) -> List[str]:
         """Get available monitor configuration files"""

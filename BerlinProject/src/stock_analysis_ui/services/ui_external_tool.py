@@ -10,12 +10,13 @@ from typing import Dict, Optional, Any
 from datetime import datetime
 from flask_socketio import SocketIO
 
+from data_streamer import ExternalTool
 from environments.tick_data import TickData
 
 logger = logging.getLogger('UIExternalTool')
 
 
-class UIExternalTool:
+class UIExternalTool(ExternalTool):
     """
     UI External Tool - sends indicator and price data to browser
     """
@@ -26,7 +27,9 @@ class UIExternalTool:
 
     def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
                          indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
-                         raw_indicators: Dict[str, float] = None) -> None:
+                         raw_indicators: Dict[str, float] = None,
+                         combination_id: Optional[str] = None ) -> None:
+        # add portfolio
         """
         Send indicator data to browser
 
@@ -57,6 +60,7 @@ class UIExternalTool:
                 'indicators': indicators or {},
                 'bar_scores': bar_scores or {},
                 'raw_indicators': raw_indicators or {}
+            #     portfolio information
             }
 
             if has_bar_data:

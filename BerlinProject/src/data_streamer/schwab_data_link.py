@@ -1,14 +1,12 @@
-# schwab_data_link.py
-import os
-import base64
 import requests
 import websocket
 import json
 import threading
 import time
 import logging
+from typing import Set
 from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any, Iterator, Tuple
+from typing import Dict, List, Optional
 
 from data_streamer.data_link import DataLink
 from environments.tick_data import TickData
@@ -20,26 +18,14 @@ logger = logging.getLogger('SchwabDataLink')
 
 class SchwabDataLink(DataLink):
     """
-    A simplified class for connecting to Schwab API and streaming market data.
+    A "simplified" class for connecting to Schwab API and streaming market data.
     """
-
-    def get_stats(self) -> Dict[str, Dict[str, float]]:
-        pass
-
-    def reset_index(self) -> None:
-        pass
-
-    def get_next2(self) -> Optional[TickData]:
-        pass
-
-    def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
-        pass
 
     def __init__(self):
         # Hardcoded authentication credentials
-        self.app_key = "QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ"
-        self.app_secret = "RmwUJyBGGgW2r2C7"
-        self.redirect_uri = "https://127.0.0.1"
+        self.app_key: str = "QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ"
+        self.app_secret: str = "RmwUJyBGGgW2r2C7"
+        self.redirect_uri: str = "https://127.0.0.1"
         self.access_token = None
         self.refresh_token = None
 
@@ -48,11 +34,7 @@ class SchwabDataLink(DataLink):
         self.ws = None  # WebSocket connection
         self.is_connected = False
         self.request_id = 0
-
-        # Data handlers
-        self.quote_handlers = []
-        self.chart_handlers = []
-
+        self.subscribed_symbols: Set[str] = set()
         logger.info(f"Initialized SchwabDataLink with API key: {self.app_key}")
 
     def load_auth_info(self):
@@ -289,41 +271,6 @@ class SchwabDataLink(DataLink):
         logger.info("Sending login request to streamer")
         self.ws.send(json.dumps(login_request))
 
-    def save_chart_data(self, chart_data, filename=None):
-        """
-        Save chart data from the Schwab API to a text file
-
-        Args:
-            chart_data: Chart data from the Schwab API
-            filename: Optional filename to save to. If None, generates a filename based on symbol and time
-
-        Returns:
-            str: Path to the saved file
-        """
-
-        # Open the file and write the data
-        with open(filename, 'w') as f:
-            # # Write a header
-            # f.write("timestamp,datetime,open,high,low,close,volume,raw_json\n")
-
-            # Write each chart entry
-            for entry in chart_data:
-
-                # Format raw JSON
-                raw_json = json.dumps(entry).replace('"', '""')  # Escape quotes for CSV
-
-                # Write the data
-                f.write(
-                    f"{raw_json}\"\n,")
-
-        # Log that we've saved the file
-        if hasattr(self, 'logger'):
-            self.logger.info(f"Saved chart data to {filename}")
-        else:
-            print(f"Saved chart data to {filename}")
-
-        return filename
-
     # add a collect flag and concat it into a text file. run it with the 1 and 15 min
     def _handle_message(self, message: str) -> None:
         """Handle messages from the streaming API"""
@@ -352,12 +299,8 @@ class SchwabDataLink(DataLink):
                 for data in msg_data['data']:
                     service = data.get('service')
                     content = data.get('content', [])
-
                     if service == 'LEVELONE_EQUITIES' and content:
                         self._handle_quote_data(content)
-
-                    elif service == 'CHART_EQUITY' and content:
-                        self._handle_chart_data(content)
 
             # Handle notifications
             if 'notify' in msg_data:
@@ -385,14 +328,17 @@ class SchwabDataLink(DataLink):
                 price_float = float(price)
                 logger.info(f"Processing quote for {symbol}: ${price_float}")
 
+                # Call all registered DataStreamers.
                 # Call all registered quote handlers with the quote data
-                for i, handler in enumerate(self.quote_handlers):
-                    logger.debug(f"Calling quote handler #{i} for {symbol}")
-                    try:
-                        # Pass the raw quote data to the handler
-                        handler(quote)
-                    except Exception as handler_error:
-                        logger.error(f"Error in quote handler #{i} for {symbol}: {handler_error}")
+                for ds in self.data_streamers.get(symbol, []):
+                    ds.process_pip(quote)
+                # for i, handler in enumerate(self.quote_handlers):
+                #     logger.debug(f"Calling quote handler #{i} for {symbol}")
+                #     try:
+                #         # Pass the raw quote data to the handler
+                #         handler(quote)
+                #     except Exception as handler_error:
+                #         logger.error(f"Error in quote handler #{i} for {symbol}: {handler_error}")
 
             except (ValueError, TypeError) as e:
                 logger.error(f"Error processing quote data: {e}")
@@ -401,15 +347,10 @@ class SchwabDataLink(DataLink):
                 import traceback
                 traceback.print_exc()
 
-    def _handle_chart_data(self, data: List[Dict]) -> None:
-        """Process chart data and pass to handlers"""
-        for chart_entry in data:
-            try:
-                # Call all registered chart handlers
-                for handler in self.chart_handlers:
-                    handler(chart_entry)
-            except Exception as e:
-                logger.error(f"Error in chart handler: {e}")
+    def add_symbol_subscription(self, symbol):
+        if symbol not in self.subscribed_symbols:
+            self.subscribed_symbols.add(symbol)
+            self.subscribe_quotes(list(self.subscribed_symbols))
 
     def subscribe_quotes(self, symbols: List[str]) -> bool:
         """

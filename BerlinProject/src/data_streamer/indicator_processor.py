@@ -32,6 +32,11 @@ class IndicatorProcessor:
 
         logger.info(f"IndicatorProcessor initialized with {len(self.config.indicators)} indicators")
 
+
+    def calculate_indicators_new(self, candle_data: Dict[str, CandleAggragator]):
+
+
+
     def calculate_indicators(self,
                            all_candle_data: Dict[str, List[TickData]],
                            completed_timeframe: str = None) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
@@ -58,6 +63,9 @@ class IndicatorProcessor:
         """
         for indicator_def in self.config.indicators:
             indicator_timeframe: str = getattr(indicator_def, 'time_increment', '1m')
+            csa = candle_data[indicator_timeframe]
+            if indicator_df requires completed candle and csa.has_completed_candle()
+                csa.get_history()
 
             if indicator_timeframe != completed_timeframe:
                 continue

@@ -24,9 +24,8 @@ class TradeExecutor(ABC):
         self.portfolio = Portfolio()
 
     @abstractmethod
-    def make_decision(self,  # ✅ Changed from process_indicators to make_decision
-                     tick: TickData,
-                     indicators: Dict[str, float],
-                     bar_scores: Dict[str, float] = None) -> None:
+    def make_decision(self,
+                      tick: TickData,
+                      indicators: Dict[str, float],
+                      bar_scores: Dict[str, float] = None) -> None:
         pass
-

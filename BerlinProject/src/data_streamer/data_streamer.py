@@ -11,6 +11,7 @@ from data_streamer.indicator_processor import IndicatorProcessor
 from data_streamer.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
+from portfolios.trade_executor import TradeExecutor
 
 logger = logging.getLogger('DataStreamer')
 
@@ -33,6 +34,8 @@ class DataStreamer:
             self.aggregators[timeframe] = CandleAggregator(symbol, timeframe)
 
         # Processing components
+        self.trade_executor = TradeExecutor(monitor_config, default_position_size=1.0, stop_loss_pct=0.5)
+        self.external_tool = ExternalTool()
         self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
         self.external_tools: List[ExternalTool] = []
 
@@ -45,6 +48,22 @@ class DataStreamer:
         if symbol != self.symbol:
             return
 
+
+        ##############
+        for aggregator in self.aggregators.values():
+           aggregator.process_pip(pip_data)
+
+        self.indicators, self.raw_indicators, self.bar_scores = (
+            self.indicator_processor.calculate_indicators_new(self.aggregators))
+
+        self.external_tool.process_pip()
+
+        # add new method process pip in ui external tool for extenral tool deciding
+        # if it needs to indicator vector or to use price update
+        ##############
+
+
+
         # Send PIP to all aggregators and handle completed candles
         for timeframe, aggregator in self.aggregators.items():
             print(f"SENDING PIP to {timeframe} aggregator")  # ADD THIS
@@ -53,7 +72,6 @@ class DataStreamer:
             if completed_candle:
                 print(f"CANDLE COMPLETED: {timeframe}")  # ADD THIS
                 self._handle_completed_candle(timeframe, completed_candle)
-
         # Send current price update
         self._send_price_update(pip_data)
 
@@ -139,6 +157,9 @@ class DataStreamer:
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool"""
         self.external_tools.append(external_tool)
+
+    def get_trade_executor(self):
+        return self.trade_executor
 
     def get_symbol(self) -> str:
         """Get symbol"""
