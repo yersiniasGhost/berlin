@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 from typing import List, Tuple
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 DAILY_TICS = List[TickData]
 @dataclass

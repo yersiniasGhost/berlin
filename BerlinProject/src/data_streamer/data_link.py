@@ -1,8 +1,7 @@
-from typing import Dict, List, Optional, Tuple, Iterator, Any, Callable
-from abc import ABC, abstractmethod
+from typing import Dict, List
+from abc import ABC
 from collections import defaultdict
-from datetime import datetime
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from data_streamer.data_streamer import DataStreamer
 
 

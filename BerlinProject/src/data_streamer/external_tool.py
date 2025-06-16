@@ -1,7 +1,7 @@
 from typing import Dict, Optional, Any
 from abc import ABC, abstractmethod
 import numpy as np
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class ExternalTool(ABC):

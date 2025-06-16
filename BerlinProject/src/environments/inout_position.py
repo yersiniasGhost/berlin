@@ -2,8 +2,8 @@ from typing import Optional
 import numpy as np
 from typing import List
 from .state import State
-from environments.tick_data import TickData
-from config import IN, OUT, ACTION
+from models.tick_data import TickData
+from config import IN, OUT
 
 HOLD_TIME_LIMIT = 20
 

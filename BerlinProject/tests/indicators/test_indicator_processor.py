@@ -4,7 +4,7 @@ import unittest
 from models import MonitorConfiguration
 from data_streamer.indicator_processor import IndicatorProcessor
 from config.types import CANDLE_STICK_PATTERN
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class TestIndicatorProcessor(unittest.TestCase):

@@ -3,7 +3,7 @@ import time
 from typing import List, Optional, Tuple
 import logging
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from data_streamer.data_link import DataLink
 
 # Configure at module level

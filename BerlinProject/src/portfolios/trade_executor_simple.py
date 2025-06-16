@@ -1,15 +1,15 @@
-from typing import Dict, Optional
+from typing import Dict
 from collections import defaultdict
 import logging
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 import sys
 import os
 sys.path.append(os.path.dirname(__file__))
 
 from trade_executor import TradeExecutor
-from portfolio_tool import Portfolio, TradeReason
+from portfolio_tool import TradeReason
 
 logger = logging.getLogger('TradeExecutorSimple')
 

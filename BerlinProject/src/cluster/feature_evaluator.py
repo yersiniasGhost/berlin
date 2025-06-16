@@ -3,7 +3,7 @@
 import numpy as np
 
 from data_streamer import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class FeatureEvaluator(ExternalTool):

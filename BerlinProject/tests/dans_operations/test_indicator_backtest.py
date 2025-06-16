@@ -1,9 +1,9 @@
 import unittest
 from datetime import datetime
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from mongo_tools.tick_history_tools import TickHistoryTools
-from operations.indicator_backtest import IndicatorBacktest, Trade
+from operations.indicator_backtest import IndicatorBacktest
 from data_streamer.data_streamer_orig import DataStreamer
 
 
@@ -75,7 +75,7 @@ class TestIndicatorBackTestRealData(unittest.TestCase):
             'time_increment': 1
 
         }
-        from config.types import PyObjectId, CANDLE_STICK_PATTERN, INDICATOR_TYPE
+        from config.types import INDICATOR_TYPE
 
         indicator_config_macd = {
             'name': 'my_silly_macd_cross',

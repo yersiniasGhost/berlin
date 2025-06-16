@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict
 import logging
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
 from portfolios.portfolio_tool import Portfolio
 

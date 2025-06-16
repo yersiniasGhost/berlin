@@ -1,10 +1,10 @@
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from datetime import datetime, timedelta
 
 from bson import ObjectId
 from pydantic import BaseModel, Field as PydanticField, model_validator
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class TickHistory(BaseModel):

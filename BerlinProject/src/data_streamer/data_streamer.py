@@ -6,7 +6,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from data_streamer.indicator_processor import IndicatorProcessor
 from data_streamer.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration

@@ -1,18 +1,15 @@
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any, Iterable, Iterator
-from bson import ObjectId
-from config.types import PYMONGO_ID, SAMPLE_COLLECTION, TICK_HISTORY_COLLECTION
-from environments.tick_data import TickData
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Iterator
+from config.types import TICK_HISTORY_COLLECTION
+from models.tick_data import TickData
 from .book_data import BookData
 from pymongo.collection import Collection
 from data_streamer.data_link import DataLink
 
 from models.tick_history import TickHistory
 from mongo_tools.mongo import Mongo
-from pymongo import InsertOne, collection
-import logging
 
 STREAMING_MODE = "stream"
 RANDOM_MODE = "random"

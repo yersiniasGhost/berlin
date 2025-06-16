@@ -3,15 +3,14 @@ Enhanced IndicatorProcessor with proper history tracking - no synthetic data
 """
 
 import logging
-from typing import Tuple, Dict, List
+from typing import Tuple
 from datetime import datetime
-import numpy as np
 
 from data_streamer.candle_aggregator import CandleAggregator
 from features.indicators2 import support_level, resistance_level
 from models.monitor_configuration import MonitorConfiguration
 from features.indicators import *
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 logger = logging.getLogger('IndicatorProcessor')
 

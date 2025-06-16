@@ -1,5 +1,5 @@
-from typing import Optional, List, Dict
-from environments.tick_data import TickData
+from typing import Optional, List
+from models.tick_data import TickData
 import numpy as np
 from features.features import calculate_sma_tick, calculate_macd_tick
 from data_streamer.data_preprocessor import DataPreprocessor

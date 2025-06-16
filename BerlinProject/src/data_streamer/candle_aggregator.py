@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Dict, Optional, List, Tuple, Any
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class CandleAggregator:

@@ -1,9 +1,6 @@
-from typing import Dict, List, Tuple
+from typing import List
 
-import numpy as np
-from scipy.signal import argrelextrema
-
-from environments.tick_data import TickData
+from models.tick_data import TickData
 import numpy as np
 from scipy.signal import argrelextrema
 

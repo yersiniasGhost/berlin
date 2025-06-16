@@ -1,14 +1,12 @@
 import logging
 import threading
-import json
-import time
 import numpy as np
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, Any
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 from data_streamer.external_tool import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class UIExternalTool(ExternalTool):

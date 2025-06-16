@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.external_tool import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
 

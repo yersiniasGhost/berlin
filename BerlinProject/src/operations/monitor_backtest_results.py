@@ -6,7 +6,7 @@ import numpy as np
 from config.pyobject_id import PyObjectId
 from config.types import INDICATOR_COLLECTION
 from data_streamer.external_tool import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor
 from mongo_tools.mongo import Mongo

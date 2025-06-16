@@ -11,7 +11,7 @@ from datetime import datetime
 from flask_socketio import SocketIO
 
 from data_streamer import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 logger = logging.getLogger('UIExternalTool')
 

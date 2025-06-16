@@ -1,9 +1,9 @@
 import unittest
 from datetime import datetime
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from mongo_tools.tick_history_tools import TickHistoryTools
-from operations.indicator_backtest import IndicatorBacktest, Trade
+from operations.indicator_backtest import IndicatorBacktest
 
 
 class TestIndicatorBackTest(unittest.TestCase):

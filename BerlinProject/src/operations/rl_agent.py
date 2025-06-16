@@ -1,7 +1,7 @@
 from stable_baselines3 import PPO  # or whatever algorithm you used
 import numpy as np
 from src.config.types import AgentActions
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 class RLAgent:
     def __init__(self, saved_model: str, env):

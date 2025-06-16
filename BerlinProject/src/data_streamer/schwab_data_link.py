@@ -5,11 +5,10 @@ import threading
 import time
 import logging
 from typing import Set
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from data_streamer.data_link import DataLink
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

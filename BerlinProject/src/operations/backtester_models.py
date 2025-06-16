@@ -1,7 +1,7 @@
 from typing import List, Union
 import random
 from src.config.types import AgentActions
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class Backtester:

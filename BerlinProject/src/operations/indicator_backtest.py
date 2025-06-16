@@ -1,10 +1,10 @@
-from typing import Dict, Optional
+from typing import Optional
 from dataclasses import dataclass
 
 import numpy as np
 
 from data_streamer.external_tool import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 @dataclass
