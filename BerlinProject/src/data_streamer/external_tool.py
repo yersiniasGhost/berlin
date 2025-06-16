@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from abc import ABC, abstractmethod
 import numpy as np
 from environments.tick_data import TickData
@@ -25,4 +25,9 @@ class ExternalTool(ABC):
         pass
 
     def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
+        pass
+
+    def process_pip(self, card_id: str, symbol: str, pip_data: Dict[str, Any],
+                    indicators: Dict[str, float], raw_indicators: Dict[str, float],
+                    bar_scores: Dict[str, float]) -> None:
         pass

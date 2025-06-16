@@ -25,6 +25,39 @@ class UIExternalTool(ExternalTool):
         self.socketio: SocketIO = socketio
         self.last_meaningful_data: Dict[str, Dict] = {}
 
+    def process_pip(self, card_id: str, symbol: str, pip_data: Dict[str, Any], tick: TickData,
+                    indicators: Dict[str, float], raw_indicators: Dict[str, float],
+                    bar_scores: Dict[str, float]) -> None:
+        # the checking of data should be done in the schwab data link
+        # a check is 3, 38 whatever else is not in pip data then log error
+        try:
+            price = float(pip_data.get('3', 0.0))
+            volume = int(pip_data.get('8', 0))
+            timestamp_ms = int(pip_data.get('38', 0))
+            timestamp = datetime.fromtimestamp(timestamp_ms / 1000) if timestamp_ms > 0 else datetime.now()
+
+            # Prepare update data
+            update_data = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'price': price,
+                'timestamp': self._format_timestamp(timestamp),
+                'ohlc': [tick.open, tick.high, tick.low, tick.close],
+                'volume': volume,
+                'indicators': indicators,
+                'bar_scores': bar_scores,
+                'raw_indicators': raw_indicators
+            }
+
+            self.socketio.emit('card_update', update_data)
+
+            logger.debug(f"Sent update for {card_id}: price=${price}, bars={bar_scores}")
+
+        except Exception as e:
+            logger.error(f"Error in process_pip for {card_id}: {e}")
+
+    # check if it is a completed candle if it is pass in the indicator vector and have indicator info and candle
+    # passed, if not a completed candle just have the candle passed for a price update.
     def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
                          indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
                          raw_indicators: Dict[str, float] = None,
@@ -82,7 +115,7 @@ class UIExternalTool(ExternalTool):
                 else:
                     # No previous data - send as-is
                     print(f"UI TOOL - NO CACHE, SENDING: {update_data['bar_scores']}")  # ADD THIS DEBUG
-                    self.socketio.emit('card_update', update_data)
+                    self.socketio.emit('card_update_old', update_data)
 
         except Exception as e:
             logger.error(f"Error sending indicator data for {card_id}: {e}")
@@ -105,7 +138,7 @@ class UIExternalTool(ExternalTool):
                 meaningful_data['ohlc'] = [tick.open, tick.high, tick.low, tick.close]
                 meaningful_data['volume'] = tick.volume
 
-                self.socketio.emit('card_update', meaningful_data)
+                self.socketio.emit('card_update_old', meaningful_data)
             else:
                 # Send basic price update
                 update_data = {

@@ -7,6 +7,7 @@ from typing import Tuple, Dict, List
 from datetime import datetime
 import numpy as np
 
+from data_streamer.candle_aggregator import CandleAggregator
 from features.indicators2 import support_level, resistance_level
 from models.monitor_configuration import MonitorConfiguration
 from features.indicators import *
@@ -29,14 +30,59 @@ class IndicatorProcessor:
         self.bar_history: Dict[str, List[float]] = {}
         self.timestamp_history: List[datetime] = []
         self.max_history_length: int = 100  # Keep last 100 data points
+        self.indicators: Dict[str, float] = {}
+        self.raw_indicators: Dict[str, float] = {}
+
+        self.indicator_trigger_history: Dict[str, List[float]] = {}
+        for indicator in self.config.indicators:
+            self.indicator_trigger_history[indicator.name] = []
+
+        self.first_pass = True
 
         logger.info(f"IndicatorProcessor initialized with {len(self.config.indicators)} indicators")
 
+    def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
+        Dict[str, float], Dict[str, float], Dict[str, float]]:
 
-    def calculate_indicators_new(self, candle_data: Dict[str, CandleAggragator]):
+        for indicator_def in self.config.indicators:
+            timeframe = indicator_def.time_increment
+            aggregator = aggregators[timeframe]
+            all_candles = aggregator.get_history().copy()
 
+            if aggregator.get_current_candle():
+                all_candles.append(aggregator.get_current_candle())
 
+            calc_on_pip = indicator_def.calc_on_pip or self.first_pass
+            if calc_on_pip or aggregator.completed_candle:
+                result = self._calculate_single_indicator(all_candles, indicator_def)
+                value = float(result[-1])
 
+                self.raw_indicators[indicator_def.name] = value
+
+                self.indicator_trigger_history[indicator_def.name].append(value)
+
+                lookback = indicator_def.parameters.get('lookback')
+                trigger_history = np.array(self.indicator_trigger_history[indicator_def.name])
+                decay_value = self.calculate_time_based_metric(trigger_history, lookback)
+                self.indicators[indicator_def.name] = decay_value
+
+        self.first_pass = False
+        bar_scores: Dict[str, float] = self._calculate_bar_scores(self.indicators)
+
+        return self.indicators, self.raw_indicators, bar_scores
+
+    def calculate_time_based_metric(self, indicator_data: np.ndarray, lookback: int) -> float:
+        search = indicator_data[-lookback:]
+        non_zero_indices = np.nonzero(search)[0]
+        if non_zero_indices.size == 0:
+            return 0.0
+        c = search[non_zero_indices[-1]]
+        lookback_location = len(search) - non_zero_indices[-1] - 1
+        lookback_ratio = lookback_location / float(lookback)
+        metric = (1.0 - lookback_ratio) * np.sign(c)
+
+        return metric
+    #
     def calculate_indicators(self,
                            all_candle_data: Dict[str, List[TickData]],
                            completed_timeframe: str = None) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
@@ -54,65 +100,64 @@ class IndicatorProcessor:
             self._store_history_snapshot(current_indicators, bar_scores)
 
         return current_indicators, current_raw, bar_scores
-
-    def _calculate_fresh_indicators(self,
-                                  all_candle_data: Dict[str, List[TickData]],
-                                  completed_timeframe: str) -> None:
-        """
-        Calculate fresh values for indicators that match the completed timeframe
-        """
-        for indicator_def in self.config.indicators:
-            indicator_timeframe: str = getattr(indicator_def, 'time_increment', '1m')
-            csa = candle_data[indicator_timeframe]
-            if indicator_df requires completed candle and csa.has_completed_candle()
-                csa.get_history()
-
-            if indicator_timeframe != completed_timeframe:
-                continue
-
-            if indicator_timeframe not in all_candle_data:
-                continue
-
-            candle_data: List[TickData] = all_candle_data[indicator_timeframe]
-
-            if len(candle_data) < 20:
-                continue
-
-            try:
-                result: np.ndarray = self._calculate_single_indicator(candle_data, indicator_def)
-
-                if result is not None and isinstance(result, np.ndarray) and len(result) > 0:
-                    current_value: float = float(result[-1])
-
-                    # Check for recent triggers (last 5 values)
-                    lookback_periods: int = min(5, len(result))
-                    recent_values: np.ndarray = result[-lookback_periods:]
-                    has_recent_trigger: bool = np.any(recent_values > 0)
-
-                    if has_recent_trigger:
-                        stored_value: float = 1.0
-                        timestamp: datetime = datetime.now()
-                    else:
-                        if indicator_def.name in self.stored_values:
-                            stored_value = self.stored_values[indicator_def.name]['value']
-                            timestamp = self.stored_values[indicator_def.name]['timestamp']
-                        else:
-                            stored_value = 0.0
-                            timestamp = datetime.now()
-
-                    self.stored_values[indicator_def.name] = {
-                        'value': stored_value,
-                        'raw_value': current_value,
-                        'timestamp': timestamp,
-                        'timeframe': indicator_timeframe
-                    }
-
-            except Exception as e:
-                logger.error(f"Error calculating {indicator_def.name}: {e}")
-
+    #
+    # def _calculate_fresh_indicators(self,
+    #                               all_candle_data: Dict[str, List[TickData]],
+    #                               completed_timeframe: str) -> None:
+    #     """
+    #     Calculate fresh values for indicators that match the completed timeframe
+    #     """
+    #     for indicator_def in self.config.indicators:
+    #         indicator_timeframe: str = getattr(indicator_def, 'time_increment', '1m')
+    #         csa = candle_data[indicator_timeframe]
+    #         if indicator_df requires completed candle and csa.has_completed_candle()
+    #             csa.get_history()
+    #
+    #         if indicator_timeframe != completed_timeframe:
+    #             continue
+    #
+    #         if indicator_timeframe not in all_candle_data:
+    #             continue
+    #
+    #         candle_data: List[TickData] = all_candle_data[indicator_timeframe]
+    #
+    #         if len(candle_data) < 20:
+    #             continue
+    #
+    #         try:
+    #             result: np.ndarray = self._calculate_single_indicator(candle_data, indicator_def)
+    #
+    #             if result is not None and isinstance(result, np.ndarray) and len(result) > 0:
+    #                 current_value: float = float(result[-1])
+    #
+    #                 # Check for recent triggers (last 5 values)
+    #                 lookback_periods: int = min(5, len(result))
+    #                 recent_values: np.ndarray = result[-lookback_periods:]
+    #                 has_recent_trigger: bool = np.any(recent_values > 0)
+    #
+    #                 if has_recent_trigger:
+    #                     stored_value: float = 1.0
+    #                     timestamp: datetime = datetime.now()
+    #                 else:
+    #                     if indicator_def.name in self.stored_values:
+    #                         stored_value = self.stored_values[indicator_def.name]['value']
+    #                         timestamp = self.stored_values[indicator_def.name]['timestamp']
+    #                     else:
+    #                         stored_value = 0.0
+    #                         timestamp = datetime.now()
+    #
+    #                 self.stored_values[indicator_def.name] = {
+    #                     'value': stored_value,
+    #                     'raw_value': current_value,
+    #                     'timestamp': timestamp,
+    #                     'timeframe': indicator_timeframe
+    #                 }
+    #
+    #         except Exception as e:
+    #             logger.error(f"Error calculating {indicator_def.name}: {e}")
     def _calculate_single_indicator(self,
-                                  tick_history: List[TickData],
-                                  indicator_def) -> np.ndarray:
+                                    tick_history: List[TickData],
+                                    indicator_def) -> np.ndarray:
         """
         Calculate a single indicator
         """

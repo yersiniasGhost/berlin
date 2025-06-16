@@ -42,27 +42,28 @@ class DataStreamer:
         logger.info(f"Created DataStreamer for {symbol} with timeframes: {required_timeframes}")
 
     def process_pip(self, pip_data: Dict[str, Any]) -> None:
-        """Process incoming PIP data through aggregators"""
         symbol: Optional[str] = pip_data.get('key')
-        print(f"DATASTREAMER RECEIVED PIP: {symbol}")  # ADD THIS
         if symbol != self.symbol:
             return
-
-
         ##############
         for aggregator in self.aggregators.values():
-           aggregator.process_pip(pip_data)
+            aggregator.process_pip(pip_data)
 
         self.indicators, self.raw_indicators, self.bar_scores = (
             self.indicator_processor.calculate_indicators_new(self.aggregators))
 
-        self.external_tool.process_pip()
+        self.external_tool.process_pip(
+                card_id=self.card_id,
+                symbol=self.symbol,
+                pip_data=pip_data,
+                indicators=self.indicators,
+                raw_indicators=self.raw_indicators,
+                bar_scores=self.bar_scores
+            )
 
         # add new method process pip in ui external tool for extenral tool deciding
         # if it needs to indicator vector or to use price update
         ##############
-
-
 
         # Send PIP to all aggregators and handle completed candles
         for timeframe, aggregator in self.aggregators.items():

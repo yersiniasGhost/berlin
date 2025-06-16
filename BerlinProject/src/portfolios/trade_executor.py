@@ -4,7 +4,7 @@ import logging
 
 from environments.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
-from portfolio_tool import Portfolio
+from portfolios.portfolio_tool import Portfolio
 
 logger = logging.getLogger('TradeExecutor')
 
