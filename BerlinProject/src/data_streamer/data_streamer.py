@@ -41,40 +41,68 @@ class DataStreamer:
 
         logger.info(f"Created DataStreamer for {symbol} with timeframes: {required_timeframes}")
 
-    def process_pip(self, pip_data: Dict[str, Any]) -> None:
-        symbol: Optional[str] = pip_data.get('key')
-        if symbol != self.symbol:
-            return
-        ##############
-        for aggregator in self.aggregators.values():
-            aggregator.process_pip(pip_data)
+    def process_pip(self, tick_data: TickData) -> None:
+        """
+        Process incoming TickData (formerly process_pip)
 
+        Args:
+            tick_data: TickData object with type="PIP" for real-time data
+        """
+        if tick_data.symbol != self.symbol:
+            return
+
+        for aggregator in self.aggregators.values():
+            aggregator.process_tick(tick_data)
+
+        # Calculate indicators based on current aggregator state
         self.indicators, self.raw_indicators, self.bar_scores = (
             self.indicator_processor.calculate_indicators_new(self.aggregators))
 
         self.external_tool.process_pip(
-                card_id=self.card_id,
-                symbol=self.symbol,
-                pip_data=pip_data,
-                indicators=self.indicators,
-                raw_indicators=self.raw_indicators,
-                bar_scores=self.bar_scores
-            )
+            card_id=self.card_id,
+            symbol=self.symbol,
+            tick_data=tick_data,
+            indicators=self.indicators,
+            raw_indicators=self.raw_indicators,
+            bar_scores=self.bar_scores
+        )
 
-        # add new method process pip in ui external tool for extenral tool deciding
-        # if it needs to indicator vector or to use price update
-        ##############
 
-        # Send PIP to all aggregators and handle completed candles
-        for timeframe, aggregator in self.aggregators.items():
-            print(f"SENDING PIP to {timeframe} aggregator")  # ADD THIS
-            completed_candle: Optional[TickData] = aggregator.process_pip(pip_data)
-
-            if completed_candle:
-                print(f"CANDLE COMPLETED: {timeframe}")  # ADD THIS
-                self._handle_completed_candle(timeframe, completed_candle)
-        # Send current price update
-        self._send_price_update(pip_data)
+    # for each tick data from the data link will be passed to the aggregator process pip
+    # def process_pip(self, pip_data: Dict[str, Any]) -> None:
+    #     symbol: Optional[str] = pip_data.get('key')
+    #     if symbol != self.symbol:
+    #         return
+    #     ##############
+    #     for aggregator in self.aggregators.values():
+    #         aggregator.process_pip(pip_data)
+    #
+    #     self.indicators, self.raw_indicators, self.bar_scores = (
+    #         self.indicator_processor.calculate_indicators_new(self.aggregators))
+    #
+    #     self.external_tool.process_pip(
+    #             card_id=self.card_id,
+    #             symbol=self.symbol,
+    #             pip_data=pip_data,
+    #             indicators=self.indicators,
+    #             raw_indicators=self.raw_indicators,
+    #             bar_scores=self.bar_scores
+    #         )
+    #
+    #     # add new method process pip in ui external tool for extenral tool deciding
+    #     # if it needs to indicator vector or to use price update
+    #     ##############
+    #
+    #     # Send PIP to all aggregators and handle completed candles
+    #     for timeframe, aggregator in self.aggregators.items():
+    #         print(f"SENDING PIP to {timeframe} aggregator")  # ADD THIS
+    #         completed_candle: Optional[TickData] = aggregator.process_pip(pip_data)
+    #
+    #         if completed_candle:
+    #             print(f"CANDLE COMPLETED: {timeframe}")  # ADD THIS
+    #             self._handle_completed_candle(timeframe, completed_candle)
+    #     # Send current price update
+    #     self._send_price_update(pip_data)
 
     def _handle_completed_candle(self, timeframe: str, completed_candle: TickData) -> None:
         """Handle when a candle completes - calculate indicators and notify tools"""

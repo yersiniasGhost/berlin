@@ -25,16 +25,25 @@ class UIExternalTool(ExternalTool):
         self.socketio: SocketIO = socketio
         self.last_meaningful_data: Dict[str, Dict] = {}
 
-    def process_pip(self, card_id: str, symbol: str, pip_data: Dict[str, Any], tick: TickData,
+    def process_pip(self, card_id: str, symbol: str, tick_data: TickData,
                     indicators: Dict[str, float], raw_indicators: Dict[str, float],
                     bar_scores: Dict[str, float]) -> None:
-        # the checking of data should be done in the schwab data link
-        # a check is 3, 38 whatever else is not in pip data then log error
+        """
+        Process real-time tick data and send updates to browser
+
+        Args:
+            card_id: Card identifier
+            symbol: Stock symbol
+            tick_data: TickData object (already validated)
+            indicators: Calculated indicators
+            raw_indicators: Raw indicator values
+            bar_scores: Bar scores
+        """
         try:
-            price = float(pip_data.get('3', 0.0))
-            volume = int(pip_data.get('8', 0))
-            timestamp_ms = int(pip_data.get('38', 0))
-            timestamp = datetime.fromtimestamp(timestamp_ms / 1000) if timestamp_ms > 0 else datetime.now()
+            # Extract data from TickData object
+            price = tick_data.close
+            volume = tick_data.volume
+            timestamp = tick_data.timestamp
 
             # Prepare update data
             update_data = {
@@ -42,7 +51,7 @@ class UIExternalTool(ExternalTool):
                 'symbol': symbol,
                 'price': price,
                 'timestamp': self._format_timestamp(timestamp),
-                'ohlc': [tick.open, tick.high, tick.low, tick.close],
+                'ohlc': [tick_data.open, tick_data.high, tick_data.low, tick_data.close],
                 'volume': volume,
                 'indicators': indicators,
                 'bar_scores': bar_scores,
@@ -56,8 +65,6 @@ class UIExternalTool(ExternalTool):
         except Exception as e:
             logger.error(f"Error in process_pip for {card_id}: {e}")
 
-    # check if it is a completed candle if it is pass in the indicator vector and have indicator info and candle
-    # passed, if not a completed candle just have the candle passed for a price update.
     def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
                          indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
                          raw_indicators: Dict[str, float] = None,
