@@ -576,18 +576,17 @@
 
             <div class="form-section">
                 <h3>Monitor Configuration File</h3>
-                <div class="file-browser">
-                    <div class="file-path" id="modalCurrentPath">Loading...</div>
-                    <div id="modalFileList">
-                        <div class="file-item">
-                            <span class="file-icon">📄</span>
-                            <span class="file-name">Loading files...</span>
-                        </div>
+                <div class="form-group">
+                    <label for="modalFileInput">Select a JSON configuration file</label>
+                    <input type="file" id="modalFileInput" accept=".json" style="margin-bottom: 0.5rem;">
+                    <div id="selectedFileName" style="font-size: 0.875rem; color: #7d8590; margin-top: 0.5rem;">
+                        No file selected
                     </div>
                 </div>
-                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                    <button class="btn btn-secondary btn-small" onclick="goUpDirectoryModal()" id="modalUpButton">⬆️ Up</button>
-                    <button class="btn btn-secondary btn-small" onclick="refreshFileListModal()">🔄 Refresh</button>
+                <div style="margin-top: 1rem;">
+                    <p style="font-size: 0.875rem; color: #7d8590;">
+                        💡 <strong>Tip:</strong> You can also drag and drop a JSON file onto the file input above.
+                    </p>
                 </div>
             </div>
 
@@ -613,7 +612,6 @@
         let cards = {};
 
         // Modal state
-        let modalCurrentDirectory = '';
         let modalSelectedFile = null;
 
         // Connection handling
@@ -649,7 +647,9 @@
         function openAddCardModal() {
             document.getElementById('modalOverlay').style.display = 'block';
             document.body.style.overflow = 'hidden';
-            refreshFileListModal();
+            // Reset file input
+            document.getElementById('modalFileInput').value = '';
+            updateSelectedFileName();
         }
 
         function closeAddCardModal() {
@@ -658,119 +658,47 @@
 
             // Reset form
             document.getElementById('modalSymbolInput').value = '';
+            document.getElementById('modalFileInput').value = '';
             modalSelectedFile = null;
+            updateSelectedFileName();
             updateModalAddButton();
         }
 
-        async function refreshFileListModal(path = '') {
-            try {
-                const response = await fetch(`/api/files/browse?path=${encodeURIComponent(path)}`);
-                const data = await response.json();
+        function updateSelectedFileName() {
+            const fileInput = document.getElementById('modalFileInput');
+            const fileNameDiv = document.getElementById('selectedFileName');
 
-                if (data.error) {
-                    showMessage(`Error browsing files: ${data.error}`, 'error');
-                    return;
-                }
-
-                modalCurrentDirectory = data.current_path;
-                document.getElementById('modalCurrentPath').textContent = modalCurrentDirectory || 'Select a directory';
-
-                renderModalFileList(data);
-
-                // Update up button
-                const upButton = document.getElementById('modalUpButton');
-                upButton.disabled = !data.parent_path;
-
-            } catch (error) {
-                console.error('Error refreshing file list:', error);
-                showMessage('Error loading file list', 'error');
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                fileNameDiv.textContent = `Selected: ${file.name}`;
+                fileNameDiv.style.color = '#56d364'; // Green color for selected file
+                modalSelectedFile = file;
+            } else {
+                fileNameDiv.textContent = 'No file selected';
+                fileNameDiv.style.color = '#7d8590'; // Gray color
+                modalSelectedFile = null;
             }
-        }
-
-        function renderModalFileList(data) {
-            const fileListContainer = document.getElementById('modalFileList');
-            fileListContainer.innerHTML = '';
-
-            // Add directories
-            if (data.directories) {
-                data.directories.forEach(dir => {
-                    const item = createModalFileItem('📁', dir.name, 'Directory', dir.path, 'directory');
-                    fileListContainer.appendChild(item);
-                });
-            }
-
-            // Add JSON files
-            if (data.files) {
-                data.files.forEach(file => {
-                    const icon = file.is_config ? '⚙️' : '📄';
-                    const size = file.size ? `${(file.size / 1024).toFixed(1)}KB` : '';
-                    const item = createModalFileItem(icon, file.name, size, file.path, 'file');
-                    fileListContainer.appendChild(item);
-                });
-            }
-
-            if ((!data.directories || data.directories.length === 0) &&
-                (!data.files || data.files.length === 0)) {
-                const emptyItem = document.createElement('div');
-                emptyItem.className = 'file-item';
-                emptyItem.innerHTML = '<span class="file-icon">📂</span><span class="file-name">No files found</span>';
-                fileListContainer.appendChild(emptyItem);
-            }
-        }
-
-        function createModalFileItem(icon, name, info, path, type) {
-            const item = document.createElement('div');
-            item.className = 'file-item';
-            item.dataset.path = path;
-            item.dataset.type = type;
-            item.dataset.name = name;
-
-            item.innerHTML = `
-                <span class="file-icon">${icon}</span>
-                <span class="file-name">${name}</span>
-                <span class="file-info">${info}</span>
-            `;
-
-            item.addEventListener('click', () => {
-                if (type === 'directory') {
-                    refreshFileListModal(path);
-                } else {
-                    selectModalFile(item, name, path);
-                }
-            });
-
-            return item;
-        }
-
-        function selectModalFile(item, name, path) {
-            // Remove previous selection
-            document.querySelectorAll('#modalFileList .file-item').forEach(el => {
-                el.classList.remove('selected');
-            });
-
-            // Select current item
-            item.classList.add('selected');
-            modalSelectedFile = { name, path };
 
             updateModalAddButton();
-        }
-
-        function goUpDirectoryModal() {
-            const pathParts = modalCurrentDirectory.split('/');
-            pathParts.pop();
-            const parentPath = pathParts.join('/');
-            refreshFileListModal(parentPath);
         }
 
         function updateModalAddButton() {
             const symbol = document.getElementById('modalSymbolInput').value.trim();
             const addButton = document.getElementById('modalAddButton');
 
-            addButton.disabled = !symbol || !modalSelectedFile;
+            console.log('updateModalAddButton - symbol:', symbol, 'modalSelectedFile:', modalSelectedFile);
+
+            const isValid = symbol && modalSelectedFile;
+            addButton.disabled = !isValid;
+
+            console.log('Button disabled:', addButton.disabled);
         }
 
         async function addCombinationFromModal() {
+            console.log('addCombinationFromModal called');
+
             const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
+            console.log('Symbol:', symbol, 'File:', modalSelectedFile);
 
             if (!symbol || !modalSelectedFile) {
                 showMessage('Please enter a symbol and select a config file', 'error');
@@ -778,6 +706,22 @@
             }
 
             try {
+                console.log('Reading file...');
+                // Read the file content
+                const fileContent = await readFileAsText(modalSelectedFile);
+                console.log('File content length:', fileContent.length);
+
+                // Validate it's valid JSON
+                try {
+                    JSON.parse(fileContent);
+                    console.log('JSON validation passed');
+                } catch (e) {
+                    console.error('JSON validation failed:', e);
+                    showMessage('Selected file is not valid JSON', 'error');
+                    return;
+                }
+
+                console.log('Sending request to server...');
                 const response = await fetch('/api/combinations', {
                     method: 'POST',
                     headers: {
@@ -785,11 +729,14 @@
                     },
                     body: JSON.stringify({
                         symbol: symbol,
-                        config_file: modalSelectedFile.path
+                        config_content: fileContent,
+                        config_name: modalSelectedFile.name
                     })
                 });
 
+                console.log('Response status:', response.status);
                 const result = await response.json();
+                console.log('Response result:', result);
 
                 if (result.success) {
                     showMessage(`Successfully added ${symbol} as ${result.card_id}`, 'success');
@@ -798,19 +745,20 @@
                     showMessage(`Error: ${result.error}`, 'error');
                 }
             } catch (error) {
+                console.error('Error in addCombinationFromModal:', error);
                 showMessage(`Error adding combination: ${error.message}`, 'error');
             }
         }
 
-        // Add input listener for symbol field
-        document.getElementById('modalSymbolInput').addEventListener('input', updateModalAddButton);
-
-        // Enter key handler for symbol input
-        document.getElementById('modalSymbolInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !document.getElementById('modalAddButton').disabled) {
-                addCombinationFromModal();
-            }
-        });
+        // Helper function to read file as text
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
 
         function renderBarScores(barScores) {
             if (!barScores || Object.keys(barScores).length === 0) {
@@ -960,11 +908,6 @@
 
             // Update price with timestamp
             const priceDisplay = card.querySelector('.price-display');
-        function updateCardData(card, data) {
-            console.log("UPDATE CARD DATA - Received data:", data);
-
-            // Update price with timestamp
-            const priceDisplay = card.querySelector('.price-display');
             const timestampDisplay = card.querySelector('.price-timestamp');
 
             if (priceDisplay && data.price !== undefined) {
@@ -1059,39 +1002,75 @@
             }, 5000);
         }
 
-        // Load initial status
-        window.addEventListener('load', function() {
+        // Event listeners that need to be set up after DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add input listener for symbol field
+            const symbolInput = document.getElementById('modalSymbolInput');
+            if (symbolInput) {
+                symbolInput.addEventListener('input', updateModalAddButton);
+
+                // Enter key handler for symbol input
+                symbolInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !document.getElementById('modalAddButton').disabled) {
+                        addCombinationFromModal();
+                    }
+                });
+            }
+
+            // Add file input listener
+            const fileInput = document.getElementById('modalFileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', updateSelectedFileName);
+
+                // Add drag and drop support
+                fileInput.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    this.style.backgroundColor = '#21262d';
+                });
+
+                fileInput.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    this.style.backgroundColor = '';
+                });
+
+                fileInput.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    this.style.backgroundColor = '';
+
+                    if (e.dataTransfer.files.length > 0) {
+                        const file = e.dataTransfer.files[0];
+                        if (file.name.endsWith('.json')) {
+                            this.files = e.dataTransfer.files;
+                            updateSelectedFileName();
+                        } else {
+                            showMessage('Please select a JSON file', 'error');
+                        }
+                    }
+                });
+            }
+
+            // Close modal on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeAddCardModal();
+                }
+            });
+
+            // Close modal on overlay click
+            const modalOverlay = document.getElementById('modalOverlay');
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeAddCardModal();
+                    }
+                });
+            }
+
+            // Load initial status
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => updateStatus(data))
                 .catch(error => console.error('Error loading status:', error));
-        });
-
-        // Close modal on escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeAddCardModal();
-            }
-        });
-
-        // Close modal on overlay click
-        document.getElementById('modalOverlay').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeAddCardModal();
-            }
-        });
-
-        // Add event listeners when DOM is ready
-        document.addEventListener('DOMContentLoaded', function() {
-            // Add input listener for symbol field
-            document.getElementById('modalSymbolInput').addEventListener('input', updateModalAddButton);
-
-            // Enter key handler for symbol input
-            document.getElementById('modalSymbolInput').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && !document.getElementById('modalAddButton').disabled) {
-                    addCombinationFromModal();
-                }
-            });
         });
     </script>
 </body>

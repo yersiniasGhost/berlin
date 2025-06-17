@@ -4,7 +4,7 @@
 """
 Simplified API routes for AppService
 """
-
+import json
 import logging
 from datetime import datetime
 
@@ -36,35 +36,64 @@ def get_status():
 
 @api_bp.route('/combinations', methods=['POST'])
 def add_combination():
-    """Add a new combination - auto-generate card ID"""
+    """Add a new combination - now handles file content directly"""
     try:
         data = request.json
 
         symbol = data.get('symbol', '').upper().strip()
-        config_file = data.get('config_file', '').strip()
+        config_content = data.get('config_content', '')
+        config_name = data.get('config_name', '')
 
         if not symbol:
             return jsonify({'success': False, 'error': 'Symbol is required'}), 400
 
-        if not config_file:
-            return jsonify({'success': False, 'error': 'Config file is required'}), 400
+        if not config_content:
+            return jsonify({'success': False, 'error': 'Config content is required'}), 400
 
-        app_service = current_app.app_service
-        result = app_service.add_combination(symbol, config_file)
+        # Validate JSON content
+        try:
+            config_data = json.loads(config_content)
+        except json.JSONDecodeError as e:
+            return jsonify({'success': False, 'error': f'Invalid JSON: {str(e)}'}), 400
 
-        if result['success']:
-            logger.info(f"Successfully added combination: {result['card_id']}")
-            return jsonify(result)
-        else:
-            logger.error(f"Failed to add combination: {result.get('error', 'Unknown error')}")
-            return jsonify(result), 400
+        # Create temporary file to work with existing load_monitor_config function
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+            temp_file.write(config_content)
+            temp_config_path = temp_file.name
+
+        try:
+            # Load monitor configuration from temporary file
+            from models.monitor_configuration import load_monitor_config
+            monitor_config = load_monitor_config(temp_config_path)
+
+            if not monitor_config:
+                return jsonify({'success': False, 'error': 'Failed to parse monitor configuration'}), 400
+
+            app_service = current_app.app_service
+            result = app_service.add_combination(symbol, temp_config_path)
+
+            if result['success']:
+                logger.info(f"Successfully added combination: {result['card_id']} with uploaded config: {config_name}")
+                return jsonify(result)
+            else:
+                logger.error(f"Failed to add combination: {result.get('error', 'Unknown error')}")
+                return jsonify(result), 400
+
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_config_path)
+            except:
+                pass  # Ignore cleanup errors
 
     except Exception as e:
         logger.error(f"Error adding combination: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @api_bp.route('/combinations/<card_id>', methods=['DELETE'])
 def remove_combination(card_id: str):
