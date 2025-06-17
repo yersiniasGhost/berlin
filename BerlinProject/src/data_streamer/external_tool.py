@@ -27,7 +27,7 @@ class ExternalTool(ABC):
     def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
         pass
 
-    def process_pip(self, card_id: str, symbol: str, tick_data: Dict[str, Any],
+    def process_tick(self, card_id: str, symbol: str, tick_data: Dict[str, Any],
                     indicators: Dict[str, float], raw_indicators: Dict[str, float],
                     bar_scores: Dict[str, float]) -> None:
         pass

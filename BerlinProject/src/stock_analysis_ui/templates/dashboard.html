@@ -60,32 +60,100 @@
             padding: 2rem;
             background: #0d1117;
             border-bottom: 1px solid #21262d;
+            text-align: center;
         }
 
-        .add-combination {
-            background: #161b22;
-            padding: 2rem;
-            border-radius: 12px;
-            border: 1px solid #30363d;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-        }
-
-        .add-combination h3 {
-            margin-bottom: 1.5rem;
-            color: #f0f6fc;
-            font-size: 1.25rem;
+        .add-card-button {
+            background: #238636;
+            color: #ffffff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1.125rem;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);
         }
 
-        .form-row {
+        .add-card-button:hover {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-header {
             display: flex;
-            gap: 1.5rem;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #21262d;
+            color: #ff7b72;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+        }
+
+        .form-section h3 {
+            color: #f0f6fc;
             margin-bottom: 1rem;
-            align-items: end;
+            font-size: 1.125rem;
         }
 
         .form-group {
-            flex: 1;
+            margin-bottom: 1rem;
         }
 
         .form-group label {
@@ -115,98 +183,27 @@
             box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
         }
 
-        .form-group input::placeholder {
-            color: #7d8590;
-        }
-
-        .form-group option {
-            background: #161b22;
-            color: #e6edf3;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: 1px solid transparent;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-        }
-
-        .btn-primary {
-            background: #238636;
-            color: #ffffff;
-            border-color: #238636;
-        }
-
-        .btn-primary:hover {
-            background: #2ea043;
-            border-color: #2ea043;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.3);
-        }
-
-        .btn-secondary {
-            background: #21262d;
-            color: #e6edf3;
-            border-color: #30363d;
-        }
-
-        .btn-secondary:hover {
-            background: #30363d;
-            border-color: #484f58;
-        }
-
-        .btn-small {
-            padding: 0.5rem 1rem;
-            font-size: 0.75rem;
-        }
-
-        /* File Browser Styles */
-        .file-browser-section {
-            margin-top: 1.5rem;
-            padding: 1.5rem;
-            background: #0d1117;
+        .file-browser {
             border: 1px solid #21262d;
             border-radius: 8px;
-        }
-
-        .file-browser-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .file-browser-header h4 {
-            color: #f0f6fc;
-            font-size: 1rem;
+            background: #0d1117;
+            max-height: 300px;
+            overflow-y: auto;
         }
 
         .file-path {
+            padding: 0.75rem;
+            background: #21262d;
+            border-bottom: 1px solid #30363d;
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
             font-size: 0.75rem;
             color: #7d8590;
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            background: #161b22;
-            border-radius: 4px;
-        }
-
-        .file-list {
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #21262d;
-            border-radius: 6px;
-            background: #0d1117;
         }
 
         .file-item {
             display: flex;
             align-items: center;
-            padding: 0.75rem 1rem;
+            padding: 0.75rem;
             border-bottom: 1px solid #21262d;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -238,6 +235,58 @@
         .file-info {
             font-size: 0.75rem;
             color: #7d8590;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            padding-top: 1rem;
+            border-top: 1px solid #30363d;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #238636;
+            color: #ffffff;
+            border-color: #238636;
+        }
+
+        .btn-primary:hover {
+            background: #2ea043;
+            border-color: #2ea043;
+        }
+
+        .btn-primary:disabled {
+            background: #30363d;
+            color: #7d8590;
+            border-color: #30363d;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            color: #e6edf3;
+            border-color: #30363d;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+            border-color: #484f58;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
         }
 
         .cards-container {
@@ -323,7 +372,13 @@
             color: #da3633;
         }
 
-        /* UPDATED BAR STYLES FOR RESPONSIVE VISUAL BARS */
+        .price-timestamp {
+            font-size: 0.75rem;
+            color: #7d8590;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
         .bars-container {
             margin-bottom: 1.5rem;
         }
@@ -395,16 +450,13 @@
             100% { transform: translateX(100%); }
         }
 
-        /* Color classes for different value ranges */
         .bar-green {
             --bar-color: #238636;
             --bar-color-light: #2ea043;
             --bar-glow: 35, 134, 54;
         }
 
-        .bar-green .bar-value-text {
-            color: #56d364;
-        }
+        .bar-green .bar-value-text { color: #56d364; }
 
         .bar-yellow {
             --bar-color: #d4a017;
@@ -412,9 +464,7 @@
             --bar-glow: 212, 160, 23;
         }
 
-        .bar-yellow .bar-value-text {
-            color: #f9c74f;
-        }
+        .bar-yellow .bar-value-text { color: #f9c74f; }
 
         .bar-neutral {
             --bar-color: #7d8590;
@@ -422,9 +472,7 @@
             --bar-glow: 125, 133, 144;
         }
 
-        .bar-neutral .bar-value-text {
-            color: #8b949e;
-        }
+        .bar-neutral .bar-value-text { color: #8b949e; }
 
         .bar-red {
             --bar-color: #da3633;
@@ -432,9 +480,7 @@
             --bar-glow: 218, 54, 51;
         }
 
-        .bar-red .bar-value-text {
-            color: #ff7b72;
-        }
+        .bar-red .bar-value-text { color: #ff7b72; }
 
         .indicators-summary {
             font-size: 0.875rem;
@@ -507,39 +553,47 @@
     </div>
 
     <div class="controls">
-        <div class="add-combination">
-            <h3>Add New Trading Card</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="symbolInput">Stock Symbol</label>
-                    <input type="text" id="symbolInput" placeholder="e.g., AAPL, MSFT" maxlength="10">
-                </div>
-                <div class="form-group">
-                    <label for="configSelect">Monitor Configuration</label>
-                    <select id="configSelect">
-                        <option value="">Select configuration...</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="addCombination()">Add Card</button>
+        <button class="add-card-button" onclick="openAddCardModal()">
+            + Add New Trading Card
+        </button>
+    </div>
+
+    <!-- Modal for adding cards -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Add New Trading Card</h2>
+                <button class="modal-close" onclick="closeAddCardModal()">&times;</button>
             </div>
 
-            <!-- File Browser Section -->
-            <div class="file-browser-section">
-                <div class="file-browser-header">
-                    <h4>📁 Browse Configuration Files</h4>
-                    <button class="btn btn-secondary btn-small" onclick="refreshFileList()">🔄 Refresh</button>
+            <div class="form-section">
+                <h3>Stock Symbol</h3>
+                <div class="form-group">
+                    <label for="modalSymbolInput">Enter stock symbol</label>
+                    <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="10">
                 </div>
-                <div class="file-path" id="currentPath">Loading...</div>
-                <div class="file-list" id="fileList">
-                    <div class="file-item">
-                        <span class="file-icon">📄</span>
-                        <span class="file-name">Loading files...</span>
+            </div>
+
+            <div class="form-section">
+                <h3>Monitor Configuration File</h3>
+                <div class="file-browser">
+                    <div class="file-path" id="modalCurrentPath">Loading...</div>
+                    <div id="modalFileList">
+                        <div class="file-item">
+                            <span class="file-icon">📄</span>
+                            <span class="file-name">Loading files...</span>
+                        </div>
                     </div>
                 </div>
-                <div style="margin-top: 1rem;">
-                    <button class="btn btn-secondary btn-small" onclick="goUpDirectory()" id="upButton">⬆️ Up</button>
-                    <button class="btn btn-primary btn-small" onclick="selectCurrentFile()" id="selectButton" disabled>✅ Select File</button>
+                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-secondary btn-small" onclick="goUpDirectoryModal()" id="modalUpButton">⬆️ Up</button>
+                    <button class="btn btn-secondary btn-small" onclick="refreshFileListModal()">🔄 Refresh</button>
                 </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
+                <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>Add Card</button>
             </div>
         </div>
     </div>
@@ -549,7 +603,7 @@
     <div class="cards-container" id="cardsContainer">
         <div class="loading">
             <p>No trading cards added yet.</p>
-            <p>Add a card above to start monitoring indicators.</p>
+            <p>Click "Add New Trading Card" above to get started.</p>
         </div>
     </div>
 
@@ -557,22 +611,24 @@
         // WebSocket connection
         const socket = io();
         let cards = {};
-        let currentDirectory = '';
-        let selectedFile = null;
-        let fileList = [];
+
+        // Modal state
+        let modalCurrentDirectory = '';
+        let modalSelectedFile = null;
 
         // Connection handling
         socket.on('connect', function() {
             updateConnectionStatus(true);
-            loadInitialData();
         });
 
         socket.on('disconnect', function() {
             updateConnectionStatus(false);
         });
 
-        // Card update
+        // Card update handler
         socket.on('card_update', function(data) {
+            console.log('Received card_update:', data);
+
             const cardId = data.card_id;
             if (cardId) {
                 updateOrCreateCard(cardId, data);
@@ -589,18 +645,179 @@
             showMessage(`Error: ${data.message}`, 'error');
         });
 
-        function renderBarScores(barScores) {
-            console.log("RENDER BAR SCORES - Input:", barScores);  // ADD THIS DEBUG
+        // Modal functions
+        function openAddCardModal() {
+            document.getElementById('modalOverlay').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            refreshFileListModal();
+        }
 
+        function closeAddCardModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto';
+
+            // Reset form
+            document.getElementById('modalSymbolInput').value = '';
+            modalSelectedFile = null;
+            updateModalAddButton();
+        }
+
+        async function refreshFileListModal(path = '') {
+            try {
+                const response = await fetch(`/api/files/browse?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    showMessage(`Error browsing files: ${data.error}`, 'error');
+                    return;
+                }
+
+                modalCurrentDirectory = data.current_path;
+                document.getElementById('modalCurrentPath').textContent = modalCurrentDirectory || 'Select a directory';
+
+                renderModalFileList(data);
+
+                // Update up button
+                const upButton = document.getElementById('modalUpButton');
+                upButton.disabled = !data.parent_path;
+
+            } catch (error) {
+                console.error('Error refreshing file list:', error);
+                showMessage('Error loading file list', 'error');
+            }
+        }
+
+        function renderModalFileList(data) {
+            const fileListContainer = document.getElementById('modalFileList');
+            fileListContainer.innerHTML = '';
+
+            // Add directories
+            if (data.directories) {
+                data.directories.forEach(dir => {
+                    const item = createModalFileItem('📁', dir.name, 'Directory', dir.path, 'directory');
+                    fileListContainer.appendChild(item);
+                });
+            }
+
+            // Add JSON files
+            if (data.files) {
+                data.files.forEach(file => {
+                    const icon = file.is_config ? '⚙️' : '📄';
+                    const size = file.size ? `${(file.size / 1024).toFixed(1)}KB` : '';
+                    const item = createModalFileItem(icon, file.name, size, file.path, 'file');
+                    fileListContainer.appendChild(item);
+                });
+            }
+
+            if ((!data.directories || data.directories.length === 0) &&
+                (!data.files || data.files.length === 0)) {
+                const emptyItem = document.createElement('div');
+                emptyItem.className = 'file-item';
+                emptyItem.innerHTML = '<span class="file-icon">📂</span><span class="file-name">No files found</span>';
+                fileListContainer.appendChild(emptyItem);
+            }
+        }
+
+        function createModalFileItem(icon, name, info, path, type) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.dataset.path = path;
+            item.dataset.type = type;
+            item.dataset.name = name;
+
+            item.innerHTML = `
+                <span class="file-icon">${icon}</span>
+                <span class="file-name">${name}</span>
+                <span class="file-info">${info}</span>
+            `;
+
+            item.addEventListener('click', () => {
+                if (type === 'directory') {
+                    refreshFileListModal(path);
+                } else {
+                    selectModalFile(item, name, path);
+                }
+            });
+
+            return item;
+        }
+
+        function selectModalFile(item, name, path) {
+            // Remove previous selection
+            document.querySelectorAll('#modalFileList .file-item').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Select current item
+            item.classList.add('selected');
+            modalSelectedFile = { name, path };
+
+            updateModalAddButton();
+        }
+
+        function goUpDirectoryModal() {
+            const pathParts = modalCurrentDirectory.split('/');
+            pathParts.pop();
+            const parentPath = pathParts.join('/');
+            refreshFileListModal(parentPath);
+        }
+
+        function updateModalAddButton() {
+            const symbol = document.getElementById('modalSymbolInput').value.trim();
+            const addButton = document.getElementById('modalAddButton');
+
+            addButton.disabled = !symbol || !modalSelectedFile;
+        }
+
+        async function addCombinationFromModal() {
+            const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
+
+            if (!symbol || !modalSelectedFile) {
+                showMessage('Please enter a symbol and select a config file', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/combinations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        symbol: symbol,
+                        config_file: modalSelectedFile.path
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(`Successfully added ${symbol} as ${result.card_id}`, 'success');
+                    closeAddCardModal();
+                } else {
+                    showMessage(`Error: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error adding combination: ${error.message}`, 'error');
+            }
+        }
+
+        // Add input listener for symbol field
+        document.getElementById('modalSymbolInput').addEventListener('input', updateModalAddButton);
+
+        // Enter key handler for symbol input
+        document.getElementById('modalSymbolInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !document.getElementById('modalAddButton').disabled) {
+                addCombinationFromModal();
+            }
+        });
+
+        function renderBarScores(barScores) {
             if (!barScores || Object.keys(barScores).length === 0) {
-                console.log("RENDER BAR SCORES - No bar data");  // ADD THIS DEBUG
                 return '<div class="responsive-bar"><div class="bar-header"><span class="bar-label">No bar data</span></div></div>';
             }
 
             return Object.entries(barScores).map(([name, value]) => {
-                console.log(`RENDER BAR SCORES - Processing: ${name} = ${value}`);  // ADD THIS DEBUG
-
-                // Determine color class based on value
                 let colorClass = 'bar-neutral';
                 if (value >= 0.7) {
                     colorClass = 'bar-green';
@@ -610,9 +827,7 @@
                     colorClass = 'bar-red';
                 }
 
-                // Calculate bar width (0-100%)
                 const barWidth = Math.min(Math.abs(value) * 100, 100);
-                console.log(`RENDER BAR SCORES - ${name}: value=${value}, barWidth=${barWidth}%`);  // ADD THIS DEBUG
 
                 return `
                     <div class="responsive-bar ${colorClass}">
@@ -628,173 +843,6 @@
             }).join('');
         }
 
-        // File Browser Functions
-        async function loadInitialData() {
-            await loadAvailableConfigs();
-            await refreshFileList();
-        }
-
-        async function loadAvailableConfigs() {
-            try {
-                const response = await fetch('/api/configs');
-                const data = await response.json();
-
-                const select = document.getElementById('configSelect');
-                select.innerHTML = '<option value="">Select configuration...</option>';
-
-                if (data.success && data.configs) {
-                    data.configs.forEach(config => {
-                        const option = document.createElement('option');
-                        option.value = config;
-                        option.textContent = config;
-                        select.appendChild(option);
-                    });
-                }
-            } catch (error) {
-                console.error('Error loading configs:', error);
-            }
-        }
-
-        async function refreshFileList(path = '') {
-            try {
-                const response = await fetch(`/api/files/browse?path=${encodeURIComponent(path)}`);
-                const data = await response.json();
-
-                if (data.error) {
-                    showMessage(`Error browsing files: ${data.error}`, 'error');
-                    return;
-                }
-
-                currentDirectory = data.current_path;
-                document.getElementById('currentPath').textContent = currentDirectory || 'Select a directory';
-
-                renderFileList(data);
-
-                // Update up button
-                const upButton = document.getElementById('upButton');
-                upButton.disabled = !data.parent_path;
-
-            } catch (error) {
-                console.error('Error refreshing file list:', error);
-                showMessage('Error loading file list', 'error');
-            }
-        }
-
-        function renderFileList(data) {
-            const fileListContainer = document.getElementById('fileList');
-            fileListContainer.innerHTML = '';
-
-            // Add directories
-            if (data.directories) {
-                data.directories.forEach(dir => {
-                    const item = createFileItem('📁', dir.name, 'Directory', dir.path, 'directory');
-                    fileListContainer.appendChild(item);
-                });
-            }
-
-            // Add JSON files
-            if (data.files) {
-                data.files.forEach(file => {
-                    const icon = file.is_config ? '⚙️' : '📄';
-                    const size = file.size ? `${(file.size / 1024).toFixed(1)}KB` : '';
-                    const item = createFileItem(icon, file.name, size, file.path, 'file');
-                    fileListContainer.appendChild(item);
-                });
-            }
-
-            if ((!data.directories || data.directories.length === 0) &&
-                (!data.files || data.files.length === 0)) {
-                const emptyItem = document.createElement('div');
-                emptyItem.className = 'file-item';
-                emptyItem.innerHTML = '<span class="file-icon">📂</span><span class="file-name">No files found</span>';
-                fileListContainer.appendChild(emptyItem);
-            }
-        }
-
-        function createFileItem(icon, name, info, path, type) {
-            const item = document.createElement('div');
-            item.className = 'file-item';
-            item.dataset.path = path;
-            item.dataset.type = type;
-            item.dataset.name = name;
-
-            item.innerHTML = `
-                <span class="file-icon">${icon}</span>
-                <span class="file-name">${name}</span>
-                <span class="file-info">${info}</span>
-            `;
-
-            item.addEventListener('click', () => {
-                if (type === 'directory') {
-                    refreshFileList(path);
-                } else {
-                    selectFile(item, name, path);
-                }
-            });
-
-            return item;
-        }
-
-        function selectFile(item, name, path) {
-            // Remove previous selection
-            document.querySelectorAll('.file-item').forEach(el => {
-                el.classList.remove('selected');
-            });
-
-            // Select current item
-            item.classList.add('selected');
-            selectedFile = { name, path };
-
-            // Enable select button
-            const selectButton = document.getElementById('selectButton');
-            selectButton.disabled = false;
-            selectButton.textContent = `✅ Select ${name}`;
-        }
-
-        function goUpDirectory() {
-            const pathParts = currentDirectory.split('/');
-            pathParts.pop();
-            const parentPath = pathParts.join('/');
-            refreshFileList(parentPath);
-        }
-
-        async function selectCurrentFile() {
-            if (!selectedFile) return;
-
-            try {
-                // Validate the file
-                const response = await fetch('/api/files/validate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        file_path: selectedFile.path
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.valid) {
-                    // Add to dropdown
-                    const select = document.getElementById('configSelect');
-                    const option = document.createElement('option');
-                    option.value = selectedFile.path;
-                    option.textContent = `${selectedFile.name} (${result.summary.name})`;
-                    option.selected = true;
-                    select.appendChild(option);
-
-                    showMessage(`Selected: ${selectedFile.name} (${result.summary.indicators} indicators, ${result.summary.bars.length} bars)`, 'success');
-                } else {
-                    showMessage(`Invalid config file: ${result.error}`, 'error');
-                }
-
-            } catch (error) {
-                showMessage(`Error validating file: ${error.message}`, 'error');
-            }
-        }
-
-        // Rest of your existing UI functions...
         function updateConnectionStatus(connected) {
             const statusDot = document.getElementById('connectionStatus');
             const statusText = document.getElementById('connectionText');
@@ -875,6 +923,7 @@
                     <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
                 </div>
                 <div class="price-display">$0.00</div>
+                <div class="price-timestamp">Last updated: Never</div>
                 <div class="bars-container"></div>
                 <div class="indicators-summary">0 Active Indicators</div>
             `;
@@ -897,10 +946,6 @@
                 if (data.success) {
                     // Navigate to details page
                     window.location.href = `/card-details.html?card_id=${cardId}`;
-
-                    // Or open in new tab:
-                    // window.open(`/card-details.html?card_id=${cardId}`, '_blank');
-
                 } else {
                     showMessage(`Error loading details: ${data.error}`, 'error');
                 }
@@ -911,20 +956,33 @@
         }
 
         function updateCardData(card, data) {
-            console.log("UPDATE CARD DATA - Received data:", data);  // ADD THIS DEBUG
+            console.log("UPDATE CARD DATA - Received data:", data);
 
-            // Update price
+            // Update price with timestamp
             const priceDisplay = card.querySelector('.price-display');
+        function updateCardData(card, data) {
+            console.log("UPDATE CARD DATA - Received data:", data);
+
+            // Update price with timestamp
+            const priceDisplay = card.querySelector('.price-display');
+            const timestampDisplay = card.querySelector('.price-timestamp');
+
             if (priceDisplay && data.price !== undefined) {
                 const priceClass = data.price >= 0 ? '' : 'negative';
                 priceDisplay.className = `price-display ${priceClass}`;
-                priceDisplay.textContent = `$${data.price.toFixed(2)}`;
+                priceDisplay.textContent = `${data.price.toFixed(2)}`;
+            }
+
+            // Update timestamp
+            if (timestampDisplay && data.timestamp) {
+                const updateTime = new Date(data.timestamp);
+                timestampDisplay.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
             }
 
             // Update bar scores
             const barsContainer = card.querySelector('.bars-container');
             if (barsContainer && data.bar_scores) {
-                console.log("UPDATE CARD DATA - Updating bars with:", data.bar_scores);  // ADD THIS DEBUG
+                console.log("UPDATE CARD DATA - Updating bars with:", data.bar_scores);
                 barsContainer.innerHTML = renderBarScores(data.bar_scores);
             }
 
@@ -947,48 +1005,6 @@
             return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }
 
-        // API Functions
-        async function addCombination() {
-            const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
-            const configFile = document.getElementById('configSelect').value;
-
-            if (!symbol) {
-                showMessage('Please enter a stock symbol', 'error');
-                return;
-            }
-
-            if (!configFile) {
-                showMessage('Please select a configuration file', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/combinations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        symbol: symbol,
-                        config_file: configFile
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showMessage(`Successfully added ${symbol} as ${result.card_id}`, 'success');
-                    // Clear form
-                    document.getElementById('symbolInput').value = '';
-                    document.getElementById('configSelect').selectedIndex = 0;
-                } else {
-                    showMessage(`Error: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                showMessage(`Error adding combination: ${error.message}`, 'error');
-            }
-        }
-
         async function removeCard(cardId) {
             if (!confirm(`Are you sure you want to remove ${cardId}?`)) {
                 return;
@@ -1002,7 +1018,7 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    // Remove card from UI
+                    // Remove card from UI immediately
                     const card = document.getElementById(cardId);
                     if (card) {
                         card.remove();
@@ -1015,7 +1031,7 @@
                             container.innerHTML = `
                                 <div class="loading">
                                     <p>No trading cards active.</p>
-                                    <p>Add a card above to start monitoring indicators.</p>
+                                    <p>Click "Add New Trading Card" above to get started.</p>
                                 </div>
                             `;
                         }
@@ -1043,19 +1059,39 @@
             }, 5000);
         }
 
-        // Event Listeners
-        document.getElementById('symbolInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                addCombination();
-            }
-        });
-
         // Load initial status
         window.addEventListener('load', function() {
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => updateStatus(data))
                 .catch(error => console.error('Error loading status:', error));
+        });
+
+        // Close modal on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAddCardModal();
+            }
+        });
+
+        // Close modal on overlay click
+        document.getElementById('modalOverlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddCardModal();
+            }
+        });
+
+        // Add event listeners when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add input listener for symbol field
+            document.getElementById('modalSymbolInput').addEventListener('input', updateModalAddButton);
+
+            // Enter key handler for symbol input
+            document.getElementById('modalSymbolInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !document.getElementById('modalAddButton').disabled) {
+                    addCombinationFromModal();
+                }
+            });
         });
     </script>
 </body>

@@ -8,6 +8,8 @@ UIExternalTool for sending data to browser via WebSocket
 import logging
 from typing import Dict, Optional, Any
 from datetime import datetime
+
+import numpy as np
 from flask_socketio import SocketIO
 
 from data_streamer import ExternalTool
@@ -25,7 +27,7 @@ class UIExternalTool(ExternalTool):
         self.socketio: SocketIO = socketio
         self.last_meaningful_data: Dict[str, Dict] = {}
 
-    def process_pip(self, card_id: str, symbol: str, tick_data: TickData,
+    def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
                     indicators: Dict[str, float], raw_indicators: Dict[str, float],
                     bar_scores: Dict[str, float]) -> None:
         """
@@ -63,7 +65,10 @@ class UIExternalTool(ExternalTool):
             logger.debug(f"Sent update for {card_id}: price=${price}, bars={bar_scores}")
 
         except Exception as e:
-            logger.error(f"Error in process_pip for {card_id}: {e}")
+            logger.error(f"Error in process_tick for {card_id}: {e}")
+
+    def feature_vector(self, fv: np.array, tick: TickData) -> None:
+        pass
 
     def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
                          indicators: Dict[str, float], bar_scores: Dict[str, float] = None,

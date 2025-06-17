@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Details - Trading Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         /* Similar styling to dashboard but focused on details */
         body {
@@ -23,6 +24,7 @@
             padding: 20px;
             background: #161b22;
             border-radius: 12px;
+            border: 1px solid #30363d;
         }
 
         .back-button {
@@ -37,6 +39,24 @@
 
         .back-button:hover {
             background: #30363d;
+        }
+
+        .live-price {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #238636;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .live-price.negative {
+            color: #da3633;
+        }
+
+        .live-timestamp {
+            font-size: 0.875rem;
+            color: #7d8590;
+            margin-bottom: 1rem;
         }
 
         .details-grid {
@@ -74,6 +94,120 @@
             border-radius: 8px;
             padding: 15px;
         }
+
+        .current-indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .indicator-value {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .indicator-value .name {
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-bottom: 0.25rem;
+        }
+
+        .indicator-value .value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #e6edf3;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .bar-scores-current {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .bar-score-item {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .bar-score-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .bar-score-name {
+            font-weight: 500;
+            color: #e6edf3;
+            font-size: 0.875rem;
+        }
+
+        .bar-score-value {
+            font-weight: 600;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.875rem;
+        }
+
+        .bar-track {
+            height: 8px;
+            background: #21262d;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #30363d;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: all 0.5s ease;
+            position: relative;
+        }
+
+        .bar-green { background: linear-gradient(90deg, #238636, #2ea043); }
+        .bar-yellow { background: linear-gradient(90deg, #d4a017, #f9c74f); }
+        .bar-neutral { background: linear-gradient(90deg, #7d8590, #8b949e); }
+        .bar-red { background: linear-gradient(90deg, #da3633, #ff7b72); }
+
+        .bar-green .bar-score-value { color: #56d364; }
+        .bar-yellow .bar-score-value { color: #f9c74f; }
+        .bar-neutral .bar-score-value { color: #8b949e; }
+        .bar-red .bar-score-value { color: #ff7b72; }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.connected { background: #238636; }
+        .status-dot.disconnected { background: #da3633; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        .updating {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
     </style>
 </head>
 <body>
@@ -81,8 +215,16 @@
         <div>
             <h1 id="cardTitle">Card Details</h1>
             <p id="cardSubtitle">Loading...</p>
+            <div class="connection-status">
+                <div class="status-dot disconnected" id="connectionStatus"></div>
+                <span id="connectionText">Connecting...</span>
+            </div>
         </div>
-        <a href="/" class="back-button">← Back to Dashboard</a>
+        <div>
+            <div class="live-price" id="livePrice">$0.00</div>
+            <div class="live-timestamp" id="liveTimestamp">Last updated: Never</div>
+            <a href="/" class="back-button">← Back to Dashboard</a>
+        </div>
     </div>
 
     <div class="details-grid">
@@ -92,9 +234,14 @@
         </div>
 
         <div class="details-card">
-            <h3>Current Values</h3>
-            <div id="currentValues">Loading...</div>
+            <h3>Current Bar Scores</h3>
+            <div class="bar-scores-current" id="currentBarScores">Loading...</div>
         </div>
+    </div>
+
+    <div class="details-card">
+        <h3>Current Indicators</h3>
+        <div class="current-indicators" id="currentIndicators">Loading...</div>
     </div>
 
     <div class="chart-container">
@@ -108,7 +255,7 @@
     </div>
 
     <div class="details-card">
-        <h3>All Indicators</h3>
+        <h3>All Indicator Definitions</h3>
         <div class="indicator-list" id="indicatorList">Loading...</div>
     </div>
 
@@ -117,10 +264,128 @@
         const urlParams = new URLSearchParams(window.location.search);
         const cardId = urlParams.get('card_id');
 
+        // WebSocket connection
+        const socket = io();
+        let cardData = null;
+        let indicatorChart = null;
+        let barChart = null;
+
         if (!cardId) {
             document.body.innerHTML = '<h1>Error: No card ID specified</h1>';
         } else {
             loadCardDetails(cardId);
+        }
+
+        // Connection handling
+        socket.on('connect', function() {
+            updateConnectionStatus(true);
+        });
+
+        socket.on('disconnect', function() {
+            updateConnectionStatus(false);
+        });
+
+        // UPDATED: Listen for real-time updates for this specific card
+        socket.on('card_update', function(data) {
+            if (data.card_id === cardId) {
+                console.log('Received real-time update for card:', data);
+                updateLiveData(data);
+            }
+        });
+
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+
+            if (connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = 'Connected (Live Updates)';
+            } else {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        function updateLiveData(data) {
+            try {
+                // Update live price
+                const priceElement = document.getElementById('livePrice');
+                const timestampElement = document.getElementById('liveTimestamp');
+
+                if (data.price !== undefined) {
+                    const priceClass = data.price >= 0 ? '' : 'negative';
+                    priceElement.className = `live-price ${priceClass}`;
+                    priceElement.textContent = `$${data.price.toFixed(2)}`;
+                }
+
+                if (data.timestamp) {
+                    const updateTime = new Date(data.timestamp);
+                    timestampElement.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
+                }
+
+                // Update current bar scores
+                if (data.bar_scores) {
+                    updateCurrentBarScores(data.bar_scores);
+                }
+
+                // Update current indicators
+                if (data.indicators) {
+                    updateCurrentIndicators(data.indicators);
+                }
+
+                // Add updating animation to header
+                const header = document.querySelector('.header');
+                header.classList.add('updating');
+                setTimeout(() => header.classList.remove('updating'), 500);
+
+            } catch (error) {
+                console.error('Error updating live data:', error);
+            }
+        }
+
+        function updateCurrentBarScores(barScores) {
+            const container = document.getElementById('currentBarScores');
+
+            const html = Object.entries(barScores).map(([name, value]) => {
+                // Determine color class based on value
+                let colorClass = 'bar-neutral';
+                if (value >= 0.7) {
+                    colorClass = 'bar-green';
+                } else if (value >= 0.3) {
+                    colorClass = 'bar-yellow';
+                } else if (value < 0) {
+                    colorClass = 'bar-red';
+                }
+
+                const barWidth = Math.min(Math.abs(value) * 100, 100);
+
+                return `
+                    <div class="bar-score-item ${colorClass}">
+                        <div class="bar-score-header">
+                            <span class="bar-score-name">${formatBarName(name)}</span>
+                            <span class="bar-score-value">${value.toFixed(3)}</span>
+                        </div>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width: ${barWidth}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        function updateCurrentIndicators(indicators) {
+            const container = document.getElementById('currentIndicators');
+
+            const html = Object.entries(indicators).map(([name, value]) => `
+                <div class="indicator-value">
+                    <div class="name">${formatBarName(name)}</div>
+                    <div class="value">${value.toFixed(3)}</div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
         }
 
         async function loadCardDetails(cardId) {
@@ -129,6 +394,7 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    cardData = data;
                     displayCardDetails(data);
                 } else {
                     throw new Error(data.error);
@@ -153,17 +419,22 @@
                 <p><strong>Total Indicators:</strong> ${data.card_info.total_indicators}</p>
             `;
 
-            // Display current values
+            // Display initial current values
             const currentVals = data.current_values;
-            let currentHtml = '<h4>Bar Scores:</h4>';
-            for (const [name, value] of Object.entries(currentVals.bar_scores)) {
-                currentHtml += `<p>${name}: <strong>${value.toFixed(4)}</strong></p>`;
+
+            // Initial price display
+            const priceElement = document.getElementById('livePrice');
+            if (currentVals.bar_scores && Object.keys(currentVals.bar_scores).length > 0) {
+                // Use the first price we can find or a default
+                const firstPrice = Object.values(currentVals.bar_scores)[0] * 100; // Just for demo
+                priceElement.textContent = `$${firstPrice.toFixed(2)}`;
             }
-            currentHtml += '<h4>Individual Indicators:</h4>';
-            for (const [name, value] of Object.entries(currentVals.indicators)) {
-                currentHtml += `<p>${name}: <strong>${value.toFixed(4)}</strong></p>`;
-            }
-            document.getElementById('currentValues').innerHTML = currentHtml;
+
+            // Display current bar scores
+            updateCurrentBarScores(currentVals.bar_scores);
+
+            // Display current indicators
+            updateCurrentIndicators(currentVals.indicators);
 
             // Create charts
             createIndicatorChart(data.indicator_history);
@@ -181,10 +452,11 @@
                 data: values,
                 borderColor: `hsl(${index * 137.5 % 360}, 70%, 60%)`,
                 backgroundColor: `hsla(${index * 137.5 % 360}, 70%, 60%, 0.1)`,
-                fill: false
+                fill: false,
+                tension: 0.1
             }));
 
-            new Chart(ctx, {
+            indicatorChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: history.timestamps.map(ts => new Date(ts).toLocaleTimeString()),
@@ -198,12 +470,17 @@
                     scales: {
                         x: {
                             ticks: {
-                                // Show EVERY tick (every minute)
-                                maxTicksLimit: 200,  // Allow many more ticks
-                                maxRotation: 90      // Rotate vertically to fit
+                                maxTicksLimit: 20,
+                                maxRotation: 45
                             }
                         },
-                        y: { beginAtZero: true }
+                        y: {
+                            beginAtZero: true,
+                            max: 1
+                        }
+                    },
+                    animation: {
+                        duration: 0 // Disable animation for real-time updates
                     }
                 }
             });
@@ -217,10 +494,11 @@
                 data: values,
                 borderColor: `hsl(${index * 137.5 % 360}, 70%, 60%)`,
                 backgroundColor: `hsla(${index * 137.5 % 360}, 70%, 60%, 0.3)`,
-                fill: true
+                fill: true,
+                tension: 0.1
             }));
 
-            new Chart(ctx, {
+            barChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: history.timestamps.map(ts => new Date(ts).toLocaleTimeString()),
@@ -234,12 +512,17 @@
                     scales: {
                         x: {
                             ticks: {
-                                // Show EVERY tick (every minute)
-                                maxTicksLimit: 200,  // Allow many more ticks
-                                maxRotation: 90      // Rotate vertically to fit
+                                maxTicksLimit: 20,
+                                maxRotation: 45
                             }
                         },
-                        y: { beginAtZero: true }
+                        y: {
+                            beginAtZero: true,
+                            max: 1
+                        }
+                    },
+                    animation: {
+                        duration: 0 // Disable animation for real-time updates
                     }
                 }
             });
@@ -253,10 +536,21 @@
                     <p><strong>Function:</strong> ${def.function}</p>
                     <p><strong>Timeframe:</strong> ${def.timeframe}</p>
                     <p><strong>Parameters:</strong></p>
-                    <pre>${JSON.stringify(def.parameters, null, 2)}</pre>
+                    <pre style="font-size: 0.75rem; color: #7d8590;">${JSON.stringify(def.parameters, null, 2)}</pre>
                 </div>
             `).join('');
         }
+
+        function formatBarName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (socket) {
+                socket.disconnect();
+            }
+        });
     </script>
 </body>
 </html>

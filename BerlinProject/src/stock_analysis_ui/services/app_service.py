@@ -1,5 +1,5 @@
 """
-Simplified application service - DataStreamers own their aggregators
+Updated application service for process_tick architecture
 """
 
 import os
@@ -16,10 +16,10 @@ from stock_analysis_ui.services.ui_external_tool import UIExternalTool
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 
 
-
 class AppService:
     """
-    Simplified application service - DataStreamers own their aggregators
+    Updated application service for process_tick architecture
+    DataStreamers now own their aggregators and process TickData
     """
 
     def __init__(self, socketio: SocketIO, auth_manager: SchwabAuthManager) -> None:
@@ -36,7 +36,7 @@ class AppService:
         self.card_counter: int = 0
         self.subscribed_symbols: set = set()
         self.logger = logging.getLogger('AppService')
-        self.logger.info("AppService initialized")
+        self.logger.info("AppService initialized for process_tick architecture")
 
     def start_streaming(self) -> bool:
         """Initialize streaming infrastructure"""
@@ -46,6 +46,7 @@ class AppService:
         try:
             self.logger.info("Starting streaming infrastructure")
 
+            # Create and configure SchwabDataLink
             self.data_link = SchwabDataLink()
             self.data_link.access_token = self.auth_manager.access_token
             self.data_link.refresh_token = self.auth_manager.refresh_token
@@ -65,7 +66,7 @@ class AppService:
             return False
 
     def add_combination(self, symbol: str, config_file: str) -> Dict[str, Any]:
-        """Add a new combination"""
+        """Add a new combination with updated architecture"""
         try:
             if not self.is_streaming:
                 if not self.start_streaming():
@@ -74,20 +75,28 @@ class AppService:
             self.card_counter += 1
             card_id: str = f"card{self.card_counter}"
 
+            # Load monitor configuration
             monitor_config: Optional[MonitorConfiguration] = load_monitor_config(config_file)
             if not monitor_config:
                 return {"success": False, "error": f"Failed to load config: {config_file}"}
 
+            # Create DataStreamer (now owns its own aggregators)
             data_streamer: DataStreamer = DataStreamer(
                 card_id=card_id,
                 symbol=symbol,
                 monitor_config=monitor_config
             )
+
+            # Load historical data for all timeframes
             data_streamer.load_historical_data(self.data_link)
+
+            # Connect UI tool to DataStreamer
             data_streamer.connect_tool(self.ui_tool)
+
+            # Register DataStreamer with SchwabDataLink
             self.data_link.add_data_streamer(symbol, data_streamer)
 
-
+            # Store combination info
             self.combinations[card_id] = {
                 'card_id': card_id,
                 'symbol': symbol,
@@ -95,6 +104,8 @@ class AppService:
                 'monitor_config': monitor_config,
                 'data_streamer': data_streamer
             }
+
+            # Subscribe to symbol quotes
             self.data_link.add_symbol_subscription(symbol)
 
             self.logger.info(f"Successfully added combination: {card_id} ({symbol})")
@@ -110,34 +121,40 @@ class AppService:
             self.logger.error(f"Error adding combination: {e}")
             return {"success": False, "error": str(e)}
 
-    # def _ensure_symbol_subscription(self, symbol: str) -> None:
-    #     """Subscribe to quotes for symbol and set up routing"""
-    #     try:
-    #         if symbol not in self.subscribed_symbols:
-    #             self.subscribed_symbols.add(symbol)
-    #             all_symbols: List[str] = list(self.subscribed_symbols)
-    #
-    #             self.data_link.subscribe_quotes(all_symbols)
-    #
-    #             def quote_handler(quote_data: Dict[str, Any]) -> None:
-    #                 symbol_from_pip = quote_data.get('key')
-    #                 if symbol_from_pip:
-    #                     # Add timestamp if missing  MOVE To SCHWAB
-    #                     if '38' not in quote_data:
-    #                         from datetime import datetime
-    #                         quote_data['38'] = int(datetime.now().timestamp() * 1000)
-    #                         print(f"ADDED TIMESTAMP: {quote_data['38']}")  # DEBUG
-    #                     else:
-    #                         print(f"EXISTING TIMESTAMP: {quote_data['38']}")  # DEBUG
-    #
-    #                     self._route_pip_to_streamers(quote_data)
-    #
-    #             self.data_link.add_quote_handler(quote_handler)
-    #
-    #     except Exception as e:
-    #         self.logger.error(f"Error subscribing to symbol {symbol}: {e}")
+    def remove_combination(self, card_id: str) -> Dict[str, Any]:
+        """Remove a combination and properly cleanup DataStreamer"""
+        try:
+            if card_id not in self.combinations:
+                return {"success": False, "error": f"Card {card_id} not found"}
 
-    # This should GO
+            combination = self.combinations[card_id]
+            symbol = combination['symbol']
+            data_streamer = combination['data_streamer']
+
+            # Remove DataStreamer from SchwabDataLink
+            if self.data_link and symbol in self.data_link.data_streamers:
+                # Remove this specific data_streamer from the symbol's list
+                if data_streamer in self.data_link.data_streamers[symbol]:
+                    self.data_link.data_streamers[symbol].remove(data_streamer)
+
+                # If no more DataStreamers for this symbol, remove the symbol entry
+                if not self.data_link.data_streamers[symbol]:
+                    del self.data_link.data_streamers[symbol]
+                    # Optionally unsubscribe from symbol (for now we'll keep subscription active)
+
+            # Clear UI tool data for this card
+            self.ui_tool.clear_meaningful_data(card_id)
+
+            # Remove from combinations
+            del self.combinations[card_id]
+
+            self.logger.info(f"Successfully removed combination and cleaned up DataStreamer: {card_id}")
+
+            return {"success": True, "message": f"Removed {card_id}"}
+
+        except Exception as e:
+            self.logger.error(f"Error removing combination {card_id}: {e}")
+            return {"success": False, "error": str(e)}
 
     def get_combinations(self) -> Dict[str, Any]:
         """Get all active combinations"""
@@ -161,13 +178,15 @@ class AppService:
             if self.data_link:
                 self.data_link.disconnect()
 
+            # Clear all combinations
+            self.combinations.clear()
+
             self.logger.info("Streaming stopped")
             return True
 
         except Exception as e:
             self.logger.error(f"Error stopping streaming: {e}")
             return False
-
 
     def get_available_configs(self) -> List[str]:
         """Get available monitor configuration files"""

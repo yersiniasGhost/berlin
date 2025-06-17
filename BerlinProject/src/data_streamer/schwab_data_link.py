@@ -1,13 +1,11 @@
-from datetime import datetime
-
 import requests
 import websocket
 import json
 import threading
 import time
 import logging
-from typing import Set
-from typing import Dict, List
+from typing import Set, Dict, List
+from datetime import datetime
 
 from data_streamer.data_link import DataLink
 from models.tick_data import TickData
@@ -41,29 +39,40 @@ class SchwabDataLink(DataLink):
         self.login_complete = False
         logger.info(f"Initialized SchwabDataLink with API key: {self.app_key}")
 
-    def _pip_to_tick_data(self, pip_data: Dict) -> TickData | None:
-
+    def _pip_to_tick_data(self, pip_data: Dict) -> TickData:
+        """
+        Simple conversion of Schwab PIP data to TickData object.
+        Requires: symbol, timestamp, and close price.
+        """
+        # Get required fields
         symbol = pip_data.get('key')
         timestamp_ms = pip_data.get('38')
         close_price = pip_data.get('3')
 
+        # Simple validation - just check they exist
         if not symbol or not timestamp_ms or not close_price:
             print(f"Missing required data: symbol={symbol}, timestamp={timestamp_ms}, price={close_price}")
             return None
 
+        # Convert to proper types and validate
         timestamp_ms = int(timestamp_ms)
         price = float(close_price)
 
+        # Check for invalid data
         if timestamp_ms == 0 or price <= 0:
             print(f"Invalid PIP data - timestamp: {timestamp_ms}, price: {price}")
             return None
+
         timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+
+        # Sanity check timestamp (must be after year 2000)
         if timestamp.year < 2000:
             print(f"Invalid timestamp year: {timestamp.year}")
             return None
 
-        volume = int(pip_data.get('8', 0))
+        volume = int(pip_data.get('8', 0))  # Optional, default to 0
 
+        # For PIP data, all OHLC values are the current price
         return TickData(
             symbol=symbol,
             timestamp=timestamp,
@@ -339,6 +348,11 @@ class SchwabDataLink(DataLink):
             try:
                 # Convert PIP data to TickData with validation
                 tick_data = self._pip_to_tick_data(quote)
+
+                # Skip if conversion failed (tick_data is None)
+                if tick_data is None:
+                    continue
+
                 symbol = tick_data.symbol
 
                 logger.info(f"Processing TickData for {symbol}: ${tick_data.close}")
@@ -470,7 +484,7 @@ class SchwabDataLink(DataLink):
             # Convert to TickData objects
             result = []
             for candle in candles:
-                # Create TickData with correct timeframe and type="TICK"
+                # Create TickData with correct timeframe (no type field)
                 tick = TickData(
                     symbol=symbol,
                     timestamp=datetime.fromtimestamp(candle['datetime'] / 1000),
