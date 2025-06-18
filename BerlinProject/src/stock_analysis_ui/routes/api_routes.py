@@ -95,6 +95,7 @@ def add_combination():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @api_bp.route('/combinations/<card_id>', methods=['DELETE'])
 def remove_combination(card_id: str):
     """Remove a combination by card ID"""
@@ -300,6 +301,57 @@ def get_card_details(card_id: str):
         logger.error(f"Error getting card details for {card_id}: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # Add this new route to the existing api_routes.py file
+
+
+@api_bp.route('/combinations/<card_id>/portfolio')
+def get_card_portfolio(card_id: str):
+    """Get current portfolio metrics for a specific card"""
+    try:
+        app_service = current_app.app_service
+
+        # Check if card exists
+        if card_id not in app_service.combinations:
+            return jsonify({'success': False, 'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        data_streamer = combination['data_streamer']
+
+        # Get current portfolio metrics
+        portfolio_metrics = data_streamer.get_portfolio_metrics()
+
+        return jsonify({
+            'success': True,
+            'card_id': card_id,
+            'portfolio_metrics': portfolio_metrics
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting portfolio for {card_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/portfolios')
+def get_all_portfolios():
+    """Get portfolio metrics for all active cards"""
+    try:
+        app_service = current_app.app_service
+
+        portfolios = {}
+        for card_id, combination in app_service.combinations.items():
+            data_streamer = combination['data_streamer']
+            portfolios[card_id] = data_streamer.get_portfolio_metrics()
+
+        return jsonify({
+            'success': True,
+            'portfolios': portfolios,
+            'total_cards': len(portfolios)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting all portfolios: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # Remove the old _get_real_indicator_history function since we're using the processor's method now

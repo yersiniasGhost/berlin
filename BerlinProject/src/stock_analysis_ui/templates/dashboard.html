@@ -82,7 +82,7 @@
             box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
         }
 
-        /* Modal Styles */
+        /* Modal Styles - keeping existing styles */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -183,60 +183,6 @@
             box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
         }
 
-        .file-browser {
-            border: 1px solid #21262d;
-            border-radius: 8px;
-            background: #0d1117;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .file-path {
-            padding: 0.75rem;
-            background: #21262d;
-            border-bottom: 1px solid #30363d;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            font-size: 0.75rem;
-            color: #7d8590;
-        }
-
-        .file-item {
-            display: flex;
-            align-items: center;
-            padding: 0.75rem;
-            border-bottom: 1px solid #21262d;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .file-item:last-child {
-            border-bottom: none;
-        }
-
-        .file-item:hover {
-            background: #161b22;
-        }
-
-        .file-item.selected {
-            background: #1f6feb;
-            color: #ffffff;
-        }
-
-        .file-icon {
-            margin-right: 0.75rem;
-            font-size: 1rem;
-        }
-
-        .file-name {
-            flex: 1;
-            font-size: 0.875rem;
-        }
-
-        .file-info {
-            font-size: 0.75rem;
-            color: #7d8590;
-        }
-
         .modal-actions {
             display: flex;
             gap: 1rem;
@@ -282,11 +228,6 @@
         .btn-secondary:hover {
             background: #30363d;
             border-color: #484f58;
-        }
-
-        .btn-small {
-            padding: 0.5rem 1rem;
-            font-size: 0.75rem;
         }
 
         .cards-container {
@@ -363,7 +304,7 @@
             font-size: 2rem;
             font-weight: 700;
             color: #238636;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             text-align: center;
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
         }
@@ -377,6 +318,85 @@
             color: #7d8590;
             text-align: center;
             margin-bottom: 1rem;
+        }
+
+        /* NEW: Portfolio Section Styles */
+        .portfolio-section {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .portfolio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .portfolio-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .position-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .position-status.in-position {
+            background: rgba(35, 134, 54, 0.2);
+            color: #56d364;
+            border: 1px solid rgba(35, 134, 54, 0.3);
+        }
+
+        .position-status.no-position {
+            background: rgba(125, 133, 144, 0.2);
+            color: #8b949e;
+            border: 1px solid rgba(125, 133, 144, 0.3);
+        }
+
+        .portfolio-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .metric-item {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .metric-value.positive {
+            color: #56d364;
+        }
+
+        .metric-value.negative {
+            color: #ff7b72;
+        }
+
+        .metric-value.neutral {
+            color: #e6edf3;
         }
 
         .bars-container {
@@ -558,7 +578,7 @@
         </button>
     </div>
 
-    <!-- Modal for adding cards -->
+    <!-- Modal for adding cards (keeping existing modal HTML) -->
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
             <div class="modal-header">
@@ -643,11 +663,10 @@
             showMessage(`Error: ${data.message}`, 'error');
         });
 
-        // Modal functions
+        // Modal functions (keeping existing modal functions)
         function openAddCardModal() {
             document.getElementById('modalOverlay').style.display = 'block';
             document.body.style.overflow = 'hidden';
-            // Reset file input
             document.getElementById('modalFileInput').value = '';
             updateSelectedFileName();
         }
@@ -655,8 +674,6 @@
         function closeAddCardModal() {
             document.getElementById('modalOverlay').style.display = 'none';
             document.body.style.overflow = 'auto';
-
-            // Reset form
             document.getElementById('modalSymbolInput').value = '';
             document.getElementById('modalFileInput').value = '';
             modalSelectedFile = null;
@@ -671,11 +688,11 @@
             if (fileInput.files.length > 0) {
                 const file = fileInput.files[0];
                 fileNameDiv.textContent = `Selected: ${file.name}`;
-                fileNameDiv.style.color = '#56d364'; // Green color for selected file
+                fileNameDiv.style.color = '#56d364';
                 modalSelectedFile = file;
             } else {
                 fileNameDiv.textContent = 'No file selected';
-                fileNameDiv.style.color = '#7d8590'; // Gray color
+                fileNameDiv.style.color = '#7d8590';
                 modalSelectedFile = null;
             }
 
@@ -685,20 +702,12 @@
         function updateModalAddButton() {
             const symbol = document.getElementById('modalSymbolInput').value.trim();
             const addButton = document.getElementById('modalAddButton');
-
-            console.log('updateModalAddButton - symbol:', symbol, 'modalSelectedFile:', modalSelectedFile);
-
             const isValid = symbol && modalSelectedFile;
             addButton.disabled = !isValid;
-
-            console.log('Button disabled:', addButton.disabled);
         }
 
         async function addCombinationFromModal() {
-            console.log('addCombinationFromModal called');
-
             const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
-            console.log('Symbol:', symbol, 'File:', modalSelectedFile);
 
             if (!symbol || !modalSelectedFile) {
                 showMessage('Please enter a symbol and select a config file', 'error');
@@ -706,22 +715,15 @@
             }
 
             try {
-                console.log('Reading file...');
-                // Read the file content
                 const fileContent = await readFileAsText(modalSelectedFile);
-                console.log('File content length:', fileContent.length);
 
-                // Validate it's valid JSON
                 try {
                     JSON.parse(fileContent);
-                    console.log('JSON validation passed');
                 } catch (e) {
-                    console.error('JSON validation failed:', e);
                     showMessage('Selected file is not valid JSON', 'error');
                     return;
                 }
 
-                console.log('Sending request to server...');
                 const response = await fetch('/api/combinations', {
                     method: 'POST',
                     headers: {
@@ -734,9 +736,7 @@
                     })
                 });
 
-                console.log('Response status:', response.status);
                 const result = await response.json();
-                console.log('Response result:', result);
 
                 if (result.success) {
                     showMessage(`Successfully added ${symbol} as ${result.card_id}`, 'success');
@@ -745,12 +745,10 @@
                     showMessage(`Error: ${result.error}`, 'error');
                 }
             } catch (error) {
-                console.error('Error in addCombinationFromModal:', error);
                 showMessage(`Error adding combination: ${error.message}`, 'error');
             }
         }
 
-        // Helper function to read file as text
         function readFileAsText(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -758,6 +756,59 @@
                 reader.onerror = (e) => reject(new Error('Failed to read file'));
                 reader.readAsText(file);
             });
+        }
+
+        // NEW: Portfolio rendering function
+        function renderPortfolioSection(portfolio) {
+            if (!portfolio) {
+                return '<div class="portfolio-section"><div class="portfolio-title">No Portfolio Data</div></div>';
+            }
+
+            const position = portfolio.position || {};
+            const pnl = portfolio.pnl || {};
+
+            const isInPosition = position.is_in_position || false;
+            const entryPrice = position.entry_price || 0;
+            const currentPrice = position.current_price || 0;
+            const positionSize = position.position_size || 0;
+
+            const realizedPnl = pnl.realized_pnl || 0;
+            const unrealizedPnl = pnl.unrealized_pnl || 0;
+            const totalPnl = pnl.total_pnl || 0;
+
+            const statusClass = isInPosition ? 'in-position' : 'no-position';
+            const statusText = isInPosition ? 'IN POSITION' : 'NO POSITION';
+
+            return `
+                <div class="portfolio-section">
+                    <div class="portfolio-header">
+                        <span class="portfolio-title">Portfolio</span>
+                        <span class="position-status ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="portfolio-metrics">
+                        <div class="metric-item">
+                            <div class="metric-label">Entry Price</div>
+                            <div class="metric-value neutral">$${entryPrice.toFixed(2)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Position Size</div>
+                            <div class="metric-value neutral">${positionSize.toFixed(1)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Realized P&L</div>
+                            <div class="metric-value ${realizedPnl >= 0 ? 'positive' : 'negative'}">$${realizedPnl.toFixed(2)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Unrealized P&L</div>
+                            <div class="metric-value ${unrealizedPnl >= 0 ? 'positive' : 'negative'}">$${unrealizedPnl.toFixed(2)}</div>
+                        </div>
+                        <div class="metric-item" style="grid-column: 1 / -1;">
+                            <div class="metric-label">Total P&L</div>
+                            <div class="metric-value ${totalPnl >= 0 ? 'positive' : 'negative'}" style="font-size: 1.25rem;">$${totalPnl.toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         function renderBarScores(barScores) {
@@ -872,6 +923,7 @@
                 </div>
                 <div class="price-display">$0.00</div>
                 <div class="price-timestamp">Last updated: Never</div>
+                <div class="portfolio-container"></div>
                 <div class="bars-container"></div>
                 <div class="indicators-summary">0 Active Indicators</div>
             `;
@@ -920,6 +972,12 @@
             if (timestampDisplay && data.timestamp) {
                 const updateTime = new Date(data.timestamp);
                 timestampDisplay.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
+            }
+
+            // Update portfolio section
+            const portfolioContainer = card.querySelector('.portfolio-container');
+            if (portfolioContainer) {
+                portfolioContainer.innerHTML = renderPortfolioSection(data.portfolio);
             }
 
             // Update bar scores

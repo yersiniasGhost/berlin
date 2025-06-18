@@ -1,8 +1,8 @@
 # File: BerlinProject/src/stock_analysis_ui/services/ui_external_tool.py
-# PRODUCTION VERSION - Clean, no debug code
+# Updated version with portfolio metrics support
 
 """
-UIExternalTool for sending data to browser via WebSocket
+UIExternalTool for sending data to browser via WebSocket including portfolio metrics
 """
 
 import logging
@@ -20,7 +20,7 @@ logger = logging.getLogger('UIExternalTool')
 
 class UIExternalTool(ExternalTool):
     """
-    UI External Tool - sends indicator and price data to browser
+    UI External Tool - sends indicator, price, and portfolio data to browser
     """
 
     def __init__(self, socketio: SocketIO):
@@ -28,10 +28,10 @@ class UIExternalTool(ExternalTool):
         self.last_meaningful_data: Dict[str, Dict] = {}
 
     def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
-                    indicators: Dict[str, float], raw_indicators: Dict[str, float],
-                    bar_scores: Dict[str, float]) -> None:
+                     indicators: Dict[str, float], raw_indicators: Dict[str, float],
+                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
         """
-        Process real-time tick data and send updates to browser
+        Process real-time tick data and send updates to browser including portfolio metrics
 
         Args:
             card_id: Card identifier
@@ -40,6 +40,7 @@ class UIExternalTool(ExternalTool):
             indicators: Calculated indicators
             raw_indicators: Raw indicator values
             bar_scores: Bar scores
+            portfolio_metrics: Portfolio performance metrics (position and P&L)
         """
         try:
             # Extract data from TickData object
@@ -60,6 +61,12 @@ class UIExternalTool(ExternalTool):
                 'raw_indicators': raw_indicators
             }
 
+            # Add portfolio metrics if available
+            if portfolio_metrics:
+                update_data['portfolio'] = portfolio_metrics
+                logger.debug(f"Portfolio for {card_id}: P&L=${portfolio_metrics['pnl']['total_pnl']:.2f}, "
+                             f"Position: {portfolio_metrics['position']['is_in_position']}")
+
             self.socketio.emit('card_update', update_data)
 
             logger.debug(f"Sent update for {card_id}: price=${price}, bars={bar_scores}")
@@ -73,10 +80,10 @@ class UIExternalTool(ExternalTool):
     def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
                          indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
                          raw_indicators: Dict[str, float] = None,
-                         combination_id: Optional[str] = None ) -> None:
-        # add portfolio
+                         combination_id: Optional[str] = None,
+                         portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
         """
-        Send indicator data to browser
+        Send indicator data to browser including portfolio metrics
 
         Args:
             card_id: Card identifier
@@ -85,12 +92,9 @@ class UIExternalTool(ExternalTool):
             indicators: Calculated indicators
             bar_scores: Bar scores
             raw_indicators: Raw indicator values
+            portfolio_metrics: Portfolio performance metrics
         """
         try:
-            # Debug: Log what we're sending
-            print(f"UI TOOL - SENDING TO {card_id}: bar_scores = {bar_scores}")  # ADD THIS DEBUG
-            print(f"UI TOOL - indicators = {indicators}")  # ADD THIS DEBUG
-
             # Check if this update has bar data (even if values are 0.0)
             has_bar_data: bool = bool(bar_scores and len(bar_scores) > 0)
 
@@ -105,13 +109,15 @@ class UIExternalTool(ExternalTool):
                 'indicators': indicators or {},
                 'bar_scores': bar_scores or {},
                 'raw_indicators': raw_indicators or {}
-            #     portfolio information
             }
+
+            # Add portfolio metrics if available
+            if portfolio_metrics:
+                update_data['portfolio'] = portfolio_metrics
 
             if has_bar_data:
                 # Store and emit meaningful data
                 self.last_meaningful_data[card_id] = update_data.copy()
-                print(f"UI TOOL - EMITTING: {update_data['bar_scores']}")  # ADD THIS DEBUG
                 self.socketio.emit('card_update', update_data)
             else:
                 # Preserve previous bar scores if available
@@ -122,24 +128,28 @@ class UIExternalTool(ExternalTool):
                     meaningful_data['ohlc'] = update_data['ohlc']
                     meaningful_data['volume'] = update_data['volume']
 
-                    print(f"UI TOOL - USING CACHED: {meaningful_data['bar_scores']}")  # ADD THIS DEBUG
+                    # Update portfolio metrics if provided
+                    if portfolio_metrics:
+                        meaningful_data['portfolio'] = portfolio_metrics
+
                     self.socketio.emit('card_update', meaningful_data)
                 else:
                     # No previous data - send as-is
-                    print(f"UI TOOL - NO CACHE, SENDING: {update_data['bar_scores']}")  # ADD THIS DEBUG
-                    self.socketio.emit('card_update_old', update_data)
+                    self.socketio.emit('card_update', update_data)
 
         except Exception as e:
             logger.error(f"Error sending indicator data for {card_id}: {e}")
 
-    def price_update(self, card_id: str, symbol: str, tick: TickData) -> None:
+    def price_update(self, card_id: str, symbol: str, tick: TickData,
+                     portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
         """
-        Send price update to browser
+        Send price update to browser including portfolio metrics
 
         Args:
             card_id: Card identifier
             symbol: Stock symbol
             tick: Current tick data
+            portfolio_metrics: Portfolio performance metrics
         """
         try:
             # Preserve bar scores if available
@@ -150,7 +160,11 @@ class UIExternalTool(ExternalTool):
                 meaningful_data['ohlc'] = [tick.open, tick.high, tick.low, tick.close]
                 meaningful_data['volume'] = tick.volume
 
-                self.socketio.emit('card_update_old', meaningful_data)
+                # Update portfolio metrics if provided
+                if portfolio_metrics:
+                    meaningful_data['portfolio'] = portfolio_metrics
+
+                self.socketio.emit('card_update', meaningful_data)
             else:
                 # Send basic price update
                 update_data = {
@@ -164,6 +178,10 @@ class UIExternalTool(ExternalTool):
                     'bar_scores': {},
                     'raw_indicators': {}
                 }
+
+                # Add portfolio metrics if provided
+                if portfolio_metrics:
+                    update_data['portfolio'] = portfolio_metrics
 
                 self.socketio.emit('card_update', update_data)
 
