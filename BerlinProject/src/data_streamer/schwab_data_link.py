@@ -433,10 +433,20 @@ class SchwabDataLink(DataLink):
             List of TickData objects sorted by timestamp
         """
         try:
-            # Calculate time range (last 5 hours)
+            # FIXED: Calculate time range properly (last 5 trading days instead of hours)
             from datetime import datetime, timedelta
-            end_time = datetime.now()
-            start_time = end_time - timedelta(hours=5)
+            import pytz
+
+            # Get current time in Eastern timezone (market timezone)
+            eastern = pytz.timezone('US/Eastern')
+            end_time = datetime.now(eastern)
+
+            # FIXED: Go back 5 trading days instead of 5 hours
+            start_time = end_time - timedelta(days=5)
+
+            # Make sure we're not trying to get future data
+            if start_time > end_time:
+                start_time = end_time - timedelta(days=1)
 
             logger.info(f"Loading {timeframe} data for {symbol} from {start_time} to {end_time}")
 
@@ -455,20 +465,21 @@ class SchwabDataLink(DataLink):
             elif timeframe == "30m":
                 frequency = 30
             elif timeframe == "1h":
-                frequency_type = "hour"
-                frequency = 1
+                frequency_type = "minute"  # Keep as minute for 1h
+                frequency = 60
 
-            # API parameters
+            # FIXED: API parameters with proper period handling
             params = {
                 'symbol': symbol,
                 'periodType': 'day',
-                'period': 1,
+                'period': 5,  # Last 5 days
                 'frequencyType': frequency_type,
                 'frequency': frequency,
-                'startDate': int(start_time.timestamp() * 1000),
-                'endDate': int(end_time.timestamp() * 1000),
-                'needExtendedHoursData': True
+                'needExtendedHoursData': False  # Only regular market hours
             }
+
+            # Don't specify start/end dates, let the API handle the period
+            logger.info(f"API params: {params}")
 
             # Make request
             response = requests.get(url, headers=headers, params=params)

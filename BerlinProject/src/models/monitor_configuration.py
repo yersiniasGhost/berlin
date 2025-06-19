@@ -7,7 +7,6 @@ from models.indicator_definition import IndicatorDefinition
 import os
 
 
-
 class MonitorConfiguration(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     name: str
@@ -112,15 +111,25 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
             )
             indicators.append(indicator)
 
+        # FIXED: Properly extract threshold and bear_threshold from monitor_data
         monitor_config = MonitorConfiguration(
             name=monitor_data.get('name', 'Trading Signals'),
-            indicators=indicators
+            indicators=indicators,
+            threshold=monitor_data.get('threshold', 0.8),  # Get from JSON or default
+            bear_threshold=monitor_data.get('bear_threshold', 0.8),  # Get from JSON or default
+            description=monitor_data.get('description', '')
         )
 
+        # FIXED: Properly set bars from monitor_data
         if 'bars' in monitor_data:
             monitor_config.bars = monitor_data['bars']
 
-        print(f"Successfully loaded config: {monitor_config.name} with {len(indicators)} indicators")
+        print(f"Successfully loaded config: {monitor_config.name}")
+        print(f"  Threshold: {monitor_config.threshold}")
+        print(f"  Bear Threshold: {monitor_config.bear_threshold}")
+        print(f"  Indicators: {len(indicators)}")
+        print(f"  Bars: {list(monitor_config.bars.keys())}")
+
         return monitor_config
 
     except Exception as e:

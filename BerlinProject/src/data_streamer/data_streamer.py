@@ -1,5 +1,5 @@
 """
-Simplified DataStreamer with proper typing
+Simplified DataStreamer with proper typing - CLEAN VERSION
 """
 
 import logging
@@ -20,81 +20,79 @@ logger = logging.getLogger('DataStreamer')
 class DataStreamer:
     """
     DataStreamer owns aggregators and processes data for one symbol+config combination
+    Now includes TradeExecutor for portfolio management with simplified metrics
     """
 
-    class DataStreamer:
+    def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
+                 default_position_size: float = 1.0, stop_loss_pct: float = 0.5) -> None:
+        self.card_id: str = card_id
+        self.symbol: str = symbol
+        self.monitor_config: MonitorConfiguration = monitor_config
+
+        # Own candle aggregators for each required timeframe
+        self.aggregators: Dict[str, CandleAggregator] = {}
+        required_timeframes: List[str] = list(monitor_config.get_time_increments())
+
+        for timeframe in required_timeframes:
+            self.aggregators[timeframe] = CandleAggregator(symbol, timeframe)
+
+        # Processing components
+        self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
+        self.external_tools: List[ExternalTool] = []
+
+        # Add TradeExecutor instance
+        self.trade_executor: TradeExecutorSimple = TradeExecutorSimple(
+            monitor_config=monitor_config,
+            default_position_size=default_position_size,
+            stop_loss_pct=stop_loss_pct
+        )
+
+        # Initialize tracking variables
+        self.indicators: Dict[str, float] = {}
+        self.raw_indicators: Dict[str, float] = {}
+        self.bar_scores: Dict[str, float] = {}
+
+        logger.info(f"Created DataStreamer for {symbol} with timeframes: {required_timeframes}")
+
+    def process_tick(self, tick_data: TickData) -> None:
         """
-        DataStreamer owns aggregators and processes data for one symbol+config combination
-        Now includes TradeExecutor for portfolio management with simplified metrics
+        Process incoming TickData and execute trading logic
+
+        Args:
+            tick_data: TickData object with type="PIP" for real-time data
         """
+        if tick_data.symbol != self.symbol:
+            return
 
-        def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
-                     default_position_size: float = 1.0, stop_loss_pct: float = 0.5) -> None:
-            self.card_id: str = card_id
-            self.symbol: str = symbol
-            self.monitor_config: MonitorConfiguration = monitor_config
+        # Process tick through aggregators
+        for aggregator in self.aggregators.values():
+            aggregator.process_tick(tick_data)
 
-            # Own candle aggregators for each required timeframe
-            self.aggregators: Dict[str, CandleAggregator] = {}
-            required_timeframes: List[str] = list(monitor_config.get_time_increments())
+        # Calculate indicators based on current aggregator state
+        self.indicators, self.raw_indicators, self.bar_scores = (
+            self.indicator_processor.calculate_indicators_new(self.aggregators))
 
-            for timeframe in required_timeframes:
-                self.aggregators[timeframe] = CandleAggregator(symbol, timeframe)
+        # Execute trading logic based on current indicators and bar scores
+        self.trade_executor.make_decision(
+            tick=tick_data,
+            indicators=self.indicators,
+            bar_scores=self.bar_scores
+        )
 
-            # Processing components
-            self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
-            self.external_tools: List[ExternalTool] = []
+        # Get simplified portfolio performance metrics with current price
+        portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
 
-            # Add TradeExecutor instance
-            self.trade_executor: TradeExecutorSimple = TradeExecutorSimple(
-                monitor_config=monitor_config,
-                default_position_size=default_position_size,
-                stop_loss_pct=stop_loss_pct
-            )
-
-            logger.info(f"Created DataStreamer for {symbol} with timeframes: {required_timeframes}")
-            logger.info(
-                f"TradeExecutor initialized with position size: {default_position_size}, stop loss: {stop_loss_pct}%")
-
-        def process_tick(self, tick_data: TickData) -> None:
-            """
-            Process incoming TickData and execute trading logic
-
-            Args:
-                tick_data: TickData object with type="PIP" for real-time data
-            """
-            if tick_data.symbol != self.symbol:
-                return
-
-            # Process tick through aggregators
-            for aggregator in self.aggregators.values():
-                aggregator.process_tick(tick_data)
-
-            # Calculate indicators based on current aggregator state
-            self.indicators, self.raw_indicators, self.bar_scores = (
-                self.indicator_processor.calculate_indicators_new(self.aggregators))
-
-            # Execute trading logic based on current indicators and bar scores
-            self.trade_executor.make_decision(
-                tick=tick_data,
+        # Send data to external tools (including portfolio data)
+        for tool in self.external_tools:
+            tool.process_tick(
+                card_id=self.card_id,
+                symbol=self.symbol,
+                tick_data=tick_data,
                 indicators=self.indicators,
-                bar_scores=self.bar_scores
+                raw_indicators=self.raw_indicators,
+                bar_scores=self.bar_scores,
+                portfolio_metrics=portfolio_metrics
             )
-
-            # Get simplified portfolio performance metrics with current price
-            portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
-
-            # Send data to external tools (including portfolio data)
-            for tool in self.external_tools:
-                tool.process_tick(
-                    card_id=self.card_id,
-                    symbol=self.symbol,
-                    tick_data=tick_data,
-                    indicators=self.indicators,
-                    raw_indicators=self.raw_indicators,
-                    bar_scores=self.bar_scores,
-                    portfolio_metrics=portfolio_metrics
-                )
 
     def _get_all_candle_data(self) -> Dict[str, List[TickData]]:
         """Get all candle data from aggregators"""

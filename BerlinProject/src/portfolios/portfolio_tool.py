@@ -73,27 +73,35 @@ class Portfolio:
         return self.position_size > 0
 
     def get_entry_price(self) -> Optional[float]:
-        """Get the entry price of current position"""
+        """Get the entry price of current position - FIXED VERSION"""
         if not self.is_in_position():
             return None
 
-        # Find the most recent entry trade
+        # Find the most recent entry trade by looking backwards through trade history
         for trade in reversed(self.trade_history):
             if trade.reason in [TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT]:
                 return trade.price
+
+        # If no explicit entry trade found, look for any BUY trade while we're in position
+        # This handles cases where the reason might not be set correctly
+        for trade in reversed(self.trade_history):
+            if trade.size > 0:  # Positive size indicates a buy
+                return trade.price
+
         return None
 
     def calculate_unrealized_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L for current position"""
-        if not self.is_in_position():
+        if not self.is_in_position() or not current_price:
             return 0.0
 
         entry_price = self.get_entry_price()
-        if entry_price is None:
+        if entry_price is None or entry_price == 0.0:
             return 0.0
 
         # For long positions: (current_price - entry_price) * position_size
-        return (current_price - entry_price) * self.position_size
+        unrealized = (current_price - entry_price) * self.position_size
+        return unrealized
 
     def calculate_realized_pnl(self) -> float:
         """Calculate realized P&L from completed round trips"""
@@ -121,6 +129,59 @@ class Portfolio:
                     entry_size = 0.0
 
         return realized_pnl
+
+    def get_performance_metrics(self, current_price: float = None) -> Dict[str, Any]:
+        """
+        Get comprehensive portfolio performance metrics
+
+        Args:
+            current_price: Current market price for unrealized P&L calculation
+
+        Returns:
+            Dictionary with position and P&L information
+        """
+        # Get entry price - this should now work correctly
+        entry_price = self.get_entry_price() or 0.0
+
+        # Position information
+        position_data = {
+            'is_in_position': self.is_in_position(),
+            'position_size': self.position_size,
+            'entry_price': entry_price,
+            'current_price': current_price or 0.0
+        }
+
+        # P&L calculations with proper current_price handling
+        realized_pnl = self.calculate_realized_pnl()
+        unrealized_pnl = self.calculate_unrealized_pnl(current_price) if current_price else 0.0
+        total_pnl = realized_pnl + unrealized_pnl
+
+        pnl_data = {
+            'realized_pnl': realized_pnl,
+            'unrealized_pnl': unrealized_pnl,
+            'total_pnl': total_pnl
+        }
+
+        return {
+            'position': position_data,
+            'pnl': pnl_data
+        }
+
+    def get_trade_summary(self) -> Dict[str, Any]:
+        """Get a summary of all trades for debugging"""
+        return {
+            'total_trades': len(self.trade_history),
+            'current_position_size': self.position_size,
+            'trades': [
+                {
+                    'time': trade.time,
+                    'reason': trade.reason.value,
+                    'size': trade.size,
+                    'price': trade.price
+                }
+                for trade in self.trade_history[-5:]  # Last 5 trades
+            ]
+        }
 
     def reset(self) -> None:
         """Reset portfolio to initial state"""

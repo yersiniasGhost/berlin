@@ -75,6 +75,16 @@ class AppService:
             self.card_counter += 1
             card_id: str = f"card{self.card_counter}"
 
+            # UPDATED: Extract test_name FIRST before loading monitor config
+            test_name = "Unknown Config"
+            try:
+                with open(config_file, 'r') as f:
+                    config_data = json.load(f)
+                    test_name = config_data.get('test_name', 'Unknown Config')
+                    self.logger.info(f"Extracted test_name: '{test_name}' from config file")
+            except Exception as e:
+                self.logger.error(f"Error reading config file for test_name: {e}")
+
             # Load monitor configuration
             monitor_config: Optional[MonitorConfiguration] = load_monitor_config(config_file)
             if not monitor_config:
@@ -87,6 +97,9 @@ class AppService:
                 monitor_config=monitor_config
             )
 
+            # UPDATED: Store test_name in the DataStreamer for easy access
+            data_streamer.test_name = test_name
+
             # Load historical data for all timeframes
             data_streamer.load_historical_data(self.data_link)
 
@@ -96,25 +109,27 @@ class AppService:
             # Register DataStreamer with SchwabDataLink
             self.data_link.add_data_streamer(symbol, data_streamer)
 
-            # Store combination info
+            # Store combination info with test_name
             self.combinations[card_id] = {
                 'card_id': card_id,
                 'symbol': symbol,
                 'config_file': config_file,
                 'monitor_config': monitor_config,
+                'test_name': test_name,  # Store test_name
                 'data_streamer': data_streamer
             }
 
             # Subscribe to symbol quotes
             self.data_link.add_symbol_subscription(symbol)
 
-            self.logger.info(f"Successfully added combination: {card_id} ({symbol})")
+            self.logger.info(f"Successfully added combination: {card_id} ({symbol}) - '{test_name}'")
 
             return {
                 "success": True,
                 "card_id": card_id,
                 "symbol": symbol,
-                "monitor_config_name": monitor_config.name
+                "monitor_config_name": monitor_config.name,
+                "test_name": test_name  # Return test_name
             }
 
         except Exception as e:

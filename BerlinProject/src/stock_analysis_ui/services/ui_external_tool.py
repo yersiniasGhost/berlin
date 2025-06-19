@@ -64,15 +64,85 @@ class UIExternalTool(ExternalTool):
             # Add portfolio metrics if available
             if portfolio_metrics:
                 update_data['portfolio'] = portfolio_metrics
-                logger.debug(f"Portfolio for {card_id}: P&L=${portfolio_metrics['pnl']['total_pnl']:.2f}, "
-                             f"Position: {portfolio_metrics['position']['is_in_position']}")
 
             self.socketio.emit('card_update', update_data)
 
-            logger.debug(f"Sent update for {card_id}: price=${price}, bars={bar_scores}")
-
         except Exception as e:
             logger.error(f"Error in process_tick for {card_id}: {e}")
+
+    def indicator_vector(self, card_id: str, symbol: str, tick: TickData,
+                         indicators: Dict[str, float], bar_scores: Dict[str, float] = None,
+                         raw_indicators: Dict[str, float] = None,
+                         combination_id: Optional[str] = None,
+                         portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Send indicator data to browser including portfolio metrics
+
+        Args:
+            card_id: Card identifier
+            symbol: Stock symbol
+            tick: Current tick data
+            indicators: Calculated indicators
+            bar_scores: Bar scores
+            raw_indicators: Raw indicator values
+            portfolio_metrics: Portfolio performance metrics
+        """
+        try:
+            # Check if this update has bar data (even if values are 0.0)
+            has_bar_data: bool = bool(bar_scores and len(bar_scores) > 0)
+
+            # UPDATED: Get test_name from app_service combinations
+            test_name = "Unknown Config"
+            try:
+                from flask import current_app
+                if hasattr(current_app, 'app_service') and card_id in current_app.app_service.combinations:
+                    test_name = current_app.app_service.combinations[card_id].get('test_name', 'Unknown Config')
+            except:
+                pass
+
+            # Prepare data
+            update_data: Dict[str, Any] = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'test_name': test_name,  # ADDED: Include test_name
+                'price': tick.close,
+                'timestamp': self._format_timestamp(tick.timestamp),
+                'ohlc': [tick.open, tick.high, tick.low, tick.close],
+                'volume': tick.volume,
+                'indicators': indicators or {},
+                'bar_scores': bar_scores or {},
+                'raw_indicators': raw_indicators or {}
+            }
+
+            # Add portfolio metrics if available
+            if portfolio_metrics:
+                update_data['portfolio'] = portfolio_metrics
+
+            if has_bar_data:
+                # Store and emit meaningful data
+                self.last_meaningful_data[card_id] = update_data.copy()
+                self.socketio.emit('card_update', update_data)
+            else:
+                # Preserve previous bar scores if available
+                if card_id in self.last_meaningful_data:
+                    meaningful_data: Dict[str, Any] = self.last_meaningful_data[card_id].copy()
+                    meaningful_data['price'] = tick.close
+                    meaningful_data['timestamp'] = update_data['timestamp']
+                    meaningful_data['ohlc'] = update_data['ohlc']
+                    meaningful_data['volume'] = update_data['volume']
+                    meaningful_data['test_name'] = test_name  # ADDED: Update test_name
+
+                    # Update portfolio metrics if provided
+                    if portfolio_metrics:
+                        meaningful_data['portfolio'] = portfolio_metrics
+
+                    self.socketio.emit('card_update', meaningful_data)
+                else:
+                    # No previous data - send as-is
+                    self.socketio.emit('card_update', update_data)
+
+        except Exception as e:
+            logger.error(f"Error sending indicator data for {card_id}: {e}")
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         pass

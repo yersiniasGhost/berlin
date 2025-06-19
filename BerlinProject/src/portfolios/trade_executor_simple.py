@@ -25,7 +25,7 @@ class TradeExecutorSimple(TradeExecutor):
     def __init__(self,
                  monitor_config,
                  default_position_size: float = 1.0,
-                 stop_loss_pct: float = 0.5):
+                 stop_loss_pct: float = 0.0005):
         super().__init__(monitor_config, default_position_size, stop_loss_pct)
         self.trailing_stop_price = 0.0
         logger.info(
@@ -62,7 +62,6 @@ class TradeExecutorSimple(TradeExecutor):
                         )
 
                         # Set initial trailing stop loss
-                        # Convert percentage to decimal if needed
                         stop_loss_decimal = self.stop_loss_pct / 100.0 if self.stop_loss_pct > 1 else self.stop_loss_pct
                         self.trailing_stop_price = tick.close * (1 - stop_loss_decimal)
 
