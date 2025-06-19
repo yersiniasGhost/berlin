@@ -1,5 +1,5 @@
 """
-Simplified DataStreamer with proper typing - CLEAN VERSION
+Clean DataStreamer with no debug output
 """
 
 import logging
@@ -19,8 +19,7 @@ logger = logging.getLogger('DataStreamer')
 
 class DataStreamer:
     """
-    DataStreamer owns aggregators and processes data for one symbol+config combination
-    Now includes TradeExecutor for portfolio management with simplified metrics
+    Clean DataStreamer with minimal logging
     """
 
     def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
@@ -52,14 +51,9 @@ class DataStreamer:
         self.raw_indicators: Dict[str, float] = {}
         self.bar_scores: Dict[str, float] = {}
 
-        logger.info(f"Created DataStreamer for {symbol} with timeframes: {required_timeframes}")
-
     def process_tick(self, tick_data: TickData) -> None:
         """
         Process incoming TickData and execute trading logic
-
-        Args:
-            tick_data: TickData object with type="PIP" for real-time data
         """
         if tick_data.symbol != self.symbol:
             return
@@ -79,7 +73,7 @@ class DataStreamer:
             bar_scores=self.bar_scores
         )
 
-        # Get simplified portfolio performance metrics with current price
+        # Get portfolio performance metrics with current price
         portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
 
         # Send data to external tools (including portfolio data)
@@ -112,8 +106,7 @@ class DataStreamer:
     def load_historical_data(self, data_link) -> None:
         """Load historical data for all timeframes"""
         for timeframe, aggregator in self.aggregators.items():
-            count: int = aggregator.prepopulate_data(data_link)
-            logger.info(f"Loaded {count} {timeframe} candles for {self.symbol}")
+            aggregator.prepopulate_data(data_link)
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
         """Connect an external tool"""
