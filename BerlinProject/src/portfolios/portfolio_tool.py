@@ -24,7 +24,7 @@ class Trade:
 @dataclass
 class Portfolio:
     """
-    Portfolio data object with performance calculation methods
+    Portfolio data object with PERCENT-BASED P&L and proper realized P&L tracking
     """
     # Position state
     position_size: float = 0.0
@@ -32,6 +32,9 @@ class Portfolio:
 
     # Trade history
     trade_history: List[Trade] = field(default_factory=list)
+
+    # P&L tracking - NEW: Track realized P&L properly
+    total_realized_pnl_percent: float = 0.0  # Cumulative realized P&L as percentage
 
     def buy(self, time: int, price: float, reason: TradeReason, size: float) -> None:
         # Update position
@@ -47,6 +50,21 @@ class Portfolio:
         self.trade_history.append(trade)
 
     def exit_long(self, time: int, price: float, reason: TradeReason = TradeReason.EXIT_LONG) -> None:
+        """Exit long position and properly add to realized P&L"""
+
+        # Calculate realized P&L BEFORE clearing position
+        entry_price = self.get_entry_price()
+        if entry_price and entry_price > 0 and self.position_size > 0:
+            # Calculate percent gain/loss: (exit_price - entry_price) / entry_price * 100
+            realized_pnl_percent = ((price - entry_price) / entry_price) * 100.0
+
+            # Add to cumulative realized P&L
+            self.total_realized_pnl_percent += realized_pnl_percent
+
+            print(f"REALIZED P&L: Entry: ${entry_price:.4f}, Exit: ${price:.4f}, "
+                  f"Gain: {realized_pnl_percent:.2f}%, Total Realized: {self.total_realized_pnl_percent:.2f}%")
+
+        # Record the exit trade
         trade = Trade(
             time=time,
             size=self.position_size,  # Exit full position
@@ -55,6 +73,7 @@ class Portfolio:
         )
         self.trade_history.append(trade)
 
+        # Clear position AFTER calculating P&L
         self.position_size = 0.0
 
     def sell(self, time: int, price: float, reason: TradeReason, size: float) -> None:
@@ -73,7 +92,7 @@ class Portfolio:
         return self.position_size > 0
 
     def get_entry_price(self) -> Optional[float]:
-        """Get the entry price of current position - FIXED VERSION"""
+        """Get the entry price of current position"""
         if not self.is_in_position():
             return None
 
@@ -83,15 +102,14 @@ class Portfolio:
                 return trade.price
 
         # If no explicit entry trade found, look for any BUY trade while we're in position
-        # This handles cases where the reason might not be set correctly
         for trade in reversed(self.trade_history):
             if trade.size > 0:  # Positive size indicates a buy
                 return trade.price
 
         return None
 
-    def calculate_unrealized_pnl(self, current_price: float) -> float:
-        """Calculate unrealized P&L for current position"""
+    def calculate_unrealized_pnl_percent(self, current_price: float) -> float:
+        """Calculate unrealized P&L as PERCENTAGE"""
         if not self.is_in_position() or not current_price:
             return 0.0
 
@@ -99,48 +117,25 @@ class Portfolio:
         if entry_price is None or entry_price == 0.0:
             return 0.0
 
-        # For long positions: (current_price - entry_price) * position_size
-        unrealized = (current_price - entry_price) * self.position_size
-        return unrealized
+        # Calculate percent change: (current_price - entry_price) / entry_price * 100
+        unrealized_percent = ((current_price - entry_price) / entry_price) * 100.0
+        return unrealized_percent
 
-    def calculate_realized_pnl(self) -> float:
-        """Calculate realized P&L from completed round trips"""
-        realized_pnl = 0.0
-        entry_price = None
-        entry_size = 0.0
-
-        for trade in self.trade_history:
-            if trade.reason in [TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT]:
-                entry_price = trade.price
-                entry_size = trade.size
-            elif trade.reason in [TradeReason.EXIT_LONG, TradeReason.EXIT_SHORT, TradeReason.STOP_LOSS,
-                                  TradeReason.TAKE_PROFIT]:
-                if entry_price is not None:
-                    # Calculate P&L for this round trip
-                    if trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]:
-                        # Long position exit
-                        pnl = (trade.price - entry_price) * entry_size
-                    else:
-                        # Short position exit (if we implement shorts later)
-                        pnl = (entry_price - trade.price) * entry_size
-
-                    realized_pnl += pnl
-                    entry_price = None
-                    entry_size = 0.0
-
-        return realized_pnl
+    def calculate_realized_pnl_percent(self) -> float:
+        """Get total realized P&L as percentage"""
+        return self.total_realized_pnl_percent
 
     def get_performance_metrics(self, current_price: float = None) -> Dict[str, Any]:
         """
-        Get comprehensive portfolio performance metrics
+        Get comprehensive portfolio performance metrics with PERCENT-BASED P&L
 
         Args:
             current_price: Current market price for unrealized P&L calculation
 
         Returns:
-            Dictionary with position and P&L information
+            Dictionary with position and P&L information in PERCENTAGES
         """
-        # Get entry price - this should now work correctly
+        # Get entry price
         entry_price = self.get_entry_price() or 0.0
 
         # Position information
@@ -151,15 +146,15 @@ class Portfolio:
             'current_price': current_price or 0.0
         }
 
-        # P&L calculations with proper current_price handling
-        realized_pnl = self.calculate_realized_pnl()
-        unrealized_pnl = self.calculate_unrealized_pnl(current_price) if current_price else 0.0
-        total_pnl = realized_pnl + unrealized_pnl
+        # P&L calculations in PERCENTAGES
+        realized_pnl_percent = self.calculate_realized_pnl_percent()
+        unrealized_pnl_percent = self.calculate_unrealized_pnl_percent(current_price) if current_price else 0.0
+        total_pnl_percent = realized_pnl_percent + unrealized_pnl_percent
 
         pnl_data = {
-            'realized_pnl': realized_pnl,
-            'unrealized_pnl': unrealized_pnl,
-            'total_pnl': total_pnl
+            'realized_pnl_percent': realized_pnl_percent,
+            'unrealized_pnl_percent': unrealized_pnl_percent,
+            'total_pnl_percent': total_pnl_percent
         }
 
         return {
@@ -172,6 +167,7 @@ class Portfolio:
         return {
             'total_trades': len(self.trade_history),
             'current_position_size': self.position_size,
+            'total_realized_pnl_percent': self.total_realized_pnl_percent,
             'trades': [
                 {
                     'time': trade.time,
@@ -187,3 +183,4 @@ class Portfolio:
         """Reset portfolio to initial state"""
         self.position_size = 0.0
         self.trade_history.clear()
+        self.total_realized_pnl_percent = 0.0  # Reset realized P&L too

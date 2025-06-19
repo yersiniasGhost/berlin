@@ -1,11 +1,13 @@
 # File: BerlinProject/src/stock_analysis_ui/routes/api_routes.py
-# FIXED VERSION - No mock data, clean real indicator history
+# Complete API routes with debugging and WebSocket monitoring
 
 """
-Simplified API routes for AppService
+API routes for AppService with enhanced debugging capabilities
 """
+
 import json
 import logging
+import time
 from datetime import datetime
 
 import numpy as np
@@ -17,16 +19,22 @@ api_bp = Blueprint('api', __name__)
 
 @api_bp.route('/status')
 def get_status():
-    """Get current application status"""
+    """Get current application status - supports both live and replay modes"""
     try:
         app_service = current_app.app_service
         combinations = app_service.get_combinations()
 
+        # Handle both live and replay modes
+        authenticated = True  # Default for replay mode
+        if app_service.auth_manager is not None:
+            authenticated = app_service.auth_manager.is_authenticated()
+
         return jsonify({
-            'authenticated': app_service.auth_manager.is_authenticated(),
+            'authenticated': authenticated,
             'streaming': app_service.is_streaming,
             'combinations': combinations['combinations'],
-            'total_combinations': combinations['total']
+            'total_combinations': combinations['total'],
+            'mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Unknown'
         })
 
     except Exception as e:
@@ -36,7 +44,7 @@ def get_status():
 
 @api_bp.route('/combinations', methods=['POST'])
 def add_combination():
-    """Add a new combination - now handles file content directly"""
+    """Add a new combination - handles file content directly"""
     try:
         data = request.json
 
@@ -182,50 +190,6 @@ def stop_streaming():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_bp.route('/debug/<card_id>')
-def debug_card(card_id: str):
-    """Debug endpoint to see what's happening with a specific card"""
-    try:
-        app_service = current_app.app_service
-
-        if card_id not in app_service.combinations:
-            return jsonify({'error': f'Card {card_id} not found'}), 404
-
-        combination = app_service.combinations[card_id]
-        data_streamer = combination['data_streamer']
-
-        # Get all candle data
-        all_candle_data = data_streamer._get_all_candle_data()
-
-        # Get current indicators
-        current_indicators, current_raw, current_bars = data_streamer.indicator_processor.calculate_indicators(
-            all_candle_data, None
-        )
-
-        # Build debug info
-        debug_info = {
-            'card_id': card_id,
-            'symbol': data_streamer.symbol,
-            'timeframes': list(all_candle_data.keys()),
-            'candle_counts': {tf: len(candles) for tf, candles in all_candle_data.items()},
-            'current_indicators': current_indicators,
-            'current_raw': current_raw,
-            'current_bars': current_bars,
-            'stored_values': data_streamer.indicator_processor.stored_values
-        }
-
-        return jsonify({
-            'success': True,
-            'debug_info': debug_info
-        })
-
-    except Exception as e:
-        logger.error(f"Error in debug endpoint: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @api_bp.route('/combinations/<card_id>/details')
 def get_card_details(card_id: str):
     """Get detailed indicator history and current values for a specific card"""
@@ -303,8 +267,6 @@ def get_card_details(card_id: str):
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
-    # Add this new route to the existing api_routes.py file
-
 
 @api_bp.route('/combinations/<card_id>/portfolio')
 def get_card_portfolio(card_id: str):
@@ -320,7 +282,8 @@ def get_card_portfolio(card_id: str):
         data_streamer = combination['data_streamer']
 
         # Get current portfolio metrics
-        portfolio_metrics = data_streamer.get_portfolio_metrics()
+        portfolio_metrics = data_streamer.get_portfolio_metrics() if hasattr(data_streamer,
+                                                                             'get_portfolio_metrics') else {}
 
         return jsonify({
             'success': True,
@@ -342,7 +305,8 @@ def get_all_portfolios():
         portfolios = {}
         for card_id, combination in app_service.combinations.items():
             data_streamer = combination['data_streamer']
-            portfolios[card_id] = data_streamer.get_portfolio_metrics()
+            if hasattr(data_streamer, 'get_portfolio_metrics'):
+                portfolios[card_id] = data_streamer.get_portfolio_metrics()
 
         return jsonify({
             'success': True,
@@ -354,4 +318,205 @@ def get_all_portfolios():
         logger.error(f"Error getting all portfolios: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# Remove the old _get_real_indicator_history function since we're using the processor's method now
+
+# ============================================================================
+# DEBUG ENDPOINTS
+# ============================================================================
+
+@api_bp.route('/debug/streaming')
+def debug_streaming():
+    """Get detailed streaming debug information"""
+    try:
+        app_service = current_app.app_service
+
+        debug_info = {
+            'app_service_streaming': app_service.is_streaming,
+            'app_service_mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Unknown',
+            'combinations_count': len(app_service.combinations),
+            'data_link_type': type(app_service.data_link).__name__ if app_service.data_link else 'None'
+        }
+
+        # Get CSReplayDataLink specific debug info
+        if hasattr(app_service.data_link, 'get_debug_info'):
+            debug_info['replay_debug'] = app_service.data_link.get_debug_info()
+
+        # Get DataStreamer info
+        debug_info['data_streamers'] = {}
+        for card_id, combo in app_service.combinations.items():
+            symbol = combo['symbol']
+            data_streamer = combo['data_streamer']
+
+            debug_info['data_streamers'][card_id] = {
+                'symbol': symbol,
+                'card_id': card_id,
+                'aggregators_count': len(data_streamer.aggregators) if hasattr(data_streamer, 'aggregators') else 0,
+                'external_tools_count': len(data_streamer.external_tools) if hasattr(data_streamer,
+                                                                                     'external_tools') else 0
+            }
+
+        return jsonify({
+            'success': True,
+            'debug_info': debug_info,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting debug info: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/websocket-health')
+def websocket_health():
+    """Get WebSocket health status"""
+    try:
+        app_service = current_app.app_service
+
+        health_data = {
+            'timestamp': datetime.now().isoformat(),
+            'ui_tool_health': app_service.ui_tool.get_health_status(),
+            'active_combinations': len(app_service.combinations),
+            'streaming_active': app_service.is_streaming
+        }
+
+        return jsonify({
+            'success': True,
+            'health': health_data
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting WebSocket health: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/force-restart-streaming', methods=['POST'])
+def force_restart_streaming():
+    """Force restart streaming if it gets stuck"""
+    try:
+        app_service = current_app.app_service
+
+        logger.info("🔄 Force restarting streaming...")
+
+        # Stop current streaming
+        if app_service.data_link and hasattr(app_service.data_link, 'stop_streaming'):
+            app_service.data_link.stop_streaming()
+
+        app_service.is_streaming = False
+
+        # Wait a moment
+        time.sleep(1)
+
+        # Restart
+        success = app_service.start_streaming()
+
+        return jsonify({
+            'success': success,
+            'message': 'Streaming restart attempted',
+            'new_status': app_service.is_streaming
+        })
+
+    except Exception as e:
+        logger.error(f"Error restarting streaming: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/force-ui-update', methods=['POST'])
+def force_ui_update():
+    """Force send test update to all cards"""
+    try:
+        app_service = current_app.app_service
+
+        updates_sent = 0
+        for card_id, combo in app_service.combinations.items():
+            symbol = combo['symbol']
+
+            # Send test update
+            test_data = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'price': 100.00,
+                'timestamp': datetime.now().isoformat(),
+                'ohlc': [100, 100, 100, 100],
+                'volume': 1000,
+                'indicators': {'test': 0.5},
+                'bar_scores': {'test_bar': 0.75},
+                'raw_indicators': {},
+                'test_update': True,
+                'portfolio': {
+                    'position': {
+                        'is_in_position': False,
+                        'position_size': 0,
+                        'entry_price': 0,
+                        'current_price': 100
+                    },
+                    'pnl': {
+                        'realized_pnl_percent': 0,
+                        'unrealized_pnl_percent': 0,
+                        'total_pnl_percent': 0
+                    }
+                }
+            }
+
+            try:
+                app_service.ui_tool.socketio.emit('card_update', test_data)
+                updates_sent += 1
+                logger.info(f"Sent test update to {card_id}")
+            except Exception as emit_error:
+                logger.error(f"Failed to send test update to {card_id}: {emit_error}")
+
+        return jsonify({
+            'success': True,
+            'updates_sent': updates_sent,
+            'total_cards': len(app_service.combinations),
+            'message': f'Sent test updates to {updates_sent} cards'
+        })
+
+    except Exception as e:
+        logger.error(f"Error forcing UI update: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/card/<card_id>')
+def debug_card(card_id: str):
+    """Debug endpoint to see what's happening with a specific card"""
+    try:
+        app_service = current_app.app_service
+
+        if card_id not in app_service.combinations:
+            return jsonify({'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        data_streamer = combination['data_streamer']
+
+        # Get all candle data
+        all_candle_data = data_streamer._get_all_candle_data()
+
+        # Get current indicators
+        current_indicators, current_raw, current_bars = data_streamer.indicator_processor.calculate_indicators(
+            all_candle_data, None
+        )
+
+        # Build debug info
+        debug_info = {
+            'card_id': card_id,
+            'symbol': data_streamer.symbol,
+            'timeframes': list(all_candle_data.keys()),
+            'candle_counts': {tf: len(candles) for tf, candles in all_candle_data.items()},
+            'current_indicators': current_indicators,
+            'current_raw': current_raw,
+            'current_bars': current_bars,
+            'stored_values': data_streamer.indicator_processor.stored_values if hasattr(
+                data_streamer.indicator_processor, 'stored_values') else {}
+        }
+
+        return jsonify({
+            'success': True,
+            'debug_info': debug_info
+        })
+
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500

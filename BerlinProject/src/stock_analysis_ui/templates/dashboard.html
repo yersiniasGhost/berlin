@@ -758,7 +758,8 @@
             });
         }
 
-        // NEW: Portfolio rendering function
+        // Update the renderPortfolioSection function in your dashboard.html
+
         function renderPortfolioSection(portfolio) {
             if (!portfolio) {
                 return '<div class="portfolio-section"><div class="portfolio-title">No Portfolio Data</div></div>';
@@ -772,9 +773,10 @@
             const currentPrice = position.current_price || 0;
             const positionSize = position.position_size || 0;
 
-            const realizedPnl = pnl.realized_pnl || 0;
-            const unrealizedPnl = pnl.unrealized_pnl || 0;
-            const totalPnl = pnl.total_pnl || 0;
+            // Use PERCENT values instead of dollar values
+            const realizedPnlPercent = pnl.realized_pnl_percent || 0;
+            const unrealizedPnlPercent = pnl.unrealized_pnl_percent || 0;
+            const totalPnlPercent = pnl.total_pnl_percent || 0;
 
             const statusClass = isInPosition ? 'in-position' : 'no-position';
             const statusText = isInPosition ? 'IN POSITION' : 'NO POSITION';
@@ -796,21 +798,20 @@
                         </div>
                         <div class="metric-item">
                             <div class="metric-label">Realized P&L</div>
-                            <div class="metric-value ${realizedPnl >= 0 ? 'positive' : 'negative'}">$${realizedPnl.toFixed(2)}</div>
+                            <div class="metric-value ${realizedPnlPercent >= 0 ? 'positive' : 'negative'}">${realizedPnlPercent.toFixed(2)}%</div>
                         </div>
                         <div class="metric-item">
                             <div class="metric-label">Unrealized P&L</div>
-                            <div class="metric-value ${unrealizedPnl >= 0 ? 'positive' : 'negative'}">$${unrealizedPnl.toFixed(2)}</div>
+                            <div class="metric-value ${unrealizedPnlPercent >= 0 ? 'positive' : 'negative'}">${unrealizedPnlPercent.toFixed(2)}%</div>
                         </div>
                         <div class="metric-item" style="grid-column: 1 / -1;">
                             <div class="metric-label">Total P&L</div>
-                            <div class="metric-value ${totalPnl >= 0 ? 'positive' : 'negative'}" style="font-size: 1.25rem;">$${totalPnl.toFixed(2)}</div>
+                            <div class="metric-value ${totalPnlPercent >= 0 ? 'positive' : 'negative'}" style="font-size: 1.25rem;">${totalPnlPercent.toFixed(2)}%</div>
                         </div>
                     </div>
                 </div>
             `;
         }
-
         function renderBarScores(barScores) {
             if (!barScores || Object.keys(barScores).length === 0) {
                 return '<div class="responsive-bar"><div class="bar-header"><span class="bar-label">No bar data</span></div></div>';

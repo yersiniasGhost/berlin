@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
 """
-Main Flask application entry point - SIMPLIFIED VERSION with proper type hints
+Complete Flask application with support for both Live Schwab and CS Replay modes
+Usage:
+  # Live mode (unchanged from original)
+  python app.py
+
+  # CS Replay mode
+  python app.py --replay-file pltr_pips.txt --symbol PLTR --config monitor_config.json
+
+  # CS Replay mode with multiple symbols
+  python app.py --replay-files PLTR:pltr_pips.txt NVDA:nvda_pips.txt --config config.json
 """
 
 import os
 import sys
 import logging
+import argparse
 from flask import Flask
 from flask_socketio import SocketIO
 
@@ -15,6 +25,7 @@ sys.path.insert(0, os.path.join(current_dir, '..'))
 
 from services.schwab_auth import SchwabAuthManager
 from services.app_service import AppService
+from data_streamer.cs_replay_data_link import CSReplayDataLink
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,8 +40,121 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 app_service: AppService = None
 
 
+def parse_symbol_files(symbol_file_args):
+    """Parse symbol:file pairs from command line arguments"""
+    symbol_files = {}
+
+    for arg in symbol_file_args:
+        if ':' not in arg:
+            logger.error(f"Invalid format: {arg}. Use SYMBOL:filepath format")
+            continue
+
+        symbol, file_path = arg.split(':', 1)
+        symbol = symbol.upper().strip()
+        file_path = file_path.strip()
+
+        if not symbol or not file_path:
+            logger.error(f"Empty symbol or file path in: {arg}")
+            continue
+
+        symbol_files[symbol] = file_path
+
+    return symbol_files
+
+
+def validate_files(file_paths):
+    """Validate that all files exist and are readable"""
+    if isinstance(file_paths, dict):
+        # Multiple files case
+        for symbol, file_path in file_paths.items():
+            if not os.path.exists(file_path):
+                logger.error(f"File not found for {symbol}: {file_path}")
+                return False
+            logger.info(f"✓ {symbol}: {file_path}")
+    else:
+        # Single file case
+        if not os.path.exists(file_paths):
+            logger.error(f"File not found: {file_paths}")
+            return False
+        logger.info(f"✓ File: {file_paths}")
+
+    return True
+
+
+def setup_cs_replay_mode_single(file_path: str, symbol: str, speed: float = 1.0) -> bool:
+    """Set up CS Replay mode with single symbol file"""
+    global app_service
+
+    print(f"\n=== CS REPLAY MODE (Single Symbol) ===")
+    print(f"File: {file_path}")
+    print(f"Symbol: {symbol}")
+    print(f"Speed: {speed}x")
+
+    if not validate_files(file_path):
+        return False
+
+    # Create app service without auth manager (replay mode)
+    app_service = AppService(socketio, auth_manager=None)
+
+    # Create CSReplayDataLink
+    cs_replay_link = CSReplayDataLink(playback_speed=speed)
+
+    # Load the symbol file
+    if not cs_replay_link.add_symbol_file(symbol, file_path):
+        logger.error(f"Failed to load data for {symbol}")
+        return False
+
+    # Set data_link on app_service BEFORE calling start_streaming
+    app_service.data_link = cs_replay_link
+
+    # Start streaming
+    if not app_service.start_streaming():
+        logger.error("Failed to start streaming")
+        return False
+
+    print("✅ CS Replay mode setup successful!")
+    return True
+
+
+def setup_cs_replay_mode_multi(symbol_files: dict, speed: float = 1.0) -> bool:
+    """Set up CS Replay mode with multiple symbol files"""
+    global app_service
+
+    print(f"\n=== CS REPLAY MODE (Multi Symbol) ===")
+    print(f"Speed: {speed}x")
+    print("Symbol Files:")
+    for symbol, file_path in symbol_files.items():
+        print(f"  {symbol}: {file_path}")
+
+    if not validate_files(symbol_files):
+        return False
+
+    # Create app service without auth manager (replay mode)
+    app_service = AppService(socketio, auth_manager=None)
+
+    # Create CSReplayDataLink
+    cs_replay_link = CSReplayDataLink(playback_speed=speed)
+
+    # Load each symbol file
+    for symbol, file_path in symbol_files.items():
+        if not cs_replay_link.add_symbol_file(symbol, file_path):
+            logger.error(f"Failed to load data for {symbol}")
+            return False
+
+    # Set data_link on app_service
+    app_service.data_link = cs_replay_link
+
+    # Start streaming
+    if not app_service.start_streaming():
+        logger.error("Failed to start streaming")
+        return False
+
+    print("✅ CS Replay mode setup successful!")
+    return True
+
+
 def authenticate_before_startup() -> bool:
-    """Force fresh Schwab authentication before starting the web server"""
+    """Force fresh Schwab authentication for live mode (unchanged from original)"""
     global app_service
 
     print("\n=== TRADING DASHBOARD AUTHENTICATION ===")
@@ -57,6 +181,129 @@ def authenticate_before_startup() -> bool:
     return True
 
 
+def add_cards_from_args(args) -> None:
+    """Add trading cards based on command line arguments"""
+    if not args.config:
+        logger.info("No configs specified - cards can be added via web interface")
+        return
+
+    # Determine symbols based on mode
+    symbols = []
+    if args.replay_file and args.symbol:
+        # Single symbol mode
+        symbols = [args.symbol.upper()]
+    elif args.replay_files:
+        # Multi symbol mode
+        symbol_files = parse_symbol_files(args.replay_files)
+        symbols = list(symbol_files.keys())
+    else:
+        logger.info("No symbols specified - cards can be added via web interface")
+        return
+
+    configs = args.config if isinstance(args.config, list) else [args.config]
+
+    print(f"\nAdding Trading Cards:")
+
+    # Handle config assignment
+    if len(configs) == 1:
+        # One config for all symbols
+        config_file = configs[0]
+        for symbol in symbols:
+            result = app_service.add_combination(symbol, config_file)
+            if result['success']:
+                print(f"✓ Added card: {result['card_id']} ({symbol})")
+            else:
+                print(f"✗ Failed to add {symbol}: {result['error']}")
+
+    elif len(symbols) == len(configs):
+        # One-to-one mapping
+        for symbol, config_file in zip(symbols, configs):
+            result = app_service.add_combination(symbol, config_file)
+            if result['success']:
+                print(f"✓ Added card: {result['card_id']} ({symbol})")
+            else:
+                print(f"✗ Failed to add {symbol}: {result['error']}")
+
+    else:
+        logger.error(f"Mismatch: {len(symbols)} symbols but {len(configs)} configs")
+        logger.error("Provide either 1 config for all symbols, or 1 config per symbol")
+
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Trading Dashboard - Live Schwab or CS Replay Mode',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  # Live mode (original - unchanged)
+  python app.py
+
+  # CS Replay mode - single symbol
+  python app.py --replay-file pltr_pips.txt --symbol PLTR --config monitor_config.json
+
+  # CS Replay mode - multiple symbols
+  python app.py --replay-files PLTR:pltr_pips.txt NVDA:nvda_pips.txt --config config.json
+
+  # CS Replay with custom speed
+  python app.py --replay-file pltr_pips.txt --symbol PLTR --speed 2.0 --config config.json
+        '''
+    )
+
+    # CS Replay arguments
+    parser.add_argument(
+        '--replay-file',
+        help='Path to single PIP data file for replay mode'
+    )
+
+    parser.add_argument(
+        '--symbol',
+        help='Symbol for single file replay mode (e.g., PLTR)'
+    )
+
+    parser.add_argument(
+        '--replay-files',
+        nargs='+',
+        help='Multiple symbol:file pairs (e.g., PLTR:pltr_pips.txt NVDA:nvda_pips.txt)'
+    )
+
+    parser.add_argument(
+        '--speed', '-s',
+        type=float,
+        default=1.0,
+        help='Playback speed multiplier (default: 1.0 = real-time)'
+    )
+
+    parser.add_argument(
+        '--config',
+        nargs='+',
+        help='Path(s) to monitor configuration JSON file(s)'
+    )
+
+    # Server arguments
+    parser.add_argument(
+        '--port', '-p',
+        type=int,
+        default=5050,
+        help='Port to run the web server on (default: 5050)'
+    )
+
+    parser.add_argument(
+        '--host',
+        type=str,
+        default='0.0.0.0',
+        help='Host to bind the web server to (default: 0.0.0.0)'
+    )
+
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug mode'
+    )
+
+    return parser.parse_args()
+
+
 def register_routes() -> None:
     """Register all route blueprints"""
     from routes.dashboard_routes import dashboard_bp
@@ -80,7 +327,7 @@ def create_app():
     # Make app_service available to routes with proper typing
     app.app_service = app_service
 
-    # Add type annotation for IDE support (this fixes the yellow underline)
+    # Add type annotation for IDE support
     if not hasattr(app, '__annotations__'):
         app.__annotations__ = {}
     app.__annotations__['app_service'] = AppService
@@ -89,11 +336,51 @@ def create_app():
 
 
 if __name__ == '__main__':
-    # Authenticate before starting the server
-    if authenticate_before_startup():
-        create_app()
-        print("🚀 Starting Trading Dashboard at http://localhost:5050")
-        socketio.run(app, debug=False, host='0.0.0.0', port=5050)
+    # Parse command line arguments
+    args = parse_arguments()
+
+    # Determine mode and setup accordingly
+    if args.replay_file and args.symbol:
+        # Single symbol CS Replay mode
+        if not setup_cs_replay_mode_single(args.replay_file, args.symbol.upper(), args.speed):
+            print("Failed to set up CS Replay mode.")
+            sys.exit(1)
+
+    elif args.replay_files:
+        # Multi symbol CS Replay mode
+        symbol_files = parse_symbol_files(args.replay_files)
+        if not symbol_files:
+            print("No valid symbol:file pairs provided.")
+            sys.exit(1)
+
+        if not setup_cs_replay_mode_multi(symbol_files, args.speed):
+            print("Failed to set up CS Replay mode.")
+            sys.exit(1)
+
     else:
-        print("Exiting due to authentication failure.")
-        sys.exit(1)
+        # Live mode (original behavior - unchanged)
+        if not authenticate_before_startup():
+            print("Exiting due to authentication failure.")
+            sys.exit(1)
+
+    # Add cards from command line arguments
+    add_cards_from_args(args)
+
+    # Create Flask app
+    create_app()
+
+    # Determine mode for display
+    mode = "Live Schwab"
+    if args.replay_file or args.replay_files:
+        mode = "CS Replay"
+        if args.replay_files:
+            symbol_files = parse_symbol_files(args.replay_files)
+            mode += f" ({len(symbol_files)} symbols)"
+        else:
+            mode += f" ({args.symbol})"
+        mode += f" @ {args.speed}x speed"
+
+    print(f"\n🚀 Starting Trading Dashboard at http://localhost:{args.port}")
+    print(f"Mode: {mode}")
+
+    socketio.run(app, debug=args.debug, host=args.host, port=args.port)

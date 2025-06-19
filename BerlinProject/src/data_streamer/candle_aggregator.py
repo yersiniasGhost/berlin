@@ -196,6 +196,7 @@ class CandleAggregator:
     def prepopulate_data(self, data_link):
         """
         Prepopulate history for this aggregator's symbol and timeframe.
+        FIXED: Handle CSReplayDataLink which returns None for historical data
 
         Args:
             data_link: Data link object with load_historical_data method
@@ -205,6 +206,10 @@ class CandleAggregator:
         """
         # Load historical data for this symbol and timeframe
         historical_data = data_link.load_historical_data(self.symbol, self.timeframe)
+
+        # FIXED: Handle CSReplayDataLink which returns None or empty list
+        if not historical_data:
+            return 0
 
         # Sort by timestamp to ensure chronological order
         historical_data.sort(key=lambda x: x.timestamp)
@@ -218,4 +223,3 @@ class CandleAggregator:
             self.current_candle = historical_data[-1]
 
         return len(historical_data)
-

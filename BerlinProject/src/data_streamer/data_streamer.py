@@ -24,7 +24,7 @@ class DataStreamer:
     """
 
     def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
-                 default_position_size: float = 1.0, stop_loss_pct: float = 0.5) -> None:
+                 default_position_size: float = 100.0, stop_loss_pct: float = 0.005) -> None:
         self.card_id: str = card_id
         self.symbol: str = symbol
         self.monitor_config: MonitorConfiguration = monitor_config

@@ -24,8 +24,8 @@ class TradeExecutorSimple(TradeExecutor):
 
     def __init__(self,
                  monitor_config,
-                 default_position_size: float = 1.0,
-                 stop_loss_pct: float = 0.0005):
+                 default_position_size: float = 10.0,
+                 stop_loss_pct: float = 0.005):
         super().__init__(monitor_config, default_position_size, stop_loss_pct)
         self.trailing_stop_price = 0.0
         logger.info(
