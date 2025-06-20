@@ -47,6 +47,8 @@ class IndicatorProcessor:
         for indicator_def in self.config.indicators:
             timeframe = indicator_def.time_increment
 
+            # add aggregatopr type
+
             if timeframe not in aggregators:
                 continue
 

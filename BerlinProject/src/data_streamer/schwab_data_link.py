@@ -30,6 +30,9 @@ class SchwabDataLink(DataLink):
         self.access_token = None
         self.refresh_token = None
 
+        # for data dumper
+        self.quote_handlers = []
+
         # Streamer configuration
         self.user_prefs = None
         self.ws = None  # WebSocket connection
@@ -346,10 +349,18 @@ class SchwabDataLink(DataLink):
 
         for quote in data:
             try:
-                # Convert PIP data to TickData with validation
+                # FIRST: Call any registered quote handlers with raw PIP data
+                # This happens BEFORE validation, so we save everything
+                for handler in self.quote_handlers:
+                    try:
+                        handler(quote)
+                    except Exception as e:
+                        logger.error(f"Error in quote handler: {e}")
+
+                # THEN: Try to convert PIP data to TickData with validation
                 tick_data = self._pip_to_tick_data(quote)
 
-                # Skip if conversion failed (tick_data is None)
+                # Skip if conversion failed (tick_data is None) but continue to next quote
                 if tick_data is None:
                     continue
 
@@ -368,10 +379,6 @@ class SchwabDataLink(DataLink):
                 else:
                     logger.debug(f"No DataStreamers registered for symbol: {symbol}")
 
-            except ValueError as e:
-                # Skip invalid quotes but log the error
-                logger.warning(f"Skipping invalid quote: {e}")
-                continue
             except Exception as e:
                 logger.error(f"Unexpected error processing quote: {e}")
                 import traceback
@@ -538,3 +545,8 @@ class SchwabDataLink(DataLink):
             self.ws.close()
             self.is_connected = False
             logger.info("Disconnected from streaming API")
+
+    #  THis is for the data dumper to use:
+    def add_quote_handler(self, handler):
+        """Add a quote handler function"""
+        self.quote_handlers.append(handler)

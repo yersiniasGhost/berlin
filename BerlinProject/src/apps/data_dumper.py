@@ -231,6 +231,13 @@ class ImprovedPIPDataCollector:
         """Handle incoming PIP data and save to file"""
         try:
             symbol = pip_data.get('key')
+
+            # Debug: Print what we received
+            if symbol in self.symbols:
+                timestamp = pip_data.get('38')
+                price = pip_data.get('3')
+                self.logger.debug(f"Received PIP for {symbol}: timestamp={timestamp}, price={price}")
+
             if not symbol or symbol not in self.symbols:
                 return
 
@@ -250,8 +257,14 @@ class ImprovedPIPDataCollector:
                 # Update statistics
                 self.stats[symbol] += 1
 
+                # Log every 10th PIP for this symbol
+                if self.stats[symbol] % 10 == 0:
+                    self.logger.info(f"Saved {self.stats[symbol]} PIPs for {symbol}")
+
         except Exception as e:
             self.logger.error(f"Error handling PIP data: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _start_heartbeat_monitor(self) -> None:
         """Start heartbeat monitoring with market hours awareness"""
