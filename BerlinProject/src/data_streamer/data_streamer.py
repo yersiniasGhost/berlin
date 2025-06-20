@@ -1,5 +1,6 @@
+# data_streamer/data_streamer.py - Updated logic
 """
-Clean DataStreamer with no debug output
+DataStreamer with simple aggregator selection logic
 """
 
 import logging
@@ -8,10 +9,11 @@ from datetime import datetime
 
 from models.tick_data import TickData
 from data_streamer.indicator_processor import IndicatorProcessor
-from data_streamer.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator_normal import CANormal
+from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
-from portfolios.trade_executor import TradeExecutor
 from portfolios.trade_executor_simple import TradeExecutorSimple
 
 logger = logging.getLogger('DataStreamer')
@@ -19,7 +21,7 @@ logger = logging.getLogger('DataStreamer')
 
 class DataStreamer:
     """
-    Clean DataStreamer with minimal logging
+    DataStreamer with simple aggregator type selection
     """
 
     def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
@@ -28,18 +30,21 @@ class DataStreamer:
         self.symbol: str = symbol
         self.monitor_config: MonitorConfiguration = monitor_config
 
-        # Own candle aggregators for each required timeframe
+        # Get aggregator type from configuration
+        aggregator_type = monitor_config.get_aggregator_type()
         self.aggregators: Dict[str, CandleAggregator] = {}
         required_timeframes: List[str] = list(monitor_config.get_time_increments())
 
         for timeframe in required_timeframes:
-            self.aggregators[timeframe] = CandleAggregator(symbol, timeframe)
+            aggregator = self._create_aggregator(aggregator_type, symbol, timeframe)
+            self.aggregators[timeframe] = aggregator
+            logger.info(f"Created {aggregator_type} aggregator for {timeframe}")
 
         # Processing components
         self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
         self.external_tools: List[ExternalTool] = []
 
-        # Add TradeExecutor instance
+        # TradeExecutor instance
         self.trade_executor: TradeExecutorSimple = TradeExecutorSimple(
             monitor_config=monitor_config,
             default_position_size=default_position_size,
@@ -58,25 +63,27 @@ class DataStreamer:
         if tick_data.symbol != self.symbol:
             return
 
-        # Process tick through aggregators
-        for aggregator in self.aggregators.values():
-            aggregator.process_tick(tick_data)
+        # Process tick through all aggregators
+        for timeframe, aggregator in self.aggregators.items():
+            completed_candle = aggregator.process_tick(tick_data)
+            if completed_candle is not None:
+                logger.debug(f"Completed {timeframe} {aggregator._get_aggregator_type()} candle")
 
         # Calculate indicators based on current aggregator state
         self.indicators, self.raw_indicators, self.bar_scores = (
             self.indicator_processor.calculate_indicators_new(self.aggregators))
 
-        # Execute trading logic based on current indicators and bar scores
+        # Execute trading logic
         self.trade_executor.make_decision(
             tick=tick_data,
             indicators=self.indicators,
             bar_scores=self.bar_scores
         )
 
-        # Get portfolio performance metrics with current price
+        # Get portfolio performance metrics
         portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
 
-        # Send data to external tools (including portfolio data)
+        # Send data to external tools
         for tool in self.external_tools:
             tool.process_tick(
                 card_id=self.card_id,
@@ -102,6 +109,12 @@ class DataStreamer:
             all_data[timeframe] = history
 
         return all_data
+
+    def _create_aggregator(self, aggregator_type: str, symbol: str, timeframe: str) -> CandleAggregator:
+        if aggregator_type == "normal":
+            return CANormal(symbol, timeframe)
+        elif aggregator_type == "heiken":
+            return CAHeiken(symbol, timeframe)
 
     def load_historical_data(self, data_link) -> None:
         """Load historical data for all timeframes"""

@@ -11,8 +11,12 @@ class MonitorConfiguration(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     name: str
     indicators: List[IndicatorDefinition]
-    # Add the bars field to support your new structure
-    bars: Dict[str, Dict[str, float]] = PydanticField(default_factory=dict)
+    aggregator_type: str = PydanticField(default="normal")  # Changed default back to normal
+
+    # Fixed: Changed from Dict[str, Dict[str, float]] to Dict[str, Any]
+    # to handle complex nested structure with "type" and "indicators" fields
+    bars: Dict[str, Any] = PydanticField(default_factory=dict)
+
     threshold: float = PydanticField(default=0.8)
     bear_threshold: float = PydanticField(default=0.8)
     description: str = PydanticField(default="")
@@ -49,6 +53,10 @@ class MonitorConfiguration(BaseModel):
                 time_increments.add(indicator.time_increment)
 
         return time_increments
+
+    def get_aggregator_type(self) -> str:
+        """Get the aggregator type for this configuration"""
+        return self.aggregator_type
 
 
 def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
@@ -99,6 +107,7 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
         monitor_data: Dict[str, Any] = config_data.get('monitor', {})
         indicators_data: List[Dict[str, Any]] = config_data.get('indicators', [])
 
+        # Process indicators
         indicators: List[IndicatorDefinition] = []
         for ind_data in indicators_data:
             indicator = IndicatorDefinition(
@@ -111,20 +120,28 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
             )
             indicators.append(indicator)
 
-        # FIXED: Properly extract threshold and bear_threshold from monitor_data
-        monitor_config = MonitorConfiguration(
-            name=monitor_data.get('name', 'Trading Signals'),
-            indicators=indicators,
-            threshold=monitor_data.get('threshold', 0.8),  # Get from JSON or default
-            bear_threshold=monitor_data.get('bear_threshold', 0.8),  # Get from JSON or default
-            description=monitor_data.get('description', '')
-        )
+        # Build configuration dictionary - let Pydantic handle defaults
+        config_dict = {
+            'name': monitor_data.get('name', 'Trading Signals'),
+            'indicators': indicators,
+            'threshold': monitor_data.get('threshold', 0.8),
+            'bear_threshold': monitor_data.get('bear_threshold', 0.8),
+            'description': monitor_data.get('description', '')
+        }
 
-        # FIXED: Properly set bars from monitor_data
+        # Only add aggregator_type if it exists in JSON - let Pydantic use default otherwise
+        if 'aggregator_type' in monitor_data:
+            config_dict['aggregator_type'] = monitor_data['aggregator_type']
+
+        # Only add bars if they exist in JSON
         if 'bars' in monitor_data:
-            monitor_config.bars = monitor_data['bars']
+            config_dict['bars'] = monitor_data['bars']
+
+        # Create MonitorConfiguration and let Pydantic handle defaults
+        monitor_config = MonitorConfiguration(**config_dict)
 
         print(f"Successfully loaded config: {monitor_config.name}")
+        print(f"  Aggregator Type: {monitor_config.aggregator_type}")
         print(f"  Threshold: {monitor_config.threshold}")
         print(f"  Bear Threshold: {monitor_config.bear_threshold}")
         print(f"  Indicators: {len(indicators)}")
@@ -137,3 +154,40 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
         import traceback
         traceback.print_exc()
         return None
+
+#
+# # Example of what your JSON structure looks like:
+# EXAMPLE_JSON_STRUCTURE = {
+#     "monitor": {
+#         "name": "Complex Strategy",
+#         "aggregator_type": "heiken",
+#         "threshold": 0.7,
+#         "bear_threshold": 0.7,
+#         "bars": {
+#             "bull_combo_alpha": {
+#                 "type": "bull",
+#                 "indicators": {
+#                     "ultra_sma_cross": 1.0,
+#                     "micro_macd_bull": 1.0
+#                 }
+#             },
+#             "bear_combo_alpha": {
+#                 "type": "bear",
+#                 "indicators": {
+#                     "micro_macd_bear": 1.0,
+#                     "fast_bollinger_bear": 1.0
+#                 }
+#             }
+#         }
+#     },
+#     "indicators": [
+#         {
+#             "name": "ultra_sma_cross",
+#             "type": "indicator",
+#             "function": "sma_crossover",
+#             "time_increment": "5m",
+#             "calc_on_pip": False,
+#             "parameters": {"period": 20, "trend": "bullish"}
+#         }
+#     ]
+# }

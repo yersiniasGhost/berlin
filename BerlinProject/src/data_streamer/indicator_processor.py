@@ -3,11 +3,12 @@ Enhanced IndicatorProcessor with proper history tracking - CLEAN VERSION
 """
 
 import logging
-import numpy as np
-from typing import Tuple, Dict, List
+from typing import Tuple
 from datetime import datetime
 
-from data_streamer.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator_normal import CANormal
+from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from features.indicators2 import support_level, resistance_level
 from models.monitor_configuration import MonitorConfiguration
 from features.indicators import *
@@ -41,18 +42,63 @@ class IndicatorProcessor:
 
         logger.info(f"IndicatorProcessor initialized with {len(self.config.indicators)} indicators")
 
+    # def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
+    #     Dict[str, float], Dict[str, float], Dict[str, float]]:
+    #
+    #     for indicator_def in self.config.indicators:
+    #         timeframe = indicator_def.time_increment
+    #
+    #         # add aggregatopr type
+    #
+    #         if timeframe not in aggregators:
+    #             continue
+    #
+    #         aggregator = aggregators[timeframe]
+    #         all_candles = aggregator.get_history().copy()
+    #
+    #         if aggregator.get_current_candle():
+    #             all_candles.append(aggregator.get_current_candle())
+    #
+    #         calc_on_pip = indicator_def.calc_on_pip or self.first_pass
+    #         if calc_on_pip or aggregator.completed_candle:
+    #             try:
+    #                 result = self._calculate_single_indicator(all_candles, indicator_def)
+    #                 if result is not None and len(result) > 0:
+    #                     value = float(result[-1])
+    #
+    #                     self.raw_indicators[indicator_def.name] = value
+    #                     self.indicator_trigger_history[indicator_def.name].append(value)
+    #
+    #                     lookback = indicator_def.parameters.get('lookback')
+    #                     trigger_history = np.array(self.indicator_trigger_history[indicator_def.name])
+    #                     decay_value = self.calculate_time_based_metric(trigger_history, lookback)
+    #                     self.indicators[indicator_def.name] = decay_value
+    #             except Exception as e:
+    #                 logger.error(f"Error calculating indicator '{indicator_def.name}': {e}")
+    #
+    #     self.first_pass = False
+    #     bar_scores: Dict[str, float] = self._calculate_bar_scores(self.indicators)
+    #
+    #     return self.indicators, self.raw_indicators, bar_scores
+
     def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
         Dict[str, float], Dict[str, float], Dict[str, float]]:
 
         for indicator_def in self.config.indicators:
             timeframe = indicator_def.time_increment
 
-            # add aggregatopr type
-
             if timeframe not in aggregators:
                 continue
 
             aggregator = aggregators[timeframe]
+
+            aggregator_type = aggregator._get_aggregator_type()
+            indicator_key = f"{aggregator_type}_{timeframe}_{indicator_def.name}"
+
+            # Initialize history for this key if needed
+            if indicator_key not in self.indicator_trigger_history:
+                self.indicator_trigger_history[indicator_key] = []
+
             all_candles = aggregator.get_history().copy()
 
             if aggregator.get_current_candle():
@@ -65,11 +111,14 @@ class IndicatorProcessor:
                     if result is not None and len(result) > 0:
                         value = float(result[-1])
 
+                        # Use regular indicator name for output (user-facing)
                         self.raw_indicators[indicator_def.name] = value
-                        self.indicator_trigger_history[indicator_def.name].append(value)
+
+                        # Use unique key for internal storage (aggregator-aware)
+                        self.indicator_trigger_history[indicator_key].append(value)
 
                         lookback = indicator_def.parameters.get('lookback')
-                        trigger_history = np.array(self.indicator_trigger_history[indicator_def.name])
+                        trigger_history = np.array(self.indicator_trigger_history[indicator_key])
                         decay_value = self.calculate_time_based_metric(trigger_history, lookback)
                         self.indicators[indicator_def.name] = decay_value
                 except Exception as e:
@@ -79,6 +128,7 @@ class IndicatorProcessor:
         bar_scores: Dict[str, float] = self._calculate_bar_scores(self.indicators)
 
         return self.indicators, self.raw_indicators, bar_scores
+
 
     def calculate_time_based_metric(self, indicator_data: np.ndarray, lookback: int) -> float:
         if len(indicator_data) == 0:
