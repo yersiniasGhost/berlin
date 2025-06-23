@@ -18,12 +18,16 @@ class CAHeiken(CandleAggregator):
         if not self.history:
             ha_open = tick_data.close
 
+        # Calculate proper HA high and low using the formulas
+        ha_high = max(tick_data.high, ha_open, ha_close)
+        ha_low = min(tick_data.low, ha_open, ha_close)
+
         return TickData(
             symbol=self.symbol,
             timestamp=candle_start_time,
             open=ha_open,
-            high=ha_close,
-            low=ha_close,
+            high=ha_high,  # ← Use calculated HA high
+            low=ha_low,  # ← Use calculated HA low
             close=ha_close,
             volume=tick_data.volume,
             time_increment=self.timeframe
