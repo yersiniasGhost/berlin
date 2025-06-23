@@ -129,20 +129,45 @@ class IndicatorProcessor:
 
         return self.indicators, self.raw_indicators, bar_scores
 
-
+    # def calculate_time_based_metric(self, indicator_data: np.ndarray, lookback: int) -> float:
+    #     if len(indicator_data) == 0:
+    #         return 0.0
+    #
+    #     search = indicator_data[-lookback:] if len(indicator_data) >= lookback else indicator_data
+    #     non_zero_indices = np.nonzero(search)[0]
+    #     if non_zero_indices.size == 0:
+    #         return 0.0
+    #     c = search[non_zero_indices[-1]]
+    #     lookback_location = len(search) - non_zero_indices[-1] - 1
+    #     lookback_ratio = lookback_location / float(len(search))
+    #     metric = (1.0 - lookback_ratio) * np.sign(c)
+    #
+    #     return metric
     def calculate_time_based_metric(self, indicator_data: np.ndarray, lookback: int) -> float:
         if len(indicator_data) == 0:
             return 0.0
 
-        search = indicator_data[-lookback:] if len(indicator_data) >= lookback else indicator_data
+        # Always use fixed lookback window, pad with zeros if we don't have enough data
+        if len(indicator_data) < lookback:
+            padded_data = np.zeros(lookback)
+            padded_data[-len(indicator_data):] = indicator_data
+            search = padded_data
+        else:
+            search = indicator_data[-lookback:]
+
         non_zero_indices = np.nonzero(search)[0]
         if non_zero_indices.size == 0:
             return 0.0
-        c = search[non_zero_indices[-1]]
-        lookback_location = len(search) - non_zero_indices[-1] - 1
-        lookback_ratio = lookback_location / float(len(search))
-        metric = (1.0 - lookback_ratio) * np.sign(c)
 
+        # Get the most recent trigger
+        last_trigger_index = non_zero_indices[-1]
+        trigger_value = search[last_trigger_index]
+
+        # Calculate position from the end (0 = most recent position)
+        lookback_location = len(search) - last_trigger_index - 1
+        lookback_ratio = lookback_location / float(lookback)  # Use fixed lookback, not window size
+
+        metric = (1.0 - lookback_ratio) * np.sign(trigger_value)
         return metric
 
     def _calculate_single_indicator(self,

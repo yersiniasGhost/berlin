@@ -4,259 +4,631 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Details - Trading Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
-        /* Similar styling to dashboard but focused on details */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0f1419;
             color: #e6edf3;
-            margin: 0;
-            padding: 20px;
+            min-height: 100vh;
+            line-height: 1.6;
         }
 
-        .header {
+        /* Header Bar Styles */
+        .header-bar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            margin: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-content {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #161b22;
-            border-radius: 12px;
-            border: 1px solid #30363d;
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
-        .back-button {
-            background: #21262d;
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .symbol-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .symbol-name {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f0f6fc;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .symbol-subtitle {
+            font-size: 0.875rem;
+            color: #7d8590;
+        }
+
+        .config-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding-left: 2rem;
+            border-left: 1px solid #30363d;
+        }
+
+        .config-label {
+            font-size: 0.75rem;
+            color: #7d8590;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .config-name {
+            font-size: 1rem;
+            font-weight: 600;
             color: #e6edf3;
-            border: 1px solid #30363d;
-            padding: 10px 20px;
-            border-radius: 6px;
-            text-decoration: none;
-            transition: all 0.2s ease;
         }
 
-        .back-button:hover {
-            background: #30363d;
+        .price-section {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.5rem;
         }
 
         .live-price {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: 700;
             color: #238636;
-            margin-bottom: 0.5rem;
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            transition: all 0.3s ease;
         }
 
         .live-price.negative {
             color: #da3633;
         }
 
-        .live-timestamp {
-            font-size: 0.875rem;
-            color: #7d8590;
-            margin-bottom: 1rem;
+        .live-price.updating {
+            transform: scale(1.05);
+            text-shadow: 0 0 10px currentColor;
         }
 
-        .details-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .details-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 20px;
-        }
-
-        .chart-container {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .indicator-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .indicator-item {
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        .current-indicators {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .indicator-value {
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 6px;
-            padding: 10px;
-            text-align: center;
-        }
-
-        .indicator-value .name {
-            font-size: 0.75rem;
-            color: #7d8590;
-            margin-bottom: 0.25rem;
-        }
-
-        .indicator-value .value {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #e6edf3;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .bar-scores-current {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .bar-score-item {
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        .bar-score-header {
+        .price-meta {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-
-        .bar-score-name {
-            font-weight: 500;
-            color: #e6edf3;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.25rem;
             font-size: 0.875rem;
+            color: #7d8590;
         }
 
-        .bar-score-value {
+        .price-change {
             font-weight: 600;
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            font-size: 0.875rem;
         }
 
-        .bar-track {
-            height: 8px;
-            background: #21262d;
-            border-radius: 4px;
-            overflow: hidden;
-            position: relative;
-            border: 1px solid #30363d;
+        .price-change.positive {
+            color: #56d364;
         }
 
-        .bar-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: all 0.5s ease;
-            position: relative;
+        .price-change.negative {
+            color: #ff7b72;
         }
 
-        .bar-green { background: linear-gradient(90deg, #238636, #2ea043); }
-        .bar-yellow { background: linear-gradient(90deg, #d4a017, #f9c74f); }
-        .bar-neutral { background: linear-gradient(90deg, #7d8590, #8b949e); }
-        .bar-red { background: linear-gradient(90deg, #da3633, #ff7b72); }
+        .last-update {
+            font-size: 0.75rem;
+        }
 
-        .bar-green .bar-score-value { color: #56d364; }
-        .bar-yellow .bar-score-value { color: #f9c74f; }
-        .bar-neutral .bar-score-value { color: #8b949e; }
-        .bar-red .bar-score-value { color: #ff7b72; }
-
+        /* Connection Status */
         .connection-status {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
             font-size: 0.875rem;
-            margin-bottom: 1rem;
+            background: rgba(22, 27, 34, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid #30363d;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
+            background: #da3633;
+            transition: background-color 0.3s ease;
         }
 
-        .status-dot.connected { background: #238636; }
-        .status-dot.disconnected { background: #da3633; }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.8; }
-            100% { opacity: 1; }
+        .status-dot.connected {
+            background: #238636;
         }
 
-        .updating {
-            animation: pulse 1.5s ease-in-out infinite;
+        /* Back Button */
+        .back-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #21262d;
+            color: #e6edf3;
+            border: 1px solid #30363d;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-button:hover {
+            background: #30363d;
+            color: #f0f6fc;
+            transform: translateX(-2px);
+        }
+
+        /* Main Content Area */
+        .main-content {
+            margin: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Two Column Layout */
+        .two-column-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            min-height: 500px;
+        }
+
+        /* Indicators & Bars Section (Left Column) */
+        .indicators-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .section-subtitle {
+            font-size: 0.875rem;
+            color: #7d8590;
+            margin-top: 0.25rem;
+        }
+
+        /* Individual Indicators */
+        .indicators-list {
+            margin-bottom: 2rem;
+        }
+
+        .indicator-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .indicator-item:hover {
+            border-color: #30363d;
+            transform: translateX(2px);
+        }
+
+        .indicator-name {
+            font-weight: 500;
+            color: #e6edf3;
+            font-size: 0.875rem;
+        }
+
+        .indicator-value {
+            background: #1f6feb;
+            color: #ffffff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.75rem;
+        }
+
+        /* Bar Calculations */
+        .bars-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .bar-item {
+            background: #0d1117;
+            border: 1px solid #1f6feb;
+            border-radius: 8px;
+            padding: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .bar-item:hover {
+            border-color: #388bfd;
+            box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.2);
+        }
+
+        .bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .bar-name {
+            font-weight: 600;
+            color: #1f6feb;
+            font-size: 0.875rem;
+        }
+
+        .bar-final-score {
+            background: #1f6feb;
+            color: #ffffff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.75rem;
+        }
+
+        .bar-calculation {
+            font-size: 0.75rem;
+            color: #7d8590;
+            line-height: 1.4;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .bar-math {
+            color: #8b949e;
+            margin-bottom: 0.25rem;
+        }
+
+        .bar-total-weight {
+            color: #6e7681;
+            font-style: italic;
+        }
+
+        /* Trade History Section (Right Column) */
+        .trades-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .trades-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .trade-item {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .trade-item:hover {
+            border-color: #30363d;
+            transform: translateY(-1px);
+        }
+
+        .trade-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .trade-action {
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .trade-action.buy {
+            background: rgba(35, 134, 54, 0.2);
+            color: #56d364;
+            border: 1px solid rgba(35, 134, 54, 0.3);
+        }
+
+        .trade-action.sell {
+            background: rgba(218, 54, 51, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(218, 54, 51, 0.3);
+        }
+
+        .trade-action.stop-loss {
+            background: rgba(255, 123, 114, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(255, 123, 114, 0.3);
+        }
+
+        .trade-time {
+            font-size: 0.75rem;
+            color: #7d8590;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .trade-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+
+        .trade-detail {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .trade-detail-label {
+            color: #7d8590;
+        }
+
+        .trade-detail-value {
+            color: #e6edf3;
+            font-weight: 500;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .trade-pnl {
+            grid-column: 1 / -1;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #21262d;
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        .trade-pnl.positive {
+            color: #56d364;
+        }
+
+        .trade-pnl.negative {
+            color: #ff7b72;
+        }
+
+        /* Empty states */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1rem;
+            color: #7d8590;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 0.875rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 1024px) {
+            .two-column-layout {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .main-content {
+                margin: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .indicator-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .trade-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .trade-details {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1.5rem;
+                align-items: stretch;
+            }
+
+            .header-left {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .config-section {
+                padding-left: 0;
+                border-left: none;
+                border-top: 1px solid #30363d;
+                padding-top: 1rem;
+            }
+
+            .price-section {
+                align-items: center;
+            }
+
+            .symbol-name {
+                font-size: 1.5rem;
+            }
+
+            .live-price {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1 id="cardTitle">Card Details</h1>
-            <p id="cardSubtitle">Loading...</p>
-            <div class="connection-status">
-                <div class="status-dot disconnected" id="connectionStatus"></div>
-                <span id="connectionText">Connecting...</span>
+    <!-- Connection Status -->
+    <div class="connection-status">
+        <div class="status-dot" id="connectionStatus"></div>
+        <span id="connectionText">Connecting...</span>
+    </div>
+
+    <!-- Back Button -->
+    <a href="/" class="back-button">
+        <span>←</span>
+        <span>Back to Dashboard</span>
+    </a>
+
+    <!-- Header Bar -->
+    <div class="header-bar">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="symbol-section">
+                    <div class="symbol-name" id="symbolName">LOADING</div>
+                </div>
+
+                <div class="config-section">
+                    <div class="config-name" id="configName">Loading configuration...</div>
+                </div>
+            </div>
+
+            <div class="price-section">
+                <div class="live-price" id="livePrice">$0.00</div>
+                <div class="price-meta">
+                    <div class="price-change" id="priceChange">--</div>
+                    <div class="last-update" id="lastUpdate">No updates yet</div>
+                </div>
             </div>
         </div>
-        <div>
-            <div class="live-price" id="livePrice">$0.00</div>
-            <div class="live-timestamp" id="liveTimestamp">Last updated: Never</div>
-            <a href="/" class="back-button">← Back to Dashboard</a>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <!-- Two Column Layout -->
+        <div class="two-column-layout">
+            <!-- Left Column: Indicators & Bars -->
+            <div class="indicators-section">
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Indicators & Bar Calculations</div>
+                        <div class="section-subtitle">Individual indicator values and their weighted combinations</div>
+                    </div>
+                </div>
+
+                <!-- Individual Indicators -->
+                <div class="indicators-list">
+                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem;">Individual Indicators</h4>
+                    <div id="indicatorsList">
+                        <!-- Will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📊</div>
+                            <div class="empty-state-text">Loading indicator data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bar Calculations -->
+                <div class="bars-list">
+                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem;">Bar Score Calculations</h4>
+                    <div id="barsList">
+                        <!-- Will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚖️</div>
+                            <div class="empty-state-text">Loading bar calculations...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Trade History -->
+            <div class="trades-section">
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Trade History</div>
+                        <div class="section-subtitle">Portfolio trading decisions and performance</div>
+                    </div>
+                </div>
+
+                <div class="trades-list" id="tradesList">
+                    <!-- Will be populated by JavaScript -->
+                    <div class="empty-state">
+                        <div class="empty-state-icon">💼</div>
+                        <div class="empty-state-text">No trades executed yet</div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <div class="details-grid">
-        <div class="details-card">
-            <h3>Card Information</h3>
-            <div id="cardInfo">Loading...</div>
+        <!-- Future: Chart Area Placeholder -->
+        <div style="margin-top: 2rem; padding: 2rem; background: #161b22; border: 1px solid #30363d; border-radius: 12px; text-align: center; color: #7d8590;">
+            <h3 style="color: #e6edf3; margin-bottom: 1rem;">📈 Candlestick Chart Area</h3>
+            <p>Chart implementation will be added in the next phase</p>
         </div>
-
-        <div class="details-card">
-            <h3>Current Bar Scores</h3>
-            <div class="bar-scores-current" id="currentBarScores">Loading...</div>
-        </div>
-    </div>
-
-    <div class="details-card">
-        <h3>Current Indicators</h3>
-        <div class="current-indicators" id="currentIndicators">Loading...</div>
-    </div>
-
-    <div class="chart-container">
-        <h3>Indicator History</h3>
-        <canvas id="indicatorChart" width="400" height="200"></canvas>
-    </div>
-
-    <div class="chart-container">
-        <h3>Bar Scores History</h3>
-        <canvas id="barChart" width="400" height="200"></canvas>
-    </div>
-
-    <div class="details-card">
-        <h3>All Indicator Definitions</h3>
-        <div class="indicator-list" id="indicatorList">Loading...</div>
     </div>
 
     <script>
@@ -266,12 +638,12 @@
 
         // WebSocket connection
         const socket = io();
-        let cardData = null;
-        let indicatorChart = null;
-        let barChart = null;
+        let previousPrice = null;
+        let currentMonitorConfig = null; // Store the monitor configuration
 
         if (!cardId) {
-            document.body.innerHTML = '<h1>Error: No card ID specified</h1>';
+            document.getElementById('symbolName').textContent = 'ERROR';
+            document.getElementById('configName').textContent = 'No card ID specified';
         } else {
             loadCardDetails(cardId);
         }
@@ -285,11 +657,13 @@
             updateConnectionStatus(false);
         });
 
-        // UPDATED: Listen for real-time updates for this specific card
+        // Real-time card updates
         socket.on('card_update', function(data) {
             if (data.card_id === cardId) {
-                console.log('Received real-time update for card:', data);
-                updateLiveData(data);
+                console.log('Received card_update:', data);
+                updateHeaderBar(data);
+                updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
+                updateTradesSection(data.portfolio?.trade_history);
             }
         });
 
@@ -299,74 +673,128 @@
 
             if (connected) {
                 statusDot.className = 'status-dot connected';
-                statusText.textContent = 'Connected (Live Updates)';
+                statusText.textContent = 'Connected';
             } else {
-                statusDot.className = 'status-dot disconnected';
+                statusDot.className = 'status-dot';
                 statusText.textContent = 'Disconnected';
             }
         }
 
-        function updateLiveData(data) {
-            try {
-                // Update live price
+        function updateHeaderBar(data) {
+            // Update symbol name
+            if (data.symbol) {
+                document.getElementById('symbolName').textContent = data.symbol;
+            }
+
+            // Update live price with animation
+            if (data.price !== undefined) {
                 const priceElement = document.getElementById('livePrice');
-                const timestampElement = document.getElementById('liveTimestamp');
+                const changeElement = document.getElementById('priceChange');
 
-                if (data.price !== undefined) {
-                    const priceClass = data.price >= 0 ? '' : 'negative';
-                    priceElement.className = `live-price ${priceClass}`;
-                    priceElement.textContent = `$${data.price.toFixed(2)}`;
+                // Add updating animation
+                priceElement.classList.add('updating');
+                setTimeout(() => priceElement.classList.remove('updating'), 300);
+
+                // Update price color based on change
+                const isNegative = data.price < 0;
+                priceElement.className = `live-price ${isNegative ? 'negative' : ''}`;
+                priceElement.textContent = `${Math.abs(data.price).toFixed(2)}`;
+
+                // Calculate and display price change if we have previous price
+                if (previousPrice !== null) {
+                    const change = data.price - previousPrice;
+                    const changePercent = ((change / previousPrice) * 100);
+
+                    let changeClass = '';
+                    let changeSign = '';
+
+                    if (change > 0) {
+                        changeClass = 'positive';
+                        changeSign = '+';
+                    } else if (change < 0) {
+                        changeClass = 'negative';
+                        changeSign = '';
+                    }
+
+                    changeElement.className = `price-change ${changeClass}`;
+                    changeElement.textContent = `${changeSign}${Math.abs(change).toFixed(2)} (${changeSign}${Math.abs(changePercent).toFixed(2)}%)`;
                 }
 
-                if (data.timestamp) {
-                    const updateTime = new Date(data.timestamp);
-                    timestampElement.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
-                }
+                previousPrice = data.price;
+            }
 
-                // Update current bar scores
-                if (data.bar_scores) {
-                    updateCurrentBarScores(data.bar_scores);
-                }
-
-                // Update current indicators
-                if (data.indicators) {
-                    updateCurrentIndicators(data.indicators);
-                }
-
-                // Add updating animation to header
-                const header = document.querySelector('.header');
-                header.classList.add('updating');
-                setTimeout(() => header.classList.remove('updating'), 500);
-
-            } catch (error) {
-                console.error('Error updating live data:', error);
+            // Update timestamp
+            if (data.timestamp) {
+                const updateTime = new Date(data.timestamp);
+                document.getElementById('lastUpdate').textContent = `Updated: ${updateTime.toLocaleTimeString()}`;
             }
         }
 
-        function updateCurrentBarScores(barScores) {
-            const container = document.getElementById('currentBarScores');
+        function updateIndicatorsSection(indicators, rawIndicators, barScores) {
+            updateIndicatorsList(indicators, rawIndicators);
+            updateBarsList(barScores, indicators);
+        }
 
-            const html = Object.entries(barScores).map(([name, value]) => {
-                // Determine color class based on value
-                let colorClass = 'bar-neutral';
-                if (value >= 0.7) {
-                    colorClass = 'bar-green';
-                } else if (value >= 0.3) {
-                    colorClass = 'bar-yellow';
-                } else if (value < 0) {
-                    colorClass = 'bar-red';
-                }
+        function updateIndicatorsList(indicators, rawIndicators) {
+            const container = document.getElementById('indicatorsList');
 
-                const barWidth = Math.min(Math.abs(value) * 100, 100);
+            if (!indicators || Object.keys(indicators).length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <div class="empty-state-text">No indicator data available</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = Object.entries(indicators).map(([name, value]) => {
+                const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const rawValue = rawIndicators?.[name];
 
                 return `
-                    <div class="bar-score-item ${colorClass}">
-                        <div class="bar-score-header">
-                            <span class="bar-score-name">${formatBarName(name)}</span>
-                            <span class="bar-score-value">${value.toFixed(3)}</span>
+                    <div class="indicator-item">
+                        <div>
+                            <div class="indicator-name">${displayName}</div>
+                            ${rawValue !== undefined ? `<div style="font-size: 0.75rem; color: #7d8590; margin-top: 0.25rem;">Raw: ${rawValue.toFixed(4)}</div>` : ''}
                         </div>
-                        <div class="bar-track">
-                            <div class="bar-fill" style="width: ${barWidth}%"></div>
+                        <div class="indicator-value">${(value * 100).toFixed(1)}%</div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        function updateBarsList(barScores, indicators) {
+            const container = document.getElementById('barsList');
+
+            if (!barScores || Object.keys(barScores).length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚖️</div>
+                        <div class="empty-state-text">No bar calculations available</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Use actual bar scores and monitor configuration
+            const html = Object.entries(barScores).map(([barName, score]) => {
+                const displayName = barName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                // Get real calculation from monitor config if available
+                const calculation = getBarCalculation(barName, score, indicators);
+
+                return `
+                    <div class="bar-item">
+                        <div class="bar-header">
+                            <div class="bar-name">${displayName}</div>
+                            <div class="bar-final-score">${(score * 100).toFixed(1)}%</div>
+                        </div>
+                        <div class="bar-calculation">
+                            <div class="bar-math">${calculation.math}</div>
+                            <div class="bar-total-weight">Total Weight: ${calculation.totalWeight}</div>
                         </div>
                     </div>
                 `;
@@ -375,17 +803,131 @@
             container.innerHTML = html;
         }
 
-        function updateCurrentIndicators(indicators) {
-            const container = document.getElementById('currentIndicators');
+        function getBarCalculation(barName, finalScore, indicators) {
+            // Debug log to see what we have
+            console.log('getBarCalculation called with:', {
+                barName,
+                finalScore,
+                indicators,
+                currentMonitorConfig
+            });
 
-            const html = Object.entries(indicators).map(([name, value]) => `
-                <div class="indicator-value">
-                    <div class="name">${formatBarName(name)}</div>
-                    <div class="value">${value.toFixed(3)}</div>
-                </div>
-            `).join('');
+            // Use the monitor configuration stored when card details are loaded
+            if (!currentMonitorConfig) {
+                console.log('No currentMonitorConfig available');
+                return {
+                    math: 'Monitor configuration not loaded',
+                    totalWeight: '0.0'
+                };
+            }
+
+            // Try different possible structures for bars configuration
+            const bars = currentMonitorConfig.bars ||
+                        currentMonitorConfig.monitor?.bars ||
+                        currentMonitorConfig;
+
+            if (!bars || !bars[barName]) {
+                console.log('Bar configuration not found for:', barName);
+                console.log('Available bars:', Object.keys(bars || {}));
+                return {
+                    math: `Bar '${barName}' not found in configuration`,
+                    totalWeight: '0.0'
+                };
+            }
+
+            const barConfig = bars[barName];
+            console.log('Bar config for', barName, ':', barConfig);
+
+            // Handle different possible structures:
+            // Option 1: { indicators: { indicator_name: weight } }
+            // Option 2: { indicator_name: weight }
+            const barIndicators = barConfig.indicators || barConfig;
+
+            if (!indicators || Object.keys(barIndicators).length === 0) {
+                return {
+                    math: 'No indicators configured for this bar',
+                    totalWeight: '0.0'
+                };
+            }
+
+            let mathParts = [];
+            let totalWeight = 0;
+            let weightedSum = 0;
+
+            Object.entries(barIndicators).forEach(([indicatorName, weight]) => {
+                const indicatorValue = indicators[indicatorName] || 0;
+
+                // Create a shorter name for display
+                const shortName = indicatorName.replace(/_/g, '').substring(0, 8).toUpperCase();
+
+                mathParts.push(`${shortName}(${(indicatorValue * 100).toFixed(1)}%) × ${weight.toFixed(1)}`);
+                weightedSum += indicatorValue * weight;
+                totalWeight += weight;
+            });
+
+            const calculatedScore = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
+            const math = `${mathParts.join(' + ')} = ${weightedSum.toFixed(2)} ÷ ${totalWeight.toFixed(1)} = ${calculatedScore.toFixed(3)}`;
+
+            return {
+                math,
+                totalWeight: totalWeight.toFixed(1)
+            };
+        }
+
+        function updateTradesSection(tradeHistory) {
+            const container = document.getElementById('tradesList');
+
+            if (!tradeHistory || tradeHistory.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">💼</div>
+                        <div class="empty-state-text">No trades executed yet</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Show most recent trades first
+            const recentTrades = tradeHistory.slice(-10).reverse();
+
+            const html = recentTrades.map(trade => {
+                const actionClass = getTradeActionClass(trade.action);
+                const actionDisplay = trade.action.replace(/_/g, ' ').toUpperCase();
+                const tradeTime = new Date(trade.timestamp).toLocaleTimeString();
+
+                return `
+                    <div class="trade-item">
+                        <div class="trade-header">
+                            <div class="trade-action ${actionClass}">${actionDisplay}</div>
+                            <div class="trade-time">${tradeTime}</div>
+                        </div>
+                        <div class="trade-details">
+                            <div class="trade-detail">
+                                <span class="trade-detail-label">Price:</span>
+                                <span class="trade-detail-value">${trade.price.toFixed(2)}</span>
+                            </div>
+                            <div class="trade-detail">
+                                <span class="trade-detail-label">Size:</span>
+                                <span class="trade-detail-value">${trade.size}</span>
+                            </div>
+                            ${trade.reason ? `
+                                <div class="trade-detail" style="grid-column: 1 / -1;">
+                                    <span class="trade-detail-label">Reason:</span>
+                                    <span class="trade-detail-value">${trade.reason.replace(/_/g, ' ')}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
 
             container.innerHTML = html;
+        }
+
+        function getTradeActionClass(action) {
+            if (action.includes('enter') || action.includes('buy')) return 'buy';
+            if (action.includes('stop')) return 'stop-loss';
+            return 'sell';
         }
 
         async function loadCardDetails(cardId) {
@@ -394,163 +936,56 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    cardData = data;
-                    displayCardDetails(data);
+                    // Store monitor configuration for bar calculations
+                    // Try different possible locations for the monitor config
+                    currentMonitorConfig = data.monitor_config ||
+                                         data.card_info?.monitor_config ||
+                                         data.combination?.monitor_config ||
+                                         null;
+
+                    console.log('Loaded monitor config:', currentMonitorConfig);
+                    console.log('Full API response:', data);
+
+                    // Update header with card info
+                    document.getElementById('symbolName').textContent = data.card_info.symbol;
+                    document.getElementById('configName').textContent = data.card_info.config_name;
+
+                    // Set initial data if available
+                    if (data.current_values) {
+                        // Use real price data if available
+                        const price = data.current_values.price || 127.45;
+
+                        updateHeaderBar({
+                            symbol: data.card_info.symbol,
+                            price: price,
+                            timestamp: new Date().toISOString()
+                        });
+
+                        // Update indicators and bars with real data
+                        updateIndicatorsSection(
+                            data.current_values.indicators,
+                            data.current_values.raw_indicators,
+                            data.current_values.bar_scores
+                        );
+
+                        // Update trade history if available
+                        if (data.current_values.trade_history) {
+                            updateTradesSection(data.current_values.trade_history);
+                        }
+                    }
+
+                    console.log('Card details loaded:', data);
                 } else {
                     throw new Error(data.error);
                 }
 
             } catch (error) {
-                document.getElementById('cardInfo').innerHTML = `<p style="color: #da3633;">Error: ${error.message}</p>`;
+                console.error('Error loading card details:', error);
+                document.getElementById('configName').textContent = `Error: ${error.message}`;
             }
         }
 
-        function displayCardDetails(data) {
-            // Update header
-            document.getElementById('cardTitle').textContent = `${data.card_info.symbol} - ${data.card_info.card_id}`;
-            document.getElementById('cardSubtitle').textContent = data.card_info.config_name;
-
-            // Display card info
-            document.getElementById('cardInfo').innerHTML = `
-                <p><strong>Symbol:</strong> ${data.card_info.symbol}</p>
-                <p><strong>Card ID:</strong> ${data.card_info.card_id}</p>
-                <p><strong>Config:</strong> ${data.card_info.config_name}</p>
-                <p><strong>Timeframes:</strong> ${data.card_info.timeframes.join(', ')}</p>
-                <p><strong>Total Indicators:</strong> ${data.card_info.total_indicators}</p>
-            `;
-
-            // Display initial current values
-            const currentVals = data.current_values;
-
-            // Initial price display
-            const priceElement = document.getElementById('livePrice');
-            if (currentVals.bar_scores && Object.keys(currentVals.bar_scores).length > 0) {
-                // Use the first price we can find or a default
-                const firstPrice = Object.values(currentVals.bar_scores)[0] * 100; // Just for demo
-                priceElement.textContent = `$${firstPrice.toFixed(2)}`;
-            }
-
-            // Display current bar scores
-            updateCurrentBarScores(currentVals.bar_scores);
-
-            // Display current indicators
-            updateCurrentIndicators(currentVals.indicators);
-
-            // Create charts
-            createIndicatorChart(data.indicator_history);
-            createBarChart(data.indicator_history);
-
-            // Display indicator definitions
-            displayIndicatorDefinitions(data.indicator_definitions);
-        }
-
-        function createIndicatorChart(history) {
-            const ctx = document.getElementById('indicatorChart').getContext('2d');
-
-            const datasets = Object.entries(history.indicators).map(([name, values], index) => ({
-                label: name,
-                data: values,
-                borderColor: `hsl(${index * 137.5 % 360}, 70%, 60%)`,
-                backgroundColor: `hsla(${index * 137.5 % 360}, 70%, 60%, 0.1)`,
-                fill: false,
-                tension: 0.1
-            }));
-
-            indicatorChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: history.timestamps.map(ts => new Date(ts).toLocaleTimeString()),
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: true }
-                    },
-                    scales: {
-                        x: {
-                            ticks: {
-                                maxTicksLimit: 20,
-                                maxRotation: 45
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            max: 1
-                        }
-                    },
-                    animation: {
-                        duration: 0 // Disable animation for real-time updates
-                    }
-                }
-            });
-        }
-
-        function createBarChart(history) {
-            const ctx = document.getElementById('barChart').getContext('2d');
-
-            const datasets = Object.entries(history.bar_scores).map(([name, values], index) => ({
-                label: name,
-                data: values,
-                borderColor: `hsl(${index * 137.5 % 360}, 70%, 60%)`,
-                backgroundColor: `hsla(${index * 137.5 % 360}, 70%, 60%, 0.3)`,
-                fill: true,
-                tension: 0.1
-            }));
-
-            barChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: history.timestamps.map(ts => new Date(ts).toLocaleTimeString()),
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: true }
-                    },
-                    scales: {
-                        x: {
-                            ticks: {
-                                maxTicksLimit: 20,
-                                maxRotation: 45
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            max: 1
-                        }
-                    },
-                    animation: {
-                        duration: 0 // Disable animation for real-time updates
-                    }
-                }
-            });
-        }
-
-        function displayIndicatorDefinitions(definitions) {
-            const container = document.getElementById('indicatorList');
-            container.innerHTML = definitions.map(def => `
-                <div class="indicator-item">
-                    <h4>${def.name}</h4>
-                    <p><strong>Function:</strong> ${def.function}</p>
-                    <p><strong>Timeframe:</strong> ${def.timeframe}</p>
-                    <p><strong>Parameters:</strong></p>
-                    <pre style="font-size: 0.75rem; color: #7d8590;">${JSON.stringify(def.parameters, null, 2)}</pre>
-                </div>
-            `).join('');
-        }
-
-        function formatBarName(name) {
-            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', function() {
-            if (socket) {
-                socket.disconnect();
-            }
-        });
+        console.log('Card details page initialized for real data streaming.');
     </script>
 </body>
 </html>

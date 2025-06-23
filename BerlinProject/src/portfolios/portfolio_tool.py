@@ -159,7 +159,17 @@ class Portfolio:
 
         return {
             'position': position_data,
-            'pnl': pnl_data
+            'pnl': pnl_data,
+            'trade_history': [  # ADD THIS
+                {
+                    'time': trade.time,
+                    'action': trade.reason.value,
+                    'price': trade.price,
+                    'size': trade.size,
+                    'timestamp': datetime.fromtimestamp(trade.time / 1000).isoformat()
+                }
+                for trade in self.trade_history[-10:]  # Last 10 trades
+            ]
         }
 
     def get_trade_summary(self) -> Dict[str, Any]:

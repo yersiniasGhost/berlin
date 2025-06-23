@@ -189,6 +189,7 @@ def stop_streaming():
         logger.error(f"Error stopping streaming: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Add this to your api_routes.py file - modify the get_card_details function
 
 @api_bp.route('/combinations/<card_id>/details')
 def get_card_details(card_id: str):
@@ -230,6 +231,15 @@ def get_card_details(card_id: str):
         # Get REAL indicator history from processor
         indicator_history = data_streamer.indicator_processor.get_history_data()
 
+        # IMPORTANT: Convert monitor_config to dict format for JSON serialization
+        monitor_config_dict = {
+            'name': monitor_config.name,
+            'threshold': monitor_config.threshold,
+            'bear_threshold': monitor_config.bear_threshold,
+            'bars': monitor_config.bars,  # This contains the bar configurations we need!
+            'aggregator_type': getattr(monitor_config, 'aggregator_type', 'normal')
+        }
+
         # Build response
         response_data = {
             'success': True,
@@ -240,6 +250,7 @@ def get_card_details(card_id: str):
                 'timeframes': list(timeframes),
                 'total_indicators': len(monitor_config.indicators)
             },
+            'monitor_config': monitor_config_dict,  # ADD THIS LINE!
             'aggregator_info': aggregator_info,
             'current_values': {
                 'indicators': current_indicators,
