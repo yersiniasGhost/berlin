@@ -16,7 +16,7 @@ if src_dir not in sys.path:
 # Import required classes
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 from data_streamer.schwab_data_link import SchwabDataLink
-from data_streamer.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator_old import CandleAggregator
 from models.tick_data import TickData
 
 

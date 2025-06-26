@@ -15,3 +15,5 @@ class IndicatorDefinition(BaseModel):
     time_increment: Optional[str] = "1m"
     calc_on_pip: bool
 
+#     change time increment to agg_config which is mix of interval and HA or normal
+
