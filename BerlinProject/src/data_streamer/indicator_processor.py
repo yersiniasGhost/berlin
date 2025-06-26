@@ -81,53 +81,91 @@ class IndicatorProcessor:
     #
     #     return self.indicators, self.raw_indicators, bar_scores
 
-    def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']):
-        for indicator_def in self.config.indicators:
-            timeframe = indicator_def.get_timeframe()  # NEW method
-            agg_type = indicator_def.get_aggregator_type()  # NEW method
+    def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
+        Dict[str, float], Dict[str, float], Dict[str, float]]:
+        """
+        Calculate indicators using the new agg_config system with proper aggregator key matching
 
-            if timeframe not in aggregators:
+        Args:
+            aggregators: Dict of aggregator_key -> CandleAggregator (e.g., "1m-heiken" -> aggregator)
+
+        Returns:
+            Tuple of (indicators, raw_indicators, bar_scores)
+        """
+
+        for indicator_def in self.config.indicators:
+            # FIXED: Create the full aggregator key that matches how aggregators are stored
+            timeframe = indicator_def.get_timeframe()
+            agg_type = indicator_def.get_aggregator_type()
+            agg_key = f"{timeframe}-{agg_type}"  # e.g., "1m-heiken", "5m-normal"
+
+            # FIXED: Look for the full aggregator key instead of just timeframe
+            if agg_key not in aggregators:
+                logger.warning(f"Aggregator not found for {indicator_def.name}: {agg_key}")
+                logger.debug(f"Available aggregators: {list(aggregators.keys())}")
                 continue
 
-            aggregator = aggregators[timeframe]
+            aggregator = aggregators[agg_key]
 
             # Verify aggregator type matches (optional validation)
             if aggregator._get_aggregator_type() != agg_type:
-                logger.warning(f"Aggregator type mismatch for {indicator_def.name}")
+                logger.warning(f"Aggregator type mismatch for {indicator_def.name}: "
+                               f"expected {agg_type}, got {aggregator._get_aggregator_type()}")
 
-            # Create unique key including aggregator type
-            indicator_key = f"{agg_type}_{timeframe}_{indicator_def.name}"
+            # Create unique key for internal storage (to handle multiple indicators per aggregator)
+            indicator_key = f"{agg_key}_{indicator_def.name}"
 
+            # Initialize tracking for this indicator if needed
             if indicator_key not in self.indicator_trigger_history:
                 self.indicator_trigger_history[indicator_key] = []
 
+            # Get all candles from this aggregator (history + current)
             all_candles = aggregator.get_history().copy()
-
             if aggregator.get_current_candle():
                 all_candles.append(aggregator.get_current_candle())
 
+            # Determine if we should calculate (on PIP or when candle completes)
             calc_on_pip = indicator_def.calc_on_pip or self.first_pass
-            if calc_on_pip or aggregator.completed_candle:
+            should_calculate = calc_on_pip or aggregator.completed_candle
+
+            if should_calculate:
                 try:
+                    # Calculate the indicator
                     result = self._calculate_single_indicator(all_candles, indicator_def)
+
                     if result is not None and len(result) > 0:
-                        value = float(result[-1])
+                        raw_value = float(result[-1])
 
-                        # Use regular indicator name for output (user-facing)
-                        self.raw_indicators[indicator_def.name] = value
+                        # Store raw value (user-facing indicator name)
+                        self.raw_indicators[indicator_def.name] = raw_value
 
-                        # Use unique key for internal storage (aggregator-aware)
-                        self.indicator_trigger_history[indicator_key].append(value)
+                        # Store in history using unique key (internal tracking)
+                        self.indicator_trigger_history[indicator_key].append(raw_value)
 
-                        lookback = indicator_def.parameters.get('lookback')
+                        # Calculate time-based decay
+                        lookback = indicator_def.parameters.get('lookback', 10)
                         trigger_history = np.array(self.indicator_trigger_history[indicator_key])
                         decay_value = self.calculate_time_based_metric(trigger_history, lookback)
+
+                        # Store decayed value (user-facing indicator name)
                         self.indicators[indicator_def.name] = decay_value
+
+                        logger.debug(f"Calculated {indicator_def.name}: raw={raw_value:.4f}, decay={decay_value:.4f}")
+
                 except Exception as e:
                     logger.error(f"Error calculating indicator '{indicator_def.name}': {e}")
+                    import traceback
+                    traceback.print_exc()
 
+        # Mark first pass as complete
         self.first_pass = False
+
+        # Calculate bar scores from current indicator values
         bar_scores: Dict[str, float] = self._calculate_bar_scores(self.indicators)
+
+        # Log summary
+        active_indicators = len([v for v in self.indicators.values() if v > 0])
+        logger.info(f"Calculated {len(self.indicators)} indicators, {active_indicators} active")
 
         return self.indicators, self.raw_indicators, bar_scores
 
