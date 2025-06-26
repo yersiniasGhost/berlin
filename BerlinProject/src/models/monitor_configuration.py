@@ -11,7 +11,6 @@ class MonitorConfiguration(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     name: str
     indicators: List[IndicatorDefinition]
-    aggregator_type: str = PydanticField(default="normal")  # Changed default back to normal
 
     # Fixed: Changed from Dict[str, Dict[str, float]] to Dict[str, Any]
     # to handle complex nested structure with "type" and "indicators" fields
@@ -40,23 +39,30 @@ class MonitorConfiguration(BaseModel):
         return self.indicators == other.indicators
 
     def get_time_increments(self) -> Set[str]:
-        """
-        Iterate through all indicators and collect their time intervals.
-        Returns a set of unique time increments used by indicators.
-        """
-        # Start with a default 1m timeframe
-        time_increments = {"1m"}
-
-        # Add time increments from individual indicators
+        """Get all unique timeframes from indicators"""
+        timeframes = set()
         for indicator in self.indicators:
-            if hasattr(indicator, 'time_increment') and indicator.time_increment:
-                time_increments.add(indicator.time_increment)
+            timeframes.add(indicator.get_timeframe())
+        return timeframes
 
-        return time_increments
+    def get_aggregator_configs(self) -> Dict[str, str]:
+        """
+        Get mapping of unique aggregator keys to aggregator types
 
-    def get_aggregator_type(self) -> str:
-        """Get the aggregator type for this configuration"""
-        return self.aggregator_type
+        Returns:
+            Dict like {'1m-normal': 'normal', '1m-heiken': 'heiken'}
+        """
+        configs = {}
+        for indicator in self.indicators:
+            timeframe = indicator.get_timeframe()
+            agg_type = indicator.get_aggregator_type()
+
+            # Create unique key for this timeframe+aggregator combination
+            agg_key = f"{timeframe}-{agg_type}"  # ← This creates unique keys!
+
+            configs[agg_key] = agg_type
+
+        return configs
 
 
 def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
@@ -115,8 +121,10 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
                 type=ind_data['type'],
                 function=ind_data['function'],
                 parameters=ind_data['parameters'],
-                time_increment=ind_data.get('time_increment'),
-                calc_on_pip=ind_data.get('calc_on_pip')
+                # CHANGED: Use agg_config instead of time_increment
+                agg_config=ind_data.get('agg_config'),  # ← NEW: This reads from JSON
+                calc_on_pip=ind_data.get('calc_on_pip', False),  # ← Added default
+                ranges=ind_data.get('ranges')  # ← Added ranges if they exist
             )
             indicators.append(indicator)
 
@@ -129,10 +137,6 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
             'description': monitor_data.get('description', '')
         }
 
-        # Only add aggregator_type if it exists in JSON - let Pydantic use default otherwise
-        if 'aggregator_type' in monitor_data:
-            config_dict['aggregator_type'] = monitor_data['aggregator_type']
-
         # Only add bars if they exist in JSON
         if 'bars' in monitor_data:
             config_dict['bars'] = monitor_data['bars']
@@ -141,7 +145,6 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
         monitor_config = MonitorConfiguration(**config_dict)
 
         print(f"Successfully loaded config: {monitor_config.name}")
-        print(f"  Aggregator Type: {monitor_config.aggregator_type}")
         print(f"  Threshold: {monitor_config.threshold}")
         print(f"  Bear Threshold: {monitor_config.bear_threshold}")
         print(f"  Indicators: {len(indicators)}")
@@ -154,40 +157,3 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
         import traceback
         traceback.print_exc()
         return None
-
-#
-# # Example of what your JSON structure looks like:
-# EXAMPLE_JSON_STRUCTURE = {
-#     "monitor": {
-#         "name": "Complex Strategy",
-#         "aggregator_type": "heiken",
-#         "threshold": 0.7,
-#         "bear_threshold": 0.7,
-#         "bars": {
-#             "bull_combo_alpha": {
-#                 "type": "bull",
-#                 "indicators": {
-#                     "ultra_sma_cross": 1.0,
-#                     "micro_macd_bull": 1.0
-#                 }
-#             },
-#             "bear_combo_alpha": {
-#                 "type": "bear",
-#                 "indicators": {
-#                     "micro_macd_bear": 1.0,
-#                     "fast_bollinger_bear": 1.0
-#                 }
-#             }
-#         }
-#     },
-#     "indicators": [
-#         {
-#             "name": "ultra_sma_cross",
-#             "type": "indicator",
-#             "function": "sma_crossover",
-#             "time_increment": "5m",
-#             "calc_on_pip": False,
-#             "parameters": {"period": 20, "trend": "bullish"}
-#         }
-#     ]
-# }

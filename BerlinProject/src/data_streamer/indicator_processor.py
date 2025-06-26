@@ -81,21 +81,23 @@ class IndicatorProcessor:
     #
     #     return self.indicators, self.raw_indicators, bar_scores
 
-    def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
-        Dict[str, float], Dict[str, float], Dict[str, float]]:
-
+    def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']):
         for indicator_def in self.config.indicators:
-            timeframe = indicator_def.time_increment
+            timeframe = indicator_def.get_timeframe()  # NEW method
+            agg_type = indicator_def.get_aggregator_type()  # NEW method
 
             if timeframe not in aggregators:
                 continue
 
             aggregator = aggregators[timeframe]
 
-            aggregator_type = aggregator._get_aggregator_type()
-            indicator_key = f"{aggregator_type}_{timeframe}_{indicator_def.name}"
+            # Verify aggregator type matches (optional validation)
+            if aggregator._get_aggregator_type() != agg_type:
+                logger.warning(f"Aggregator type mismatch for {indicator_def.name}")
 
-            # Initialize history for this key if needed
+            # Create unique key including aggregator type
+            indicator_key = f"{agg_type}_{timeframe}_{indicator_def.name}"
+
             if indicator_key not in self.indicator_trigger_history:
                 self.indicator_trigger_history[indicator_key] = []
 

@@ -25,20 +25,19 @@ class DataStreamer:
     """
 
     def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
-                 default_position_size: float = 100.0, stop_loss_pct: float = 0.005) -> None:
-        self.card_id: str = card_id
-        self.symbol: str = symbol
-        self.monitor_config: MonitorConfiguration = monitor_config
+                 default_position_size: float = 100.0, stop_loss_pct: float = 0.005):
+        self.card_id = card_id
+        self.symbol = symbol
+        self.monitor_config = monitor_config
 
-        # Get aggregator type from configuration
-        aggregator_type = monitor_config.get_aggregator_type()
+        aggregator_configs = monitor_config.get_aggregator_configs()
         self.aggregators: Dict[str, CandleAggregator] = {}
-        required_timeframes: List[str] = list(monitor_config.get_time_increments())
 
-        for timeframe in required_timeframes:
-            aggregator = self._create_aggregator(aggregator_type, symbol, timeframe)
-            self.aggregators[timeframe] = aggregator
-            logger.info(f"Created {aggregator_type} aggregator for {timeframe}")
+        for agg_key, agg_type in aggregator_configs.items():
+            timeframe = agg_key.split('-')[0]  # Extract timeframe from key
+            aggregator = self._create_aggregator(agg_type, symbol, timeframe)
+            self.aggregators[agg_key] = aggregator  # ← Store with unique key!
+            logger.info(f"Created {agg_type} aggregator for {timeframe}")
 
         # Processing components
         self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)

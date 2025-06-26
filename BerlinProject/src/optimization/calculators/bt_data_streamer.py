@@ -21,15 +21,13 @@ class BacktestDataStreamer:
     5. Send results to external tools
     """
 
-
     # pass in a data config
     def __init__(self, symbol: str, monitor_config: MonitorConfiguration):
-        # self.card_id = card_id
         self.symbol = symbol
         self.monitor_config = monitor_config
-
         self.aggregators: Dict[str, CandleAggregator] = {}
 
+        # Will be populated by load_historical_data
         self.indicator_processor_historical_new = IndicatorProcessorHistoricalNew(monitor_config)
 
         # self.external_tools: List[ExternalTool] = []

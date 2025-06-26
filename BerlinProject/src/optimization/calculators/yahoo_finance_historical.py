@@ -124,6 +124,23 @@ class YahooFinanceHistorical:
 
         print(f"Created {len(self.aggregators)} {aggregator_type} aggregators: {list(timeframes)}")
 
+    def _create_aggregators(self, ticker: str, monitor_config: MonitorConfiguration):
+        """Create aggregators based on agg_config"""
+        self.ticker = ticker
+        aggregator_configs = monitor_config.get_aggregator_configs()  # NEW
+        self.aggregators = {}
+
+        for timeframe, agg_type in aggregator_configs.items():
+            if agg_type == "heiken":
+                aggregator = CAHeiken(ticker, timeframe)
+            else:
+                aggregator = CANormal(ticker, timeframe)
+
+            self.aggregators[timeframe] = aggregator
+
+        print(f"Created {len(self.aggregators)} aggregators: {aggregator_configs}")
+
+
     def _process_all_ticks(self, raw_ticks: List[TickData]):
         """
         Process all ticks through all aggregators
