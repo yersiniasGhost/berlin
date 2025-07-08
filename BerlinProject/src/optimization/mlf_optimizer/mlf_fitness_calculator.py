@@ -36,7 +36,7 @@ class MlfFitnessCalculator(FitnessCalculator):
             # Run through the monitor back test and collect the results
             bt = MonitorResultsBacktest("Optimizer", individual.monitor)
             self.data_streamer.replace_monitor_configuration(individual.monitor_configuration)
-            self.data_streamer.replace_external_tools(bt)
+            # self.data_streamer.replace_external_tools(bt)
             self.data_streamer.run()
             if self.display_results:
                 print("Final Result?")

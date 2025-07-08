@@ -1,70 +1,157 @@
 import logging
+import json
 from typing import Dict, List, Optional, Any
 
-from indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 from models.monitor_configuration import MonitorConfiguration
 from candle_aggregator.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator_normal import CANormal
+from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
+from data_streamer.indicator_processor import IndicatorProcessor
+from portfolios.trade_executor_simple import TradeExecutorSimple
+from models.tick_data import TickData
 
 logger = logging.getLogger('BacktestDataStreamer')
 
 
 class BacktestDataStreamer:
-    """
-    Simple backtest data streamer
 
-    Lego Brick Responsibilities:
-    1. Get historical data from data source
-    2. Own and manage aggregators
-    3. Process data through aggregators
-    4. Run indicator processor
-    5. Send results to external tools
-    """
-
-    # pass in a data config
-    def __init__(self, symbol: str, monitor_config: MonitorConfiguration):
-        self.symbol = symbol
+    def __init__(self, monitor_config: MonitorConfiguration, data_config_file: str,
+                 default_position_size: float = 100.0, stop_loss_pct: float = 0.005):
         self.monitor_config = monitor_config
+
+        # Load simple data config
+        with open(data_config_file, 'r') as f:
+            data_config = json.load(f)
+
+        self.ticker = data_config['ticker']
+        self.start_date = data_config['start_date']
+        self.end_date = data_config['end_date']
+
+        # Aggregators will be populated by YahooFinanceHistorical
         self.aggregators: Dict[str, CandleAggregator] = {}
 
-        # Will be populated by load_historical_data
-        self.indicator_processor_historical_new = IndicatorProcessorHistoricalNew(monitor_config)
+        # Same processing components as DataStreamer
+        self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
+        self.trade_executor: TradeExecutorSimple = TradeExecutorSimple(
+            monitor_config=monitor_config,
+            default_position_size=default_position_size,
+            stop_loss_pct=stop_loss_pct
+        )
 
-        # self.external_tools: List[ExternalTool] = []
+        logger.info(f"BacktestDataStreamer created for {self.ticker}")
 
-        logger.info(f"BacktestDataStreamer created for {symbol}")
+    def load_historical_data(self):
+        """Load historical data into aggregators via YahooFinanceHistorical"""
+        yahoo_source = YahooFinanceHistorical()
+        yahoo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
 
-    # returns bars, raw indicators, and indicators to be used for the trade exec?
-    def load_historical_data(self, yahoo_source: YahooFinanceHistorical, ticker: str, start_date: str, end_date: str):
+        # Get the fully populated aggregators from YahooFinanceHistorical
+        self.aggregators = yahoo_source.aggregators
+        logger.info(f"Got {len(self.aggregators)} aggregators from YahooFinanceHistorical:")
+
+        for timeframe, aggregator in self.aggregators.items():
+            history_count = len(aggregator.get_history())
+            has_current = aggregator.get_current_candle() is not None
+            agg_type = aggregator._get_aggregator_type()
+            logger.info(
+                f"  {timeframe} ({agg_type}): {history_count} completed + {1 if has_current else 0} current candles")
+
+    def run_backtest(self):
         """
-        Load historical data from YahooFinanceHistorical
-
-        Args:
-            yahoo_source: YahooFinanceHistorical instance
-            ticker: Stock symbol
-            start_date: Start date string "YYYY-MM-DD"
-            end_date: End date string "YYYY-MM-DD"
-
+        Run backtest simulation - process all historical data through indicators and trading
         """
-        try:
-            logger.info(f"Loading historical data for {ticker}")
+        logger.info("Starting backtest simulation...")
 
-            # Process data through YahooFinanceHistorical
-            yahoo_source.process_historical_data(ticker, start_date, end_date, self.monitor_config)
-            self.aggregators = yahoo_source.aggregators
+        # Get primary timeframe for simulation
+        primary_timeframe = self._get_primary_timeframe()
+        primary_aggregator = self.aggregators[primary_timeframe]
 
-    def _run_indicator_processor(self):
-        try:
-            # Calculate the indicators
-            indicators, raw_indicators, bar_scores = self.indicator_processor_historical_new.calculate_indicators(
-                self.aggregators)
+        # Get all candles for simulation
+        all_candles = primary_aggregator.get_history().copy()
+        if primary_aggregator.get_current_candle():
+            all_candles.append(primary_aggregator.get_current_candle())
 
-            # STORE the results as class attributes
-            self.indicators = indicators
-            self.raw_indicators = raw_indicators
-            self.bar_scores = bar_scores
+        logger.info(f"Processing {len(all_candles)} candles")
 
-            logger.info("Indicators completed and stored")
+        # Process each candle (similar to DataStreamer.process_tick)
+        for i, candle in enumerate(all_candles):
+            # Create tick data from candle
+            tick_data = TickData(
+                symbol=self.ticker,
+                timestamp=candle.timestamp,
+                open=candle.close,
+                high=candle.close,
+                low=candle.close,
+                close=candle.close,
+                volume=candle.volume,
+                time_increment="BACKTEST"
+            )
 
-        except Exception as e:
-            logger.error(f"Error in indicator processor: {e}")
+            # Calculate indicators (same as DataStreamer)
+            indicators, raw_indicators, bar_scores = (
+                self.indicator_processor.calculate_indicators_new(self.aggregators))
+
+            # Execute trading logic (same as DataStreamer)
+            self.trade_executor.make_decision(
+                tick=tick_data,
+                indicators=indicators,
+                bar_scores=bar_scores
+            )
+
+            # Log progress
+            if i % 100 == 0:
+                logger.info(f"Processed {i + 1}/{len(all_candles)} candles")
+
+        logger.info("Backtest simulation completed")
+
+    def _get_primary_timeframe(self) -> str:
+        """Get primary timeframe for simulation"""
+        timeframes = list(self.aggregators.keys())
+
+        priority = ['1m', '5m', '15m', '30m', '1h']
+
+        for tf in priority:
+            for available_tf in timeframes:
+                if tf in available_tf:
+                    return available_tf
+
+        return timeframes[0] if timeframes else '1m'
+
+    def get_results(self) -> Dict[str, Any]:
+        """Get backtest results"""
+        # Get final portfolio metrics
+        portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(
+            0)
+
+        trade_history = []
+        if hasattr(self.trade_executor.portfolio, 'trade_history'):
+            for trade in self.trade_executor.portfolio.trade_history:
+                trade_dict = {
+                    'entry_time': trade.entry_time.isoformat() if trade.entry_time else None,
+                    'exit_time': trade.exit_time.isoformat() if trade.exit_time else None,
+                    'symbol': trade.symbol,
+                    'side': trade.side,
+                    'entry_price': trade.entry_price,
+                    'exit_price': trade.exit_price,
+                    'quantity': trade.quantity,
+                    'pnl': trade.pnl,
+                    'pnl_percent': trade.pnl_percent,
+                    'status': trade.status
+                }
+                trade_history.append(trade_dict)
+
+        return {
+            'ticker': self.ticker,
+            'start_date': self.start_date,
+            'end_date': self.end_date,
+            'trade_history': trade_history,
+            'portfolio_metrics': portfolio_metrics,
+            'total_trades': len(trade_history)
+        }
+
+    def run(self):
+        """Complete backtest process"""
+        self.load_historical_data()
+        self.run_backtest()
+        return self.get_results()
