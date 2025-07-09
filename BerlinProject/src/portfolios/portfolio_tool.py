@@ -61,8 +61,8 @@ class Portfolio:
             # Add to cumulative realized P&L
             self.total_realized_pnl_percent += realized_pnl_percent
 
-            print(f"REALIZED P&L: Entry: ${entry_price:.4f}, Exit: ${price:.4f}, "
-                  f"Gain: {realized_pnl_percent:.2f}%, Total Realized: {self.total_realized_pnl_percent:.2f}%")
+            # print(f"REALIZED P&L: Entry: ${entry_price:.4f}, Exit: ${price:.4f}, "
+            #       f"Gain: {realized_pnl_percent:.2f}%, Total Realized: {self.total_realized_pnl_percent:.2f}%")
 
         # Record the exit trade
         trade = Trade(

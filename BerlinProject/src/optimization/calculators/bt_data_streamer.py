@@ -8,7 +8,7 @@ from candle_aggregator.candle_aggregator_normal import CANormal
 from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
 from data_streamer.indicator_processor import IndicatorProcessor
-from portfolios.trade_executor_simple import TradeExecutorSimple
+from portfolios.trade_executor_new import TradeExecutorNew
 from models.tick_data import TickData
 
 logger = logging.getLogger('BacktestDataStreamer')
@@ -31,9 +31,9 @@ class BacktestDataStreamer:
         # Aggregators will be populated by YahooFinanceHistorical
         self.aggregators: Dict[str, CandleAggregator] = {}
 
-        # Same processing components as DataStreamer
+        # THIS IS WHERE WE PUT OUR DIFFERENT TRADE EXECUTORS!!!
         self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
-        self.trade_executor: TradeExecutorSimple = TradeExecutorSimple(
+        self.trade_executor: TradeExecutorNew = TradeExecutorNew(
             monitor_config=monitor_config,
             default_position_size=default_position_size,
             stop_loss_pct=stop_loss_pct
@@ -119,25 +119,20 @@ class BacktestDataStreamer:
         return timeframes[0] if timeframes else '1m'
 
     def get_results(self) -> Dict[str, Any]:
-        """Get backtest results"""
+        """Get backtest results using simple trade structure"""
         # Get final portfolio metrics
-        portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(
-            0)
+        portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(0)
 
         trade_history = []
         if hasattr(self.trade_executor.portfolio, 'trade_history'):
             for trade in self.trade_executor.portfolio.trade_history:
                 trade_dict = {
-                    'entry_time': trade.entry_time.isoformat() if trade.entry_time else None,
-                    'exit_time': trade.exit_time.isoformat() if trade.exit_time else None,
-                    'symbol': trade.symbol,
-                    'side': trade.side,
-                    'entry_price': trade.entry_price,
-                    'exit_price': trade.exit_price,
-                    'quantity': trade.quantity,
-                    'pnl': trade.pnl,
-                    'pnl_percent': trade.pnl_percent,
-                    'status': trade.status
+                    'time': trade.time.isoformat() if hasattr(trade.time, 'isoformat') else str(trade.time),
+                    'size': trade.size,
+                    'price': trade.price,
+                    'reason': trade.reason,
+                    'symbol': self.ticker,  # Use the backtester's symbol
+                    'side': 'buy' if trade.size > 0 else 'sell',  # Derive from size
                 }
                 trade_history.append(trade_dict)
 

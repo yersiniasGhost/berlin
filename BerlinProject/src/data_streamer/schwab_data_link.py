@@ -42,6 +42,9 @@ class SchwabDataLink(DataLink):
         self.login_complete = False
         logger.info(f"Initialized SchwabDataLink with API key: {self.app_key}")
 
+    # TODO: ADD A NEW VALIDATOR TO MAKE SURE WE ARE NOT GETTING HUGE DECREASES FROM PIP TO PIP...
+    # DATA QUALITY ISSUE^
+
     def _pip_to_tick_data(self, pip_data: Dict) -> TickData:
         """
         Simple conversion of Schwab PIP data to TickData object.
