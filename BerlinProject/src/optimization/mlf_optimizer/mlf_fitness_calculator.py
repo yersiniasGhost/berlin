@@ -61,7 +61,7 @@ class MlfFitnessCalculator(FitnessCalculator):
             # add some sort of replace monitor config?
             self.backtest_streamer.replace_monitor_config(individual.monitor_configuration)
 
-            backtest_results = backtest_streamer.run()
+            backtest_results = self.backtest_streamer.run()
 
             if self.display_results:
                 portfolio_metrics = backtest_results['portfolio_metrics']

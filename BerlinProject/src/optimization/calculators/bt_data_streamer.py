@@ -22,6 +22,7 @@ logger = logging.getLogger('BacktestDataStreamer')
 #  filter out bad data from schwab pips
 # minor fixes on trigger and indicator displayes
 # TODO: changebar colors based on what the parameter types on each bar.
+# TODO: add monitor creation/ edit page for UI / get into MONGO!
 
 class BacktestDataStreamer:
 
@@ -110,9 +111,13 @@ class BacktestDataStreamer:
         logger.info("Backtest simulation completed")
 
     def replace_monitor_config(self, monitor_config: MonitorConfiguration):
-    #     we must replace the indicaotr values
-    # reinit the portfolio
 
+        #  reinit portfolio
+        # reset indicator values for our streamer run method
+        self.monitor_config = monitor_config
+        self.indicator_processor = IndicatorProcessor(monitor_config)
+        self.trade_executor.portfolio.reset()
+        self.trade_executor.monitor_config = monitor_config
 
     def _get_primary_timeframe(self) -> str:
         """Get primary timeframe for simulation"""
