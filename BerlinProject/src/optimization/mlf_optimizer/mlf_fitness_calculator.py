@@ -4,6 +4,7 @@ from typing import List, Optional, Dict
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
 from data_streamer import DataStreamer
 from operations.monitor_backtest_results import MonitorResultsBacktest
@@ -75,7 +76,7 @@ class MlfFitnessCalculator(FitnessCalculator):
             fitness_results.append(individual_stats)
         return fitness_results
 
-    def __calculate_individual_stats_new(self, individual: MlfIndividual, backtest_results: Dict, index: int):
+    def __calculate_individual_stats_new(self, individual: MlfIndividual, backtest_results: Portfolio, index: int):
         fitness_values = np.array(
             [objective.calculate_objective(individual, backtest_results) for objective in self.objectives])
         if fitness_values[0] == 100.0:

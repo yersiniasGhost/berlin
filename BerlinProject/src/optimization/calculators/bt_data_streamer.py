@@ -8,6 +8,7 @@ from candle_aggregator.candle_aggregator_normal import CANormal
 from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
 from data_streamer.indicator_processor import IndicatorProcessor
+from portfolios.portfolio_tool import Portfolio
 from portfolios.trade_executor import TradeExecutor
 from portfolios.trade_executor_new import TradeExecutorNew
 from models.tick_data import TickData
@@ -132,35 +133,35 @@ class BacktestDataStreamer:
 
         return timeframes[0] if timeframes else '1m'
 
-    def get_results(self) -> Dict[str, Any]:
-        """Get backtest results using simple trade structure"""
-        # Get final portfolio metrics
-        portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(0)
+    # def get_results(self) -> Dict[str, Any]:
+    #     """Get backtest results using simple trade structure"""
+    #     # Get final portfolio metrics
+    #     portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(0)
+    #
+    #     trade_history = []
+    #     if hasattr(self.trade_executor.portfolio, 'trade_history'):
+    #         for trade in self.trade_executor.portfolio.trade_history:
+    #             trade_dict = {
+    #                 'time': trade.time.isoformat() if hasattr(trade.time, 'isoformat') else str(trade.time),
+    #                 'size': trade.size,
+    #                 'price': trade.price,
+    #                 'reason': trade.reason,
+    #                 'symbol': self.ticker,  # Use the backtester's symbol
+    #                 'side': 'buy' if trade.size > 0 else 'sell',  # Derive from size
+    #             }
+    #             trade_history.append(trade_dict)
+    #
+    #     return {
+    #         'ticker': self.ticker,
+    #         'start_date': self.start_date,
+    #         'end_date': self.end_date,
+    #         'trade_history': trade_history,
+    #         'portfolio_metrics': portfolio_metrics,
+    #         'total_trades': len(trade_history)
+    #     }
 
-        trade_history = []
-        if hasattr(self.trade_executor.portfolio, 'trade_history'):
-            for trade in self.trade_executor.portfolio.trade_history:
-                trade_dict = {
-                    'time': trade.time.isoformat() if hasattr(trade.time, 'isoformat') else str(trade.time),
-                    'size': trade.size,
-                    'price': trade.price,
-                    'reason': trade.reason,
-                    'symbol': self.ticker,  # Use the backtester's symbol
-                    'side': 'buy' if trade.size > 0 else 'sell',  # Derive from size
-                }
-                trade_history.append(trade_dict)
-
-        return {
-            'ticker': self.ticker,
-            'start_date': self.start_date,
-            'end_date': self.end_date,
-            'trade_history': trade_history,
-            'portfolio_metrics': portfolio_metrics,
-            'total_trades': len(trade_history)
-        }
-
-    def run(self):
+    def run(self) -> Portfolio:
         """Complete backtest process"""
         self.load_historical_data()
         self.run_backtest()
-        return self.get_results()
+        return self.trade_executor.portfolio

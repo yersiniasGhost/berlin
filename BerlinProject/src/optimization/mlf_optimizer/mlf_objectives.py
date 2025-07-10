@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from optimization.genetic_optimizer.abstractions.objective_function_base import ObjectiveFunctionBase
+from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
 from operations.monitor_backtest_results import MonitorResultsBacktest
 
@@ -16,7 +17,8 @@ class MaximizeProfit(ObjectiveFunctionBase):
     def calculate_objective(self, *args) -> float:
         # Ensure there is no grid charges during this time frame.
         individual: MlfIndividual = args[0]
-        bt: MonitorResultsBacktest = args[1]
+        # bt: MonitorResultsBacktest = args[1]
+        bt: Portfolio = args[1]
         total_profit = bt.get_total_percent_profits()
         if total_profit == 0.0:
             return 100.0

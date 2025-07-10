@@ -52,17 +52,12 @@ class Portfolio:
     def exit_long(self, time: int, price: float, reason: TradeReason = TradeReason.EXIT_LONG) -> None:
         """Exit long position and properly add to realized P&L"""
 
-        # Calculate realized P&L BEFORE clearing position
         entry_price = self.get_entry_price()
         if entry_price and entry_price > 0 and self.position_size > 0:
-            # Calculate percent gain/loss: (exit_price - entry_price) / entry_price * 100
             realized_pnl_percent = ((price - entry_price) / entry_price) * 100.0
 
             # Add to cumulative realized P&L
             self.total_realized_pnl_percent += realized_pnl_percent
-
-            # print(f"REALIZED P&L: Entry: ${entry_price:.4f}, Exit: ${price:.4f}, "
-            #       f"Gain: {realized_pnl_percent:.2f}%, Total Realized: {self.total_realized_pnl_percent:.2f}%")
 
         # Record the exit trade
         trade = Trade(
@@ -73,7 +68,6 @@ class Portfolio:
         )
         self.trade_history.append(trade)
 
-        # Clear position AFTER calculating P&L
         self.position_size = 0.0
 
     def sell(self, time: int, price: float, reason: TradeReason, size: float) -> None:
