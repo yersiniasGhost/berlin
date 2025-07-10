@@ -8,19 +8,28 @@ from candle_aggregator.candle_aggregator_normal import CANormal
 from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
 from data_streamer.indicator_processor import IndicatorProcessor
+from portfolios.trade_executor import TradeExecutor
 from portfolios.trade_executor_new import TradeExecutorNew
 from models.tick_data import TickData
 
 logger = logging.getLogger('BacktestDataStreamer')
 
 
+# TODO: add monitor name to cards
+# TODO: minimizing portfolio info
+#TODO: add candle chart in the details
+# TODO: fic trade history display
+#  filter out bad data from schwab pips
+# minor fixes on trigger and indicator displayes
+# TODO: changebar colors based on what the parameter types on each bar.
+
 class BacktestDataStreamer:
 
     def __init__(self, monitor_config: MonitorConfiguration, data_config_file: str,
-                 default_position_size: float = 100.0, stop_loss_pct: float = 0.005):
+                 trade_executor: TradeExecutor):
         self.monitor_config = monitor_config
 
-        # Load simple data config
+        # Load data config
         with open(data_config_file, 'r') as f:
             data_config = json.load(f)
 
@@ -28,18 +37,13 @@ class BacktestDataStreamer:
         self.start_date = data_config['start_date']
         self.end_date = data_config['end_date']
 
-        # Aggregators will be populated by YahooFinanceHistorical
         self.aggregators: Dict[str, CandleAggregator] = {}
-
-        # THIS IS WHERE WE PUT OUR DIFFERENT TRADE EXECUTORS!!!
         self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
-        self.trade_executor: TradeExecutorNew = TradeExecutorNew(
-            monitor_config=monitor_config,
-            default_position_size=default_position_size,
-            stop_loss_pct=stop_loss_pct
-        )
 
-        logger.info(f"BacktestDataStreamer created for {self.ticker}")
+        # Use injected trade executor
+        self.trade_executor = trade_executor
+
+        logger.info(f"BacktestDataStreamer created with {type(trade_executor).__name__}")
 
     def load_historical_data(self):
         """Load historical data into aggregators via YahooFinanceHistorical"""
@@ -104,6 +108,11 @@ class BacktestDataStreamer:
                 logger.info(f"Processed {i + 1}/{len(all_candles)} candles")
 
         logger.info("Backtest simulation completed")
+
+    def replace_monitor_config(self, monitor_config: MonitorConfiguration):
+    #     we must replace the indicaotr values
+    # reinit the portfolio
+
 
     def _get_primary_timeframe(self) -> str:
         """Get primary timeframe for simulation"""

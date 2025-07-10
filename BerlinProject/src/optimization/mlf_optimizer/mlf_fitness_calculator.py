@@ -1,17 +1,18 @@
 from dataclasses import dataclass
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from .mlf_individual import MlfIndividual
 from data_streamer import DataStreamer
 from operations.monitor_backtest_results import MonitorResultsBacktest
+from optimization.calculators.bt_data_streamer import BacktestDataStreamer
 
 
 @dataclass
 class MlfFitnessCalculator(FitnessCalculator):
-    data_streamer: Optional[DataStreamer] = None
+    backtest_streamer: Optional[BacktestDataStreamer] = None
     display_results: bool = False
 
     def __post_init__(self):
@@ -51,6 +52,38 @@ class MlfFitnessCalculator(FitnessCalculator):
             individual_stats = self.__calculate_individual_stats(individual, bt, cnt)
             fitness_results.append(individual_stats)
         return fitness_results
+
+    def calculate_fitness_functions_new(self, population: List[MlfIndividual]) -> List[IndividualStats]:
+        fitness_results: List[IndividualStats] = []
+        cnt = 0
+        for individual in population:
+
+            # add some sort of replace monitor config?
+            self.backtest_streamer.replace_monitor_config(individual.monitor_configuration)
+
+            backtest_results = backtest_streamer.run()
+
+            if self.display_results:
+                portfolio_metrics = backtest_results['portfolio_metrics']
+                print("Final Result?")
+                print(cnt, "fitness: ", backtest_results['total_trades'],
+                      f"profit: %{portfolio_metrics['pnl']['realized_pnl_percent']:.3f}",
+                      f"total P&L: %{portfolio_metrics['pnl']['total_pnl_percent']:.3f}")
+                print("-----------")
+            cnt += 1
+            individual_stats = self.__calculate_individual_stats_new(individual, backtest_results, cnt)
+            fitness_results.append(individual_stats)
+        return fitness_results
+
+    def __calculate_individual_stats_new(self, individual: MlfIndividual, backtest_results: Dict, index: int):
+        fitness_values = np.array(
+            [objective.calculate_objective(individual, backtest_results) for objective in self.objectives])
+        if fitness_values[0] == 100.0:
+            fitness_values = np.ones_like(fitness_values) * 100.0
+        individual_stats = IndividualStats(index=index,
+                                           fitness_values=fitness_values,
+                                           individual=individual)
+        return individual_stats
 
     def calculate_individual(self, individual: MlfIndividual):
         return self.__calculate_individual_stats(individual, 0)
