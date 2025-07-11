@@ -5,11 +5,26 @@ from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor
 
 
+# def choose_weights_old(monitor: Monitor):
+#     monitor.triggers = {key: random.randint(1, 100) for key in monitor.triggers}
+#     monitor.bear_triggers = {key: random.randint(1, 100) for key in monitor.bear_triggers}
+#     monitor.threshold = random.uniform(0.6, 0.9)
+#     monitor.bear_threshold = random.uniform(0.6, 0.9)
+
+
 def choose_weights(monitor: Monitor):
-    monitor.triggers = {key: random.randint(1, 100) for key in monitor.triggers}
-    monitor.bear_triggers = {key: random.randint(1, 100) for key in monitor.bear_triggers}
-    monitor.threshold = random.uniform(0.6, 0.9)
-    monitor.bear_threshold = random.uniform(0.6, 0.9)
+
+    for bar_name, bar_config in monitor.bars.items():
+        if 'indicators' in bar_config:
+            for indicator_name in bar_config['indicators']:
+                monitor.bars[bar_name]['indicators'][indicator_name] = random.randint(1, 100)
+
+    # NEW: Randomize thresholds for enter_long and exit_long
+    if hasattr(monitor, 'enter_long') and monitor.enter_long:
+        monitor.enter_long['threshold'] = random.uniform(0.5, 0.9)
+
+    if hasattr(monitor, 'exit_long') and monitor.exit_long:
+        monitor.exit_long['threshold'] = random.uniform(0.5, 0.9)
 
 
 def choose_parameters(config: MonitorConfiguration):

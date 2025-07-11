@@ -81,6 +81,8 @@ class Portfolio:
         )
         self.trade_history.append(trade)
 
+    #THIS STUFF IS USED FOR UI
+
     def is_in_position(self) -> bool:
         """Check if currently in a position"""
         return self.position_size > 0
@@ -182,6 +184,125 @@ class Portfolio:
                 for trade in self.trade_history[-5:]  # Last 5 trades
             ]
         }
+
+    # THIS IS USED FOR GA OPTIMIZER OBJECTIVE FUNCTIONS
+
+    def get_total_percent_profits(self) -> float:
+        """
+        Sum of all profitable trades as percentages -used in Maximize profit OF.
+        """
+        total_profits = 0.0
+
+        # Look for entry/exit pairs
+        i = 0
+        while i < len(self.trade_history) - 1:
+            entry_trade = self.trade_history[i]
+            exit_trade = self.trade_history[i + 1]
+
+            # Check if this is an entry followed by an exit
+            if (entry_trade.reason == TradeReason.ENTER_LONG and
+                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+
+                # Calculate P&L percentage
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
+
+                # Add to profits if positive
+                if pnl_percent > 0:
+                    total_profits += pnl_percent
+
+                i += 2  # Skip both trades
+            else:
+                i += 1
+
+        return total_profits
+
+    def get_total_percent_losses(self) -> float:
+        """
+        Sum of all losing trades as percentages (returned as positive values) - used in minimize loss OF
+        """
+        total_losses = 0.0
+
+        # Look for entry/exit pairs
+        i = 0
+        while i < len(self.trade_history) - 1:
+            entry_trade = self.trade_history[i]
+            exit_trade = self.trade_history[i + 1]
+
+            # Check if this is an entry followed by an exit
+            if (entry_trade.reason == TradeReason.ENTER_LONG and
+                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+
+                # Calculate P&L percentage
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
+
+                # Add to losses if negative (convert to positive)
+                if pnl_percent < 0:
+                    total_losses += abs(pnl_percent)
+
+                i += 2  # Skip both trades
+            else:
+                i += 1
+
+        return total_losses
+
+    def get_losing_trades_count(self) -> int:
+        """
+        Count of trades that lost money - used in minimize losing trades
+        """
+        losing_count = 0
+
+        # Look for entry/exit pairs
+        i = 0
+        while i < len(self.trade_history) - 1:
+            entry_trade = self.trade_history[i]
+            exit_trade = self.trade_history[i + 1]
+
+            # Check if this is an entry followed by an exit
+            if (entry_trade.reason == TradeReason.ENTER_LONG and
+                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+
+                # Calculate P&L percentage
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
+
+                # Count if losing
+                if pnl_percent < 0:
+                    losing_count += 1
+
+                i += 2  # Skip both trades
+            else:
+                i += 1
+
+        return losing_count
+
+    def get_winning_trades_count(self) -> int:
+        """
+        Count of trades that made money - used in minimize losing trades
+        """
+        winning_count = 0
+
+        # Look for entry/exit pairs
+        i = 0
+        while i < len(self.trade_history) - 1:
+            entry_trade = self.trade_history[i]
+            exit_trade = self.trade_history[i + 1]
+
+            # Check if this is an entry followed by an exit
+            if (entry_trade.reason == TradeReason.ENTER_LONG and
+                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+
+                # Calculate P&L percentage
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
+
+                # Count if winning
+                if pnl_percent > 0:
+                    winning_count += 1
+
+                i += 2  # Skip both trades
+            else:
+                i += 1
+
+        return winning_count
+
 
     def reset(self) -> None:
         """Reset portfolio to initial state"""
