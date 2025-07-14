@@ -1,9 +1,6 @@
 from typing import Optional, List, Dict
 from dataclasses import dataclass, field
-from pathlib import Path
-import json
 
-from operations.monitor_backtest_results import MonitorResultsBacktest
 from optimization.genetic_optimizer.support.types import Json
 from optimization.genetic_optimizer.apps.utils.optimizer_config import GAHyperparameters
 from optimization.genetic_optimizer.apps.utils.objectives import Objective
@@ -13,9 +10,7 @@ from optimization.genetic_optimizer.genetic_algorithm.genetic_algorithm import G
 from optimization.genetic_optimizer.abstractions.objective_function_base import ObjectiveFunctionBase
 
 from models.monitor_configuration import MonitorConfiguration
-from models.monitor_model import Monitor
 from models.indicator_definition import IndicatorDefinition
-from data_streamer import DataStreamer
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
 from portfolios.trade_executor_new import TradeExecutorNew
 
@@ -24,9 +19,8 @@ from portfolios.trade_executor_new import TradeExecutorNew
 class MlfOptimizerConfig:
     objectives: Dict[str, Objective]
     hyper_parameters: GAHyperparameters
-    data_config_file: str  # FIXED: Consistent field name
-    monitor_config: MonitorConfiguration
-    monitor: Monitor
+    data_config_file: str
+    monitor_config: MonitorConfiguration  # REMOVED: monitor: Monitor
     configuration: Optional[Json] = None
 
     fitness_calculator: Optional[MlfFitnessCalculator] = None
@@ -35,10 +29,6 @@ class MlfOptimizerConfig:
 
     def __post_init__(self):
         self.model_config = {"preprocess_config": "test_ds"}
-
-    def write_configuration(self, path: Path):
-        with open(path, 'w') as f:
-            f.write(json.dumps(self.configuration, indent=2))
 
     def create_project(self) -> GeneticAlgorithm:
         trade_executor = TradeExecutorNew(
@@ -50,7 +40,7 @@ class MlfOptimizerConfig:
 
         backtest_streamer = BacktestDataStreamer(
             monitor_config=self.monitor_config,
-            data_config_file=self.data_config_file,  # FIXED: Uses correct field name
+            data_config_file=self.data_config_file,
             trade_executor=trade_executor
         )
 
@@ -64,10 +54,9 @@ class MlfOptimizerConfig:
             self.fitness_calculator.add_objective(obj, objective.weight)
             self.objectives_dict[obj.name] = obj
 
+        # FIXED: Only pass monitor_configuration
         problem_domain = MlfProblem(
-            self.fitness_calculator,
-            monitor_configuration=self.monitor_config,
-            monitor=self.monitor
+            monitor_configuration=self.monitor_config
         )
 
         ga = GeneticAlgorithm(
@@ -83,12 +72,9 @@ class MlfOptimizerConfig:
 
     @staticmethod
     def from_json(resources: Json, data_config_file: str = None) -> 'MlfOptimizerConfig':
-        """
-        Simplified version now that Monitor model uses 'bars' directly
-        """
+        """Load configuration using only MonitorConfiguration"""
         objectives: Dict[str, Objective] = {}
         hyper_parameters: Optional[GAHyperparameters] = None
-        monitor: Optional[Monitor] = None
         monitor_config: Optional[MonitorConfiguration] = None
 
         for key, value in resources.items():
@@ -99,19 +85,22 @@ class MlfOptimizerConfig:
             elif key == "ga_hyperparameters":
                 hyper_parameters = GAHyperparameters.from_json(value)
             elif key == "monitor":
-                # Now this works directly since Monitor expects 'bars'
-                monitor = Monitor(**value)
-            elif key == 'indicators':
+                # FIXED: Create MonitorConfiguration directly from monitor data
                 indicators = []
-                for ind_def in value:
-                    indicators.append(IndicatorDefinition(**ind_def))
-                # Use monitor name if available
-                monitor_name = monitor.name if monitor else "Unnamed Monitor"
-                monitor_config = MonitorConfiguration(name=monitor_name, indicators=indicators)
+                if 'indicators' in resources:
+                    for ind_def in resources['indicators']:
+                        indicators.append(IndicatorDefinition(**ind_def))
 
-        # Validation
-        if not monitor:
-            raise ValueError("No Monitor configuration was created.")
+                monitor_config = MonitorConfiguration(
+                    name=value.get('name', 'GA Monitor'),
+                    description=value.get('description', ''),
+                    enter_long=value.get('enter_long', []),
+                    exit_long=value.get('exit_long', []),
+                    bars=value.get('bars', {}),
+                    indicators=indicators
+                )
+
+        # Validation - REMOVED monitor validation
         if not monitor_config:
             raise ValueError("No MonitorConfiguration was created.")
         if not hyper_parameters:
@@ -125,25 +114,6 @@ class MlfOptimizerConfig:
             objectives=objectives,
             hyper_parameters=hyper_parameters,
             data_config_file=data_config_file,
-            monitor=monitor,
             monitor_config=monitor_config,
             configuration=resources
         )
-
-    @staticmethod
-    def from_file(filepath: Path, ga_config: Path = None, data_config_file: str = None) -> "MlfOptimizerConfig":
-        """
-        FIXED: Updated to pass data_config_file through to from_json
-        """
-        ga_config_json: Json = None
-        if ga_config:
-            with open(ga_config) as f:
-                ga_config_json = json.load(f)
-
-        with open(filepath) as f:
-            input_json = json.load(f)
-            if ga_config:
-                input_json = {**input_json, **ga_config_json}
-
-            # FIXED: Pass data_config_file to from_json
-            return MlfOptimizerConfig.from_json(input_json, data_config_file)

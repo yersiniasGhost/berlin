@@ -120,6 +120,17 @@ class BacktestDataStreamer:
         self.trade_executor.portfolio.reset()
         self.trade_executor.monitor_config = monitor_config
 
+    def replace_monitor_config(self, monitor_config: MonitorConfiguration):
+
+        self.monitor_config = monitor_config
+        self.indicator_processor = IndicatorProcessor(monitor_config)
+        self.trade_executor.portfolio.reset()
+        self.trade_executor.monitor_config = monitor_config
+
+        # Clear any trade executor state (stop loss, take profit levels)
+        if hasattr(self.trade_executor, '_clear_exit_levels'):
+            self.trade_executor._clear_exit_levels()
+
     def _get_primary_timeframe(self) -> str:
         """Get primary timeframe for simulation"""
         timeframes = list(self.aggregators.keys())
@@ -132,33 +143,6 @@ class BacktestDataStreamer:
                     return available_tf
 
         return timeframes[0] if timeframes else '1m'
-
-    # def get_results(self) -> Dict[str, Any]:
-    #     """Get backtest results using simple trade structure"""
-    #     # Get final portfolio metrics
-    #     portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(0)
-    #
-    #     trade_history = []
-    #     if hasattr(self.trade_executor.portfolio, 'trade_history'):
-    #         for trade in self.trade_executor.portfolio.trade_history:
-    #             trade_dict = {
-    #                 'time': trade.time.isoformat() if hasattr(trade.time, 'isoformat') else str(trade.time),
-    #                 'size': trade.size,
-    #                 'price': trade.price,
-    #                 'reason': trade.reason,
-    #                 'symbol': self.ticker,  # Use the backtester's symbol
-    #                 'side': 'buy' if trade.size > 0 else 'sell',  # Derive from size
-    #             }
-    #             trade_history.append(trade_dict)
-    #
-    #     return {
-    #         'ticker': self.ticker,
-    #         'start_date': self.start_date,
-    #         'end_date': self.end_date,
-    #         'trade_history': trade_history,
-    #         'portfolio_metrics': portfolio_metrics,
-    #         'total_trades': len(trade_history)
-    #     }
 
     def run(self) -> Portfolio:
         """Complete backtest process"""

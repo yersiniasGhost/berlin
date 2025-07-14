@@ -214,30 +214,118 @@ class IndicatorProcessor:
                                     tick_history: List[TickData],
                                     indicator_def) -> np.ndarray:
         """
-        Calculate a single indicator
+        Calculate a single indicator with enhanced debugging
         """
         try:
+            # DEBUG: Show calculation attempt
+            logger.info(f"    _calculate_single_indicator: {indicator_def.function}")
+            logger.info(f"    Data points: {len(tick_history)}")
+
             if len(tick_history) < 10:  # Need minimum data
+                logger.warning(f"    ❌ Insufficient data: {len(tick_history)} < 10 candles")
                 return np.array([0.0])
 
+            # Show sample data for debugging
+            if len(tick_history) > 0:
+                first_candle = tick_history[0]
+                last_candle = tick_history[-1]
+                logger.info(f"    First candle: {first_candle.timestamp} - Close: {first_candle.close}")
+                logger.info(f"    Last candle: {last_candle.timestamp} - Close: {last_candle.close}")
+
+            # Calculate based on function type
+            result = None
+
             if indicator_def.function == 'sma_crossover':
+                logger.info(f"    Calling sma_crossover with params: {indicator_def.parameters}")
                 result = sma_crossover(tick_history, indicator_def.parameters)
+
             elif indicator_def.function == 'macd_histogram_crossover':
+                logger.info(f"    Calling macd_histogram_crossover with params: {indicator_def.parameters}")
+
+                # TEMP DEBUG: Let's manually check what MACD values look like
+                from features.indicators import macd_calculation
+                macd, signal, histogram = macd_calculation(tick_history,
+                                                           indicator_def.parameters['fast'],
+                                                           indicator_def.parameters['slow'],
+                                                           indicator_def.parameters['signal'])
+
+                # Show histogram statistics
+                valid_hist = histogram[~np.isnan(histogram)]
+                if len(valid_hist) > 0:
+                    logger.info(f"    HISTOGRAM STATS:")
+                    logger.info(f"      Min: {np.min(valid_hist):.6f}")
+                    logger.info(f"      Max: {np.max(valid_hist):.6f}")
+                    logger.info(f"      Mean: {np.mean(valid_hist):.6f}")
+                    logger.info(f"      Last 10 values: {valid_hist[-10:]}")
+                    logger.info(f"      Threshold: {indicator_def.parameters['histogram_threshold']:.6f}")
+
+                    # Check how many values exceed threshold
+                    if indicator_def.parameters['trend'] == 'bullish':
+                        exceeds = np.sum(valid_hist > indicator_def.parameters['histogram_threshold'])
+                        logger.info(f"      Values > threshold: {exceeds}/{len(valid_hist)}")
+                    else:
+                        exceeds = np.sum(valid_hist < -indicator_def.parameters['histogram_threshold'])
+                        logger.info(f"      Values < -threshold: {exceeds}/{len(valid_hist)}")
+
                 result = macd_histogram_crossover(tick_history, indicator_def.parameters)
+
+                # DEBUG: Check what the crossover detection actually produces
+                non_zero_indices = np.where(result != 0)[0]
+                total_crossovers = np.sum(result)
+                logger.info(f"    CROSSOVER DETECTION:")
+                logger.info(f"      Total crossovers found: {len(non_zero_indices)} (sum: {total_crossovers})")
+                logger.info(f"      Last 20 result values: {result[-20:]}")
+
+                if len(non_zero_indices) > 0:
+                    logger.info(f"      First few crossover indices: {non_zero_indices[:5]}")
+                    logger.info(f"      Last few crossover indices: {non_zero_indices[-5:]}")
+                    logger.info(
+                        f"      Most recent crossover was at index: {non_zero_indices[-1]} (from end: {len(result) - non_zero_indices[-1] - 1})")
+                else:
+                    logger.info(f"      NO CROSSOVERS DETECTED!")
+
             elif indicator_def.function == 'bol_bands_lower_band_bounce':
+                logger.info(f"    Calling bol_bands_lower_band_bounce with params: {indicator_def.parameters}")
                 result = bol_bands_lower_band_bounce(tick_history, indicator_def.parameters)
+
             elif indicator_def.function == 'support_level':
+                logger.info(f"    Calling support_level with params: {indicator_def.parameters}")
                 result = support_level(tick_history, indicator_def.parameters)
+
             elif indicator_def.function == 'resistance_level':
+                logger.info(f"    Calling resistance_level with params: {indicator_def.parameters}")
                 result = resistance_level(tick_history, indicator_def.parameters)
+
             else:
-                logger.warning(f"Unknown indicator function: {indicator_def.function}")
+                logger.warning(f"    ❌ Unknown indicator function: {indicator_def.function}")
+                result = np.array([0.0])
+
+            # DEBUG: Show result details
+            if result is not None:
+                logger.info(f"    ✅ Function returned: type={type(result)}, length={len(result)}")
+                if hasattr(result, '__len__') and len(result) > 0:
+                    logger.info(f"    Last value: {result[-1]}")
+                    # Show some sample values
+                    if len(result) > 5:
+                        logger.info(f"    Last 5 values: {result[-5:]}")
+
+                    # Convert to numpy array if it isn't already
+                    if not isinstance(result, np.ndarray):
+                        logger.info(f"    Converting {type(result)} to numpy array")
+                        result = np.array(result)
+                else:
+                    logger.warning(f"    ❌ Result array is empty")
+                    result = np.array([0.0])
+            else:
+                logger.warning(f"    ❌ Function returned None")
                 result = np.array([0.0])
 
             return result
 
         except Exception as e:
-            logger.error(f"Error calculating {indicator_def.function}: {e}")
+            logger.error(f"    ❌ Exception in _calculate_single_indicator: {e}")
+            import traceback
+            traceback.print_exc()
             return np.array([0.0])
 
     def calculate_indicators(self,

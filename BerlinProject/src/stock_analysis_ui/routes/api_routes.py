@@ -231,13 +231,20 @@ def get_card_details(card_id: str):
         # Get REAL indicator history from processor
         indicator_history = data_streamer.indicator_processor.get_history_data()
 
-        # IMPORTANT: Convert monitor_config to dict format for JSON serialization
+        # UPDATED: Convert monitor_config to dict format for new structure
         monitor_config_dict = {
             'name': monitor_config.name,
-            'threshold': monitor_config.threshold,
-            'bear_threshold': monitor_config.bear_threshold,
-            'bars': monitor_config.bars,  # This contains the bar configurations we need!
-            'aggregator_type': getattr(monitor_config, 'aggregator_type', 'normal')
+            'description': monitor_config.description,
+            # NEW: Include enter_long and exit_long arrays
+            'enter_long': monitor_config.enter_long,
+            'exit_long': monitor_config.exit_long,
+            # Keep bars configuration
+            'bars': monitor_config.bars,
+            # Keep aggregator type if available
+            'aggregator_type': getattr(monitor_config, 'aggregator_type', 'normal'),
+            # Add summary info for UI
+            'enter_conditions_count': len(monitor_config.enter_long),
+            'exit_conditions_count': len(monitor_config.exit_long)
         }
 
         # Build response
@@ -250,7 +257,7 @@ def get_card_details(card_id: str):
                 'timeframes': list(timeframes),
                 'total_indicators': len(monitor_config.indicators)
             },
-            'monitor_config': monitor_config_dict,  # ADD THIS LINE!
+            'monitor_config': monitor_config_dict,
             'aggregator_info': aggregator_info,
             'current_values': {
                 'indicators': current_indicators,
@@ -277,7 +284,6 @@ def get_card_details(card_id: str):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @api_bp.route('/combinations/<card_id>/portfolio')
 def get_card_portfolio(card_id: str):

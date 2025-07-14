@@ -8,17 +8,18 @@ import os
 
 
 class MonitorConfiguration(BaseModel):
-    id: PyObjectId = PydanticField(None, alias="_id")
+    id: Optional[PyObjectId] = PydanticField(None, alias="_id")
     name: str
-    indicators: List[IndicatorDefinition]
-
-    # Fixed: Changed from Dict[str, Dict[str, float]] to Dict[str, Any]
-    # to handle complex nested structure with "type" and "indicators" fields
-    bars: Dict[str, Any] = PydanticField(default_factory=dict)
-
-    threshold: float = PydanticField(default=0.8)
-    bear_threshold: float = PydanticField(default=0.8)
     description: str = PydanticField(default="")
+
+    # NEW: Arrays of conditions instead of single objects
+    enter_long: List[Dict[str, Any]] = PydanticField(default_factory=list)
+    exit_long: List[Dict[str, Any]] = PydanticField(default_factory=list)
+
+    bars: Dict[str, Any] = PydanticField(default_factory=dict)
+    indicators: List[IndicatorDefinition] = PydanticField(default_factory=list)
+
+    user_id: Optional[PyObjectId] = PydanticField(None)
 
     @model_validator(mode='before')
     def validate_definition(cls, values):
@@ -128,14 +129,36 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
             )
             indicators.append(indicator)
 
-        # Build configuration dictionary - let Pydantic handle defaults
+        # Build configuration dictionary - NEW STRUCTURE
         config_dict = {
             'name': monitor_data.get('name', 'Trading Signals'),
+            'description': monitor_data.get('description', ''),
             'indicators': indicators,
-            'threshold': monitor_data.get('threshold', 0.8),
-            'bear_threshold': monitor_data.get('bear_threshold', 0.8),
-            'description': monitor_data.get('description', '')
         }
+
+        # Handle new enter_long array structure
+        if 'enter_long' in monitor_data:
+            enter_long = monitor_data['enter_long']
+            if isinstance(enter_long, list):
+                # Already an array
+                config_dict['enter_long'] = enter_long
+            elif isinstance(enter_long, dict):
+                # Convert single object to array
+                config_dict['enter_long'] = [enter_long]
+        else:
+            config_dict['enter_long'] = []
+
+        # Handle new exit_long array structure
+        if 'exit_long' in monitor_data:
+            exit_long = monitor_data['exit_long']
+            if isinstance(exit_long, list):
+                # Already an array
+                config_dict['exit_long'] = exit_long
+            elif isinstance(exit_long, dict):
+                # Convert single object to array
+                config_dict['exit_long'] = [exit_long]
+        else:
+            config_dict['exit_long'] = []
 
         # Only add bars if they exist in JSON
         if 'bars' in monitor_data:
@@ -145,8 +168,9 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
         monitor_config = MonitorConfiguration(**config_dict)
 
         print(f"Successfully loaded config: {monitor_config.name}")
-        print(f"  Threshold: {monitor_config.threshold}")
-        print(f"  Bear Threshold: {monitor_config.bear_threshold}")
+        print(f"  Description: {monitor_config.description}")
+        print(f"  Enter conditions: {len(monitor_config.enter_long)}")
+        print(f"  Exit conditions: {len(monitor_config.exit_long)}")
         print(f"  Indicators: {len(indicators)}")
         print(f"  Bars: {list(monitor_config.bars.keys())}")
 
