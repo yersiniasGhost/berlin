@@ -22,6 +22,8 @@ class AppService:
     Updated application service that supports both live Schwab streaming and CSReplayDataLink
     """
 
+    # In app_service.py, modify the __init__ method
+
     def __init__(self, socketio: SocketIO, auth_manager: Optional[SchwabAuthManager] = None) -> None:
         """
         Initialize AppService
@@ -35,7 +37,8 @@ class AppService:
 
         # Core components - data_link can be either SchwabDataLink or CSReplayDataLink
         self.data_link: Optional[Union[SchwabDataLink, CSReplayDataLink]] = None
-        self.ui_tool: UIExternalTool = UIExternalTool(socketio)
+        # MODIFIED: Pass self to UIExternalTool so it can access combination data
+        self.ui_tool: UIExternalTool = UIExternalTool(socketio, app_service=self)
 
         # State tracking
         self.is_streaming: bool = False
@@ -247,7 +250,9 @@ class AppService:
                 {
                     "card_id": card_id,
                     "symbol": data["symbol"],
-                    "monitor_config_name": data["monitor_config"].name
+                    # MODIFIED: Prioritize test_name from config file over generic monitor name
+                    "monitor_config_name": data.get("test_name", data["monitor_config"].name),
+                    "test_name": data.get("test_name", "Unknown Config")  # Include both for flexibility
                 }
                 for card_id, data in self.combinations.items()
             ],

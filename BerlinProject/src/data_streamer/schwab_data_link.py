@@ -45,36 +45,56 @@ class SchwabDataLink(DataLink):
     # TODO: ADD A NEW VALIDATOR TO MAKE SURE WE ARE NOT GETTING HUGE DECREASES FROM PIP TO PIP...
     # DATA QUALITY ISSUE^
 
+    # In schwab_data_link.py, modify the _pip_to_tick_data method
+
     def _pip_to_tick_data(self, pip_data: Dict) -> TickData:
         """
         Simple conversion of Schwab PIP data to TickData object.
-        Requires: symbol, timestamp, and close price.
+        Now uses current time as fallback for missing/invalid timestamps.
         """
         # Get required fields
         symbol = pip_data.get('key')
-        timestamp_ms = pip_data.get('38')
         close_price = pip_data.get('3')
 
-        # Simple validation - just check they exist
-        if not symbol or not timestamp_ms or not close_price:
-            print(f"Missing required data: symbol={symbol}, timestamp={timestamp_ms}, price={close_price}")
+        # Validation - only require symbol and price
+        if not symbol or not close_price:
+            print(f"Missing required data: symbol={symbol}, price={close_price}")
             return None
 
-        # Convert to proper types and validate
-        timestamp_ms = int(timestamp_ms)
-        price = float(close_price)
-
-        # Check for invalid data
-        if timestamp_ms == 0 or price <= 0:
-            print(f"Invalid PIP data - timestamp: {timestamp_ms}, price: {price}")
+        # Convert price and validate
+        try:
+            price = float(close_price)
+            if price <= 0:
+                print(f"Invalid price: {price}")
+                return None
+        except (ValueError, TypeError):
+            print(f"Cannot convert price to float: {close_price}")
             return None
 
-        timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+        # Handle timestamp with fallback to current time
+        timestamp_ms = pip_data.get('38')
+        timestamp = None
 
-        # Sanity check timestamp (must be after year 2000)
-        if timestamp.year < 2000:
-            print(f"Invalid timestamp year: {timestamp.year}")
-            return None
+        if timestamp_ms:
+            try:
+                timestamp_ms = int(timestamp_ms)
+                if timestamp_ms > 0:
+                    timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+
+                    # Sanity check timestamp (must be after year 2000)
+                    if timestamp.year < 2000:
+                        print(f"Invalid timestamp year: {timestamp.year}, using current time")
+                        timestamp = None  # Will use current time below
+                else:
+                    print(f"Invalid timestamp: {timestamp_ms}, using current time")
+                    timestamp = None  # Will use current time below
+            except (ValueError, TypeError):
+                print(f"Cannot convert timestamp: {timestamp_ms}, using current time")
+                timestamp = None  # Will use current time below
+
+        # If no valid timestamp, use current time
+        if timestamp is None:
+            timestamp = datetime.now()
 
         volume = int(pip_data.get('8', 0))  # Optional, default to 0
 

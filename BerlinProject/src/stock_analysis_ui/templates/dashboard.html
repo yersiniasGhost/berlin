@@ -82,7 +82,7 @@
             box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
         }
 
-        /* Modal Styles - keeping existing styles */
+        /* Modal Styles */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -193,85 +193,98 @@
 
         .btn {
             padding: 0.75rem 1.5rem;
-            border: 1px solid transparent;
+            border: none;
             border-radius: 6px;
-            cursor: pointer;
             font-size: 0.875rem;
-            font-weight: 500;
+            font-weight: 600;
+            cursor: pointer;
             transition: all 0.2s ease;
         }
 
-        .btn-primary {
+        .btn.btn-primary {
             background: #238636;
             color: #ffffff;
-            border-color: #238636;
         }
 
-        .btn-primary:hover {
+        .btn.btn-primary:hover:not(:disabled) {
             background: #2ea043;
-            border-color: #2ea043;
         }
 
-        .btn-primary:disabled {
-            background: #30363d;
+        .btn.btn-primary:disabled {
+            background: #21262d;
             color: #7d8590;
-            border-color: #30363d;
             cursor: not-allowed;
         }
 
-        .btn-secondary {
+        .btn.btn-secondary {
             background: #21262d;
             color: #e6edf3;
-            border-color: #30363d;
+            border: 1px solid #30363d;
         }
 
-        .btn-secondary:hover {
+        .btn.btn-secondary:hover {
             background: #30363d;
-            border-color: #484f58;
         }
 
+        /* Cards Container */
         .cards-container {
             padding: 2rem;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-            gap: 1.5rem;
-            background: #0d1117;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
+        .loading {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #7d8590;
+        }
+
+        .loading p {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Trading Card Styles */
         .trading-card {
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 12px;
             padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         }
 
         .trading-card:hover {
+            border-color: #7d8590;
             transform: translateY(-2px);
-            border-color: #1f6feb;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .trading-card.updating {
+            box-shadow: 0 0 20px rgba(35, 134, 54, 0.3);
         }
 
         .card-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #21262d;
         }
 
         .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
+            font-size: 1.5rem;
+            font-weight: 700;
             color: #f0f6fc;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
         }
 
         .card-subtitle {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: #7d8590;
             margin-top: 0.25rem;
         }
@@ -320,13 +333,14 @@
             margin-bottom: 1rem;
         }
 
-        /* NEW: Portfolio Section Styles */
+        /* Enhanced Portfolio Section Styles with Collapsible Feature */
         .portfolio-section {
             background: #0d1117;
             border: 1px solid #21262d;
             border-radius: 8px;
             padding: 1rem;
             margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
         }
 
         .portfolio-header {
@@ -334,12 +348,53 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 0.75rem;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        .portfolio-header:hover {
+            background: rgba(125, 133, 144, 0.05);
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            margin: -0.25rem -0.5rem 0.75rem -0.5rem;
+        }
+
+        .portfolio-title-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
         .portfolio-title {
             font-size: 0.875rem;
             font-weight: 600;
             color: #f0f6fc;
+        }
+
+        .portfolio-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #7d8590;
+            font-size: 0.75rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .portfolio-toggle:hover {
+            background: #30363d;
+            color: #e6edf3;
+            border-color: #7d8590;
+        }
+
+        .portfolio-toggle.collapsed {
+            transform: rotate(-90deg);
         }
 
         .position-status {
@@ -365,6 +420,17 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.75rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            opacity: 1;
+            max-height: 500px;
+        }
+
+        .portfolio-metrics.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
         }
 
         .metric-item {
@@ -462,94 +528,70 @@
             right: 0;
             bottom: 0;
             background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
-            animation: shimmer 2s infinite;
+            border-radius: 5px;
         }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        .bar-green {
-            --bar-color: #238636;
-            --bar-color-light: #2ea043;
-            --bar-glow: 35, 134, 54;
-        }
-
-        .bar-green .bar-value-text { color: #56d364; }
-
-        .bar-yellow {
-            --bar-color: #d4a017;
-            --bar-color-light: #f9c74f;
-            --bar-glow: 212, 160, 23;
-        }
-
-        .bar-yellow .bar-value-text { color: #f9c74f; }
-
-        .bar-neutral {
-            --bar-color: #7d8590;
-            --bar-color-light: #8b949e;
-            --bar-glow: 125, 133, 144;
-        }
-
-        .bar-neutral .bar-value-text { color: #8b949e; }
-
-        .bar-red {
-            --bar-color: #da3633;
-            --bar-color-light: #ff7b72;
-            --bar-glow: 218, 54, 51;
-        }
-
-        .bar-red .bar-value-text { color: #ff7b72; }
 
         .indicators-summary {
             font-size: 0.875rem;
             color: #7d8590;
             text-align: center;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid #21262d;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 3rem;
-            color: #7d8590;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            margin: 2rem;
-        }
-
-        .error-message {
-            background: rgba(218, 54, 51, 0.1);
-            border: 1px solid rgba(218, 54, 51, 0.3);
-            color: #ff7b72;
             padding: 1rem;
+            background: #0d1117;
+            border: 1px solid #21262d;
             border-radius: 8px;
-            margin: 1rem 0;
+        }
+
+        /* Messages */
+        .success-message, .error-message, .info-message {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            z-index: 1001;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .success-message {
-            background: rgba(35, 134, 54, 0.1);
-            border: 1px solid rgba(35, 134, 54, 0.3);
+            background: rgba(35, 134, 54, 0.2);
             color: #56d364;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+            border: 1px solid rgba(35, 134, 54, 0.3);
         }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.8; }
-            100% { opacity: 1; }
+        .error-message {
+            background: rgba(248, 81, 73, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, 0.3);
         }
 
-        .updating {
-            animation: pulse 1.5s ease-in-out infinite;
+        .info-message {
+            background: rgba(31, 111, 235, 0.2);
+            color: #79c0ff;
+            border: 1px solid rgba(31, 111, 235, 0.3);
         }
 
-        .hidden {
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .cards-container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .trading-card {
+                padding: 1rem;
+            }
+
+            .modal {
+                width: 95%;
+                margin: 1rem;
+            }
+        }
+
+        /* Hide scrollbar but allow scrolling */
+        .modal::-webkit-scrollbar {
             display: none;
         }
     </style>
@@ -578,7 +620,7 @@
         </button>
     </div>
 
-    <!-- Modal for adding cards (keeping existing modal HTML) -->
+    <!-- Modal for adding cards -->
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
             <div class="modal-header">
@@ -663,210 +705,33 @@
             showMessage(`Error: ${data.message}`, 'error');
         });
 
-        // Modal functions (keeping existing modal functions)
-        function openAddCardModal() {
-            document.getElementById('modalOverlay').style.display = 'block';
-            document.body.style.overflow = 'hidden';
-            document.getElementById('modalFileInput').value = '';
-            updateSelectedFileName();
-        }
+        // Initial data from server
+        socket.on('initial_data', function(data) {
+            console.log('Received initial_data:', data);
+            updateConnectionStatus(true);
+            updateStatus(data);
 
-        function closeAddCardModal() {
-            document.getElementById('modalOverlay').style.display = 'none';
-            document.body.style.overflow = 'auto';
-            document.getElementById('modalSymbolInput').value = '';
-            document.getElementById('modalFileInput').value = '';
-            modalSelectedFile = null;
-            updateSelectedFileName();
-            updateModalAddButton();
-        }
-
-        function updateSelectedFileName() {
-            const fileInput = document.getElementById('modalFileInput');
-            const fileNameDiv = document.getElementById('selectedFileName');
-
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                fileNameDiv.textContent = `Selected: ${file.name}`;
-                fileNameDiv.style.color = '#56d364';
-                modalSelectedFile = file;
-            } else {
-                fileNameDiv.textContent = 'No file selected';
-                fileNameDiv.style.color = '#7d8590';
-                modalSelectedFile = null;
-            }
-
-            updateModalAddButton();
-        }
-
-        function updateModalAddButton() {
-            const symbol = document.getElementById('modalSymbolInput').value.trim();
-            const addButton = document.getElementById('modalAddButton');
-            const isValid = symbol && modalSelectedFile;
-            addButton.disabled = !isValid;
-        }
-
-        async function addCombinationFromModal() {
-            const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
-
-            if (!symbol || !modalSelectedFile) {
-                showMessage('Please enter a symbol and select a config file', 'error');
-                return;
-            }
-
-            try {
-                const fileContent = await readFileAsText(modalSelectedFile);
-
-                try {
-                    JSON.parse(fileContent);
-                } catch (e) {
-                    showMessage('Selected file is not valid JSON', 'error');
-                    return;
-                }
-
-                const response = await fetch('/api/combinations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        symbol: symbol,
-                        config_content: fileContent,
-                        config_name: modalSelectedFile.name
-                    })
+            if (data.combinations && data.combinations.length > 0) {
+                data.combinations.forEach(combination => {
+                    updateOrCreateCard(combination.card_id, combination);
                 });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showMessage(`Successfully added ${symbol} as ${result.card_id}`, 'success');
-                    closeAddCardModal();
-                } else {
-                    showMessage(`Error: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                showMessage(`Error adding combination: ${error.message}`, 'error');
             }
-        }
-
-        function readFileAsText(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(new Error('Failed to read file'));
-                reader.readAsText(file);
-            });
-        }
-
-        // Update the renderPortfolioSection function in your dashboard.html
-
-        function renderPortfolioSection(portfolio) {
-            if (!portfolio) {
-                return '<div class="portfolio-section"><div class="portfolio-title">No Portfolio Data</div></div>';
-            }
-
-            const position = portfolio.position || {};
-            const pnl = portfolio.pnl || {};
-
-            const isInPosition = position.is_in_position || false;
-            const entryPrice = position.entry_price || 0;
-            const currentPrice = position.current_price || 0;
-            const positionSize = position.position_size || 0;
-
-            // Use PERCENT values instead of dollar values
-            const realizedPnlPercent = pnl.realized_pnl_percent || 0;
-            const unrealizedPnlPercent = pnl.unrealized_pnl_percent || 0;
-            const totalPnlPercent = pnl.total_pnl_percent || 0;
-
-            const statusClass = isInPosition ? 'in-position' : 'no-position';
-            const statusText = isInPosition ? 'IN POSITION' : 'NO POSITION';
-
-            return `
-                <div class="portfolio-section">
-                    <div class="portfolio-header">
-                        <span class="portfolio-title">Portfolio</span>
-                        <span class="position-status ${statusClass}">${statusText}</span>
-                    </div>
-                    <div class="portfolio-metrics">
-                        <div class="metric-item">
-                            <div class="metric-label">Entry Price</div>
-                            <div class="metric-value neutral">$${entryPrice.toFixed(2)}</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Position Size</div>
-                            <div class="metric-value neutral">${positionSize.toFixed(1)}</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Realized P&L</div>
-                            <div class="metric-value ${realizedPnlPercent >= 0 ? 'positive' : 'negative'}">${realizedPnlPercent.toFixed(2)}%</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Unrealized P&L</div>
-                            <div class="metric-value ${unrealizedPnlPercent >= 0 ? 'positive' : 'negative'}">${unrealizedPnlPercent.toFixed(2)}%</div>
-                        </div>
-                        <div class="metric-item" style="grid-column: 1 / -1;">
-                            <div class="metric-label">Total P&L</div>
-                            <div class="metric-value ${totalPnlPercent >= 0 ? 'positive' : 'negative'}" style="font-size: 1.25rem;">${totalPnlPercent.toFixed(2)}%</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        function renderBarScores(barScores) {
-            if (!barScores || Object.keys(barScores).length === 0) {
-                return '<div class="responsive-bar"><div class="bar-header"><span class="bar-label">No bar data</span></div></div>';
-            }
-
-            return Object.entries(barScores).map(([name, value]) => {
-                let colorClass = 'bar-neutral';
-                if (value >= 0.7) {
-                    colorClass = 'bar-green';
-                } else if (value >= 0.3) {
-                    colorClass = 'bar-yellow';
-                } else if (value < 0) {
-                    colorClass = 'bar-red';
-                }
-
-                const barWidth = Math.min(Math.abs(value) * 100, 100);
-
-                return `
-                    <div class="responsive-bar ${colorClass}">
-                        <div class="bar-header">
-                            <span class="bar-label">${formatBarName(name)}</span>
-                            <span class="bar-value-text">${value.toFixed(3)}</span>
-                        </div>
-                        <div class="bar-track">
-                            <div class="bar-fill" style="width: ${barWidth}%"></div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
+        });
 
         function updateConnectionStatus(connected) {
             const statusDot = document.getElementById('connectionStatus');
             const statusText = document.getElementById('connectionText');
 
-            if (connected) {
-                statusDot.className = 'status-dot connected';
-                statusText.textContent = 'Connected';
-            } else {
-                statusDot.className = 'status-dot disconnected';
-                statusText.textContent = 'Disconnected';
-            }
+            statusDot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+            statusText.textContent = connected ? 'Connected' : 'Disconnected';
         }
 
         function updateStatus(data) {
-            const streamingStatus = document.getElementById('streamingStatus');
+            const streamingDot = document.getElementById('streamingStatus');
             const streamingText = document.getElementById('streamingText');
 
-            if (data.streaming) {
-                streamingStatus.className = 'status-dot connected';
-                streamingText.textContent = 'Streaming';
-            } else {
-                streamingStatus.className = 'status-dot disconnected';
-                streamingText.textContent = 'Not Streaming';
-            }
+            streamingDot.className = `status-dot ${data.streaming ? 'connected' : 'disconnected'}`;
+            streamingText.textContent = data.streaming ? 'Streaming Active' : 'Not Streaming';
 
             updateCardsCount(data.combinations ? data.combinations.length : 0);
         }
@@ -907,16 +772,21 @@
             // Make card clickable
             card.style.cursor = 'pointer';
             card.addEventListener('click', function(e) {
-                // Don't trigger on close button
-                if (!e.target.classList.contains('card-close')) {
+                // Don't trigger on close button or portfolio toggle
+                if (!e.target.classList.contains('card-close') && !e.target.classList.contains('portfolio-toggle') && !e.target.closest('.portfolio-header')) {
                     openCardDetails(cardId);
                 }
             });
 
+            // MODIFIED: Include monitor name in the card title
+            const displayTitle = data.symbol || 'Unknown';
+            const monitorName = data.monitor_config_name || data.test_name;
+            const fullTitle = monitorName ? `${displayTitle} - ${monitorName}` : displayTitle;
+
             card.innerHTML = `
                 <div class="card-header">
                     <div>
-                        <div class="card-title">${data.symbol || 'Unknown'}</div>
+                        <div class="card-title">${fullTitle}</div>
                         <div class="card-subtitle">Trading Signals - Click for details</div>
                         <div class="card-id">${cardId}</div>
                     </div>
@@ -975,10 +845,14 @@
                 timestampDisplay.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
             }
 
-            // Update portfolio section
+            // Update portfolio section (MODIFIED TO PASS CARD ID)
             const portfolioContainer = card.querySelector('.portfolio-container');
             if (portfolioContainer) {
-                portfolioContainer.innerHTML = renderPortfolioSection(data.portfolio);
+                const cardId = card.id;
+                portfolioContainer.innerHTML = renderPortfolioSection(data.portfolio, cardId);
+
+                // Restore collapsed state from localStorage
+                restorePortfolioState(cardId);
             }
 
             // Update bar scores
@@ -1001,6 +875,173 @@
 
             // Store card data
             cards[card.id] = data;
+        }
+
+        // ENHANCED: Portfolio section with collapsible feature
+        function renderPortfolioSection(portfolio, cardId) {
+            if (!portfolio) {
+                return `
+                    <div class="portfolio-section">
+                        <div class="portfolio-header" onclick="togglePortfolio('${cardId}')">
+                            <div class="portfolio-title-section">
+                                <span class="portfolio-toggle" id="toggle-${cardId}">⌄</span>
+                                <span class="portfolio-title">Portfolio</span>
+                            </div>
+                            <span class="position-status no-position">NO DATA</span>
+                        </div>
+                        <div class="portfolio-metrics" id="metrics-${cardId}">
+                            <div class="metric-item" style="grid-column: 1 / -1;">
+                                <div class="metric-label">No Portfolio Data</div>
+                                <div class="metric-value neutral">--</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const position = portfolio.position || {};
+            const pnl = portfolio.pnl || {};
+
+            const isInPosition = position.is_in_position || false;
+            const entryPrice = position.entry_price || 0;
+            const currentPrice = position.current_price || 0;
+            const positionSize = position.position_size || 0;
+
+            // Use PERCENT values instead of dollar values
+            const realizedPnlPercent = pnl.realized_pnl_percent || 0;
+            const unrealizedPnlPercent = pnl.unrealized_pnl_percent || 0;
+            const totalPnlPercent = pnl.total_pnl_percent || 0;
+
+            const statusClass = isInPosition ? 'in-position' : 'no-position';
+            const statusText = isInPosition ? 'IN POSITION' : 'NO POSITION';
+
+            return `
+                <div class="portfolio-section">
+                    <div class="portfolio-header" onclick="togglePortfolio('${cardId}')">
+                        <div class="portfolio-title-section">
+                            <span class="portfolio-toggle" id="toggle-${cardId}">⌄</span>
+                            <span class="portfolio-title">Portfolio</span>
+                        </div>
+                        <span class="position-status ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="portfolio-metrics" id="metrics-${cardId}">
+                        <div class="metric-item">
+                            <div class="metric-label">Entry Price</div>
+                            <div class="metric-value neutral">${entryPrice.toFixed(2)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Position Size</div>
+                            <div class="metric-value neutral">${positionSize.toFixed(1)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Realized P&L</div>
+                            <div class="metric-value ${realizedPnlPercent >= 0 ? 'positive' : 'negative'}">${realizedPnlPercent.toFixed(2)}%</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Unrealized P&L</div>
+                            <div class="metric-value ${unrealizedPnlPercent >= 0 ? 'positive' : 'negative'}">${unrealizedPnlPercent.toFixed(2)}%</div>
+                        </div>
+                        <div class="metric-item" style="grid-column: 1 / -1;">
+                            <div class="metric-label">Total P&L</div>
+                            <div class="metric-value ${totalPnlPercent >= 0 ? 'positive' : 'negative'}">${totalPnlPercent.toFixed(2)}%</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Portfolio toggle function
+        function togglePortfolio(cardId) {
+            const metricsElement = document.getElementById(`metrics-${cardId}`);
+            const toggleElement = document.getElementById(`toggle-${cardId}`);
+
+            if (!metricsElement || !toggleElement) {
+                return;
+            }
+
+            // Toggle the collapsed class
+            const isCollapsed = metricsElement.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                // Expand
+                metricsElement.classList.remove('collapsed');
+                toggleElement.classList.remove('collapsed');
+                toggleElement.textContent = '⌄'; // Down arrow
+
+                // Store preference
+                localStorage.setItem(`portfolio-${cardId}`, 'expanded');
+            } else {
+                // Collapse
+                metricsElement.classList.add('collapsed');
+                toggleElement.classList.add('collapsed');
+                toggleElement.textContent = '⌃'; // Up arrow
+
+                // Store preference
+                localStorage.setItem(`portfolio-${cardId}`, 'collapsed');
+            }
+        }
+
+        // Restore portfolio state from localStorage
+        function restorePortfolioState(cardId) {
+            const savedState = localStorage.getItem(`portfolio-${cardId}`);
+
+            if (savedState === 'collapsed') {
+                const metricsElement = document.getElementById(`metrics-${cardId}`);
+                const toggleElement = document.getElementById(`toggle-${cardId}`);
+
+                if (metricsElement && toggleElement) {
+                    metricsElement.classList.add('collapsed');
+                    toggleElement.classList.add('collapsed');
+                    toggleElement.textContent = '⌃'; // Up arrow
+                }
+            }
+        }
+
+        function renderBarScores(barScores) {
+            if (!barScores || Object.keys(barScores).length === 0) {
+                return '<div style="text-align: center; color: #7d8590; padding: 1rem;">No bar data available</div>';
+            }
+
+            return Object.entries(barScores).map(([barName, score]) => {
+                const displayName = formatBarName(barName);
+                const percentage = (score * 100).toFixed(1);
+                const clampedScore = Math.max(0, Math.min(1, score));
+
+                // Determine color based on score
+                let colorClass = '';
+                let barColor = '';
+                let barColorLight = '';
+                let barGlow = '';
+
+                if (score >= 0.7) {
+                    colorClass = 'positive';
+                    barColor = '#238636';
+                    barColorLight = '#2ea043';
+                    barGlow = '35, 134, 54';
+                } else if (score >= 0.4) {
+                    colorClass = 'neutral';
+                    barColor = '#1f6feb';
+                    barColorLight = '#388bfd';
+                    barGlow = '31, 111, 235';
+                } else {
+                    colorClass = 'negative';
+                    barColor = '#da3633';
+                    barColorLight = '#ff7b72';
+                    barGlow = '248, 81, 73';
+                }
+
+                return `
+                    <div class="responsive-bar" style="--bar-color: ${barColor}; --bar-color-light: ${barColorLight}; --bar-glow: ${barGlow};">
+                        <div class="bar-header">
+                            <span class="bar-label">${displayName}</span>
+                            <span class="bar-value-text ${colorClass}">${percentage}%</span>
+                        </div>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width: ${clampedScore * 100}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function formatBarName(name) {
@@ -1026,6 +1067,9 @@
                         card.remove();
                         delete cards[cardId];
                         updateCardsCount();
+
+                        // Clean up localStorage
+                        localStorage.removeItem(`portfolio-${cardId}`);
 
                         // Show loading message if no cards left
                         const container = document.getElementById('cardsContainer');
@@ -1061,6 +1105,96 @@
             }, 5000);
         }
 
+        // Modal functions
+        function openAddCardModal() {
+            document.getElementById('modalOverlay').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            document.getElementById('modalFileInput').value = '';
+            updateSelectedFileName();
+        }
+
+        function closeAddCardModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            document.getElementById('modalSymbolInput').value = '';
+            document.getElementById('modalFileInput').value = '';
+            modalSelectedFile = null;
+            updateSelectedFileName();
+            updateModalAddButton();
+        }
+
+        function updateSelectedFileName() {
+            const fileInput = document.getElementById('modalFileInput');
+            const fileNameDiv = document.getElementById('selectedFileName');
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                fileNameDiv.textContent = `Selected: ${file.name}`;
+                fileNameDiv.style.color = '#56d364';
+                modalSelectedFile = file;
+            } else {
+                fileNameDiv.textContent = 'No file selected';
+                fileNameDiv.style.color = '#7d8590';
+                modalSelectedFile = null;
+            }
+
+            updateModalAddButton();
+        }
+
+        function updateModalAddButton() {
+            const symbol = document.getElementById('modalSymbolInput').value.trim();
+            const button = document.getElementById('modalAddButton');
+
+            const isValid = symbol.length > 0 && modalSelectedFile;
+            button.disabled = !isValid;
+        }
+
+        async function addCombinationFromModal() {
+            const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
+
+            if (!symbol || !modalSelectedFile) {
+                showMessage('Please enter a symbol and select a configuration file', 'error');
+                return;
+            }
+
+            try {
+                const configContent = await readFileAsText(modalSelectedFile);
+                const configName = modalSelectedFile.name;
+
+                const response = await fetch('/api/combinations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        symbol: symbol,
+                        config_content: configContent,
+                        config_name: configName
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(`Added ${symbol} successfully!`, 'success');
+                    closeAddCardModal();
+                } else {
+                    showMessage(`Error: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error adding combination: ${error.message}`, 'error');
+            }
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+
         // Event listeners that need to be set up after DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
             // Add input listener for symbol field
@@ -1084,52 +1218,42 @@
                 // Add drag and drop support
                 fileInput.addEventListener('dragover', function(e) {
                     e.preventDefault();
-                    this.style.backgroundColor = '#21262d';
+                    e.stopPropagation();
+                    this.style.borderColor = '#1f6feb';
                 });
 
                 fileInput.addEventListener('dragleave', function(e) {
                     e.preventDefault();
-                    this.style.backgroundColor = '';
+                    e.stopPropagation();
+                    this.style.borderColor = '#30363d';
                 });
 
                 fileInput.addEventListener('drop', function(e) {
                     e.preventDefault();
-                    this.style.backgroundColor = '';
+                    e.stopPropagation();
+                    this.style.borderColor = '#30363d';
 
-                    if (e.dataTransfer.files.length > 0) {
-                        const file = e.dataTransfer.files[0];
-                        if (file.name.endsWith('.json')) {
-                            this.files = e.dataTransfer.files;
-                            updateSelectedFileName();
-                        } else {
-                            showMessage('Please select a JSON file', 'error');
-                        }
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.files = files;
+                        updateSelectedFileName();
                     }
                 });
             }
 
-            // Close modal on escape key
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
+            // Modal overlay click to close
+            document.getElementById('modalOverlay').addEventListener('click', function(e) {
+                if (e.target === this) {
                     closeAddCardModal();
                 }
             });
 
-            // Close modal on overlay click
-            const modalOverlay = document.getElementById('modalOverlay');
-            if (modalOverlay) {
-                modalOverlay.addEventListener('click', function(e) {
-                    if (e.target === this) {
-                        closeAddCardModal();
-                    }
-                });
-            }
-
-            // Load initial status
-            fetch('/api/status')
-                .then(response => response.json())
-                .then(data => updateStatus(data))
-                .catch(error => console.error('Error loading status:', error));
+            // Escape key to close modal
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && document.getElementById('modalOverlay').style.display === 'block') {
+                    closeAddCardModal();
+                }
+            });
         });
     </script>
 </body>

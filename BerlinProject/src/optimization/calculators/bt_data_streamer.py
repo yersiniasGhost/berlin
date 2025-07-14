@@ -16,10 +16,8 @@ from models.tick_data import TickData
 logger = logging.getLogger('BacktestDataStreamer')
 
 
-# TODO: add monitor name to cards
-# TODO: minimizing portfolio info
 #TODO: add candle chart in the details
-# TODO: fic trade history display
+# TODO: fix trade history display
 #  filter out bad data from schwab pips
 # minor fixes on trigger and indicator displayes
 # TODO: changebar colors based on what the parameter types on each bar.

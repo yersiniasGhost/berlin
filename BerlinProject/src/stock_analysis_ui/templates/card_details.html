@@ -95,105 +95,26 @@
             font-weight: 700;
             color: #238636;
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            transition: all 0.3s ease;
-        }
-
-        .live-price.negative {
-            color: #da3633;
-        }
-
-        .live-price.updating {
-            transform: scale(1.05);
-            text-shadow: 0 0 10px currentColor;
-        }
-
-        .price-meta {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.25rem;
-            font-size: 0.875rem;
-            color: #7d8590;
         }
 
         .price-change {
-            font-weight: 600;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #7d8590;
         }
 
-        .price-change.positive {
-            color: #56d364;
-        }
-
-        .price-change.negative {
-            color: #ff7b72;
-        }
-
-        .last-update {
+        .price-timestamp {
             font-size: 0.75rem;
+            color: #7d8590;
         }
 
-        /* Connection Status */
-        .connection-status {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            background: rgba(22, 27, 34, 0.8);
-            backdrop-filter: blur(8px);
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            border: 1px solid #30363d;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #da3633;
-            transition: background-color 0.3s ease;
-        }
-
-        .status-dot.connected {
-            background: #238636;
-        }
-
-        /* Back Button */
-        .back-button {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .back-button:hover {
-            background: #30363d;
-            color: #f0f6fc;
-            transform: translateX(-2px);
-        }
-
-        /* Main Content Area */
+        /* Main Content Layout */
         .main-content {
-            margin: 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto 2rem auto;
+            padding: 0 2rem;
         }
 
-        /* Two Column Layout */
         .two-column-layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -212,7 +133,7 @@
 
         .section-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 1.5rem;
             padding-bottom: 1rem;
@@ -338,106 +259,148 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
-        .trades-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
+        /* Excel-like Trade History Table */
+        .trades-table-container {
             max-height: 400px;
             overflow-y: auto;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            background: #0d1117;
         }
 
-        .trade-item {
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
-            padding: 1rem;
+        .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .trades-table thead {
+            background: #21262d;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .trades-table th {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            color: #f0f6fc;
+            border-bottom: 2px solid #30363d;
+            border-right: 1px solid #30363d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.625rem;
+        }
+
+        .trades-table th:last-child {
+            border-right: none;
+        }
+
+        .trades-table tbody tr {
             transition: all 0.2s ease;
         }
 
-        .trade-item:hover {
-            border-color: #30363d;
-            transform: translateY(-1px);
+        .trades-table tbody tr:hover {
+            background: #161b22;
         }
 
-        .trade-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
+        .trades-table tbody tr:nth-child(even) {
+            background: rgba(125, 133, 144, 0.05);
         }
 
-        .trade-action {
-            font-weight: 600;
-            font-size: 0.875rem;
-            padding: 0.25rem 0.75rem;
+        .trades-table tbody tr:nth-child(even):hover {
+            background: #161b22;
+        }
+
+        .trades-table td {
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid #21262d;
+            border-right: 1px solid #21262d;
+            color: #e6edf3;
+        }
+
+        .trades-table td:last-child {
+            border-right: none;
+        }
+
+        /* Trade type styling */
+        .trade-type {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
             border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.625rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
-        .trade-action.buy {
+        .trade-type.long {
             background: rgba(35, 134, 54, 0.2);
             color: #56d364;
             border: 1px solid rgba(35, 134, 54, 0.3);
         }
 
-        .trade-action.sell {
+        .trade-type.short {
             background: rgba(218, 54, 51, 0.2);
             color: #ff7b72;
             border: 1px solid rgba(218, 54, 51, 0.3);
         }
 
-        .trade-action.stop-loss {
+        /* Exit reason styling */
+        .exit-reason {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .exit-reason.stop-loss {
             background: rgba(255, 123, 114, 0.2);
             color: #ff7b72;
             border: 1px solid rgba(255, 123, 114, 0.3);
         }
 
-        .trade-time {
-            font-size: 0.75rem;
-            color: #7d8590;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .trade-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.5rem;
-            font-size: 0.75rem;
+        .exit-reason.exit-long {
+            background: rgba(125, 133, 144, 0.2);
             color: #8b949e;
+            border: 1px solid rgba(125, 133, 144, 0.3);
         }
 
-        .trade-detail {
-            display: flex;
-            justify-content: space-between;
+        .exit-reason.exit-short {
+            background: rgba(125, 133, 144, 0.2);
+            color: #8b949e;
+            border: 1px solid rgba(125, 133, 144, 0.3);
         }
 
-        .trade-detail-label {
-            color: #7d8590;
-        }
-
-        .trade-detail-value {
-            color: #e6edf3;
-            font-weight: 500;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .trade-pnl {
-            grid-column: 1 / -1;
-            margin-top: 0.5rem;
-            padding-top: 0.5rem;
-            border-top: 1px solid #21262d;
-            display: flex;
-            justify-content: space-between;
+        /* P&L styling */
+        .pnl-positive {
+            color: #56d364;
             font-weight: 600;
         }
 
-        .trade-pnl.positive {
-            color: #56d364;
+        .pnl-negative {
+            color: #ff7b72;
+            font-weight: 600;
         }
 
-        .trade-pnl.negative {
-            color: #ff7b72;
+        .pnl-neutral {
+            color: #7d8590;
+            font-style: italic;
+        }
+
+        /* Current position highlight */
+        .current-position {
+            background: rgba(31, 111, 235, 0.1) !important;
+            border-left: 3px solid #1f6feb;
+        }
+
+        .current-position:hover {
+            background: rgba(31, 111, 235, 0.15) !important;
         }
 
         /* Empty states */
@@ -486,28 +449,25 @@
                 gap: 0.5rem;
             }
 
-            .trade-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
+            .trades-table {
+                font-size: 0.625rem;
             }
 
-            .trade-details {
-                grid-template-columns: 1fr;
+            .trades-table th,
+            .trades-table td {
+                padding: 0.5rem 0.25rem;
             }
-        }
 
-        /* Responsive design */
-        @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
-                gap: 1.5rem;
-                align-items: stretch;
+                gap: 1rem;
+                align-items: flex-start;
             }
 
             .header-left {
                 flex-direction: column;
                 gap: 1rem;
+                align-items: flex-start;
             }
 
             .config-section {
@@ -516,67 +476,59 @@
                 border-top: 1px solid #30363d;
                 padding-top: 1rem;
             }
+        }
 
-            .price-section {
-                align-items: center;
-            }
+        /* Scrollbar styling for trade table */
+        .trades-table-container::-webkit-scrollbar {
+            width: 8px;
+        }
 
-            .symbol-name {
-                font-size: 1.5rem;
-            }
+        .trades-table-container::-webkit-scrollbar-track {
+            background: #21262d;
+            border-radius: 4px;
+        }
 
-            .live-price {
-                font-size: 2rem;
-            }
+        .trades-table-container::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .trades-table-container::-webkit-scrollbar-thumb:hover {
+            background: #7d8590;
         }
     </style>
 </head>
 <body>
-    <!-- Connection Status -->
-    <div class="connection-status">
-        <div class="status-dot" id="connectionStatus"></div>
-        <span id="connectionText">Connecting...</span>
-    </div>
-
-    <!-- Back Button -->
-    <a href="/" class="back-button">
-        <span>←</span>
-        <span>Back to Dashboard</span>
-    </a>
-
     <!-- Header Bar -->
     <div class="header-bar">
         <div class="header-content">
             <div class="header-left">
                 <div class="symbol-section">
-                    <div class="symbol-name" id="symbolName">LOADING</div>
+                    <div class="symbol-name" id="symbolName">LOADING...</div>
+                    <div class="symbol-subtitle">Trading Signal Details</div>
                 </div>
-
                 <div class="config-section">
-                    <div class="config-name" id="configName">Loading configuration...</div>
+                    <div class="config-label">Configuration</div>
+                    <div class="config-name" id="configName">Loading...</div>
                 </div>
             </div>
-
             <div class="price-section">
-                <div class="live-price" id="livePrice">$0.00</div>
-                <div class="price-meta">
-                    <div class="price-change" id="priceChange">--</div>
-                    <div class="last-update" id="lastUpdate">No updates yet</div>
-                </div>
+                <div class="live-price" id="livePrice">N/A</div>
+                <div class="price-change" id="priceChange">--</div>
+                <div class="price-timestamp" id="priceTimestamp">Waiting for data...</div>
             </div>
         </div>
     </div>
 
-    <!-- Main Content Area -->
+    <!-- Main Content -->
     <div class="main-content">
-        <!-- Two Column Layout -->
         <div class="two-column-layout">
-            <!-- Left Column: Indicators & Bars -->
+            <!-- Left Column: Indicators and Bar Calculations -->
             <div class="indicators-section">
                 <div class="section-header">
                     <div>
-                        <div class="section-title">Indicators & Bar Calculations</div>
-                        <div class="section-subtitle">Individual indicator values and their weighted combinations</div>
+                        <div class="section-title">Indicators & Calculations</div>
+                        <div class="section-subtitle">Real-time technical analysis and bar scoring</div>
                     </div>
                 </div>
 
@@ -614,7 +566,7 @@
                     </div>
                 </div>
 
-                <div class="trades-list" id="tradesList">
+                <div id="tradesList">
                     <!-- Will be populated by JavaScript -->
                     <div class="empty-state">
                         <div class="empty-state-icon">💼</div>
@@ -638,101 +590,60 @@
 
         // WebSocket connection
         const socket = io();
-        let previousPrice = null;
-        let currentMonitorConfig = null; // Store the monitor configuration
 
-        if (!cardId) {
-            document.getElementById('symbolName').textContent = 'ERROR';
-            document.getElementById('configName').textContent = 'No card ID specified';
-        } else {
-            loadCardDetails(cardId);
-        }
+        // Global variables for monitor configuration
+        let currentMonitorConfig = null;
 
-        // Connection handling
+        // Connect to the card's data stream
         socket.on('connect', function() {
-            updateConnectionStatus(true);
+            console.log('Connected to server');
+            if (cardId) {
+                loadCardDetails(cardId);
+            }
         });
 
-        socket.on('disconnect', function() {
-            updateConnectionStatus(false);
-        });
-
-        // Real-time card updates
+        // Listen for real-time updates
         socket.on('card_update', function(data) {
             if (data.card_id === cardId) {
-                console.log('Received card_update:', data);
+                console.log('Received real-time update for card:', data);
+
+                // Update header bar
                 updateHeaderBar(data);
+
+                // Update indicators and bars
                 updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
-                updateTradesSection(data.portfolio?.trade_history);
+
+                // Update trade history from portfolio data
+                if (data.portfolio && data.portfolio.trade_history) {
+                    updateTradesSection(data.portfolio.trade_history);
+                }
             }
         });
 
-        function updateConnectionStatus(connected) {
-            const statusDot = document.getElementById('connectionStatus');
-            const statusText = document.getElementById('connectionText');
-
-            if (connected) {
-                statusDot.className = 'status-dot connected';
-                statusText.textContent = 'Connected';
-            } else {
-                statusDot.className = 'status-dot';
-                statusText.textContent = 'Disconnected';
-            }
-        }
-
         function updateHeaderBar(data) {
-            // Update symbol name
-            if (data.symbol) {
-                document.getElementById('symbolName').textContent = data.symbol;
-            }
-
-            // Update live price with animation
-            if (data.price !== undefined) {
-                const priceElement = document.getElementById('livePrice');
-                const changeElement = document.getElementById('priceChange');
-
-                // Add updating animation
-                priceElement.classList.add('updating');
-                setTimeout(() => priceElement.classList.remove('updating'), 300);
-
-                // Update price color based on change
-                const isNegative = data.price < 0;
-                priceElement.className = `live-price ${isNegative ? 'negative' : ''}`;
-                priceElement.textContent = `${Math.abs(data.price).toFixed(2)}`;
-
-                // Calculate and display price change if we have previous price
-                if (previousPrice !== null) {
-                    const change = data.price - previousPrice;
-                    const changePercent = ((change / previousPrice) * 100);
-
-                    let changeClass = '';
-                    let changeSign = '';
-
-                    if (change > 0) {
-                        changeClass = 'positive';
-                        changeSign = '+';
-                    } else if (change < 0) {
-                        changeClass = 'negative';
-                        changeSign = '';
-                    }
-
-                    changeElement.className = `price-change ${changeClass}`;
-                    changeElement.textContent = `${changeSign}${Math.abs(change).toFixed(2)} (${changeSign}${Math.abs(changePercent).toFixed(2)}%)`;
-                }
-
-                previousPrice = data.price;
+            // Update price
+            const priceElement = document.getElementById('livePrice');
+            if (priceElement && data.price !== undefined && data.price !== null) {
+                priceElement.textContent = `${data.price.toFixed(2)}`;
+                priceElement.className = data.price >= 0 ? 'live-price' : 'live-price negative';
             }
 
             // Update timestamp
-            if (data.timestamp) {
+            const timestampElement = document.getElementById('priceTimestamp');
+            if (timestampElement && data.timestamp) {
                 const updateTime = new Date(data.timestamp);
-                document.getElementById('lastUpdate').textContent = `Updated: ${updateTime.toLocaleTimeString()}`;
+                timestampElement.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
             }
         }
 
         function updateIndicatorsSection(indicators, rawIndicators, barScores) {
-            updateIndicatorsList(indicators, rawIndicators);
-            updateBarsList(barScores, indicators);
+            if (indicators) {
+                updateIndicatorsList(indicators, rawIndicators);
+            }
+
+            if (barScores) {
+                updateBarsList(barScores, indicators);
+            }
         }
 
         function updateIndicatorsList(indicators, rawIndicators) {
@@ -742,7 +653,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">📊</div>
-                        <div class="empty-state-text">No indicator data available</div>
+                        <div class="empty-state-text">No indicators available</div>
                     </div>
                 `;
                 return;
@@ -750,7 +661,7 @@
 
             const html = Object.entries(indicators).map(([name, value]) => {
                 const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                const rawValue = rawIndicators?.[name];
+                const rawValue = rawIndicators ? rawIndicators[name] : undefined;
 
                 return `
                     <div class="indicator-item">
@@ -828,41 +739,27 @@
 
             if (!bars || !bars[barName]) {
                 console.log('Bar configuration not found for:', barName);
-                console.log('Available bars:', Object.keys(bars || {}));
                 return {
-                    math: `Bar '${barName}' not found in configuration`,
+                    math: 'Bar configuration not found',
                     totalWeight: '0.0'
                 };
             }
 
             const barConfig = bars[barName];
-            console.log('Bar config for', barName, ':', barConfig);
+            const barIndicators = barConfig.indicators || {};
 
-            // Handle different possible structures:
-            // Option 1: { indicators: { indicator_name: weight } }
-            // Option 2: { indicator_name: weight }
-            const barIndicators = barConfig.indicators || barConfig;
-
-            if (!indicators || Object.keys(barIndicators).length === 0) {
-                return {
-                    math: 'No indicators configured for this bar',
-                    totalWeight: '0.0'
-                };
-            }
-
-            let mathParts = [];
+            // Calculate the math breakdown
+            const mathParts = [];
             let totalWeight = 0;
             let weightedSum = 0;
 
-            Object.entries(barIndicators).forEach(([indicatorName, weight]) => {
-                const indicatorValue = indicators[indicatorName] || 0;
-
-                // Create a shorter name for display
-                const shortName = indicatorName.replace(/_/g, '').substring(0, 8).toUpperCase();
-
-                mathParts.push(`${shortName}(${(indicatorValue * 100).toFixed(1)}%) × ${weight.toFixed(1)}`);
-                weightedSum += indicatorValue * weight;
+            Object.entries(barIndicators).forEach(([indName, weight]) => {
+                const indValue = indicators && indicators[indName] ? indicators[indName] : 0;
+                const contribution = indValue * weight;
+                weightedSum += contribution;
                 totalWeight += weight;
+
+                mathParts.push(`(${indValue.toFixed(3)} × ${weight})`);
             });
 
             const calculatedScore = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
@@ -874,6 +771,7 @@
             };
         }
 
+        // ENHANCED: Excel-like Trade History Table
         function updateTradesSection(tradeHistory) {
             const container = document.getElementById('tradesList');
 
@@ -887,47 +785,147 @@
                 return;
             }
 
-            // Show most recent trades first
-            const recentTrades = tradeHistory.slice(-10).reverse();
+            // Process trades into position pairs
+            const positionPairs = processTradeHistory(tradeHistory);
 
-            const html = recentTrades.map(trade => {
-                const actionClass = getTradeActionClass(trade.action);
-                const actionDisplay = trade.action.replace(/_/g, ' ').toUpperCase();
-                const tradeTime = new Date(trade.timestamp).toLocaleTimeString();
+            // Create table HTML
+            const tableHTML = `
+                <div class="trades-table-container">
+                    <table class="trades-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Enter Price</th>
+                                <th>Exit Price</th>
+                                <th>Exit Reason</th>
+                                <th>P&L %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${positionPairs.map(pair => createTradeRow(pair)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
 
-                return `
-                    <div class="trade-item">
-                        <div class="trade-header">
-                            <div class="trade-action ${actionClass}">${actionDisplay}</div>
-                            <div class="trade-time">${tradeTime}</div>
-                        </div>
-                        <div class="trade-details">
-                            <div class="trade-detail">
-                                <span class="trade-detail-label">Price:</span>
-                                <span class="trade-detail-value">${trade.price.toFixed(2)}</span>
-                            </div>
-                            <div class="trade-detail">
-                                <span class="trade-detail-label">Size:</span>
-                                <span class="trade-detail-value">${trade.size}</span>
-                            </div>
-                            ${trade.reason ? `
-                                <div class="trade-detail" style="grid-column: 1 / -1;">
-                                    <span class="trade-detail-label">Reason:</span>
-                                    <span class="trade-detail-value">${trade.reason.replace(/_/g, ' ')}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            container.innerHTML = html;
+            container.innerHTML = tableHTML;
         }
 
-        function getTradeActionClass(action) {
-            if (action.includes('enter') || action.includes('buy')) return 'buy';
-            if (action.includes('stop')) return 'stop-loss';
-            return 'sell';
+        function processTradeHistory(tradeHistory) {
+            const pairs = [];
+            let openPosition = null;
+
+            // Sort trades by timestamp (oldest first for processing)
+            const sortedTrades = [...tradeHistory].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            for (const trade of sortedTrades) {
+                if (trade.action.includes('enter')) {
+                    // Starting a new position
+                    if (openPosition) {
+                        // Close previous position without exit (shouldn't happen, but handle gracefully)
+                        pairs.push({
+                            ...openPosition,
+                            exitPrice: null,
+                            exitReason: null,
+                            exitTime: null,
+                            pnlPercent: null,
+                            isOpen: true
+                        });
+                    }
+
+                    openPosition = {
+                        type: trade.action.includes('long') ? 'LONG' : 'SHORT',
+                        enterTime: trade.timestamp,
+                        enterPrice: trade.price,
+                        size: trade.size,
+                        exitPrice: null,
+                        exitReason: null,
+                        exitTime: null,
+                        pnlPercent: null,
+                        isOpen: true
+                    };
+                } else if (trade.action.includes('exit') || trade.action.includes('stop')) {
+                    // Closing a position
+                    if (openPosition) {
+                        const exitReason = trade.reason || trade.action;
+                        const pnlPercent = calculatePnlPercent(openPosition.enterPrice, trade.price, openPosition.type);
+
+                        pairs.push({
+                            ...openPosition,
+                            exitPrice: trade.price,
+                            exitReason: exitReason,
+                            exitTime: trade.timestamp,
+                            pnlPercent: pnlPercent,
+                            isOpen: false
+                        });
+
+                        openPosition = null;
+                    }
+                }
+            }
+
+            // Add any remaining open position
+            if (openPosition) {
+                pairs.push(openPosition);
+            }
+
+            // Return most recent trades first
+            return pairs.reverse();
+        }
+
+        function calculatePnlPercent(enterPrice, exitPrice, type) {
+            if (!enterPrice || !exitPrice) return null;
+
+            let pnlPercent;
+            if (type === 'LONG') {
+                pnlPercent = ((exitPrice - enterPrice) / enterPrice) * 100;
+            } else {
+                pnlPercent = ((enterPrice - exitPrice) / enterPrice) * 100;
+            }
+
+            return pnlPercent;
+        }
+
+        function createTradeRow(pair) {
+            const enterTime = new Date(pair.enterTime).toLocaleTimeString();
+            const exitTime = pair.exitTime ? new Date(pair.exitTime).toLocaleTimeString() : '--';
+
+            // Format prices
+            const enterPrice = `${pair.enterPrice.toFixed(2)}`;
+            const exitPrice = pair.exitPrice ? `${pair.exitPrice.toFixed(2)}` : '--';
+
+            // Format exit reason
+            let exitReasonHTML = '--';
+            if (pair.exitReason) {
+                const reasonClass = pair.exitReason.toLowerCase().replace(/[^a-z]/g, '-');
+                const reasonText = pair.exitReason.replace(/_/g, ' ').toUpperCase();
+                exitReasonHTML = `<span class="exit-reason ${reasonClass}">${reasonText}</span>`;
+            }
+
+            // Format P&L
+            let pnlHTML = '--';
+            if (pair.pnlPercent !== null && pair.pnlPercent !== undefined) {
+                const pnlClass = pair.pnlPercent >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const pnlSign = pair.pnlPercent >= 0 ? '+' : '';
+                pnlHTML = `<span class="${pnlClass}">${pnlSign}${pair.pnlPercent.toFixed(2)}%</span>`;
+            } else if (pair.isOpen) {
+                pnlHTML = '<span class="pnl-neutral">Open</span>';
+            }
+
+            // Row class for current position highlighting
+            const rowClass = pair.isOpen ? 'current-position' : '';
+
+            return `
+                <tr class="${rowClass}">
+                    <td>${enterTime}</td>
+                    <td><span class="trade-type ${pair.type.toLowerCase()}">${pair.type}</span></td>
+                    <td>${enterPrice}</td>
+                    <td>${exitPrice}</td>
+                    <td>${exitReasonHTML}</td>
+                    <td>${pnlHTML}</td>
+                </tr>
+            `;
         }
 
         async function loadCardDetails(cardId) {
@@ -952,14 +950,14 @@
 
                     // Set initial data if available
                     if (data.current_values) {
-                        // Use real price data if available
-                        const price = data.current_values.price || 127.45;
-
-                        updateHeaderBar({
-                            symbol: data.card_info.symbol,
-                            price: price,
-                            timestamp: new Date().toISOString()
-                        });
+                        // Only update price if we have real data
+                        if (data.current_values.price !== undefined && data.current_values.price !== null) {
+                            updateHeaderBar({
+                                symbol: data.card_info.symbol,
+                                price: data.current_values.price,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
 
                         // Update indicators and bars with real data
                         updateIndicatorsSection(
@@ -967,11 +965,13 @@
                             data.current_values.raw_indicators,
                             data.current_values.bar_scores
                         );
+                    }
 
-                        // Update trade history if available
-                        if (data.current_values.trade_history) {
-                            updateTradesSection(data.current_values.trade_history);
-                        }
+                    // Check for portfolio data with trade history
+                    if (data.portfolio_data && data.portfolio_data.trade_history) {
+                        updateTradesSection(data.portfolio_data.trade_history);
+                    } else {
+                        console.log('No trade history found in response');
                     }
 
                     console.log('Card details loaded:', data);
