@@ -36,24 +36,27 @@ class TradeExecutorSimple(TradeExecutor):
                       indicators: Dict[str, float],
                       bar_scores: Dict[str, float] = None) -> None:
         """
-        Make trading decisions based on bull/bear bar scores vs thresholds with trailing stop loss
+        Make trading decisions based on enter_long/exit_long conditions with trailing stop loss
         """
         try:
             timestamp = int(tick.timestamp.timestamp() * 1000) if tick.timestamp else 0
             bar_scores = defaultdict(float, bar_scores or {})
 
-            threshold = getattr(self.monitor_config, 'threshold')
-            bear_threshold = getattr(self.monitor_config, 'bear_threshold')
+            # Get enter_long and exit_long conditions (now arrays)
+            enter_conditions = getattr(self.monitor_config, 'enter_long', [])
+            exit_conditions = getattr(self.monitor_config, 'exit_long', [])
             bars_config = getattr(self.monitor_config, 'bars', {})
 
             # ARE WE IN A POSITION?
             if self.portfolio.position_size == 0:
                 # NOT IN POSITION - Look for BUY signals
-                for bar_name, bar_config in bars_config.items():
-                    bar_score = bar_scores[bar_name]
-                    bar_type = bar_config.get('type', '')
+                # Check each enter_long condition
+                for condition in enter_conditions:
+                    bar_name = condition.get('name')
+                    threshold = condition.get('threshold', 0.5)
+                    bar_score = bar_scores.get(bar_name, 0.0)
 
-                    if bar_type == 'bull' and bar_score >= threshold:
+                    if bar_score >= threshold:
                         self.portfolio.buy(
                             time=timestamp,
                             price=tick.close,
@@ -66,7 +69,9 @@ class TradeExecutorSimple(TradeExecutor):
                         self.trailing_stop_price = tick.close * (1 - stop_loss_decimal)
 
                         logger.info(
-                            f"BUY executed: {self.default_position_size} @ ${tick.close:.2f} Stop: ${self.trailing_stop_price:.2f}")
+                            f"BUY executed: {self.default_position_size} @ ${tick.close:.2f} "
+                            f"Stop: ${self.trailing_stop_price:.2f} "
+                            f"Condition: {bar_name} = {bar_score:.3f} >= {threshold:.3f}")
                         return
 
             else:
@@ -78,14 +83,16 @@ class TradeExecutorSimple(TradeExecutor):
                 if new_stop_price > self.trailing_stop_price:
                     self.trailing_stop_price = new_stop_price
 
-                # Check bear trigger first
-                for bar_name, bar_config in bars_config.items():
-                    bar_score = bar_scores[bar_name]
-                    bar_type = bar_config.get('type', '')
+                # Check exit_long conditions first
+                for condition in exit_conditions:
+                    bar_name = condition.get('name')
+                    threshold = condition.get('threshold', 0.8)
+                    bar_score = bar_scores.get(bar_name, 0.0)
 
-                    if bar_type == 'bear' and bar_score >= bear_threshold:
+                    if bar_score >= threshold:
                         self.portfolio.exit_long(time=timestamp, price=tick.close)
-                        logger.info(f"SELL executed @ ${tick.close:.2f} (Bear signal)")
+                        logger.info(f"SELL executed @ ${tick.close:.2f} "
+                                    f"Condition: {bar_name} = {bar_score:.3f} >= {threshold:.3f}")
                         self.trailing_stop_price = 0.0
                         return
 

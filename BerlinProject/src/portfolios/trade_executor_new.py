@@ -75,7 +75,7 @@ class TradeExecutorNew(TradeExecutor):
         Check all exit conditions in priority order:
         1. Stop Loss
         2. Take Profit
-        3. Bear Signals
+        3. Exit Long Signals
         """
 
         # 1. Check Stop Loss (highest priority)
@@ -92,62 +92,58 @@ class TradeExecutorNew(TradeExecutor):
             self._clear_exit_levels()
             return
 
-        # 3. Check Bear Signals
-        bear_exit_triggered = self._check_bear_signals(bar_scores)
-        if bear_exit_triggered:
-            logger.info(f"BEAR SIGNAL EXIT executed @ ${current_price:.2f}")
+        # 3. Check Exit Long Signals
+        exit_triggered = self._check_exit_long_signals(bar_scores)
+        if exit_triggered:
+            logger.info(f"EXIT LONG SIGNAL executed @ ${current_price:.2f}")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.EXIT_LONG)
             self._clear_exit_levels()
             return
 
-    def _check_bear_signals(self, bar_scores: Dict[str, float]) -> bool:
+    def _check_exit_long_signals(self, bar_scores: Dict[str, float]) -> bool:
         """
-        Check if any bear signals exceed the bear threshold
+        Check if any exit_long conditions are triggered
 
         Returns:
-            True if bear exit should be triggered
+            True if exit should be triggered
         """
-        bear_threshold = self.monitor_config.bear_threshold
+        exit_conditions = getattr(self.monitor_config, 'exit_long', [])
 
-        # Check all bear-type bars
-        for bar_name, bar_config in self.monitor_config.bars.items():
-            # Check if this is a bear bar
-            if isinstance(bar_config, dict) and bar_config.get('type') == 'bear':
-                bar_score = bar_scores.get(bar_name, 0.0)
+        # Check each exit_long condition
+        for condition in exit_conditions:
+            bar_name = condition.get('name')
+            threshold = condition.get('threshold', 0.8)
+            bar_score = bar_scores.get(bar_name, 0.0)
 
-                if bar_score >= bear_threshold:
-                    logger.info(f"Bear signal triggered: {bar_name} = {bar_score:.3f} "
-                                f"(threshold: {bear_threshold:.3f})")
-                    return True
-                else:
-                    logger.debug(f"Bear signal {bar_name}: {bar_score:.3f} < {bear_threshold:.3f}")
+            if bar_score >= threshold:
+                logger.info(f"Exit signal triggered: {bar_name} = {bar_score:.3f} "
+                            f"(threshold: {threshold:.3f})")
+                return True
+            else:
+                logger.debug(f"Exit signal {bar_name}: {bar_score:.3f} < {threshold:.3f}")
 
         return False
 
     def _check_entry_conditions(self, timestamp: int, current_price: float,
                                 bar_scores: Dict[str, float]) -> None:
         """
-        Check if bull signals exceed the threshold for entry
+        Check if enter_long conditions are triggered for entry
         """
-        bull_threshold = self.monitor_config.threshold
+        enter_conditions = getattr(self.monitor_config, 'enter_long', [])
 
-        # Check all bull-type bars
-        for bar_name, bar_config in self.monitor_config.bars.items():
-            # Check if this is a bull bar (or no type specified = bull by default)
-            bar_type = 'bull'  # Default
-            if isinstance(bar_config, dict):
-                bar_type = bar_config.get('type', 'bull')
+        # Check each enter_long condition
+        for condition in enter_conditions:
+            bar_name = condition.get('name')
+            threshold = condition.get('threshold', 0.5)
+            bar_score = bar_scores.get(bar_name, 0.0)
 
-            if bar_type == 'bull':
-                bar_score = bar_scores.get(bar_name, 0.0)
-
-                if bar_score >= bull_threshold:
-                    logger.info(f"BUY SIGNAL triggered: {bar_name} = {bar_score:.3f} "
-                                f"(threshold: {bull_threshold:.3f})")
-                    self._execute_buy(timestamp, current_price)
-                    return
-                else:
-                    logger.debug(f"Bull signal {bar_name}: {bar_score:.3f} < {bull_threshold:.3f}")
+            if bar_score >= threshold:
+                logger.info(f"BUY SIGNAL triggered: {bar_name} = {bar_score:.3f} "
+                            f"(threshold: {threshold:.3f})")
+                self._execute_buy(timestamp, current_price)
+                return  # Exit after first successful entry
+            else:
+                logger.debug(f"Entry signal {bar_name}: {bar_score:.3f} < {threshold:.3f}")
 
     def _execute_buy(self, timestamp: int, current_price: float) -> None:
         """

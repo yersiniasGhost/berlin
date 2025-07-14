@@ -157,37 +157,79 @@
             margin-bottom: 2rem;
         }
 
-        .indicator-item {
+        /* Clean Compact Individual Indicators */
+        .indicators-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .indicator-card {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 0.75rem;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .indicator-card:hover {
+            border-color: #30363d;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .indicator-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--indicator-color, #1f6feb);
+            opacity: 0.8;
+        }
+
+        .indicator-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.75rem 1rem;
-            margin-bottom: 0.5rem;
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
-            transition: all 0.2s ease;
+            margin-bottom: 0.25rem;
         }
 
-        .indicator-item:hover {
-            border-color: #30363d;
-            transform: translateX(2px);
-        }
-
-        .indicator-name {
+        .indicator-name-compact {
+            font-size: 0.75rem;
             font-weight: 500;
             color: #e6edf3;
-            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .indicator-value {
-            background: #1f6feb;
-            color: #ffffff;
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
+        .indicator-value-compact {
+            font-size: 0.875rem;
             font-weight: 600;
+            color: var(--indicator-color, #1f6feb);
             font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            font-size: 0.75rem;
+        }
+
+        .indicator-raw {
+            font-size: 0.625rem;
+            color: #7d8590;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        /* Color variations for different strength levels */
+        .indicator-card[data-strength="high"] {
+            --indicator-color: #238636;
+        }
+
+        .indicator-card[data-strength="medium"] {
+            --indicator-color: #1f6feb;
+        }
+
+        .indicator-card[data-strength="low"] {
+            --indicator-color: #da3633;
         }
 
         /* Bar Calculations */
@@ -197,57 +239,114 @@
             gap: 1rem;
         }
 
-        .bar-item {
+        /* Enhanced Bar Calculations */
+        .bar-calculation-card {
             background: #0d1117;
-            border: 1px solid #1f6feb;
+            border: 1px solid #21262d;
             border-radius: 8px;
             padding: 1rem;
             transition: all 0.2s ease;
+            position: relative;
         }
 
-        .bar-item:hover {
-            border-color: #388bfd;
-            box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.2);
+        .bar-calculation-card:hover {
+            border-color: #30363d;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
         }
 
-        .bar-header {
+        .bar-header-clean {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .bar-name-clean {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #f0f6fc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bar-score-clean {
+            background: linear-gradient(135deg, var(--bar-color, #1f6feb), var(--bar-color-light, #388bfd));
+            color: #ffffff;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 1rem;
+            box-shadow: 0 2px 8px rgba(var(--bar-color-rgb, 31, 111, 235), 0.3);
+        }
+
+        .bar-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.5rem;
             margin-bottom: 0.75rem;
         }
 
-        .bar-name {
-            font-weight: 600;
-            color: #1f6feb;
-            font-size: 0.875rem;
-        }
-
-        .bar-final-score {
-            background: #1f6feb;
-            color: #ffffff;
-            padding: 0.25rem 0.75rem;
+        .breakdown-item {
+            background: #161b22;
+            border: 1px solid #30363d;
             border-radius: 4px;
-            font-weight: 600;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            font-size: 0.75rem;
+            padding: 0.5rem;
+            text-align: center;
+            position: relative;
         }
 
-        .bar-calculation {
-            font-size: 0.75rem;
+        .breakdown-indicator {
+            font-size: 0.625rem;
             color: #7d8590;
-            line-height: 1.4;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.5px;
         }
 
-        .bar-math {
-            color: #8b949e;
+        .breakdown-calculation {
+            font-size: 0.75rem;
+            color: #e6edf3;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
             margin-bottom: 0.25rem;
         }
 
-        .bar-total-weight {
-            color: #6e7681;
+        .breakdown-weight {
+            font-size: 0.625rem;
+            color: #8b949e;
             font-style: italic;
+        }
+
+        .bar-summary {
+            background: #161b22;
+            border: 1px dashed #30363d;
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            color: #8b949e;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            text-align: center;
+        }
+
+        /* Color variations for different score ranges */
+        .bar-calculation-card[data-score="high"] {
+            --bar-color: #238636;
+            --bar-color-light: #2ea043;
+            --bar-color-rgb: 35, 134, 54;
+        }
+
+        .bar-calculation-card[data-score="medium"] {
+            --bar-color: #1f6feb;
+            --bar-color-light: #388bfd;
+            --bar-color-rgb: 31, 111, 235;
+        }
+
+        .bar-calculation-card[data-score="low"] {
+            --bar-color: #da3633;
+            --bar-color-light: #ff7b72;
+            --bar-color-rgb: 218, 54, 51;
         }
 
         /* Trade History Section (Right Column) */
@@ -534,11 +633,11 @@
 
                 <!-- Individual Indicators -->
                 <div class="indicators-list">
-                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem;">Individual Indicators</h4>
-                    <div id="indicatorsList">
+                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600;"> Individual Indicators</h4>
+                    <div id="indicatorsList" class="indicators-grid">
                         <!-- Will be populated by JavaScript -->
                         <div class="empty-state">
-                            <div class="empty-state-icon">📊</div>
+                            <div class="empty-state-icon"></div>
                             <div class="empty-state-text">Loading indicator data...</div>
                         </div>
                     </div>
@@ -546,11 +645,11 @@
 
                 <!-- Bar Calculations -->
                 <div class="bars-list">
-                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem;">Bar Score Calculations</h4>
+                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600;">️ Composite Calculations</h4>
                     <div id="barsList">
                         <!-- Will be populated by JavaScript -->
                         <div class="empty-state">
-                            <div class="empty-state-icon">⚖️</div>
+                            <div class="empty-state-icon">⚖</div>
                             <div class="empty-state-text">Loading bar calculations...</div>
                         </div>
                     </div>
@@ -569,7 +668,7 @@
                 <div id="tradesList">
                     <!-- Will be populated by JavaScript -->
                     <div class="empty-state">
-                        <div class="empty-state-icon">💼</div>
+                        <div class="empty-state-icon"></div>
                         <div class="empty-state-text">No trades executed yet</div>
                     </div>
                 </div>
@@ -578,7 +677,7 @@
 
         <!-- Future: Chart Area Placeholder -->
         <div style="margin-top: 2rem; padding: 2rem; background: #161b22; border: 1px solid #30363d; border-radius: 12px; text-align: center; color: #7d8590;">
-            <h3 style="color: #e6edf3; margin-bottom: 1rem;">📈 Candlestick Chart Area</h3>
+            <h3 style="color: #e6edf3; margin-bottom: 1rem;"> Candlestick Chart Area</h3>
             <p>Chart implementation will be added in the next phase</p>
         </div>
     </div>
@@ -652,7 +751,7 @@
             if (!indicators || Object.keys(indicators).length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">📊</div>
+                        <div class="empty-state-icon"></div>
                         <div class="empty-state-text">No indicators available</div>
                     </div>
                 `;
@@ -663,13 +762,18 @@
                 const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 const rawValue = rawIndicators ? rawIndicators[name] : undefined;
 
+                // Determine strength for color coding
+                let strength = 'medium';
+                if (value >= 0.8) strength = 'high';
+                else if (value <= 0.4) strength = 'low';
+
                 return `
-                    <div class="indicator-item">
-                        <div>
-                            <div class="indicator-name">${displayName}</div>
-                            ${rawValue !== undefined ? `<div style="font-size: 0.75rem; color: #7d8590; margin-top: 0.25rem;">Raw: ${rawValue.toFixed(4)}</div>` : ''}
+                    <div class="indicator-card" data-strength="${strength}">
+                        <div class="indicator-header">
+                            <div class="indicator-name-compact">${displayName}</div>
+                            <div class="indicator-value-compact">${(value * 100).toFixed(1)}%</div>
                         </div>
-                        <div class="indicator-value">${(value * 100).toFixed(1)}%</div>
+                        ${rawValue !== undefined ? `<div class="indicator-raw">Raw: ${rawValue.toFixed(4)}</div>` : ''}
                     </div>
                 `;
             }).join('');
@@ -683,35 +787,65 @@
             if (!barScores || Object.keys(barScores).length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">⚖️</div>
+                        <div class="empty-state-icon">️</div>
                         <div class="empty-state-text">No bar calculations available</div>
                     </div>
                 `;
                 return;
             }
 
-            // Use actual bar scores and monitor configuration
             const html = Object.entries(barScores).map(([barName, score]) => {
                 const displayName = barName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-                // Get real calculation from monitor config if available
                 const calculation = getBarCalculation(barName, score, indicators);
 
+                // Determine score level for color coding
+                let scoreLevel = 'medium';
+                if (score >= 0.7) scoreLevel = 'high';
+                else if (score <= 0.4) scoreLevel = 'low';
+
                 return `
-                    <div class="bar-item">
-                        <div class="bar-header">
-                            <div class="bar-name">${displayName}</div>
-                            <div class="bar-final-score">${(score * 100).toFixed(1)}%</div>
+                    <div class="bar-calculation-card" data-score="${scoreLevel}">
+                        <div class="bar-header-clean">
+                            <div class="bar-name-clean">${displayName}</div>
+                            <div class="bar-score-clean">${(score * 100).toFixed(1)}%</div>
                         </div>
-                        <div class="bar-calculation">
-                            <div class="bar-math">${calculation.math}</div>
-                            <div class="bar-total-weight">Total Weight: ${calculation.totalWeight}</div>
+
+                        <div class="bar-breakdown">
+                            ${createBarBreakdown(barName, indicators)}
+                        </div>
+
+                        <div class="bar-summary">
+                            Total Weight: ${calculation.totalWeight} | Final Score: ${(score * 100).toFixed(1)}%
                         </div>
                     </div>
                 `;
             }).join('');
 
             container.innerHTML = html;
+        }
+
+        function createBarBreakdown(barName, indicators) {
+            // Get bar configuration
+            if (!currentMonitorConfig || !currentMonitorConfig.bars || !currentMonitorConfig.bars[barName]) {
+                return '<div class="breakdown-item">No configuration available</div>';
+            }
+
+            const barConfig = currentMonitorConfig.bars[barName];
+            const barIndicators = barConfig.indicators || barConfig;
+
+            return Object.entries(barIndicators).map(([indicatorName, weight]) => {
+                const indicatorValue = indicators && indicators[indicatorName] ? indicators[indicatorName] : 0;
+                const shortName = indicatorName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()).substring(0, 12);
+                const contribution = indicatorValue * weight;
+
+                return `
+                    <div class="breakdown-item">
+                        <div class="breakdown-indicator">${shortName}</div>
+                        <div class="breakdown-calculation">${(indicatorValue * 100).toFixed(1)}% × ${weight}</div>
+                        <div class="breakdown-weight">= ${contribution.toFixed(2)}</div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function getBarCalculation(barName, finalScore, indicators) {
@@ -778,7 +912,7 @@
             if (!tradeHistory || tradeHistory.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">💼</div>
+                        <div class="empty-state-icon"></div>
                         <div class="empty-state-text">No trades executed yet</div>
                     </div>
                 `;

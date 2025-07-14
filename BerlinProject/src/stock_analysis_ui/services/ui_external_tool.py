@@ -17,13 +17,16 @@ from models.tick_data import TickData
 logger = logging.getLogger('UIExternalTool')
 
 
+# In ui_external_tool.py, modify the UIExternalTool class
+
 class UIExternalTool(ExternalTool):
     """
     Clean UI External Tool - sends data to browser via WebSocket
     """
 
-    def __init__(self, socketio: SocketIO):
+    def __init__(self, socketio: SocketIO, app_service=None):  # ADD app_service parameter
         self.socketio: SocketIO = socketio
+        self.app_service = app_service  # Store reference to app_service
         self.last_meaningful_data: Dict[str, Dict] = {}
 
         # Rate limiting
@@ -59,6 +62,15 @@ class UIExternalTool(ExternalTool):
             volume = tick_data.volume
             timestamp = tick_data.timestamp
 
+            # GET MONITOR NAME FROM APP_SERVICE
+            monitor_config_name = None
+            test_name = None
+            if self.app_service and hasattr(self.app_service, 'combinations'):
+                combination = self.app_service.combinations.get(card_id)
+                if combination:
+                    monitor_config_name = combination['monitor_config'].name
+                    test_name = combination.get('test_name', monitor_config_name)
+
             # Prepare update data
             update_data = {
                 'card_id': card_id,
@@ -70,7 +82,10 @@ class UIExternalTool(ExternalTool):
                 'indicators': indicators or {},
                 'bar_scores': bar_scores or {},
                 'raw_indicators': raw_indicators or {},
-                'update_count': self.update_counter[card_id]
+                'update_count': self.update_counter[card_id],
+                # ADD MONITOR NAME FIELDS
+                'monitor_config_name': test_name or monitor_config_name,
+                'test_name': test_name
             }
 
             # Add portfolio metrics if available
