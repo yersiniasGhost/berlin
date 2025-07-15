@@ -320,14 +320,18 @@ def register_routes() -> None:
     register_websocket_events(socketio, app_service)
 
 
+# Update the create_app function in app.py
+
+# Update the create_app function in app.py
+
 def create_app():
     """Create and configure the Flask application"""
     register_routes()
 
-    # Make app_service available to routes with proper typing
+    app.socketio = socketio
+
     app.app_service = app_service
 
-    # Add type annotation for IDE support
     if not hasattr(app, '__annotations__'):
         app.__annotations__ = {}
     app.__annotations__['app_service'] = AppService
@@ -335,9 +339,14 @@ def create_app():
     return app
 
 
+# Replace the main execution block in app.py with this:
+
 if __name__ == '__main__':
     # Parse command line arguments
     args = parse_arguments()
+
+    # Initialize app_service as None - will be created after authentication
+    app_service = None
 
     # Determine mode and setup accordingly
     if args.replay_file and args.symbol:
@@ -358,19 +367,20 @@ if __name__ == '__main__':
             sys.exit(1)
 
     else:
-        # Live mode (original behavior - unchanged)
-        if not authenticate_before_startup():
-            print("Exiting due to authentication failure.")
-            sys.exit(1)
+        # Live mode - NO AUTOMATIC AUTHENTICATION
+        # Just initialize app_service as None
+        # Authentication will happen through the UI
+        print("Live mode - authentication will be handled through web interface")
+        app_service = None
 
-    # Add cards from command line arguments
-    add_cards_from_args(args)
+    # Add cards from command line arguments (only if app_service exists)
+    if app_service is not None:
+        add_cards_from_args(args)
 
     # Create Flask app
     create_app()
 
     # Determine mode for display
-    mode = "Live Schwab"
     if args.replay_file or args.replay_files:
         mode = "CS Replay"
         if args.replay_files:
@@ -379,8 +389,12 @@ if __name__ == '__main__':
         else:
             mode += f" ({args.symbol})"
         mode += f" @ {args.speed}x speed"
+    else:
+        mode = "Live Schwab (Authentication Required)"
 
     print(f"\n🚀 Starting Trading Dashboard at http://localhost:{args.port}")
     print(f"Mode: {mode}")
+    if app_service is None:
+        print("🔐 Navigate to http://localhost:{args.port} to authenticate with Charles Schwab")
 
     socketio.run(app, debug=args.debug, host=args.host, port=args.port)

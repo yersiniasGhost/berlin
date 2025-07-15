@@ -9,13 +9,117 @@ import json
 import logging
 import time
 from datetime import datetime
+import base64
+import requests
 
 import numpy as np
 from flask import Blueprint, request, jsonify, current_app
 
+from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+from stock_analysis_ui.services.app_service import AppService
+
+
 logger = logging.getLogger('APIRoutes')
 api_bp = Blueprint('api', __name__)
 
+
+# Add this to your api_routes.py file
+
+@api_bp.route('/authenticate', methods=['POST'])
+def authenticate():
+    """Handle Schwab authentication from UI"""
+    try:
+        data = request.json
+        auth_url = data.get('auth_url', '').strip()
+
+        if not auth_url:
+            return jsonify({'success': False, 'error': 'Auth URL is required'}), 400
+
+        if 'code=' not in auth_url:
+            return jsonify({'success': False, 'error': 'Invalid auth URL - must contain authorization code'}), 400
+
+        # Create auth manager and process the URL
+        auth_manager = SchwabAuthManager()
+
+        # Extract code from URL (same logic as current authenticate method)
+        from urllib.parse import urlparse, parse_qs
+        try:
+            parsed_url = urlparse(auth_url)
+            query_params = parse_qs(parsed_url.query)
+
+            if 'code' not in query_params:
+                return jsonify({'success': False, 'error': 'Authorization code not found in URL'}), 400
+
+            response_code = query_params['code'][0]
+
+            credentials = f"{auth_manager.app_key}:{auth_manager.app_secret}"
+            base64_credentials = base64.b64encode(credentials.encode()).decode()
+
+            headers = {
+                "Authorization": f"Basic {base64_credentials}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
+
+            payload = {
+                "grant_type": "authorization_code",
+                "code": response_code,
+                "redirect_uri": auth_manager.redirect_uri,
+            }
+
+            # Get tokens from Schwab
+            token_response = requests.post(
+                "https://api.schwabapi.com/v1/oauth/token",
+                headers=headers,
+                data=payload
+            )
+
+            token_data = token_response.json()
+
+            if 'error' in token_data:
+                logger.error(f"Token error: {token_data}")
+                return jsonify({'success': False,
+                                'error': f"Authentication failed: {token_data.get('error', 'Unknown error')}"}), 400
+
+            auth_manager.access_token = token_data.get("access_token")
+            auth_manager.refresh_token = token_data.get("refresh_token")
+
+            if not auth_manager.access_token:
+                return jsonify({'success': False, 'error': 'No access token received'}), 400
+
+            # Get streamer info
+            if not auth_manager._get_streamer_info():
+                return jsonify({'success': False, 'error': 'Failed to get user preferences'}), 400
+
+            # Save tokens (current behavior - but we'll move to session later)
+            auth_manager.save_tokens()
+
+            # Create app service with authenticated manager (same as current startup)
+            # Get socketio from the Flask app instance (stored in create_app)
+            socketio = current_app.socketio
+
+            app_service = AppService(socketio, auth_manager)
+
+            # Attach to current Flask app instance
+            current_app.app_service = app_service
+
+            # Start streaming infrastructure
+            if not app_service.start_streaming():
+                return jsonify({'success': False, 'error': 'Failed to start streaming infrastructure'}), 500
+
+            logger.info("Authentication successful via UI")
+            return jsonify({
+                'success': True,
+                'message': 'Authentication successful',
+                'redirect_url': '/dashboard'
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing auth URL: {e}")
+            return jsonify({'success': False, 'error': f'Failed to process authorization: {str(e)}'}), 500
+
+    except Exception as e:
+        logger.error(f"Error in authentication endpoint: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @api_bp.route('/status')
 def get_status():

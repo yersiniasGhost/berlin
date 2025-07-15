@@ -1,15 +1,18 @@
+# Update your websocket_routes.py file
+
 """
 WebSocket event handlers for real-time communication with simple ID routing
 """
 
 import logging
 from datetime import datetime
+from flask import current_app
 from flask_socketio import emit
 
 logger = logging.getLogger('WebSocketRoutes')
 
 
-def register_websocket_events(socketio, app_service):
+def register_websocket_events(socketio, initial_app_service):
     """Register all WebSocket event handlers"""
 
     @socketio.on('connect')
@@ -19,6 +22,22 @@ def register_websocket_events(socketio, app_service):
 
         # Send current status to newly connected client
         try:
+            # Get app_service from current_app instead of closure variable
+            app_service = current_app.app_service
+
+            # Handle case where app_service might be None initially
+            if app_service is None:
+                # Send minimal initial data for unauthenticated state
+                initial_data = {
+                    'combinations': [],
+                    'streaming': False,
+                    'authenticated': False,
+                    'message': 'Connected - authentication required',
+                    'timestamp': datetime.now().isoformat()
+                }
+                emit('initial_data', initial_data)
+                return
+
             # Get current combinations
             combinations_data = app_service.get_combinations() if hasattr(app_service, 'get_combinations') else {'combinations': [], 'total': 0}
 
@@ -52,7 +71,7 @@ def register_websocket_events(socketio, app_service):
             emit('initial_data', {
                 'combinations': [],
                 'streaming': False,
-                'authenticated': True,
+                'authenticated': False,
                 'message': 'Connected (error loading data)'
             })
 
@@ -65,16 +84,22 @@ def register_websocket_events(socketio, app_service):
     def handle_combination_data_request(data):
         """Handle request for specific combination data"""
         try:
+            # Get app_service from current_app
+            app_service = current_app.app_service
+            if not app_service:
+                emit('error', {'message': 'App service not available'})
+                return
+
             combination_id = data.get('combination_id')
             if not combination_id:
                 emit('error', {'message': 'combination_id is required'})
                 return
 
-            if not hasattr(app_service, 'master_ui_tool'):
+            if not hasattr(app_service, 'ui_tool'):
                 emit('error', {'message': 'UI tool not available'})
                 return
 
-            combination_data = app_service.master_ui_tool.get_combination_data(combination_id)
+            combination_data = app_service.ui_tool.get_combination_data(combination_id)
 
             if combination_data:
                 emit('combination_data_response', {
@@ -93,11 +118,17 @@ def register_websocket_events(socketio, app_service):
     def handle_all_data_request():
         """Handle request for all combinations data"""
         try:
-            if not hasattr(app_service, 'master_ui_tool'):
+            # Get app_service from current_app
+            app_service = current_app.app_service
+            if not app_service:
+                emit('error', {'message': 'App service not available'})
+                return
+
+            if not hasattr(app_service, 'ui_tool'):
                 emit('error', {'message': 'UI tool not available'})
                 return
 
-            all_data = app_service.master_ui_tool.get_all_combinations_data()
+            all_data = app_service.ui_tool.get_all_combinations_data()
             emit('all_data_response', all_data)
 
         except Exception as e:
@@ -113,6 +144,17 @@ def register_websocket_events(socketio, app_service):
     def handle_status_request():
         """Handle request for current status"""
         try:
+            # Get app_service from current_app
+            app_service = current_app.app_service
+            if not app_service:
+                emit('status_update', {
+                    'streaming': False,
+                    'authenticated': False,
+                    'combinations': [],
+                    'total_combinations': 0
+                })
+                return
+
             combinations_data = app_service.get_combinations()
             status = {
                 'streaming': getattr(app_service, 'is_streaming', False),
@@ -130,11 +172,19 @@ def register_websocket_events(socketio, app_service):
     def handle_debug_client_state():
         """Handle debug request from client"""
         try:
+            # Get app_service from current_app
+            app_service = current_app.app_service
+            if not app_service:
+                emit('debug_server_state', {
+                    'app_service': 'None',
+                    'message': 'App service not initialized'
+                })
+                return
+
             debug_info = {
                 'server_combinations': list(app_service.combinations.keys()) if hasattr(app_service, 'combinations') else [],
                 'streaming_active': getattr(app_service, 'is_streaming', False),
-                'aggregator_keys': list(app_service.streaming_manager.aggregators.keys()) if hasattr(app_service, 'streaming_manager') else [],
-                'ui_tool_combinations': list(app_service.master_ui_tool.registered_combinations.keys()) if hasattr(app_service, 'master_ui_tool') else []
+                'ui_tool_available': hasattr(app_service, 'ui_tool')
             }
 
             emit('debug_server_state', debug_info)
@@ -144,4 +194,4 @@ def register_websocket_events(socketio, app_service):
             logger.error(f"Error handling debug request: {e}")
             emit('error', {'message': str(e)})
 
-    logger.info("WebSocket events registered with simple ID routing support")
+    logger.info("WebSocket events registered with dynamic app_service resolution")

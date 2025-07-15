@@ -18,7 +18,6 @@ logger = logging.getLogger('BacktestDataStreamer')
 
 #TODO: add candle chart in the details
 #  filter out bad data from schwab pips
-# minor fixes on trigger and indicator displayes
 # TODO: changebar colors based on what the parameter types on each bar.
 # TODO: add monitor creation/ edit page for UI / get into MONGO!
 
