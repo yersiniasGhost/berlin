@@ -11,7 +11,7 @@ from mongo_tools.sample_tools import SampleTools
 from mongo_tools.tick_history_tools import TickHistoryTools
 from features.indicators2 import support_level, resistance_level
 from features.indicators import sma_crossover, macd_histogram_crossover, bol_bands_lower_band_bounce
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class IndicatorProcessorHistorical:

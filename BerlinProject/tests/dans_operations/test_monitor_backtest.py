@@ -1,13 +1,9 @@
 import unittest
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional
 
 from bson import ObjectId
 
-from config.types import INDICATOR_TYPE, CANDLE_STICK_PATTERN
+from config.types import INDICATOR_TYPE
 from data_streamer import DataStreamer
-from environments.tick_data import TickData
 from models import IndicatorDefinition
 from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor

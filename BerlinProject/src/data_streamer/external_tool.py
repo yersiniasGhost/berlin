@@ -1,7 +1,7 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from abc import ABC, abstractmethod
 import numpy as np
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class ExternalTool(ABC):
@@ -12,7 +12,8 @@ class ExternalTool(ABC):
     @abstractmethod
     def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int,
                          raw_indicators: Optional[Dict[str, float]] = None,
-                         bar_scores: Optional[Dict[str, float]] = None) -> None:
+                         bar_scores: Optional[Dict[str, float]] = None,
+                         combination_id: Optional[str] = None) -> None:
         raise NotImplemented
 
     # Not required to be implemented
@@ -24,4 +25,9 @@ class ExternalTool(ABC):
         pass
 
     def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
+        pass
+
+    def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
+                     indicators: Dict[str, float], raw_indicators: Dict[str, float],
+                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
         pass

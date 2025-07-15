@@ -1,15 +1,12 @@
-from datetime import timedelta, datetime
 from typing import Tuple, List
 import numpy as np
 import pandas as pd
-import yfinance as yf
 import os
 import unittest
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.indicator_processor_historical import IndicatorProcessorHistorical
 from config.types import CANDLE_STICK_PATTERN, INDICATOR_TYPE
-from environments.tick_data import TickData
-from features.indicators2 import support_level, resistance_level
+from models.tick_data import TickData
 from mongo_tools.tick_history_tools import TickHistoryTools
 
 

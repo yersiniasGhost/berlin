@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Details - Trading Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Header Bar Styles */
+        .header-bar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            margin: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .symbol-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .symbol-name {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f0f6fc;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .symbol-subtitle {
+            font-size: 0.875rem;
+            color: #7d8590;
+        }
+
+        .config-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding-left: 2rem;
+            border-left: 1px solid #30363d;
+        }
+
+        .config-label {
+            font-size: 0.75rem;
+            color: #7d8590;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .config-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+
+        .price-section {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.5rem;
+        }
+
+        .live-price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #238636;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .price-change {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #7d8590;
+        }
+
+        .price-timestamp {
+            font-size: 0.75rem;
+            color: #7d8590;
+        }
+
+        /* Main Content Layout */
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .two-column-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            min-height: 500px;
+        }
+
+        /* Indicators & Bars Section (Left Column) */
+        .indicators-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .section-subtitle {
+            font-size: 0.875rem;
+            color: #7d8590;
+            margin-top: 0.25rem;
+        }
+
+        /* Individual Indicators */
+        .indicators-list {
+            margin-bottom: 2rem;
+        }
+
+        /* Clean Compact Individual Indicators */
+        .indicators-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .indicator-card {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 0.75rem;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .indicator-card:hover {
+            border-color: #30363d;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .indicator-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--indicator-color, #1f6feb);
+            opacity: 0.8;
+        }
+
+        .indicator-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .indicator-name-compact {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #e6edf3;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .indicator-value-compact {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--indicator-color, #1f6feb);
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .indicator-raw {
+            font-size: 0.625rem;
+            color: #7d8590;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        /* Color variations for different strength levels */
+        .indicator-card[data-strength="high"] {
+            --indicator-color: #238636;
+        }
+
+        .indicator-card[data-strength="medium"] {
+            --indicator-color: #1f6feb;
+        }
+
+        .indicator-card[data-strength="low"] {
+            --indicator-color: #da3633;
+        }
+
+        /* Bar Calculations */
+        .bars-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* Enhanced Bar Calculations */
+        .bar-calculation-card {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 1rem;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .bar-calculation-card:hover {
+            border-color: #30363d;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .bar-header-clean {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .bar-name-clean {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #f0f6fc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bar-score-clean {
+            background: linear-gradient(135deg, var(--bar-color, #1f6feb), var(--bar-color-light, #388bfd));
+            color: #ffffff;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 1rem;
+            box-shadow: 0 2px 8px rgba(var(--bar-color-rgb, 31, 111, 235), 0.3);
+        }
+
+        .bar-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .breakdown-item {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 0.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .breakdown-indicator {
+            font-size: 0.625rem;
+            color: #7d8590;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.5px;
+        }
+
+        .breakdown-calculation {
+            font-size: 0.75rem;
+            color: #e6edf3;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            margin-bottom: 0.25rem;
+        }
+
+        .breakdown-weight {
+            font-size: 0.625rem;
+            color: #8b949e;
+            font-style: italic;
+        }
+
+        .bar-summary {
+            background: #161b22;
+            border: 1px dashed #30363d;
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            color: #8b949e;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            text-align: center;
+        }
+
+        /* Color variations for different score ranges */
+        .bar-calculation-card[data-score="high"] {
+            --bar-color: #238636;
+            --bar-color-light: #2ea043;
+            --bar-color-rgb: 35, 134, 54;
+        }
+
+        .bar-calculation-card[data-score="medium"] {
+            --bar-color: #1f6feb;
+            --bar-color-light: #388bfd;
+            --bar-color-rgb: 31, 111, 235;
+        }
+
+        .bar-calculation-card[data-score="low"] {
+            --bar-color: #da3633;
+            --bar-color-light: #ff7b72;
+            --bar-color-rgb: 218, 54, 51;
+        }
+
+        /* Trade History Section (Right Column) */
+        .trades-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Excel-like Trade History Table */
+        .trades-table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            background: #0d1117;
+        }
+
+        .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .trades-table thead {
+            background: #21262d;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .trades-table th {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            color: #f0f6fc;
+            border-bottom: 2px solid #30363d;
+            border-right: 1px solid #30363d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.625rem;
+        }
+
+        .trades-table th:last-child {
+            border-right: none;
+        }
+
+        .trades-table tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .trades-table tbody tr:hover {
+            background: #161b22;
+        }
+
+        .trades-table tbody tr:nth-child(even) {
+            background: rgba(125, 133, 144, 0.05);
+        }
+
+        .trades-table tbody tr:nth-child(even):hover {
+            background: #161b22;
+        }
+
+        .trades-table td {
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid #21262d;
+            border-right: 1px solid #21262d;
+            color: #e6edf3;
+        }
+
+        .trades-table td:last-child {
+            border-right: none;
+        }
+
+        /* Trade type styling */
+        .trade-type {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .trade-type.long {
+            background: rgba(35, 134, 54, 0.2);
+            color: #56d364;
+            border: 1px solid rgba(35, 134, 54, 0.3);
+        }
+
+        .trade-type.short {
+            background: rgba(218, 54, 51, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(218, 54, 51, 0.3);
+        }
+
+        /* Exit reason styling */
+        .exit-reason {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .exit-reason.stop-loss {
+            background: rgba(255, 123, 114, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(255, 123, 114, 0.3);
+        }
+
+        .exit-reason.exit-long {
+            background: rgba(125, 133, 144, 0.2);
+            color: #8b949e;
+            border: 1px solid rgba(125, 133, 144, 0.3);
+        }
+
+        .exit-reason.exit-short {
+            background: rgba(125, 133, 144, 0.2);
+            color: #8b949e;
+            border: 1px solid rgba(125, 133, 144, 0.3);
+        }
+
+        /* P&L styling */
+        .pnl-positive {
+            color: #56d364;
+            font-weight: 600;
+        }
+
+        .pnl-negative {
+            color: #ff7b72;
+            font-weight: 600;
+        }
+
+        .pnl-neutral {
+            color: #7d8590;
+            font-style: italic;
+        }
+
+        /* Current position highlight */
+        .current-position {
+            background: rgba(31, 111, 235, 0.1) !important;
+            border-left: 3px solid #1f6feb;
+        }
+
+        .current-position:hover {
+            background: rgba(31, 111, 235, 0.15) !important;
+        }
+
+        /* Empty states */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1rem;
+            color: #7d8590;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 0.875rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 1024px) {
+            .two-column-layout {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .main-content {
+                margin: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .indicator-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .trades-table {
+                font-size: 0.625rem;
+            }
+
+            .trades-table th,
+            .trades-table td {
+                padding: 0.5rem 0.25rem;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .header-left {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .config-section {
+                padding-left: 0;
+                border-left: none;
+                border-top: 1px solid #30363d;
+                padding-top: 1rem;
+            }
+        }
+
+        /* Scrollbar styling for trade table */
+        .trades-table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .trades-table-container::-webkit-scrollbar-track {
+            background: #21262d;
+            border-radius: 4px;
+        }
+
+        .trades-table-container::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .trades-table-container::-webkit-scrollbar-thumb:hover {
+            background: #7d8590;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Bar -->
+    <div class="header-bar">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="symbol-section">
+                    <div class="symbol-name" id="symbolName">LOADING...</div>
+                    <div class="symbol-subtitle">Trading Signal Details</div>
+                </div>
+                <div class="config-section">
+                    <div class="config-label">Configuration</div>
+                    <div class="config-name" id="configName">Loading...</div>
+                </div>
+            </div>
+            <div class="price-section">
+                <div class="live-price" id="livePrice">N/A</div>
+                <div class="price-change" id="priceChange">--</div>
+                <div class="price-timestamp" id="priceTimestamp">Waiting for data...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="two-column-layout">
+            <!-- Left Column: Indicators and Bar Calculations -->
+            <div class="indicators-section">
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Indicators & Calculations</div>
+                        <div class="section-subtitle">Real-time technical analysis and bar scoring</div>
+                    </div>
+                </div>
+
+                <!-- Individual Indicators -->
+                <div class="indicators-list">
+                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600;"> Individual Indicators</h4>
+                    <div id="indicatorsList" class="indicators-grid">
+                        <!-- Will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <div class="empty-state-icon"></div>
+                            <div class="empty-state-text">Loading indicator data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bar Calculations -->
+                <div class="bars-list">
+                    <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600;">️ Composite Calculations</h4>
+                    <div id="barsList">
+                        <!-- Will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚖</div>
+                            <div class="empty-state-text">Loading bar calculations...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Trade History -->
+            <div class="trades-section">
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Trade History</div>
+                        <div class="section-subtitle">Portfolio trading decisions and performance</div>
+                    </div>
+                </div>
+
+                <div id="tradesList">
+                    <!-- Will be populated by JavaScript -->
+                    <div class="empty-state">
+                        <div class="empty-state-icon"></div>
+                        <div class="empty-state-text">No trades executed yet</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Future: Chart Area Placeholder -->
+        <div style="margin-top: 2rem; padding: 2rem; background: #161b22; border: 1px solid #30363d; border-radius: 12px; text-align: center; color: #7d8590;">
+            <h3 style="color: #e6edf3; margin-bottom: 1rem;"> Candlestick Chart Area</h3>
+            <p>Chart implementation will be added in the next phase</p>
+        </div>
+    </div>
+
+    <script>
+        // Get card_id from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const cardId = urlParams.get('card_id');
+
+        // WebSocket connection
+        const socket = io();
+
+        // Global variables for monitor configuration
+        let currentMonitorConfig = null;
+
+        // Connect to the card's data stream
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            if (cardId) {
+                loadCardDetails(cardId);
+            }
+        });
+
+        // Listen for real-time updates
+        socket.on('card_update', function(data) {
+            if (data.card_id === cardId) {
+                console.log('Received real-time update for card:', data);
+
+                // Update header bar
+                updateHeaderBar(data);
+
+                // Update indicators and bars
+                updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
+
+                // Update trade history from portfolio data
+                if (data.portfolio && data.portfolio.trade_history) {
+                    updateTradesSection(data.portfolio.trade_history);
+                }
+            }
+        });
+
+        function updateHeaderBar(data) {
+            // Update price
+            const priceElement = document.getElementById('livePrice');
+            if (priceElement && data.price !== undefined && data.price !== null) {
+                priceElement.textContent = `${data.price.toFixed(2)}`;
+                priceElement.className = data.price >= 0 ? 'live-price' : 'live-price negative';
+            }
+
+            // Update timestamp
+            const timestampElement = document.getElementById('priceTimestamp');
+            if (timestampElement && data.timestamp) {
+                const updateTime = new Date(data.timestamp);
+                timestampElement.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
+            }
+        }
+
+        function updateIndicatorsSection(indicators, rawIndicators, barScores) {
+            if (indicators) {
+                updateIndicatorsList(indicators, rawIndicators);
+            }
+
+            if (barScores) {
+                updateBarsList(barScores, indicators);
+            }
+        }
+
+        function updateIndicatorsList(indicators, rawIndicators) {
+            const container = document.getElementById('indicatorsList');
+
+            if (!indicators || Object.keys(indicators).length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"></div>
+                        <div class="empty-state-text">No indicators available</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = Object.entries(indicators).map(([name, value]) => {
+                const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const rawValue = rawIndicators ? rawIndicators[name] : undefined;
+
+                // Determine strength for color coding
+                let strength = 'medium';
+                if (value >= 0.8) strength = 'high';
+                else if (value <= 0.4) strength = 'low';
+
+                return `
+                    <div class="indicator-card" data-strength="${strength}">
+                        <div class="indicator-header">
+                            <div class="indicator-name-compact">${displayName}</div>
+                            <div class="indicator-value-compact">${(value * 100).toFixed(1)}%</div>
+                        </div>
+                        ${rawValue !== undefined ? `<div class="indicator-raw">Raw: ${rawValue.toFixed(4)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        function updateBarsList(barScores, indicators) {
+            const container = document.getElementById('barsList');
+
+            if (!barScores || Object.keys(barScores).length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">️</div>
+                        <div class="empty-state-text">No bar calculations available</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = Object.entries(barScores).map(([barName, score]) => {
+                const displayName = barName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const calculation = getBarCalculation(barName, score, indicators);
+
+                // Determine score level for color coding
+                let scoreLevel = 'medium';
+                if (score >= 0.7) scoreLevel = 'high';
+                else if (score <= 0.4) scoreLevel = 'low';
+
+                return `
+                    <div class="bar-calculation-card" data-score="${scoreLevel}">
+                        <div class="bar-header-clean">
+                            <div class="bar-name-clean">${displayName}</div>
+                            <div class="bar-score-clean">${(score * 100).toFixed(1)}%</div>
+                        </div>
+
+                        <div class="bar-breakdown">
+                            ${createBarBreakdown(barName, indicators)}
+                        </div>
+
+                        <div class="bar-summary">
+                            Total Weight: ${calculation.totalWeight} | Final Score: ${(score * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        function createBarBreakdown(barName, indicators) {
+            // Get bar configuration
+            if (!currentMonitorConfig || !currentMonitorConfig.bars || !currentMonitorConfig.bars[barName]) {
+                return '<div class="breakdown-item">No configuration available</div>';
+            }
+
+            const barConfig = currentMonitorConfig.bars[barName];
+            const barIndicators = barConfig.indicators || barConfig;
+
+            return Object.entries(barIndicators).map(([indicatorName, weight]) => {
+                const indicatorValue = indicators && indicators[indicatorName] ? indicators[indicatorName] : 0;
+                const shortName = indicatorName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()).substring(0, 12);
+                const contribution = indicatorValue * weight;
+
+                return `
+                    <div class="breakdown-item">
+                        <div class="breakdown-indicator">${shortName}</div>
+                        <div class="breakdown-calculation">${(indicatorValue * 100).toFixed(1)}% × ${weight}</div>
+                        <div class="breakdown-weight">= ${contribution.toFixed(2)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getBarCalculation(barName, finalScore, indicators) {
+            // Debug log to see what we have
+            console.log('getBarCalculation called with:', {
+                barName,
+                finalScore,
+                indicators,
+                currentMonitorConfig
+            });
+
+            // Use the monitor configuration stored when card details are loaded
+            if (!currentMonitorConfig) {
+                console.log('No currentMonitorConfig available');
+                return {
+                    math: 'Monitor configuration not loaded',
+                    totalWeight: '0.0'
+                };
+            }
+
+            // Try different possible structures for bars configuration
+            const bars = currentMonitorConfig.bars ||
+                        currentMonitorConfig.monitor?.bars ||
+                        currentMonitorConfig;
+
+            if (!bars || !bars[barName]) {
+                console.log('Bar configuration not found for:', barName);
+                return {
+                    math: 'Bar configuration not found',
+                    totalWeight: '0.0'
+                };
+            }
+
+            const barConfig = bars[barName];
+            const barIndicators = barConfig.indicators || {};
+
+            // Calculate the math breakdown
+            const mathParts = [];
+            let totalWeight = 0;
+            let weightedSum = 0;
+
+            Object.entries(barIndicators).forEach(([indName, weight]) => {
+                const indValue = indicators && indicators[indName] ? indicators[indName] : 0;
+                const contribution = indValue * weight;
+                weightedSum += contribution;
+                totalWeight += weight;
+
+                mathParts.push(`(${indValue.toFixed(3)} × ${weight})`);
+            });
+
+            const calculatedScore = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
+            const math = `${mathParts.join(' + ')} = ${weightedSum.toFixed(2)} ÷ ${totalWeight.toFixed(1)} = ${calculatedScore.toFixed(3)}`;
+
+            return {
+                math,
+                totalWeight: totalWeight.toFixed(1)
+            };
+        }
+
+        // ENHANCED: Excel-like Trade History Table
+        function updateTradesSection(tradeHistory) {
+            const container = document.getElementById('tradesList');
+
+            if (!tradeHistory || tradeHistory.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"></div>
+                        <div class="empty-state-text">No trades executed yet</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Process trades into position pairs
+            const positionPairs = processTradeHistory(tradeHistory);
+
+            // Create table HTML
+            const tableHTML = `
+                <div class="trades-table-container">
+                    <table class="trades-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Enter Price</th>
+                                <th>Exit Price</th>
+                                <th>Exit Reason</th>
+                                <th>P&L %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${positionPairs.map(pair => createTradeRow(pair)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            container.innerHTML = tableHTML;
+        }
+
+        function processTradeHistory(tradeHistory) {
+            const pairs = [];
+            let openPosition = null;
+
+            // Sort trades by timestamp (oldest first for processing)
+            const sortedTrades = [...tradeHistory].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            for (const trade of sortedTrades) {
+                if (trade.action.includes('enter')) {
+                    // Starting a new position
+                    if (openPosition) {
+                        // Close previous position without exit (shouldn't happen, but handle gracefully)
+                        pairs.push({
+                            ...openPosition,
+                            exitPrice: null,
+                            exitReason: null,
+                            exitTime: null,
+                            pnlPercent: null,
+                            isOpen: true
+                        });
+                    }
+
+                    openPosition = {
+                        type: trade.action.includes('long') ? 'LONG' : 'SHORT',
+                        enterTime: trade.timestamp,
+                        enterPrice: trade.price,
+                        size: trade.size,
+                        exitPrice: null,
+                        exitReason: null,
+                        exitTime: null,
+                        pnlPercent: null,
+                        isOpen: true
+                    };
+                } else if (trade.action.includes('exit') || trade.action.includes('stop')) {
+                    // Closing a position
+                    if (openPosition) {
+                        const exitReason = trade.reason || trade.action;
+                        const pnlPercent = calculatePnlPercent(openPosition.enterPrice, trade.price, openPosition.type);
+
+                        pairs.push({
+                            ...openPosition,
+                            exitPrice: trade.price,
+                            exitReason: exitReason,
+                            exitTime: trade.timestamp,
+                            pnlPercent: pnlPercent,
+                            isOpen: false
+                        });
+
+                        openPosition = null;
+                    }
+                }
+            }
+
+            // Add any remaining open position
+            if (openPosition) {
+                pairs.push(openPosition);
+            }
+
+            // Return most recent trades first
+            return pairs.reverse();
+        }
+
+        function calculatePnlPercent(enterPrice, exitPrice, type) {
+            if (!enterPrice || !exitPrice) return null;
+
+            let pnlPercent;
+            if (type === 'LONG') {
+                pnlPercent = ((exitPrice - enterPrice) / enterPrice) * 100;
+            } else {
+                pnlPercent = ((enterPrice - exitPrice) / enterPrice) * 100;
+            }
+
+            return pnlPercent;
+        }
+
+        function createTradeRow(pair) {
+            const enterTime = new Date(pair.enterTime).toLocaleTimeString();
+            const exitTime = pair.exitTime ? new Date(pair.exitTime).toLocaleTimeString() : '--';
+
+            // Format prices
+            const enterPrice = `${pair.enterPrice.toFixed(2)}`;
+            const exitPrice = pair.exitPrice ? `${pair.exitPrice.toFixed(2)}` : '--';
+
+            // Format exit reason
+            let exitReasonHTML = '--';
+            if (pair.exitReason) {
+                const reasonClass = pair.exitReason.toLowerCase().replace(/[^a-z]/g, '-');
+                const reasonText = pair.exitReason.replace(/_/g, ' ').toUpperCase();
+                exitReasonHTML = `<span class="exit-reason ${reasonClass}">${reasonText}</span>`;
+            }
+
+            // Format P&L
+            let pnlHTML = '--';
+            if (pair.pnlPercent !== null && pair.pnlPercent !== undefined) {
+                const pnlClass = pair.pnlPercent >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const pnlSign = pair.pnlPercent >= 0 ? '+' : '';
+                pnlHTML = `<span class="${pnlClass}">${pnlSign}${pair.pnlPercent.toFixed(2)}%</span>`;
+            } else if (pair.isOpen) {
+                pnlHTML = '<span class="pnl-neutral">Open</span>';
+            }
+
+            // Row class for current position highlighting
+            const rowClass = pair.isOpen ? 'current-position' : '';
+
+            return `
+                <tr class="${rowClass}">
+                    <td>${enterTime}</td>
+                    <td><span class="trade-type ${pair.type.toLowerCase()}">${pair.type}</span></td>
+                    <td>${enterPrice}</td>
+                    <td>${exitPrice}</td>
+                    <td>${exitReasonHTML}</td>
+                    <td>${pnlHTML}</td>
+                </tr>
+            `;
+        }
+
+        async function loadCardDetails(cardId) {
+            try {
+                const response = await fetch(`/api/combinations/${cardId}/details`);
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store monitor configuration for bar calculations
+                    // Try different possible locations for the monitor config
+                    currentMonitorConfig = data.monitor_config ||
+                                         data.card_info?.monitor_config ||
+                                         data.combination?.monitor_config ||
+                                         null;
+
+                    console.log('Loaded monitor config:', currentMonitorConfig);
+                    console.log('Full API response:', data);
+
+                    // Update header with card info
+                    document.getElementById('symbolName').textContent = data.card_info.symbol;
+                    document.getElementById('configName').textContent = data.card_info.config_name;
+
+                    // Set initial data if available
+                    if (data.current_values) {
+                        // Only update price if we have real data
+                        if (data.current_values.price !== undefined && data.current_values.price !== null) {
+                            updateHeaderBar({
+                                symbol: data.card_info.symbol,
+                                price: data.current_values.price,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+
+                        // Update indicators and bars with real data
+                        updateIndicatorsSection(
+                            data.current_values.indicators,
+                            data.current_values.raw_indicators,
+                            data.current_values.bar_scores
+                        );
+                    }
+
+                    // Check for portfolio data with trade history
+                    if (data.portfolio_data && data.portfolio_data.trade_history) {
+                        updateTradesSection(data.portfolio_data.trade_history);
+                    } else {
+                        console.log('No trade history found in response');
+                    }
+
+                    console.log('Card details loaded:', data);
+                } else {
+                    throw new Error(data.error);
+                }
+
+            } catch (error) {
+                console.error('Error loading card details:', error);
+                document.getElementById('configName').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        console.log('Card details page initialized for real data streaming.');
+    </script>
+</body>
+</html>

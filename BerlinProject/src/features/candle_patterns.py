@@ -2,7 +2,7 @@ from typing import Dict, Callable, Optional, List
 from dataclasses import dataclass, field
 import talib as ta
 import numpy as np
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 

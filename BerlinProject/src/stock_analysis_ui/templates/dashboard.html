@@ -1,453 +1,1260 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block title %}Stock Analysis Dashboard{% endblock %}
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
 
-{% block head_extra %}
-<style>
-    .ticker-card {
-        transition: all 0.3s ease;
-    }
-    .ticker-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-    }
-    .progress-bull {
-        background-color: #28a745;
-    }
-    .progress-bear {
-        background-color: #dc3545;
-    }
-    .ticker-price {
-        font-size: 1.5rem;
-        font-weight: bold;
-    }
-    .ticker-change-up {
-        color: #28a745;
-    }
-    .ticker-change-down {
-        color: #dc3545;
-    }
-    .empty-dashboard {
-        min-height: 300px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-</style>
-{% endblock %}
+        .header {
+            background: #161b22;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #30363d;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
 
-{% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h2>Market Dashboard</h2>
-    </div>
-    <div class="col-md-4 text-end">
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSymbolModal">
-            <i class="fas fa-plus me-1"></i> Add Symbol
-        </button>
-        <!-- Add this somewhere on your dashboard, perhaps below the "Add Symbol" button -->
-        <button id="testCardBtn" class="btn btn-outline-secondary">
-            <i class="fas fa-vial me-1"></i> Test Card Display
-        </button>
-    </div>
-</div>
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #f0f6fc;
+        }
 
-<div id="tickerContainer" class="row g-4">
-    <div class="col-12 empty-dashboard">
-        <div class="text-center">
-            <i class="fas fa-chart-line fa-5x mb-3 text-muted"></i>
-            <h3>No ticker data available</h3>
-            <p class="text-muted">Add symbols and start streaming to see data</p>
-            <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#configModal">
-                <i class="fas fa-cog me-1"></i> Configure
-            </button>
+        .status-bar {
+            display: flex;
+            gap: 2rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.connected { background: #238636; }
+        .status-dot.disconnected { background: #da3633; }
+
+        .controls {
+            padding: 2rem;
+            background: #0d1117;
+            border-bottom: 1px solid #21262d;
+            text-align: center;
+        }
+
+        .add-card-button {
+            background: #238636;
+            color: #ffffff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);
+        }
+
+        .add-card-button:hover {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #21262d;
+            color: #ff7b72;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+        }
+
+        .form-section h3 {
+            color: #f0f6fc;
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #f0f6fc;
+            font-size: 0.875rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            background: #0d1117;
+            color: #e6edf3;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #1f6feb;
+            box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            padding-top: 1rem;
+            border-top: 1px solid #30363d;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn.btn-primary {
+            background: #238636;
+            color: #ffffff;
+        }
+
+        .btn.btn-primary:hover:not(:disabled) {
+            background: #2ea043;
+        }
+
+        .btn.btn-primary:disabled {
+            background: #21262d;
+            color: #7d8590;
+            cursor: not-allowed;
+        }
+
+        .btn.btn-secondary {
+            background: #21262d;
+            color: #e6edf3;
+            border: 1px solid #30363d;
+        }
+
+        .btn.btn-secondary:hover {
+            background: #30363d;
+        }
+
+        /* Cards Container */
+        .cards-container {
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .loading {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #7d8590;
+        }
+
+        .loading p {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Trading Card Styles */
+        .trading-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .trading-card:hover {
+            border-color: #7d8590;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .trading-card.updating {
+            box-shadow: 0 0 20px rgba(35, 134, 54, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #f0f6fc;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .card-subtitle {
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-top: 0.25rem;
+        }
+
+        .card-id {
+            font-size: 0.75rem;
+            color: #7d8590;
+            background: #21262d;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .card-close {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .card-close:hover {
+            background: #21262d;
+            color: #da3633;
+        }
+
+        .price-display {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #238636;
+            margin-bottom: 1rem;
+            text-align: center;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .price-display.negative {
+            color: #da3633;
+        }
+
+        .price-timestamp {
+            font-size: 0.75rem;
+            color: #7d8590;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        /* Enhanced Portfolio Section Styles with Collapsible Feature */
+        .portfolio-section {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .portfolio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        .portfolio-header:hover {
+            background: rgba(125, 133, 144, 0.05);
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            margin: -0.25rem -0.5rem 0.75rem -0.5rem;
+        }
+
+        .portfolio-title-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .portfolio-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .portfolio-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #7d8590;
+            font-size: 0.75rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .portfolio-toggle:hover {
+            background: #30363d;
+            color: #e6edf3;
+            border-color: #7d8590;
+        }
+
+        .portfolio-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .position-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .position-status.in-position {
+            background: rgba(35, 134, 54, 0.2);
+            color: #56d364;
+            border: 1px solid rgba(35, 134, 54, 0.3);
+        }
+
+        .position-status.no-position {
+            background: rgba(125, 133, 144, 0.2);
+            color: #8b949e;
+            border: 1px solid rgba(125, 133, 144, 0.3);
+        }
+
+        .portfolio-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            opacity: 1;
+            max-height: 500px;
+        }
+
+        .portfolio-metrics.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
+        }
+
+        .metric-item {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .metric-value.positive {
+            color: #56d364;
+        }
+
+        .metric-value.negative {
+            color: #ff7b72;
+        }
+
+        .metric-value.neutral {
+            color: #e6edf3;
+        }
+
+        .bars-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .responsive-bar {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .responsive-bar:hover {
+            border-color: #30363d;
+            transform: scale(1.02);
+        }
+
+        .bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .bar-label {
+            font-weight: 500;
+            color: #e6edf3;
+            font-size: 0.875rem;
+        }
+
+        .bar-value-text {
+            font-weight: 600;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.75rem;
+        }
+
+        .bar-track {
+            height: 12px;
+            background: #21262d;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #30363d;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: all 0.5s ease;
+            position: relative;
+            background: linear-gradient(90deg, var(--bar-color) 0%, var(--bar-color-light) 100%);
+            box-shadow: 0 0 8px rgba(var(--bar-glow), 0.3);
+        }
+
+        .bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
+            border-radius: 5px;
+        }
+
+        .indicators-summary {
+            font-size: 0.875rem;
+            color: #7d8590;
+            text-align: center;
+            padding: 1rem;
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+        }
+
+        /* Messages */
+        .success-message, .error-message, .info-message {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            z-index: 1001;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .success-message {
+            background: rgba(35, 134, 54, 0.2);
+            color: #56d364;
+            border: 1px solid rgba(35, 134, 54, 0.3);
+        }
+
+        .error-message {
+            background: rgba(248, 81, 73, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .info-message {
+            background: rgba(31, 111, 235, 0.2);
+            color: #79c0ff;
+            border: 1px solid rgba(31, 111, 235, 0.3);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .cards-container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .trading-card {
+                padding: 1rem;
+            }
+
+            .modal {
+                width: 95%;
+                margin: 1rem;
+            }
+        }
+
+        /* Hide scrollbar but allow scrolling */
+        .modal::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Trading Dashboard</h1>
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot disconnected" id="connectionStatus"></div>
+                <span id="connectionText">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot disconnected" id="streamingStatus"></div>
+                <span id="streamingText">Not Streaming</span>
+            </div>
+            <div class="status-item">
+                <span id="combinationsCount">0 Cards</span>
+            </div>
         </div>
     </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script>
+    <div class="controls">
+        <button class="add-card-button" onclick="openAddCardModal()">
+            + Add New Trading Card
+        </button>
+    </div>
 
-        // Add this at the top of your script section
-    socket.onAny((event, ...args) => {
-      console.log(`SOCKET EVENT: ${event}`, args);
-    });
+    <!-- Modal for adding cards -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Add New Trading Card</h2>
+                <button class="modal-close" onclick="closeAddCardModal()">&times;</button>
+            </div>
 
-    let tickerData = {};
-
-    // Socket.IO event handlers
-    socket.on('ticker_update', function(data) {
-        console.log('TICKER UPDATE RECEIVED:', data);
-
-        // Store the data
-        if (!tickerData[data.symbol]) {
-            tickerData[data.symbol] = {};
-        }
-
-        // Merge the data instead of replacing it
-        Object.assign(tickerData[data.symbol], data.data);
-
-        // Update the UI
-        updateTickerUI();
-    });
-
-   // Socket.IO event handlers
-    socket.on('indicator_update', function(data) {
-        console.log('INDICATOR UPDATE RECEIVED:', data);
-
-        // Check that data has the required structure
-        if (!data || !data.symbol) {
-            console.error('Invalid indicator data structure:', data);
-            return;
-        }
-
-        const symbol = data.symbol;
-
-        // Make sure the ticker exists in our data structure
-        if (!tickerData[symbol]) {
-            tickerData[symbol] = {
-                symbol: symbol,  // Ensure symbol is set
-                timestamp: data.timestamp || new Date().toISOString()
-            };
-        }
-
-        // Explicitly assign all properties
-        tickerData[symbol].indicators = data.indicators;
-
-        // Store bar_scores from the update data
-        tickerData[symbol].bar_scores = data.bar_scores;
-
-        // Make sure we have all the required data
-        console.log('Updated ticker data:', JSON.parse(JSON.stringify(tickerData)));
-
-        // Update the UI
-        updateTickerUI();
-    });
-
-    // Socket.IO event handlers
-    socket.on('ticker_update', function(data) {
-        console.log('TICKER UPDATE RECEIVED:', data);
-
-        // Store the data
-        if (!tickerData[data.symbol]) {
-            tickerData[data.symbol] = {};
-        }
-
-        // Copy the data properties
-        if (data.data) {
-            // If data is nested under 'data' property
-            Object.assign(tickerData[data.symbol], data.data);
-        } else {
-            // If data is at the root level
-            const candle_props = ['open', 'high', 'low', 'close', 'volume', 'timestamp'];
-            candle_props.forEach(prop => {
-                if (data[prop] !== undefined) {
-                    tickerData[data.symbol][prop] = data[prop];
-                }
-            });
-        }
-
-        console.log('Ticker data after update:', tickerData[data.symbol]);
-
-        // Update the UI
-        updateTickerUI();
-    });
-
-    socket.on('candle_completed', function(data) {
-        console.log('CANDLE COMPLETED:', data);
-
-        if (!data || !data.symbol) {
-            console.error('Invalid candle data:', data);
-            return;
-        }
-
-        // Initialize if needed
-        if (!tickerData[data.symbol]) {
-            tickerData[data.symbol] = {};
-        }
-
-        // Store candle data
-        if (data.candle) {
-            Object.assign(tickerData[data.symbol], data.candle);
-        }
-
-        console.log('Ticker data after candle update:', tickerData[data.symbol]);
-
-        // Update the UI
-        updateTickerUI();
-    });
-
-    // Helper function to render indicators summary
-    function renderIndicatorsSummary(symbol) {
-        if (!tickerData[symbol] || !tickerData[symbol].indicators) {
-            return '';
-        }
-
-        const indicators = tickerData[symbol].indicators;
-        let html = '<div class="mt-2 small">';
-
-        // Only show up to 3 top indicators in the card
-        const indicatorNames = Object.keys(indicators);
-        const topIndicators = indicatorNames.slice(0, 3);
-
-        for (const name of topIndicators) {
-            const value = indicators[name];
-
-            // Skip if not a numeric value
-            if (typeof value !== 'number') continue;
-
-            // Format with color based on value
-            let valueClass = 'text-muted';
-            if (value > 0.7) {
-                valueClass = name.toLowerCase().includes('bear') ? 'text-danger' : 'text-success';
-            } else if (value > 0.3) {
-                valueClass = name.toLowerCase().includes('bear') ? 'text-warning' : 'text-primary';
-            }
-
-            const displayName = name
-                .replace(/_/g, ' ')
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase());
-
-            html += `
-                <div class="d-flex justify-content-between mb-1">
-                    <span>${displayName}:</span>
-                    <span class="${valueClass} fw-bold">${value.toFixed(2)}</span>
+            <div class="form-section">
+                <h3>Stock Symbol</h3>
+                <div class="form-group">
+                    <label for="modalSymbolInput">Enter stock symbol</label>
+                    <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="10">
                 </div>
-            `;
-        }
+            </div>
 
-        html += '</div>';
-        return html;
-    }
+            <div class="form-section">
+                <h3>Monitor Configuration File</h3>
+                <div class="form-group">
+                    <label for="modalFileInput">Select a JSON configuration file</label>
+                    <input type="file" id="modalFileInput" accept=".json" style="margin-bottom: 0.5rem;">
+                    <div id="selectedFileName" style="font-size: 0.875rem; color: #7d8590; margin-top: 0.5rem;">
+                        No file selected
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <p style="font-size: 0.875rem; color: #7d8590;">
+                        💡 <strong>Tip:</strong> You can also drag and drop a JSON file onto the file input above.
+                    </p>
+                </div>
+            </div>
 
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
+                <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>Add Card</button>
+            </div>
+        </div>
+    </div>
 
-    function updateTickerUI() {
-        console.log('Updating ticker UI with data:', tickerData);
-        const container = document.getElementById('tickerContainer');
-        const symbols = Object.keys(tickerData);
+    <div id="messages"></div>
 
-        // Debug: Check if we have any data
-        console.log('Symbols found:', symbols);
+    <div class="cards-container" id="cardsContainer">
+        <div class="loading">
+            <p>No trading cards added yet.</p>
+            <p>Click "Add New Trading Card" above to get started.</p>
+        </div>
+    </div>
 
-        // Clear empty dashboard if we have data
-        if (symbols.length > 0) {
-            const emptyDashboard = container.querySelector('.empty-dashboard');
-            if (emptyDashboard) {
-                container.innerHTML = '';
+    <script>
+        // WebSocket connection
+        const socket = io();
+        let cards = {};
+
+        // Modal state
+        let modalSelectedFile = null;
+
+        // Connection handling
+        socket.on('connect', function() {
+            updateConnectionStatus(true);
+        });
+
+        socket.on('disconnect', function() {
+            updateConnectionStatus(false);
+        });
+
+        // Card update handler
+        socket.on('card_update', function(data) {
+            console.log('Received card_update:', data);
+
+            const cardId = data.card_id;
+            if (cardId) {
+                updateOrCreateCard(cardId, data);
             }
+        });
+
+        // Status updates
+        socket.on('status_update', function(data) {
+            updateStatus(data);
+        });
+
+        // Error handling
+        socket.on('error', function(data) {
+            showMessage(`Error: ${data.message}`, 'error');
+        });
+
+        // Initial data from server
+        socket.on('initial_data', function(data) {
+            console.log('Received initial_data:', data);
+            updateConnectionStatus(true);
+            updateStatus(data);
+
+            if (data.combinations && data.combinations.length > 0) {
+                data.combinations.forEach(combination => {
+                    updateOrCreateCard(combination.card_id, combination);
+                });
+            }
+        });
+
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+
+            statusDot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+            statusText.textContent = connected ? 'Connected' : 'Disconnected';
         }
 
-        // Update or create cards for each ticker
-        symbols.forEach(symbol => {
-            const data = tickerData[symbol];
+        function updateStatus(data) {
+            const streamingDot = document.getElementById('streamingStatus');
+            const streamingText = document.getElementById('streamingText');
 
-            // Check if card exists
-            let card = container.querySelector(`[data-symbol="${symbol}"]`);
+            streamingDot.className = `status-dot ${data.streaming ? 'connected' : 'disconnected'}`;
+            streamingText.textContent = data.streaming ? 'Streaming Active' : 'Not Streaming';
+
+            updateCardsCount(data.combinations ? data.combinations.length : 0);
+        }
+
+        function updateCardsCount(count = null) {
+            const combinationsCount = document.getElementById('combinationsCount');
+
+            if (count === null) {
+                count = document.querySelectorAll('.trading-card').length;
+            }
+
+            combinationsCount.textContent = `${count} Card${count !== 1 ? 's' : ''}`;
+        }
+
+        function updateOrCreateCard(cardId, data) {
+            let card = document.getElementById(cardId);
 
             if (!card) {
-                // Create new card
-                console.log('Creating new card for ' + symbol);
-                const col = document.createElement('div');
-                col.className = 'col-md-4 col-lg-3';
-
-                card = document.createElement('div');
-                card.className = 'card ticker-card shadow-sm';
-                card.setAttribute('data-symbol', symbol);
-
-                // Make card clickable to go to details page
-                card.style.cursor = 'pointer';
-                card.addEventListener('click', function() {
-                    window.location.href = `/ticker/${symbol}`;
-                });
-
-                col.appendChild(card);
-                container.appendChild(col);
+                card = createCard(cardId, data);
             }
 
-            // Get price change direction
-            let changeDirection = '';
-            let changeClass = '';
-            if (data.previousClose && data.close > data.previousClose) {
-                changeDirection = '▲';
-                changeClass = 'ticker-change-up';
-            } else if (data.previousClose && data.close < data.previousClose) {
-                changeDirection = '▼';
-                changeClass = 'ticker-change-down';
+            updateCardData(card, data);
+        }
+
+        function createCard(cardId, data) {
+            const container = document.getElementById('cardsContainer');
+
+            // Remove loading message
+            const loading = container.querySelector('.loading');
+            if (loading) {
+                loading.remove();
             }
 
-            // Format price
-            const price = typeof data.close === 'number' ? data.close.toFixed(2) : data.close;
+            const card = document.createElement('div');
+            card.className = 'trading-card';
+            card.id = cardId;
 
-            // Format timestamp
-            let timeStr = '';
-            if (data.timestamp) {
-                const time = new Date(data.timestamp);
-                timeStr = time.toLocaleTimeString();
+            // Make card clickable
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', function(e) {
+                // Don't trigger on close button or portfolio toggle
+                if (!e.target.classList.contains('card-close') && !e.target.classList.contains('portfolio-toggle') && !e.target.closest('.portfolio-header')) {
+                    openCardDetails(cardId);
+                }
+            });
+
+            // MODIFIED: Include monitor name in the card title
+            const displayTitle = data.symbol || 'Unknown';
+            const monitorName = data.monitor_config_name || data.test_name;
+            const fullTitle = monitorName ? `${displayTitle} - ${monitorName}` : displayTitle;
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">${fullTitle}</div>
+                        <div class="card-subtitle">Trading Signals - Click for details</div>
+                        <div class="card-id">${cardId}</div>
+                    </div>
+                    <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
+                </div>
+                <div class="price-display">$0.00</div>
+                <div class="price-timestamp">Last updated: Never</div>
+                <div class="portfolio-container"></div>
+                <div class="bars-container"></div>
+                <div class="indicators-summary">0 Active Indicators</div>
+            `;
+
+            container.appendChild(card);
+            updateCardsCount();
+            return card;
+        }
+
+        // Function to open card details
+        async function openCardDetails(cardId) {
+            try {
+                // Show loading indicator
+                showMessage(`Loading details for ${cardId}...`, 'info');
+
+                // Fetch card details
+                const response = await fetch(`/api/combinations/${cardId}/details`);
+                const data = await response.json();
+
+                if (data.success) {
+                    // Navigate to details page
+                    window.location.href = `/card-details.html?card_id=${cardId}`;
+                } else {
+                    showMessage(`Error loading details: ${data.error}`, 'error');
+                }
+
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function updateCardData(card, data) {
+            console.log("UPDATE CARD DATA - Received data:", data);
+
+            // Update price with timestamp
+            const priceDisplay = card.querySelector('.price-display');
+            const timestampDisplay = card.querySelector('.price-timestamp');
+
+            if (priceDisplay && data.price !== undefined) {
+                const priceClass = data.price >= 0 ? '' : 'negative';
+                priceDisplay.className = `price-display ${priceClass}`;
+                priceDisplay.textContent = `${data.price.toFixed(2)}`;
             }
 
-            // Progress bars - Handle dynamic bar scores from bar_scores
-            let barScoresHTML = '';
+            // Update timestamp
+            if (timestampDisplay && data.timestamp) {
+                const updateTime = new Date(data.timestamp);
+                timestampDisplay.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
+            }
 
-            // Check if we have bar_scores
-            if (data.bar_scores && Object.keys(data.bar_scores).length > 0) {
-                // Generate a progress bar for each bar score
-                Object.entries(data.bar_scores).forEach(([barName, score]) => {
-                    // Format bar name for display (convert snake_case to Title Case)
-                    const displayName = barName
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, l => l.toUpperCase());
+            // Update portfolio section (MODIFIED TO PASS CARD ID)
+            const portfolioContainer = card.querySelector('.portfolio-container');
+            if (portfolioContainer) {
+                const cardId = card.id;
+                portfolioContainer.innerHTML = renderPortfolioSection(data.portfolio, cardId);
 
-                    // Determine bar color based on name
-                    let barClass = 'bg-secondary';
-                    if (barName.includes('bull')) {
-                        barClass = 'progress-bull';
-                    } else if (barName.includes('bear')) {
-                        barClass = 'progress-bear';
-                    } else if (barName === 'triggers') {
-                        barClass = 'bg-primary';
-                    }
+                // Restore collapsed state from localStorage
+                restorePortfolioState(cardId);
+            }
 
-                    barScoresHTML += `
-                        <div class="mb-3">
-                            <label class="d-flex justify-content-between">
-                                <span>${displayName}</span>
-                                <span>${(score * 100).toFixed(0)}%</span>
-                            </label>
-                            <div class="progress" style="height: 15px;">
-                                <div class="${barClass}" role="progressbar"
-                                     style="width: ${score * 100}%"
-                                     aria-valuenow="${score * 100}" aria-valuemin="0" aria-valuemax="100"></div>
+            // Update bar scores
+            const barsContainer = card.querySelector('.bars-container');
+            if (barsContainer && data.bar_scores) {
+                console.log("UPDATE CARD DATA - Updating bars with:", data.bar_scores);
+                barsContainer.innerHTML = renderBarScores(data.bar_scores);
+            }
+
+            // Update indicators summary
+            const indicatorsSummary = card.querySelector('.indicators-summary');
+            if (indicatorsSummary && data.indicators) {
+                const count = Object.keys(data.indicators).length;
+                indicatorsSummary.textContent = `${count} Active Indicator${count !== 1 ? 's' : ''}`;
+            }
+
+            // Add updating animation
+            card.classList.add('updating');
+            setTimeout(() => card.classList.remove('updating'), 1000);
+
+            // Store card data
+            cards[card.id] = data;
+        }
+
+        // ENHANCED: Portfolio section with collapsible feature
+        function renderPortfolioSection(portfolio, cardId) {
+            if (!portfolio) {
+                return `
+                    <div class="portfolio-section">
+                        <div class="portfolio-header" onclick="togglePortfolio('${cardId}')">
+                            <div class="portfolio-title-section">
+                                <span class="portfolio-toggle" id="toggle-${cardId}">⌄</span>
+                                <span class="portfolio-title">Portfolio</span>
                             </div>
+                            <span class="position-status no-position">NO DATA</span>
                         </div>
-                    `;
-                });
-            } else {
-                // If no bar_scores yet, show a loading placeholder
-                barScoresHTML = `
-                    <div class="text-center py-2 mb-3">
-                        <div class="text-muted mb-2">Loading signal data...</div>
-                        <div class="spinner-border spinner-border-sm text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
+                        <div class="portfolio-metrics" id="metrics-${cardId}">
+                            <div class="metric-item" style="grid-column: 1 / -1;">
+                                <div class="metric-label">No Portfolio Data</div>
+                                <div class="metric-value neutral">--</div>
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
-            // Update card content with all the necessary information
-            card.innerHTML = `
-                <div class="card-header d-flex justify-content-between align-items-center bg-light">
-                    <h5 class="mb-0">${symbol}</h5>
-                    <small class="text-muted">${timeStr}</small>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="ticker-price ${changeClass}">${price} ${changeDirection}</span>
-                        <span class="badge bg-secondary">${data.volume ? data.volume.toLocaleString() : 'N/A'}</span>
-                    </div>
+            const position = portfolio.position || {};
+            const pnl = portfolio.pnl || {};
 
-                    ${barScoresHTML}
+            const isInPosition = position.is_in_position || false;
+            const entryPrice = position.entry_price || 0;
+            const currentPrice = position.current_price || 0;
+            const positionSize = position.position_size || 0;
 
-                    ${data.indicators ? renderIndicatorsSummary(symbol) : ''}
-                </div>
-                <div class="card-footer bg-white">
-                    <div class="row small text-muted">
-                        <div class="col-6">
-                            <div>Open: ${data.open ? data.open.toFixed(2) : 'N/A'}</div>
-                            <div>Low: ${data.low ? data.low.toFixed(2) : 'N/A'}</div>
+            // Use PERCENT values instead of dollar values
+            const realizedPnlPercent = pnl.realized_pnl_percent || 0;
+            const unrealizedPnlPercent = pnl.unrealized_pnl_percent || 0;
+            const totalPnlPercent = pnl.total_pnl_percent || 0;
+
+            const statusClass = isInPosition ? 'in-position' : 'no-position';
+            const statusText = isInPosition ? 'IN POSITION' : 'NO POSITION';
+
+            return `
+                <div class="portfolio-section">
+                    <div class="portfolio-header" onclick="togglePortfolio('${cardId}')">
+                        <div class="portfolio-title-section">
+                            <span class="portfolio-toggle" id="toggle-${cardId}">⌄</span>
+                            <span class="portfolio-title">Portfolio</span>
                         </div>
-                        <div class="col-6 text-end">
-                            <div>High: ${data.high ? data.high.toFixed(2) : 'N/A'}</div>
-                            <div>Close: ${data.close ? data.close.toFixed(2) : 'N/A'}</div>
+                        <span class="position-status ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="portfolio-metrics" id="metrics-${cardId}">
+                        <div class="metric-item">
+                            <div class="metric-label">Entry Price</div>
+                            <div class="metric-value neutral">${entryPrice.toFixed(2)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Position Size</div>
+                            <div class="metric-value neutral">${positionSize.toFixed(1)}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Realized P&L</div>
+                            <div class="metric-value ${realizedPnlPercent >= 0 ? 'positive' : 'negative'}">${realizedPnlPercent.toFixed(2)}%</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Unrealized P&L</div>
+                            <div class="metric-value ${unrealizedPnlPercent >= 0 ? 'positive' : 'negative'}">${unrealizedPnlPercent.toFixed(2)}%</div>
+                        </div>
+                        <div class="metric-item" style="grid-column: 1 / -1;">
+                            <div class="metric-label">Total P&L</div>
+                            <div class="metric-value ${totalPnlPercent >= 0 ? 'positive' : 'negative'}">${totalPnlPercent.toFixed(2)}%</div>
                         </div>
                     </div>
                 </div>
             `;
-        });
-    }
-    // Check if we have data already
-    function loadInitialData() {
-        console.log('Loading initial ticker data...');
-        fetch('/api/tickers')
-            .then(response => response.json())
-            .then(data => {
-                console.log('Received initial data:', data);
-                if (data && data.data) {
-                    tickerData = data.data;
-                    updateTickerUI();
-                }
-            })
-            .catch(error => {
-                console.error('Error loading ticker data:', error);
-            });
-    }
-
-    function checkSocketConnection() {
-        console.log('Checking Socket.IO connection');
-        if (socket.connected) {
-            console.log('Socket.IO connected');
-        } else {
-            console.log('Socket.IO not connected, trying to connect...');
-            socket.connect();
         }
 
-        // Try to load initial data
-        loadInitialData();
-    }
+        // Portfolio toggle function
+        function togglePortfolio(cardId) {
+            const metricsElement = document.getElementById(`metrics-${cardId}`);
+            const toggleElement = document.getElementById(`toggle-${cardId}`);
 
-    // Initialize
-    window.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM loaded, checking Socket.IO connection...');
-        checkSocketConnection();
-
-        // Add symbol from modal
-        document.getElementById('confirmAddSymbolBtn').addEventListener('click', function() {
-            const symbolInput = document.getElementById('newSymbolInput');
-            const symbol = symbolInput.value.trim().toUpperCase();
-
-            if (symbol) {
-                // Add to UI
-                addSymbolToUI(symbol);
-
-                // Clear input and close modal
-                symbolInput.value = '';
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addSymbolModal'));
-                modal.hide();
+            if (!metricsElement || !toggleElement) {
+                return;
             }
-        });
 
-        // Add the test card button handler here
-        document.getElementById('testCardBtn').addEventListener('click', function() {
-            // Create test data for PLTR
-            const testData = {
-                PLTR: {
-                    symbol: 'PLTR',
-                    timestamp: new Date().toISOString(),
-                    open: 95.21,
-                    high: 96.30,
-                    low: 94.80,
-                    close: 95.50,
-                    volume: 1234567,
-                    indicators: {
-                        'macd_cross_bull': 0.3,
-                        'bollinger_bull': 0.1,
-                        'smaX_bull': 0.8,
-                        'bollinger_bear': 0.2
-                    },
-                    overall_scores: {
-                        bull: 0.4,
-                        bear: 0.1
-                    }
+            // Toggle the collapsed class
+            const isCollapsed = metricsElement.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                // Expand
+                metricsElement.classList.remove('collapsed');
+                toggleElement.classList.remove('collapsed');
+                toggleElement.textContent = '⌄'; // Down arrow
+
+                // Store preference
+                localStorage.setItem(`portfolio-${cardId}`, 'expanded');
+            } else {
+                // Collapse
+                metricsElement.classList.add('collapsed');
+                toggleElement.classList.add('collapsed');
+                toggleElement.textContent = '⌃'; // Up arrow
+
+                // Store preference
+                localStorage.setItem(`portfolio-${cardId}`, 'collapsed');
+            }
+        }
+
+        // Restore portfolio state from localStorage
+        function restorePortfolioState(cardId) {
+            const savedState = localStorage.getItem(`portfolio-${cardId}`);
+
+            if (savedState === 'collapsed') {
+                const metricsElement = document.getElementById(`metrics-${cardId}`);
+                const toggleElement = document.getElementById(`toggle-${cardId}`);
+
+                if (metricsElement && toggleElement) {
+                    metricsElement.classList.add('collapsed');
+                    toggleElement.classList.add('collapsed');
+                    toggleElement.textContent = '⌃'; // Up arrow
                 }
-            };
+            }
+        }
 
-            // Directly set ticker data and update UI
-            console.log('Setting test data:', testData);
-            tickerData = testData;
-            updateTickerUI();
+        function renderBarScores(barScores) {
+            if (!barScores || Object.keys(barScores).length === 0) {
+                return '<div style="text-align: center; color: #7d8590; padding: 1rem;">No bar data available</div>';
+            }
+
+            return Object.entries(barScores).map(([barName, score]) => {
+                const displayName = formatBarName(barName);
+                const percentage = (score * 100).toFixed(1);
+                const clampedScore = Math.max(0, Math.min(1, score));
+
+                // Determine color based on score
+                let colorClass = '';
+                let barColor = '';
+                let barColorLight = '';
+                let barGlow = '';
+
+                if (score >= 0.7) {
+                    colorClass = 'positive';
+                    barColor = '#238636';
+                    barColorLight = '#2ea043';
+                    barGlow = '35, 134, 54';
+                } else if (score >= 0.4) {
+                    colorClass = 'neutral';
+                    barColor = '#1f6feb';
+                    barColorLight = '#388bfd';
+                    barGlow = '31, 111, 235';
+                } else {
+                    colorClass = 'negative';
+                    barColor = '#da3633';
+                    barColorLight = '#ff7b72';
+                    barGlow = '248, 81, 73';
+                }
+
+                return `
+                    <div class="responsive-bar" style="--bar-color: ${barColor}; --bar-color-light: ${barColorLight}; --bar-glow: ${barGlow};">
+                        <div class="bar-header">
+                            <span class="bar-label">${displayName}</span>
+                            <span class="bar-value-text ${colorClass}">${percentage}%</span>
+                        </div>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width: ${clampedScore * 100}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatBarName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        async function removeCard(cardId) {
+            if (!confirm(`Are you sure you want to remove ${cardId}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/combinations/${cardId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Remove card from UI immediately
+                    const card = document.getElementById(cardId);
+                    if (card) {
+                        card.remove();
+                        delete cards[cardId];
+                        updateCardsCount();
+
+                        // Clean up localStorage
+                        localStorage.removeItem(`portfolio-${cardId}`);
+
+                        // Show loading message if no cards left
+                        const container = document.getElementById('cardsContainer');
+                        if (container.children.length === 0) {
+                            container.innerHTML = `
+                                <div class="loading">
+                                    <p>No trading cards active.</p>
+                                    <p>Click "Add New Trading Card" above to get started.</p>
+                                </div>
+                            `;
+                        }
+                    }
+                    showMessage(`Removed ${cardId}`, 'success');
+                } else {
+                    showMessage(`Error removing card: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error removing card: ${error.message}`, 'error');
+            }
+        }
+
+        function showMessage(message, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `${type}-message`;
+            messageDiv.textContent = message;
+
+            messagesDiv.appendChild(messageDiv);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
+        // Modal functions
+        function openAddCardModal() {
+            document.getElementById('modalOverlay').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            document.getElementById('modalFileInput').value = '';
+            updateSelectedFileName();
+        }
+
+        function closeAddCardModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            document.getElementById('modalSymbolInput').value = '';
+            document.getElementById('modalFileInput').value = '';
+            modalSelectedFile = null;
+            updateSelectedFileName();
+            updateModalAddButton();
+        }
+
+        function updateSelectedFileName() {
+            const fileInput = document.getElementById('modalFileInput');
+            const fileNameDiv = document.getElementById('selectedFileName');
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                fileNameDiv.textContent = `Selected: ${file.name}`;
+                fileNameDiv.style.color = '#56d364';
+                modalSelectedFile = file;
+            } else {
+                fileNameDiv.textContent = 'No file selected';
+                fileNameDiv.style.color = '#7d8590';
+                modalSelectedFile = null;
+            }
+
+            updateModalAddButton();
+        }
+
+        function updateModalAddButton() {
+            const symbol = document.getElementById('modalSymbolInput').value.trim();
+            const button = document.getElementById('modalAddButton');
+
+            const isValid = symbol.length > 0 && modalSelectedFile;
+            button.disabled = !isValid;
+        }
+
+        async function addCombinationFromModal() {
+            const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
+
+            if (!symbol || !modalSelectedFile) {
+                showMessage('Please enter a symbol and select a configuration file', 'error');
+                return;
+            }
+
+            try {
+                const configContent = await readFileAsText(modalSelectedFile);
+                const configName = modalSelectedFile.name;
+
+                const response = await fetch('/api/combinations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        symbol: symbol,
+                        config_content: configContent,
+                        config_name: configName
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(`Added ${symbol} successfully!`, 'success');
+                    closeAddCardModal();
+                } else {
+                    showMessage(`Error: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error adding combination: ${error.message}`, 'error');
+            }
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+
+        // Event listeners that need to be set up after DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add input listener for symbol field
+            const symbolInput = document.getElementById('modalSymbolInput');
+            if (symbolInput) {
+                symbolInput.addEventListener('input', updateModalAddButton);
+
+                // Enter key handler for symbol input
+                symbolInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !document.getElementById('modalAddButton').disabled) {
+                        addCombinationFromModal();
+                    }
+                });
+            }
+
+            // Add file input listener
+            const fileInput = document.getElementById('modalFileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', updateSelectedFileName);
+
+                // Add drag and drop support
+                fileInput.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.style.borderColor = '#1f6feb';
+                });
+
+                fileInput.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.style.borderColor = '#30363d';
+                });
+
+                fileInput.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.style.borderColor = '#30363d';
+
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.files = files;
+                        updateSelectedFileName();
+                    }
+                });
+            }
+
+            // Modal overlay click to close
+            document.getElementById('modalOverlay').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeAddCardModal();
+                }
+            });
+
+            // Escape key to close modal
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && document.getElementById('modalOverlay').style.display === 'block') {
+                    closeAddCardModal();
+                }
+            });
         });
-    });
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

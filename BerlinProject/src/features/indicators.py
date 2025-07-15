@@ -6,7 +6,7 @@ import talib as ta
 import numpy as np
 from scipy.signal import argrelextrema
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 def sma_indicator(tick_data: List[TickData], period: float) -> np.ndarray:

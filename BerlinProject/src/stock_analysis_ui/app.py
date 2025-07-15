@@ -1,297 +1,400 @@
 #!/usr/bin/env python3
 """
-Simple Flask app for streaming indicators with symbol/config selection
+Complete Flask application with support for both Live Schwab and CS Replay modes
+Usage:
+  # Live mode (unchanged from original)
+  python app.py
+
+  # CS Replay mode
+  python app.py --replay-file pltr_pips.txt --symbol PLTR --config monitor_config.json
+
+  # CS Replay mode with multiple symbols
+  python app.py --replay-files PLTR:pltr_pips.txt NVDA:nvda_pips.txt --config config.json
 """
 
 import os
 import sys
-import json
 import logging
-import threading
-from typing import List, Dict
-from collections import defaultdict
-from flask import Flask, render_template, request, jsonify
+import argparse
+from flask import Flask
 from flask_socketio import SocketIO
 
 # Add project path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
+sys.path.insert(0, os.path.join(current_dir, '..'))
 
-from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
-from data_streamer.schwab_data_link import SchwabDataLink
-from data_streamer.candle_aggregator import CandleAggregator
-from data_streamer.data_streamer import DataStreamer
-from models.monitor_configuration import MonitorConfiguration
-from stock_analysis_ui.services.streaming_manager import StreamingManager
-from stock_analysis_ui.services.ui_external_tool_old import UIExternalTool
+from services.schwab_auth import SchwabAuthManager
+from services.app_service import AppService
+from data_streamer.cs_replay_data_link import CSReplayDataLink
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('StreamingApp')
+logger = logging.getLogger('TradingApp')
 
 # Flask app setup
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['SECRET_KEY'] = 'your-secret-key-here'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Global variables
-streaming_active: bool = False
-streaming_thread = None
-data_service = None
+# Global app service
+app_service: AppService = None
 
 
-def authenticate_before_startup():
-    """Force fresh Schwab authentication before starting the web server"""
-    global data_service
+def parse_symbol_files(symbol_file_args):
+    """Parse symbol:file pairs from command line arguments"""
+    symbol_files = {}
 
-    print("\n=== SCHWAB AUTHENTICATION REQUIRED ===")
-    print("You will be required to login to Schwab API (no saved token).")
+    for arg in symbol_file_args:
+        if ':' not in arg:
+            logger.error(f"Invalid format: {arg}. Use SYMBOL:filepath format")
+            continue
+
+        symbol, file_path = arg.split(':', 1)
+        symbol = symbol.upper().strip()
+        file_path = file_path.strip()
+
+        if not symbol or not file_path:
+            logger.error(f"Empty symbol or file path in: {arg}")
+            continue
+
+        symbol_files[symbol] = file_path
+
+    return symbol_files
+
+
+def validate_files(file_paths):
+    """Validate that all files exist and are readable"""
+    if isinstance(file_paths, dict):
+        # Multiple files case
+        for symbol, file_path in file_paths.items():
+            if not os.path.exists(file_path):
+                logger.error(f"File not found for {symbol}: {file_path}")
+                return False
+            logger.info(f"✓ {symbol}: {file_path}")
+    else:
+        # Single file case
+        if not os.path.exists(file_paths):
+            logger.error(f"File not found: {file_paths}")
+            return False
+        logger.info(f"✓ File: {file_paths}")
+
+    return True
+
+
+def setup_cs_replay_mode_single(file_path: str, symbol: str, speed: float = 1.0) -> bool:
+    """Set up CS Replay mode with single symbol file"""
+    global app_service
+
+    print(f"\n=== CS REPLAY MODE (Single Symbol) ===")
+    print(f"File: {file_path}")
+    print(f"Symbol: {symbol}")
+    print(f"Speed: {speed}x")
+
+    if not validate_files(file_path):
+        return False
+
+    # Create app service without auth manager (replay mode)
+    app_service = AppService(socketio, auth_manager=None)
+
+    # Create CSReplayDataLink
+    cs_replay_link = CSReplayDataLink(playback_speed=speed)
+
+    # Load the symbol file
+    if not cs_replay_link.add_symbol_file(symbol, file_path):
+        logger.error(f"Failed to load data for {symbol}")
+        return False
+
+    # Set data_link on app_service BEFORE calling start_streaming
+    app_service.data_link = cs_replay_link
+
+    # Start streaming
+    if not app_service.start_streaming():
+        logger.error("Failed to start streaming")
+        return False
+
+    print("✅ CS Replay mode setup successful!")
+    return True
+
+
+def setup_cs_replay_mode_multi(symbol_files: dict, speed: float = 1.0) -> bool:
+    """Set up CS Replay mode with multiple symbol files"""
+    global app_service
+
+    print(f"\n=== CS REPLAY MODE (Multi Symbol) ===")
+    print(f"Speed: {speed}x")
+    print("Symbol Files:")
+    for symbol, file_path in symbol_files.items():
+        print(f"  {symbol}: {file_path}")
+
+    if not validate_files(symbol_files):
+        return False
+
+    # Create app service without auth manager (replay mode)
+    app_service = AppService(socketio, auth_manager=None)
+
+    # Create CSReplayDataLink
+    cs_replay_link = CSReplayDataLink(playback_speed=speed)
+
+    # Load each symbol file
+    for symbol, file_path in symbol_files.items():
+        if not cs_replay_link.add_symbol_file(symbol, file_path):
+            logger.error(f"Failed to load data for {symbol}")
+            return False
+
+    # Set data_link on app_service
+    app_service.data_link = cs_replay_link
+
+    # Start streaming
+    if not app_service.start_streaming():
+        logger.error("Failed to start streaming")
+        return False
+
+    print("✅ CS Replay mode setup successful!")
+    return True
+
+
+def authenticate_before_startup() -> bool:
+    """Force fresh Schwab authentication for live mode (unchanged from original)"""
+    global app_service
+
+    print("\n=== TRADING DASHBOARD AUTHENTICATION ===")
+    print("Charles Schwab API authentication required to start the application.")
 
     # Create auth manager and force fresh authentication
     auth_manager = SchwabAuthManager()
-    # Clear any existing tokens to force fresh login
-    auth_manager.access_token = None
-    auth_manager.refresh_token = None
+    print("Starting Schwab authentication...")
 
-    print("Starting fresh Schwab authentication...")
     if not auth_manager.authenticate():
         print("\nAuthentication failed. Cannot start application.")
         return False
 
-    # Create data service and assign the authenticated auth_manager
-    data_service = DataService()
-    data_service.auth_manager = auth_manager
+    # Create app service with authenticated manager
+    app_service = AppService(socketio, auth_manager)
 
-    print("\nFresh authentication successful! Starting web server...")
+    # Start streaming infrastructure immediately
+    print("Starting streaming infrastructure...")
+    if not app_service.start_streaming():
+        print("Failed to start streaming infrastructure.")
+        return False
+
+    print("\nAuthentication and streaming setup successful! Starting web server...")
     return True
 
 
-class DataService:
-    def __init__(self):
-        self.auth_manager = None
-        self.data_link = None
-        self.streaming_manager = None
-        self.data_streamer = None
-        self.ui_tool = None
-        self.is_running = False
+def add_cards_from_args(args) -> None:
+    """Add trading cards based on command line arguments"""
+    if not args.config:
+        logger.info("No configs specified - cards can be added via web interface")
+        return
 
-    def setup_auth(self) -> bool:
-        # Use the already authenticated auth_manager from startup
-        return self.auth_manager is not None and self.auth_manager.access_token is not None
+    # Determine symbols based on mode
+    symbols = []
+    if args.replay_file and args.symbol:
+        # Single symbol mode
+        symbols = [args.symbol.upper()]
+    elif args.replay_files:
+        # Multi symbol mode
+        symbol_files = parse_symbol_files(args.replay_files)
+        symbols = list(symbol_files.keys())
+    else:
+        logger.info("No symbols specified - cards can be added via web interface")
+        return
 
-    def start_streaming(self, combinations: List[Dict]) -> bool:
-        if self.is_running:
-            return False
+    configs = args.config if isinstance(args.config, list) else [args.config]
 
-        # Setup data link
-        self.data_link = SchwabDataLink()
-        self.data_link.access_token = self.auth_manager.access_token
-        self.data_link.refresh_token = self.auth_manager.refresh_token
-        self.data_link.user_prefs = self.auth_manager.user_prefs
+    print(f"\nAdding Trading Cards:")
 
-        if not self.data_link.connect_stream():
-            return False
+    # Handle config assignment
+    if len(configs) == 1:
+        # One config for all symbols
+        config_file = configs[0]
+        for symbol in symbols:
+            result = app_service.add_combination(symbol, config_file)
+            if result['success']:
+                print(f"✓ Added card: {result['card_id']} ({symbol})")
+            else:
+                print(f"✗ Failed to add {symbol}: {result['error']}")
 
-        # Create streaming manager
-        self.streaming_manager = StreamingManager(self.data_link)
+    elif len(symbols) == len(configs):
+        # One-to-one mapping
+        for symbol, config_file in zip(symbols, configs):
+            result = app_service.add_combination(symbol, config_file)
+            if result['success']:
+                print(f"✓ Added card: {result['card_id']} ({symbol})")
+            else:
+                print(f"✗ Failed to add {symbol}: {result['error']}")
 
-        # Setup aggregators and streamers for each combination
-        all_symbols = set()
-        for combo in combinations:
-            symbol = combo['symbol']
-            config_file = combo['config']
-
-            # Load monitor config
-            with open(config_file, 'r') as f:
-                config_data = json.load(f)
-
-            monitor_data = config_data['monitor']
-            monitor_data['indicators'] = config_data['indicators']
-            monitor_config = MonitorConfiguration(**monitor_data)
-
-            timeframes = monitor_config.get_time_increments()
-
-            # Create aggregators for this symbol
-            aggregators = {}
-            for timeframe in timeframes:
-                aggregator = CandleAggregator(symbol, timeframe)
-                # Load historical data
-                aggregator.prepopulate_data(self.data_link)
-                aggregators[timeframe] = aggregator
-
-            # Register with streaming manager
-            self.streaming_manager.aggregators[symbol] = aggregators
-
-            # Create data streamer for this combination
-            model_config = {"feature_vector": [{"name": "close"}]}
-            data_streamer = DataStreamer(model_config, monitor_config)
-
-            # Create UI tool for this combination
-            ui_tool = UIExternalTool(socketio, monitor_config)
-            data_streamer.connect_tool(ui_tool)
-
-            # Store streamer (simplified - using last one for demo)
-            self.data_streamer = data_streamer
-            self.ui_tool = ui_tool
-
-            all_symbols.add(symbol)
-
-        # Start streaming
-        self.data_link.add_quote_handler(self.streaming_manager.route_pip_data)
-        self.data_link.subscribe_quotes(list(all_symbols))
-
-        self.is_running = True
-        return True
-
-    def process_indicators(self):
-        """Process indicators periodically"""
-        while self.is_running:
-            if self.data_streamer and self.streaming_manager:
-                for symbol in self.streaming_manager.aggregators:
-                    symbol_aggregators = self.streaming_manager.aggregators[symbol]
-                    self.data_streamer.process_tick(symbol_aggregators)
-
-            import time
-            time.sleep(2)  # Process every 2 seconds
-
-    def stop_streaming(self):
-        self.is_running = False
-        if self.data_link:
-            self.data_link.disconnect()
+    else:
+        logger.error(f"Mismatch: {len(symbols)} symbols but {len(configs)} configs")
+        logger.error("Provide either 1 config for all symbols, or 1 config per symbol")
 
 
-# Routes
-@app.route('/')
-def index():
-    """Main page with symbol/config selection"""
-    # Get available config files - look in current directory and src directory
-    config_files = []
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Trading Dashboard - Live Schwab or CS Replay Mode',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  # Live mode (original - unchanged)
+  python app.py
 
-    # Check current directory first
-    for file in os.listdir('.'):
-        if file.endswith('.json') and 'monitor_config' in file:
-            config_files.append(file)
+  # CS Replay mode - single symbol
+  python app.py --replay-file pltr_pips.txt --symbol PLTR --config monitor_config.json
 
-    # If no files found, check src/stock_analysis_ui directory
-    if not config_files:
-        try:
-            src_dir = os.path.join(os.path.dirname(__file__), '..', 'src', 'stock_analysis_ui')
-            if os.path.exists(src_dir):
-                for file in os.listdir(src_dir):
-                    if file.endswith('.json') and 'monitor_config' in file:
-                        config_files.append(file)
-        except:
-            pass
+  # CS Replay mode - multiple symbols
+  python app.py --replay-files PLTR:pltr_pips.txt NVDA:nvda_pips.txt --config config.json
 
-    # If still no files, provide default
-    if not config_files:
-        config_files = ['monitor_config_example_time_intervals.json']
+  # CS Replay with custom speed
+  python app.py --replay-file pltr_pips.txt --symbol PLTR --speed 2.0 --config config.json
+        '''
+    )
 
-    return render_template('index.html', config_files=config_files)
+    # CS Replay arguments
+    parser.add_argument(
+        '--replay-file',
+        help='Path to single PIP data file for replay mode'
+    )
 
+    parser.add_argument(
+        '--symbol',
+        help='Symbol for single file replay mode (e.g., PLTR)'
+    )
 
-# Add new route for authentication
-@app.route('/api/authenticate', methods=['POST'])
-def authenticate():
-    """Handle Schwab authentication separately"""
-    global data_service
+    parser.add_argument(
+        '--replay-files',
+        nargs='+',
+        help='Multiple symbol:file pairs (e.g., PLTR:pltr_pips.txt NVDA:nvda_pips.txt)'
+    )
 
-    try:
-        if not data_service:
-            data_service = DataService()
+    parser.add_argument(
+        '--speed', '-s',
+        type=float,
+        default=1.0,
+        help='Playback speed multiplier (default: 1.0 = real-time)'
+    )
 
-        # This will prompt in terminal and wait for user input
-        success = data_service.setup_auth()
+    parser.add_argument(
+        '--config',
+        nargs='+',
+        help='Path(s) to monitor configuration JSON file(s)'
+    )
 
-        if success:
-            return jsonify({'success': True, 'message': 'Authentication successful'})
-        else:
-            return jsonify({'success': False, 'error': 'Authentication failed'})
+    # Server arguments
+    parser.add_argument(
+        '--port', '-p',
+        type=int,
+        default=5050,
+        help='Port to run the web server on (default: 5050)'
+    )
 
-    except Exception as e:
-        logger.error(f"Authentication error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    parser.add_argument(
+        '--host',
+        type=str,
+        default='0.0.0.0',
+        help='Host to bind the web server to (default: 0.0.0.0)'
+    )
 
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug mode'
+    )
 
-@app.route('/api/start', methods=['POST'])
-def start_streaming():
-    """Start streaming with selected combinations"""
-    global streaming_active, streaming_thread, data_service
-
-    if streaming_active:
-        return jsonify({'success': False, 'error': 'Already streaming'})
-
-    combinations = request.json.get('combinations', [])
-    if not combinations:
-        return jsonify({'success': False, 'error': 'No combinations provided'})
-
-    try:
-        # Make sure we have data service and it's authenticated
-        if not data_service:
-            return jsonify({'success': False, 'error': 'Please authenticate first'})
-
-        if not data_service.auth_manager or not data_service.auth_manager.is_authenticated():
-            return jsonify({'success': False, 'error': 'Please authenticate first'})
-
-        # Start streaming (authentication already done)
-        if not data_service.start_streaming(combinations):
-            return jsonify({'success': False, 'error': 'Failed to start streaming'})
-
-        # Start background thread for indicator processing
-        streaming_thread = threading.Thread(target=data_service.process_indicators)
-        streaming_thread.daemon = True
-        streaming_thread.start()
-
-        streaming_active = True
-        return jsonify({'success': True})
-
-    except Exception as e:
-        logger.error(f"Error starting streaming: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    return parser.parse_args()
 
 
-@app.route('/api/stop', methods=['POST'])
-def stop_streaming():
-    """Stop streaming"""
-    global streaming_active, data_service
+def register_routes() -> None:
+    """Register all route blueprints"""
+    from routes.dashboard_routes import dashboard_bp
+    from routes.api_routes import api_bp
+    from routes.file_routes import file_bp
+    from routes.websocket_routes import register_websocket_events
 
-    if data_service:
-        data_service.stop_streaming()
+    # Register blueprints
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(file_bp, url_prefix='/api/files')
 
-    streaming_active = False
-    return jsonify({'success': True})
-
-
-@app.route('/api/status')
-def get_status():
-    """Get current streaming status"""
-    auth_status = False
-    if data_service and data_service.auth_manager and data_service.auth_manager.access_token:
-        auth_status = True
-
-    return jsonify({
-        'streaming': streaming_active,
-        'authenticated': auth_status,
-        'combinations': len(
-            data_service.streaming_manager.aggregators) if data_service and data_service.streaming_manager else 0
-    })
+    # Register WebSocket events
+    register_websocket_events(socketio, app_service)
 
 
-# WebSocket events
-@socketio.on('connect')
-def handle_connect():
-    logger.info('Client connected')
+# Update the create_app function in app.py
+
+# Update the create_app function in app.py
+
+def create_app():
+    """Create and configure the Flask application"""
+    register_routes()
+
+    app.socketio = socketio
+
+    app.app_service = app_service
+
+    if not hasattr(app, '__annotations__'):
+        app.__annotations__ = {}
+    app.__annotations__['app_service'] = AppService
+
+    return app
 
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    logger.info('Client disconnected')
-
+# Replace the main execution block in app.py with this:
 
 if __name__ == '__main__':
-    # Authenticate before starting the server
-    if authenticate_before_startup():
-        print("🚀 Starting web application at http://localhost:5000")
-        socketio.run(app, debug=False, host='0.0.0.0', port=5000)
+    # Parse command line arguments
+    args = parse_arguments()
+
+    # Initialize app_service as None - will be created after authentication
+    app_service = None
+
+    # Determine mode and setup accordingly
+    if args.replay_file and args.symbol:
+        # Single symbol CS Replay mode
+        if not setup_cs_replay_mode_single(args.replay_file, args.symbol.upper(), args.speed):
+            print("Failed to set up CS Replay mode.")
+            sys.exit(1)
+
+    elif args.replay_files:
+        # Multi symbol CS Replay mode
+        symbol_files = parse_symbol_files(args.replay_files)
+        if not symbol_files:
+            print("No valid symbol:file pairs provided.")
+            sys.exit(1)
+
+        if not setup_cs_replay_mode_multi(symbol_files, args.speed):
+            print("Failed to set up CS Replay mode.")
+            sys.exit(1)
+
     else:
-        print("Exiting due to authentication failure.")
+        # Live mode - NO AUTOMATIC AUTHENTICATION
+        # Just initialize app_service as None
+        # Authentication will happen through the UI
+        print("Live mode - authentication will be handled through web interface")
+        app_service = None
+
+    # Add cards from command line arguments (only if app_service exists)
+    if app_service is not None:
+        add_cards_from_args(args)
+
+    # Create Flask app
+    create_app()
+
+    # Determine mode for display
+    if args.replay_file or args.replay_files:
+        mode = "CS Replay"
+        if args.replay_files:
+            symbol_files = parse_symbol_files(args.replay_files)
+            mode += f" ({len(symbol_files)} symbols)"
+        else:
+            mode += f" ({args.symbol})"
+        mode += f" @ {args.speed}x speed"
+    else:
+        mode = "Live Schwab (Authentication Required)"
+
+    print(f"\n🚀 Starting Trading Dashboard at http://localhost:{args.port}")
+    print(f"Mode: {mode}")
+    if app_service is None:
+        print("🔐 Navigate to http://localhost:{args.port} to authenticate with Charles Schwab")
+
+    socketio.run(app, debug=args.debug, host=args.host, port=args.port)

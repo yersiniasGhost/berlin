@@ -1,8 +1,7 @@
 import unittest
 from pydantic import ValidationError
-from bson import ObjectId
 from models.tick_history import TickHistory
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class TestTickHistory(unittest.TestCase):

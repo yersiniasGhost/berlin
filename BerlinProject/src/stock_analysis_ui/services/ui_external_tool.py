@@ -1,109 +1,144 @@
+"""
+Clean UIExternalTool with minimal logging
+"""
+
 import logging
-from typing import Dict, Optional, List
+import time
+from typing import Dict, Optional, Any
 from datetime import datetime
-from flask_socketio import SocketIO
 from collections import defaultdict
 
-from environments.tick_data import TickData
+import numpy as np
+from flask_socketio import SocketIO
+
+from data_streamer import ExternalTool
+from models.tick_data import TickData
 
 logger = logging.getLogger('UIExternalTool')
 
 
-class UIExternalTool:
-    """Simplified UI external tool for real-time data streaming to web interface"""
+# In ui_external_tool.py, modify the UIExternalTool class
 
-    def __init__(self, socketio: SocketIO, monitor_config):
+class UIExternalTool(ExternalTool):
+    """
+    Clean UI External Tool - sends data to browser via WebSocket
+    """
+
+    def __init__(self, socketio: SocketIO, app_service=None):  # ADD app_service parameter
         self.socketio: SocketIO = socketio
-        self.monitor_config = monitor_config
+        self.app_service = app_service  # Store reference to app_service
+        self.last_meaningful_data: Dict[str, Dict] = {}
 
-        # Current data storage
-        self.current_data: Dict[str, Dict] = defaultdict(dict)
-        self.indicators: Dict[str, Dict[str, float]] = defaultdict(dict)
-        self.bar_scores: Dict[str, Dict[str, float]] = defaultdict(dict)
-        self.raw_indicators: Dict[str, Dict[str, float]] = defaultdict(dict)
+        # Rate limiting
+        self.last_update_time: Dict[str, float] = defaultdict(float)
+        self.min_update_interval: float = 0.05  # 50ms minimum between updates
+        self.update_counter: Dict[str, int] = defaultdict(int)
+        self.failed_emit_counter: Dict[str, int] = defaultdict(int)
 
-        # Historical data (limited size)
-        self.history: Dict[str, List[Dict]] = defaultdict(list)
-        self.max_history: int = 1000
+        # WebSocket health monitoring
+        self.last_successful_emit: float = time.time()
+        self.total_emits: int = 0
+        self.failed_emits: int = 0
+        self.max_failed_emits: int = 10
 
-    def feature_vector(self, fv, tick: TickData) -> None:
-        """Handle feature vector updates (not used in current system)"""
+    def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
+                     indicators: Dict[str, float], raw_indicators: Dict[str, float],
+                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Process real-time tick data and send updates to browser
+        """
+        try:
+            current_time = time.time()
+
+            # Rate limiting: Skip update if too recent
+            if current_time - self.last_update_time[card_id] < self.min_update_interval:
+                return
+
+            self.last_update_time[card_id] = current_time
+            self.update_counter[card_id] += 1
+
+            # Extract data from TickData object
+            price = tick_data.close
+            volume = tick_data.volume
+            timestamp = tick_data.timestamp
+
+            # GET MONITOR NAME FROM APP_SERVICE
+            monitor_config_name = None
+            test_name = None
+            if self.app_service and hasattr(self.app_service, 'combinations'):
+                combination = self.app_service.combinations.get(card_id)
+                if combination:
+                    monitor_config_name = combination['monitor_config'].name
+                    test_name = combination.get('test_name', monitor_config_name)
+
+            # Prepare update data
+            update_data = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'price': price,
+                'timestamp': self._format_timestamp(timestamp),
+                'ohlc': [tick_data.open, tick_data.high, tick_data.low, tick_data.close],
+                'volume': volume,
+                'indicators': indicators or {},
+                'bar_scores': bar_scores or {},
+                'raw_indicators': raw_indicators or {},
+                'update_count': self.update_counter[card_id],
+                # ADD MONITOR NAME FIELDS
+                'monitor_config_name': test_name or monitor_config_name,
+                'test_name': test_name
+            }
+
+            # Add portfolio metrics if available
+            if portfolio_metrics:
+                update_data['portfolio'] = portfolio_metrics
+
+            # WebSocket emit with error handling
+            emit_success = self._safe_emit('card_update', update_data, card_id)
+
+            # Monitor WebSocket health
+            if emit_success:
+                self.last_successful_emit = current_time
+                self.total_emits += 1
+                # Reset failed counter on success
+                if self.failed_emit_counter[card_id] > 0:
+                    self.failed_emit_counter[card_id] = 0
+            else:
+                self.failed_emits += 1
+                self.failed_emit_counter[card_id] += 1
+
+                # If too many failures, reset counter to prevent spam
+                if self.failed_emit_counter[card_id] >= self.max_failed_emits:
+                    self.failed_emit_counter[card_id] = 0
+
+        except Exception:
+            pass
+
+    def _safe_emit(self, event: str, data: Dict, card_id: str) -> bool:
+        """
+        Safely emit WebSocket data with error handling
+        """
+        try:
+            self.socketio.emit(event, data)
+            return True
+        except Exception:
+            return False
+
+    def indicator_vector(self, indicators: Dict[str, float], tick: TickData, index: int,
+                         raw_indicators: Optional[Dict[str, float]] = None) -> None:
+        """Legacy indicator vector method - redirect to process_tick"""
         pass
 
-    def indicator_vector(self, indicators: Dict[str, float], tick: Optional[TickData],
-                         index: int, raw_indicators: Optional[Dict[str, float]] = None,
-                         bar_scores: Optional[Dict[str, float]] = None) -> None:
-        """Process indicator updates and send to UI"""
+    def feature_vector(self, fv: np.array, tick: TickData) -> None:
+        """Feature vector processing (not used in current architecture)"""
+        pass
 
-        if not tick or not hasattr(tick, 'symbol'):
-            return
+    def present_sample(self, sample: dict, index: int):
+        """Sample presentation (not used in current architecture)"""
+        pass
 
-        symbol: str = tick.symbol
-        timestamp: str = self._format_timestamp(tick.timestamp)
-
-        # Store indicator data
-        self.indicators[symbol] = indicators
-        self.raw_indicators[symbol] = raw_indicators or {}
-        self.bar_scores[symbol] = bar_scores or {}
-
-        # Store current price data
-        self.current_data[symbol] = {
-            'price': tick.close,
-            'timestamp': timestamp,
-            'ohlc': [tick.open, tick.high, tick.low, tick.close],
-            'volume': tick.volume
-        }
-
-        # Send comprehensive update to UI
-        self._emit_indicator_update(symbol, indicators, bar_scores, raw_indicators, tick)
-
-        logger.info(f"Sent indicator update for {symbol}: {len(indicators)} indicators, {len(bar_scores or {})} bars")
-
-    def handle_completed_candle(self, symbol: str, candle: TickData) -> None:
-        """Handle completed candle data"""
-
-        candle_data: Dict = {
-            'timestamp': self._format_timestamp(candle.timestamp),
-            'open': candle.open,
-            'high': candle.high,
-            'low': candle.low,
-            'close': candle.close,
-            'volume': candle.volume,
-            'timeframe': getattr(candle, 'time_increment', '1m')
-        }
-
-        # Add to history with size limit
-        self.history[symbol].append(candle_data)
-        if len(self.history[symbol]) > self.max_history:
-            self.history[symbol] = self.history[symbol][-self.max_history:]
-
-        # Send to UI
-        self.socketio.emit('candle_completed', {
-            'symbol': symbol,
-            'candle': candle_data,
-            'history_size': len(self.history[symbol])
-        })
-
-        logger.info(f"Sent completed candle for {symbol}: {candle_data['timeframe']} @ {candle_data['timestamp']}")
-
-    def _emit_indicator_update(self, symbol: str, indicators: Dict[str, float],
-                               bar_scores: Optional[Dict[str, float]],
-                               raw_indicators: Optional[Dict[str, float]],
-                               tick: TickData) -> None:
-        """Send comprehensive indicator update to UI"""
-
-        update_data: Dict = {
-            'symbol': symbol,
-            'timestamp': self._format_timestamp(tick.timestamp),
-            'indicators': indicators,
-            'bar_scores': bar_scores or {},
-            'raw_indicators': raw_indicators or {},
-            'current_price': tick.close,
-            'current_ohlc': [tick.open, tick.high, tick.low, tick.close],
-            'volume': tick.volume
-        }
-
-        self.socketio.emit('indicator_update', update_data)
+    def reset_next_sample(self):
+        """Reset for next sample (not used in current architecture)"""
+        pass
 
     def _format_timestamp(self, timestamp) -> str:
         """Format timestamp for JSON serialization"""
@@ -111,47 +146,32 @@ class UIExternalTool:
             return timestamp.isoformat()
         return str(timestamp)
 
-    def get_current_data(self, symbol: str) -> Dict:
-        """Get current data for a symbol"""
+    def clear_meaningful_data(self, card_id: str = None) -> None:
+        """Clear stored meaningful data and reset counters"""
+        if card_id:
+            self.last_meaningful_data.pop(card_id, None)
+            self.update_counter.pop(card_id, 0)
+            self.failed_emit_counter.pop(card_id, 0)
+            self.last_update_time.pop(card_id, 0)
+        else:
+            self.last_meaningful_data.clear()
+            self.update_counter.clear()
+            self.failed_emit_counter.clear()
+            self.last_update_time.clear()
+
+    def get_health_status(self) -> Dict[str, Any]:
+        """Get WebSocket health status for debugging"""
+        current_time = time.time()
+        silence_duration = current_time - self.last_successful_emit
+
         return {
-            'current': self.current_data.get(symbol, {}),
-            'indicators': self.indicators.get(symbol, {}),
-            'bar_scores': self.bar_scores.get(symbol, {}),
-            'raw_indicators': self.raw_indicators.get(symbol, {}),
-            'history': self.history.get(symbol, [])
+            'total_emits': self.total_emits,
+            'failed_emits': self.failed_emits,
+            'success_rate': (self.total_emits / max(self.total_emits + self.failed_emits, 1)) * 100,
+            'last_successful_emit': datetime.fromtimestamp(self.last_successful_emit).isoformat(),
+            'silence_duration_seconds': silence_duration,
+            'cards_with_failures': {card_id: count for card_id, count in self.failed_emit_counter.items() if count > 0},
+            'update_counts': dict(self.update_counter),
+            'min_update_interval_ms': self.min_update_interval * 1000,
+            'active_cards': len(self.update_counter)
         }
-
-    def get_all_data(self) -> Dict:
-        """Get all current data for all symbols"""
-        all_symbols: List[str] = list(set(
-            list(self.current_data.keys()) +
-            list(self.indicators.keys()) +
-            list(self.history.keys())
-        ))
-
-        return {
-            'symbols': all_symbols,
-            'data': {symbol: self.get_current_data(symbol) for symbol in all_symbols}
-        }
-
-    def send_status_update(self) -> None:
-        """Send general status update to UI"""
-        status: Dict = {
-            'timestamp': datetime.now().isoformat(),
-            'active_symbols': list(self.current_data.keys()),
-            'total_indicators': sum(len(ind) for ind in self.indicators.values()),
-            'total_history': sum(len(hist) for hist in self.history.values())
-        }
-
-        self.socketio.emit('status_update', status)
-
-    def clear_data(self) -> None:
-        """Clear all stored data"""
-        self.current_data.clear()
-        self.indicators.clear()
-        self.bar_scores.clear()
-        self.raw_indicators.clear()
-        self.history.clear()
-
-        self.socketio.emit('data_cleared', {'timestamp': datetime.now().isoformat()})
-        logger.info("Cleared all UI data.")

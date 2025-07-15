@@ -1,6 +1,6 @@
 from typing import Optional
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 from environments.state import State
 from config import ACTION
 

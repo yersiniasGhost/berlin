@@ -1,17 +1,14 @@
-# schwab_data_link.py
-import os
-import base64
 import requests
 import websocket
 import json
 import threading
 import time
 import logging
+from typing import Set, Dict, List
 from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any, Iterator, Tuple
 
 from data_streamer.data_link import DataLink
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,57 +17,98 @@ logger = logging.getLogger('SchwabDataLink')
 
 class SchwabDataLink(DataLink):
     """
-    A simplified class for connecting to Schwab API and streaming market data.
+    A "simplified" class for connecting to Schwab API and streaming market data.
+    Converts PIP data to TickData objects before passing to DataStreamers.
     """
 
-    def get_stats(self) -> Dict[str, Dict[str, float]]:
-        pass
-
-    def reset_index(self) -> None:
-        pass
-
-    def get_next2(self) -> Optional[TickData]:
-        pass
-
-    def serve_next_tick(self) -> Iterator[Tuple[TickData, int, int]]:
-        pass
-
     def __init__(self):
+        super().__init__()
         # Hardcoded authentication credentials
-        self.app_key = "QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ"
-        self.app_secret = "RmwUJyBGGgW2r2C7"
-        self.redirect_uri = "https://127.0.0.1"
+        self.app_key: str = "QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ"
+        self.app_secret: str = "RmwUJyBGGgW2r2C7"
+        self.redirect_uri: str = "https://127.0.0.1"
         self.access_token = None
         self.refresh_token = None
+
+        # for data dumper
+        self.quote_handlers = []
 
         # Streamer configuration
         self.user_prefs = None
         self.ws = None  # WebSocket connection
         self.is_connected = False
         self.request_id = 0
-
-        # Data handlers
-        self.quote_handlers = []
-        self.chart_handlers = []
-
+        self.subscribed_symbols: Set[str] = set()
+        self.login_complete = False
         logger.info(f"Initialized SchwabDataLink with API key: {self.app_key}")
 
-    def load_auth_info(self):
-        """Load authentication credentials from JSON file"""
+    # TODO: ADD A NEW VALIDATOR TO MAKE SURE WE ARE NOT GETTING HUGE DECREASES FROM PIP TO PIP...
+    # DATA QUALITY ISSUE^
+
+    # In schwab_data_link.py, modify the _pip_to_tick_data method
+
+    def _pip_to_tick_data(self, pip_data: Dict) -> TickData:
+        """
+        Simple conversion of Schwab PIP data to TickData object.
+        Now uses current time as fallback for missing/invalid timestamps.
+        """
+        # Get required fields
+        symbol = pip_data.get('key')
+        close_price = pip_data.get('3')
+
+        # Validation - only require symbol and price
+        if not symbol or not close_price:
+            print(f"Missing required data: symbol={symbol}, price={close_price}")
+            return None
+
+        # Convert price and validate
         try:
-            with open(self.auth_file_path, 'r') as auth_file:
-                auth_info = json.load(auth_file)
+            price = float(close_price)
+            if price <= 0:
+                print(f"Invalid price: {price}")
+                return None
+        except (ValueError, TypeError):
+            print(f"Cannot convert price to float: {close_price}")
+            return None
 
-            # Make sure we're using the exact keys from your JSON file
-            self.app_key = auth_info.get('api_key', auth_info.get('app_key', ''))
-            self.app_secret = auth_info.get('api_secret', auth_info.get('app_secret', ''))
-            self.redirect_uri = auth_info.get('redirect_uri', 'https://127.0.0.1')
+        # Handle timestamp with fallback to current time
+        timestamp_ms = pip_data.get('38')
+        timestamp = None
 
-            logger.info(f"Loaded authentication info for API key: {self.app_key}")
-            return True
-        except Exception as e:
-            logger.error(f"Error loading authentication info: {e}")
-            return False
+        if timestamp_ms:
+            try:
+                timestamp_ms = int(timestamp_ms)
+                if timestamp_ms > 0:
+                    timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+
+                    # Sanity check timestamp (must be after year 2000)
+                    if timestamp.year < 2000:
+                        print(f"Invalid timestamp year: {timestamp.year}, using current time")
+                        timestamp = None  # Will use current time below
+                else:
+                    print(f"Invalid timestamp: {timestamp_ms}, using current time")
+                    timestamp = None  # Will use current time below
+            except (ValueError, TypeError):
+                print(f"Cannot convert timestamp: {timestamp_ms}, using current time")
+                timestamp = None  # Will use current time below
+
+        # If no valid timestamp, use current time
+        if timestamp is None:
+            timestamp = datetime.now()
+
+        volume = int(pip_data.get('8', 0))  # Optional, default to 0
+
+        # For PIP data, all OHLC values are the current price
+        return TickData(
+            symbol=symbol,
+            timestamp=timestamp,
+            open=price,
+            high=price,
+            low=price,
+            close=price,
+            volume=volume,
+            time_increment="PIP"
+        )
 
     def authenticate(self):
         """Authenticate with Schwab API using console input"""
@@ -153,7 +191,6 @@ class SchwabDataLink(DataLink):
         except Exception as e:
             logger.error(f"Error processing authentication response: {e}")
             return False
-
 
     def _get_streamer_info(self) -> bool:
         """Get streamer information from user preferences"""
@@ -261,7 +298,6 @@ class SchwabDataLink(DataLink):
 
         return True
 
-
     def _get_next_request_id(self) -> str:
         """Get next request ID"""
         self.request_id += 1
@@ -289,42 +325,6 @@ class SchwabDataLink(DataLink):
         logger.info("Sending login request to streamer")
         self.ws.send(json.dumps(login_request))
 
-    def save_chart_data(self, chart_data, filename=None):
-        """
-        Save chart data from the Schwab API to a text file
-
-        Args:
-            chart_data: Chart data from the Schwab API
-            filename: Optional filename to save to. If None, generates a filename based on symbol and time
-
-        Returns:
-            str: Path to the saved file
-        """
-
-        # Open the file and write the data
-        with open(filename, 'w') as f:
-            # # Write a header
-            # f.write("timestamp,datetime,open,high,low,close,volume,raw_json\n")
-
-            # Write each chart entry
-            for entry in chart_data:
-
-                # Format raw JSON
-                raw_json = json.dumps(entry).replace('"', '""')  # Escape quotes for CSV
-
-                # Write the data
-                f.write(
-                    f"{raw_json}\"\n,")
-
-        # Log that we've saved the file
-        if hasattr(self, 'logger'):
-            self.logger.info(f"Saved chart data to {filename}")
-        else:
-            print(f"Saved chart data to {filename}")
-
-        return filename
-
-    # add a collect flag and concat it into a text file. run it with the 1 and 15 min
     def _handle_message(self, message: str) -> None:
         """Handle messages from the streaming API"""
         try:
@@ -352,12 +352,8 @@ class SchwabDataLink(DataLink):
                 for data in msg_data['data']:
                     service = data.get('service')
                     content = data.get('content', [])
-
                     if service == 'LEVELONE_EQUITIES' and content:
                         self._handle_quote_data(content)
-
-                    elif service == 'CHART_EQUITY' and content:
-                        self._handle_chart_data(content)
 
             # Handle notifications
             if 'notify' in msg_data:
@@ -369,24 +365,54 @@ class SchwabDataLink(DataLink):
             logger.error(f"Error handling message: {e}")
 
     def _handle_quote_data(self, data: List[Dict]) -> None:
-        """Process quote data and pass to handlers"""
+        """
+        Process quote data and convert to TickData before passing to DataStreamers
+        """
+        logger.info(f"Received quote data: {len(data)} quotes")
+
         for quote in data:
             try:
-                # Call all registered quote handlers
+                # FIRST: Call any registered quote handlers with raw PIP data
+                # This happens BEFORE validation, so we save everything
                 for handler in self.quote_handlers:
-                    handler(quote)
-            except Exception as e:
-                logger.error(f"Error in quote handler: {e}")
+                    try:
+                        handler(quote)
+                    except Exception as e:
+                        logger.error(f"Error in quote handler: {e}")
 
-    def _handle_chart_data(self, data: List[Dict]) -> None:
-        """Process chart data and pass to handlers"""
-        for chart_entry in data:
-            try:
-                # Call all registered chart handlers
-                for handler in self.chart_handlers:
-                    handler(chart_entry)
+                # THEN: Try to convert PIP data to TickData with validation
+                tick_data = self._pip_to_tick_data(quote)
+
+                # Skip if conversion failed (tick_data is None) but continue to next quote
+                if tick_data is None:
+                    continue
+
+                symbol = tick_data.symbol
+
+                logger.info(f"Processing TickData for {symbol}: ${tick_data.close}")
+
+                # Pass TickData to all registered DataStreamers for this symbol
+                if symbol in self.data_streamers:
+                    for data_streamer in self.data_streamers[symbol]:
+                        try:
+                            # DataStreamer now receives TickData instead of raw PIP data
+                            data_streamer.process_tick(tick_data)
+                        except Exception as ds_error:
+                            logger.error(f"Error in DataStreamer for {symbol}: {ds_error}")
+                else:
+                    logger.debug(f"No DataStreamers registered for symbol: {symbol}")
+
             except Exception as e:
-                logger.error(f"Error in chart handler: {e}")
+                logger.error(f"Unexpected error processing quote: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+    def add_symbol_subscription(self, symbol):
+        """Add symbol to subscription list"""
+        if symbol not in self.subscribed_symbols:
+            self.subscribed_symbols.add(symbol)
+            self.subscribe_quotes(list(self.subscribed_symbols))
 
     def subscribe_quotes(self, symbols: List[str]) -> bool:
         """
@@ -425,61 +451,9 @@ class SchwabDataLink(DataLink):
         self.ws.send(json.dumps(subscribe_request))
         return True
 
-    def subscribe_charts(self, symbols: List[str], timeframe: str = "1m") -> bool:
-        """
-        Subscribe to chart data for specified symbols
-
-        Args:
-            symbols: List of stock symbols
-            timeframe: Candle timeframe (1m, 5m, 15m, 30m, 1h, 1d)
-
-        Returns:
-            bool: Success status
-        """
-        if not self.is_connected:
-            logger.error("Not connected to streaming API")
-            return False
-
-        # Map timeframe string to frequency parameters
-        timeframe_mapping = {
-            "1m": {"frequency_type": "minute", "frequency": 1},
-            "5m": {"frequency_type": "minute", "frequency": 5},
-            "15m": {"frequency_type": "minute", "frequency": 15},
-            "30m": {"frequency_type": "minute", "frequency": 30},
-            "1h": {"frequency_type": "hour", "frequency": 1},
-            "1d": {"frequency_type": "daily", "frequency": 1}
-        }
-
-        tf_params = timeframe_mapping.get(timeframe, timeframe_mapping["1m"])
-
-        # Fields for chart data
-        fields = "0,1,2,3,4,5,6,7,8"
-
-        subscribe_request = {
-            "requests": [
-                {
-                    "service": "CHART_EQUITY",
-                    "requestid": self._get_next_request_id(),
-                    "command": "SUBS",
-                    "SchwabClientCustomerId": self.user_prefs.get('schwabClientCustomerId'),
-                    "SchwabClientCorrelId": self.user_prefs.get('schwabClientCorrelId'),
-                    "parameters": {
-                        "keys": ",".join(symbols),
-                        "fields": fields,
-                        "frequency_type": tf_params["frequency_type"],
-                        "frequency": tf_params["frequency"]
-                    }
-                }
-            ]
-        }
-
-        logger.info(f"Subscribing to charts for: {symbols} with timeframe {timeframe}")
-        self.ws.send(json.dumps(subscribe_request))
-        return True
-
     def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
         """
-        Simple function to load the last 5 hours of candle data for a given symbol and timeframe.
+        Load historical data and convert to TickData objects with type="TICK"
 
         Args:
             symbol: Stock symbol
@@ -489,10 +463,20 @@ class SchwabDataLink(DataLink):
             List of TickData objects sorted by timestamp
         """
         try:
-            # Calculate time range (last 5 hours)
+            # FIXED: Calculate time range properly (last 5 trading days instead of hours)
             from datetime import datetime, timedelta
-            end_time = datetime.now()
-            start_time = end_time - timedelta(hours=5)
+            import pytz
+
+            # Get current time in Eastern timezone (market timezone)
+            eastern = pytz.timezone('US/Eastern')
+            end_time = datetime.now(eastern)
+
+            # FIXED: Go back 5 trading days instead of 5 hours
+            start_time = end_time - timedelta(days=5)
+
+            # Make sure we're not trying to get future data
+            if start_time > end_time:
+                start_time = end_time - timedelta(days=1)
 
             logger.info(f"Loading {timeframe} data for {symbol} from {start_time} to {end_time}")
 
@@ -511,20 +495,21 @@ class SchwabDataLink(DataLink):
             elif timeframe == "30m":
                 frequency = 30
             elif timeframe == "1h":
-                frequency_type = "hour"
-                frequency = 1
+                frequency_type = "minute"  # Keep as minute for 1h
+                frequency = 60
 
-            # API parameters
+            # FIXED: API parameters with proper period handling
             params = {
                 'symbol': symbol,
                 'periodType': 'day',
-                'period': 1,
+                'period': 5,  # Last 5 days
                 'frequencyType': frequency_type,
                 'frequency': frequency,
-                'startDate': int(start_time.timestamp() * 1000),
-                'endDate': int(end_time.timestamp() * 1000),
-                'needExtendedHoursData': True
+                'needExtendedHoursData': False  # Only regular market hours
             }
+
+            # Don't specify start/end dates, let the API handle the period
+            logger.info(f"API params: {params}")
 
             # Make request
             response = requests.get(url, headers=headers, params=params)
@@ -540,7 +525,7 @@ class SchwabDataLink(DataLink):
             # Convert to TickData objects
             result = []
             for candle in candles:
-                # Create TickData with correct timeframe
+                # Create TickData with correct timeframe (no type field)
                 tick = TickData(
                     symbol=symbol,
                     timestamp=datetime.fromtimestamp(candle['datetime'] / 1000),
@@ -583,3 +568,8 @@ class SchwabDataLink(DataLink):
             self.ws.close()
             self.is_connected = False
             logger.info("Disconnected from streaming API")
+
+    #  THis is for the data dumper to use:
+    def add_quote_handler(self, handler):
+        """Add a quote handler function"""
+        self.quote_handlers.append(handler)

@@ -13,7 +13,7 @@ from data_streamer.candle_aggregator import CandleAggregator
 from data_streamer.data_streamer import DataStreamer
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 def load_monitor_config():

@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 from src.features.indicators import sma_crossover, macd_calculation, macd_histogram_crossover, create_bol_bands, \
-    bol_bands_lower_band_bounce, fib_retracement_resistance_hit
-from environments.tick_data import TickData
+    bol_bands_lower_band_bounce
+from models.tick_data import TickData
 
 
 class TestSMATriggerCrossover(unittest.TestCase):

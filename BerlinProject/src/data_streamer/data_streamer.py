@@ -1,56 +1,125 @@
-from datetime import datetime
-import time
-from typing import List, Optional, Tuple, Dict
+# data_streamer/data_streamer.py - Updated logic
+"""
+DataStreamer with simple aggregator selection logic
+"""
+
 import logging
-from data_streamer.candle_aggregator import CandleAggregator
+from typing import Dict, List, Optional, Any
+from datetime import datetime
 
-from environments.tick_data import TickData
-
-# Configure at module level
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('DataStreamer')
-
-from mongo_tools.sample_tools import SampleTools
+from models.tick_data import TickData
 from data_streamer.indicator_processor import IndicatorProcessor
+from candle_aggregator.candle_aggregator import CandleAggregator
+from candle_aggregator.candle_aggregator_normal import CANormal
+from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
+from portfolios.trade_executor_simple import TradeExecutorSimple
+
+logger = logging.getLogger('DataStreamer')
 
 
 class DataStreamer:
-    def __init__(self, model_configuration: dict,
-                 indicator_configuration: Optional[MonitorConfiguration] = None):
-        # self.feature_vector_calculator = FeatureVectorCalculator(model_configuration)
-        self.indicators: Optional[IndicatorProcessor] = IndicatorProcessor(
-            indicator_configuration) if indicator_configuration else None
-        self.external_tool: List[ExternalTool] = []
-        self.reset_after_sample: bool = False
+    """
+    DataStreamer with simple aggregator type selection
+    """
 
-    def process_tick(self, candle_aggregators: Dict[str, CandleAggregator]) -> None:
-        if self.indicators:
-            indicator_results, raw_indicators, bar_scores = self.indicators.next_tick(candle_aggregators)
+    def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration,
+                 default_position_size: float = 100.0, stop_loss_pct: float = 0.005):
+        self.card_id = card_id
+        self.symbol = symbol
+        self.monitor_config = monitor_config
 
-            if indicator_results:
-                # Get tick with symbol info from aggregators
-                representative_tick: Optional[TickData] = None
-                for aggregator in candle_aggregators.values():
-                    current_candle: Optional[TickData] = aggregator.get_current_candle()
-                    if current_candle:
-                        representative_tick = current_candle
-                        break
+        aggregator_configs = monitor_config.get_aggregator_configs()
+        self.aggregators: Dict[str, CandleAggregator] = {}
 
-                for external_tool in self.external_tool:
-                    external_tool.indicator_vector(
-                        indicator_results,
-                        representative_tick,
-                        -1,
-                        raw_indicators,
-                        bar_scores
-                    )
+        for agg_key, agg_type in aggregator_configs.items():
+            timeframe = agg_key.split('-')[0]  # Extract timeframe from key
+            aggregator = self._create_aggregator(agg_type, symbol, timeframe)
+            self.aggregators[agg_key] = aggregator  # ← Store with unique key!
+            logger.info(f"Created {agg_type} aggregator for {timeframe}")
+
+        # Processing components
+        self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
+        self.external_tools: List[ExternalTool] = []
+
+        # TradeExecutor instance
+        self.trade_executor: TradeExecutorSimple = TradeExecutorSimple(
+            monitor_config=monitor_config,
+            default_position_size=default_position_size,
+            stop_loss_pct=stop_loss_pct
+        )
+
+        # Initialize tracking variables
+        self.indicators: Dict[str, float] = {}
+        self.raw_indicators: Dict[str, float] = {}
+        self.bar_scores: Dict[str, float] = {}
+
+    def process_tick(self, tick_data: TickData) -> None:
+        """
+        Process incoming TickData and execute trading logic
+        """
+        if tick_data.symbol != self.symbol:
+            return
+
+        # Process tick through all aggregators
+        for timeframe, aggregator in self.aggregators.items():
+            completed_candle = aggregator.process_tick(tick_data)
+            if completed_candle is not None:
+                logger.debug(f"Completed {timeframe} {aggregator._get_aggregator_type()} candle")
+
+        # Calculate indicators based on current aggregator state
+        self.indicators, self.raw_indicators, self.bar_scores = (
+            self.indicator_processor.calculate_indicators_new(self.aggregators))
+
+        # Execute trading logic
+        self.trade_executor.make_decision(
+            tick=tick_data,
+            indicators=self.indicators,
+            bar_scores=self.bar_scores
+        )
+
+        # Get portfolio performance metrics
+        portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
+
+        # Send data to external tools
+        for tool in self.external_tools:
+            tool.process_tick(
+                card_id=self.card_id,
+                symbol=self.symbol,
+                tick_data=tick_data,
+                indicators=self.indicators,
+                raw_indicators=self.raw_indicators,
+                bar_scores=self.bar_scores,
+                portfolio_metrics=portfolio_metrics
+            )
+
+    def _get_all_candle_data(self) -> Dict[str, List[TickData]]:
+        """Get all candle data from aggregators"""
+        all_data: Dict[str, List[TickData]] = {}
+
+        for timeframe, aggregator in self.aggregators.items():
+            history: List[TickData] = aggregator.get_history().copy()
+            current: Optional[TickData] = aggregator.get_current_candle()
+
+            if current:
+                history.append(current)
+
+            all_data[timeframe] = history
+
+        return all_data
+
+    def _create_aggregator(self, aggregator_type: str, symbol: str, timeframe: str) -> CandleAggregator:
+        if aggregator_type == "normal":
+            return CANormal(symbol, timeframe)
+        elif aggregator_type == "heiken":
+            return CAHeiken(symbol, timeframe)
+
+    def load_historical_data(self, data_link) -> None:
+        """Load historical data for all timeframes"""
+        for timeframe, aggregator in self.aggregators.items():
+            aggregator.prepopulate_data(data_link)
 
     def connect_tool(self, external_tool: ExternalTool) -> None:
-        """Connect an external tool to the data streamer"""
-        self.external_tool.append(external_tool)
-
-    def replace_external_tools(self, et: ExternalTool) -> None:
-        """Replace all external tools with a single tool"""
-        self.external_tool = [et]
+        """Connect an external tool"""
+        self.external_tools.append(external_tool)

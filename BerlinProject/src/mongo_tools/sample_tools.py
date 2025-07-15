@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Tuple, Any, Iterable
 from bson import ObjectId
 from config.types import PYMONGO_ID, SAMPLE_COLLECTION
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 from pymongo.collection import Collection
 from mongo_tools.mongo import Mongo

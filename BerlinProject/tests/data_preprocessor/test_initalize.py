@@ -1,11 +1,8 @@
 # test_initialize.py
-import time
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.data_preprocessor import DataPreprocessor
-from environments.tick_data import TickData
 
 
 def main():

@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 from data_streamer.data_preprocessor import DataPreprocessor
 from data_streamer.feature_vector_calculator import FeatureVectorCalculator
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 import talib
 

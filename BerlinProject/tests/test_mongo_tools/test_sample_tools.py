@@ -1,6 +1,6 @@
 import unittest
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 from mongo_tools.sample_tools import SampleTools
 

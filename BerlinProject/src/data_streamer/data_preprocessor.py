@@ -1,7 +1,5 @@
 from typing import Optional, List, Dict, Tuple
-from environments.tick_data import TickData
-import traceback
-import numpy as np
+from models.tick_data import TickData
 import logging
 
 logger = logging.getLogger('DataPreprocessor')

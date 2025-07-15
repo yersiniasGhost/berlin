@@ -3,7 +3,7 @@ import numpy as np
 import logging
 from datetime import datetime
 from data_streamer.external_tool import ExternalTool
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 logger = logging.getLogger('SchwabAdapter')
 

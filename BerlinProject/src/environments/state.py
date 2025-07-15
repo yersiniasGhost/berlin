@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from .tick_data import TickData
+from models.tick_data import TickData
 
 
 class State(ABC):

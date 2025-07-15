@@ -1,4 +1,3 @@
-import os
 import unittest
 from typing import List
 
@@ -6,12 +5,11 @@ import yfinance as yf
 from datetime import datetime, timedelta
 
 import numpy as np
-import pandas as pd
 
 from src.features.indicators2 import (calculate_support, calculate_resistance,
-                                      support_level, resistance_level, calculate_fibonacci_levels, fib_trigger)
+                                      support_level, resistance_level, fib_trigger)
 
-from environments.tick_data import TickData
+from models.tick_data import TickData
 
 
 class TestCalculateLines(unittest.TestCase):

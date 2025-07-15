@@ -1,8 +1,7 @@
 import unittest
 
-from environments.tick_data import TickData
-from mongo_tools.tick_history_tools import TickHistoryTools, STREAMING_MODE, BOOK_MODE, RANDOM_MODE
-from datetime import datetime, timedelta
+from mongo_tools.tick_history_tools import TickHistoryTools, STREAMING_MODE, RANDOM_MODE
+from datetime import datetime
 
 
 class TestTickHistory(unittest.TestCase):
