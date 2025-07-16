@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Dashboard - Home</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.6;
+        }
+
+        .home-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 3rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .logo-section {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .logo-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #f0f6fc;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .logo-subtitle {
+            font-size: 1rem;
+            color: #7d8590;
+            margin-bottom: 2rem;
+        }
+
+        .auth-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .connect-button {
+            background: #238636;
+            color: #ffffff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);
+        }
+
+        .connect-button:hover {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
+        }
+
+        .connect-button:disabled {
+            background: #21262d;
+            color: #7d8590;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .url-input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .input-label {
+            font-size: 0.875rem;
+            color: #e6edf3;
+            font-weight: 500;
+        }
+
+        .url-input {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: #e6edf3;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            transition: border-color 0.2s ease;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #1f6feb;
+            box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+        }
+
+        .url-input::placeholder {
+            color: #7d8590;
+        }
+
+        .instructions {
+            font-size: 0.75rem;
+            color: #7d8590;
+            line-height: 1.4;
+            margin-top: 0.5rem;
+        }
+
+        .submit-button {
+            background: #1f6feb;
+            color: #ffffff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(31, 111, 235, 0.3);
+        }
+
+        .submit-button:hover:not(:disabled) {
+            background: #2879eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(31, 111, 235, 0.4);
+        }
+
+        .submit-button:disabled {
+            background: #21262d;
+            color: #7d8590;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .error-message {
+            background: rgba(218, 54, 51, 0.1);
+            border: 1px solid rgba(218, 54, 51, 0.3);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: #ff7b72;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .loading-state {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+            color: #7d8590;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #30363d;
+            border-top: 2px solid #1f6feb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .future-section {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid #30363d;
+        }
+
+        .future-title {
+            font-size: 1rem;
+            color: #7d8590;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .future-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .future-button {
+            background: #21262d;
+            color: #7d8590;
+            border: 1px solid #30363d;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: not-allowed;
+            transition: all 0.2s ease;
+        }
+
+        .future-button::after {
+            content: " (Coming Soon)";
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="home-container">
+        <div class="logo-section">
+            <h1 class="logo-title">Trading Dashboard</h1>
+            <p class="logo-subtitle">Connect your broker to start trading</p>
+        </div>
+
+        <div class="auth-section">
+            <button class="connect-button" id="connectSchwab">
+                Connect to Charles Schwab
+            </button>
+
+            <div class="url-input-section">
+                <label class="input-label" for="authUrl">
+                    Paste the authorization URL here:
+                </label>
+                <input
+                    type="text"
+                    id="authUrl"
+                    class="url-input"
+                    placeholder="https://127.0.0.1/?code=..."
+                    disabled
+                />
+                <div class="instructions">
+                    After clicking "Connect to Charles Schwab", log in with your credentials and copy the full URL from your browser's address bar after authentication.
+                </div>
+            </div>
+
+            <button class="submit-button" id="submitAuth" disabled>
+                Connect
+            </button>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="loading-state" id="loadingState">
+                <div class="loading-spinner"></div>
+                Connecting to Charles Schwab...
+            </div>
+        </div>
+
+        <div class="future-section">
+            <h3 class="future-title">Additional Brokers</h3>
+            <div class="future-buttons">
+                <button class="future-button">Interactive Brokers</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const connectButton = document.getElementById('connectSchwab');
+        const authUrlInput = document.getElementById('authUrl');
+        const submitButton = document.getElementById('submitAuth');
+        const errorMessage = document.getElementById('errorMessage');
+        const loadingState = document.getElementById('loadingState');
+
+        // Enable URL input after clicking connect
+        connectButton.addEventListener('click', function() {
+            // Open Charles Schwab auth URL - you'll need to replace this with the actual URL
+            const authUrl = 'https://api.schwabapi.com/v1/oauth/authorize?client_id=QtfsQiLHpno726ZFgRDtvHA3ZItCAkcQ&redirect_uri=https://127.0.0.1';
+            window.open(authUrl, '_blank');
+
+            // Enable the input and submit button
+            authUrlInput.disabled = false;
+            authUrlInput.focus();
+
+            // Update button text
+            connectButton.textContent = 'Charles Schwab Auth Window Opened';
+            connectButton.disabled = true;
+        });
+
+        // Enable submit button when URL is entered
+        authUrlInput.addEventListener('input', function() {
+            const hasUrl = this.value.trim().length > 0;
+            submitButton.disabled = !hasUrl;
+
+            // Hide error message when user starts typing
+            errorMessage.style.display = 'none';
+        });
+
+        // Handle form submission
+        submitButton.addEventListener('click', async function() {
+            const authUrl = authUrlInput.value.trim();
+
+            if (!authUrl) {
+                showError('Please enter the authorization URL');
+                return;
+            }
+
+            if (!authUrl.includes('code=')) {
+                showError('URL must contain authorization code (code=...)');
+                return;
+            }
+
+            // Show loading state
+            loadingState.style.display = 'block';
+            submitButton.disabled = true;
+            errorMessage.style.display = 'none';
+
+            try {
+                // Send auth URL to backend
+                const response = await fetch('/api/authenticate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ auth_url: authUrl })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Redirect to dashboard
+                    window.location.href = '/dashboard';
+                } else {
+                    showError(result.error || 'Authentication failed');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            } finally {
+                // Hide loading state
+                loadingState.style.display = 'none';
+                submitButton.disabled = false;
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        // Allow Enter key to submit
+        authUrlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !submitButton.disabled) {
+                submitButton.click();
+            }
+        });
+    </script>
+</body>
+</html>
