@@ -529,6 +529,74 @@ def debug_streaming():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@api_bp.route('/generate-monitor-config', methods=['POST'])
+@require_session_auth
+def generate_monitor_config():
+    """Generate monitor configuration JSON from wizard data"""
+    try:
+        data = request.json
+
+        # Extract wizard data
+        basic_info = data.get('basicInfo', {})
+        indicators = data.get('indicators', [])
+        bars = data.get('bars', {})
+        trading_rules = data.get('tradingRules', {})
+
+        # Generate the complete monitor configuration
+        config = {
+            "test_name": basic_info.get('testName', ''),
+            "monitor": {
+                "_id": "generated_monitor_id",
+                "user_id": "user_id",
+                "name": basic_info.get('monitorName', ''),
+                "description": basic_info.get('description', ''),
+                "enter_long": [],
+                "exit_long": [],
+                "bars": {}
+            },
+            "indicators": []
+        }
+
+        # Process bars into enter/exit conditions
+        for bar_name, bar_data in bars.items():
+            if bar_data.get('type') == 'bull':
+                config["monitor"]["enter_long"].append({
+                    "name": bar_name,
+                    "threshold": trading_rules.get('entry', {}).get(bar_name, 0.5)
+                })
+            elif bar_data.get('type') == 'bear':
+                config["monitor"]["exit_long"].append({
+                    "name": bar_name,
+                    "threshold": trading_rules.get('exit', {}).get(bar_name, 0.5)
+                })
+
+            # Add bar configuration
+            config["monitor"]["bars"][bar_name] = {
+                "type": bar_data.get('type'),
+                "indicators": bar_data.get('indicators', {})
+            }
+
+        # Process indicators
+        for indicator in indicators:
+            config["indicators"].append({
+                "name": indicator.get('name'),
+                "type": "Indicator",
+                "function": indicator.get('function'),
+                "agg_config": indicator.get('aggConfig'),
+                "calc_on_pip": False,
+                "parameters": indicator.get('parameters', {})
+            })
+
+        return jsonify({
+            'success': True,
+            'config': config
+        })
+
+    except Exception as e:
+        logger.error(f"Error generating monitor config: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/debug/websocket-health')
 @require_session_auth
 def websocket_health():
