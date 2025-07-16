@@ -41,77 +41,85 @@ class UIExternalTool(ExternalTool):
         self.failed_emits: int = 0
         self.max_failed_emits: int = 10
 
+    # Update your UIExternalTool to send session-specific updates
+    # Add this method to your UIExternalTool class in ui_external_tool.py
+
+    def emit_to_session(self, event_name, data, session_id=None):
+        """Emit WebSocket event to specific session room"""
+        try:
+            if session_id:
+                # Send to specific session room
+                self.socketio.emit(event_name, data, room=f"session_{session_id}")
+            else:
+                # Fallback to broadcast (for replay mode or legacy)
+                self.socketio.emit(event_name, data)
+
+            self.total_emits += 1
+            self.last_successful_emit = time.time()
+            return True
+
+        except Exception as e:
+            self.failed_emits += 1
+            logger.error(f"Failed to emit {event_name} to session {session_id}: {e}")
+            return False
+
+    def get_session_id_from_app_service(self):
+        """Get session ID from the app_service if it has one"""
+        if hasattr(self.app_service, 'session_id'):
+            return self.app_service.session_id
+        return None
+
+    # Update the process_tick method to use session-based emit
     def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
                      indicators: Dict[str, float], raw_indicators: Dict[str, float],
                      bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
         """
-        Process real-time tick data and send updates to browser
+        Process real-time tick data and send updates to browser (session-specific)
         """
         try:
             current_time = time.time()
 
-            # Rate limiting: Skip update if too recent
+            # Rate limiting check
             if current_time - self.last_update_time[card_id] < self.min_update_interval:
                 return
 
             self.last_update_time[card_id] = current_time
             self.update_counter[card_id] += 1
 
-            # Extract data from TickData object
-            price = tick_data.close
-            volume = tick_data.volume
-            timestamp = tick_data.timestamp
-
-            # GET MONITOR NAME FROM APP_SERVICE
-            monitor_config_name = None
-            test_name = None
-            if self.app_service and hasattr(self.app_service, 'combinations'):
-                combination = self.app_service.combinations.get(card_id)
-                if combination:
-                    monitor_config_name = combination['monitor_config'].name
-                    test_name = combination.get('test_name', monitor_config_name)
-
-            # Prepare update data
+            # Build update data
             update_data = {
                 'card_id': card_id,
                 'symbol': symbol,
-                'price': price,
-                'timestamp': self._format_timestamp(timestamp),
+                'price': tick_data.close,
+                'timestamp': tick_data.timestamp.isoformat(),
                 'ohlc': [tick_data.open, tick_data.high, tick_data.low, tick_data.close],
-                'volume': volume,
-                'indicators': indicators or {},
-                'bar_scores': bar_scores or {},
-                'raw_indicators': raw_indicators or {},
-                'update_count': self.update_counter[card_id],
-                # ADD MONITOR NAME FIELDS
-                'monitor_config_name': test_name or monitor_config_name,
-                'test_name': test_name
+                'volume': tick_data.volume,
+                'indicators': indicators,
+                'bar_scores': bar_scores,
+                'raw_indicators': raw_indicators
             }
 
-            # Add portfolio metrics if available
+            # Add portfolio metrics if provided
             if portfolio_metrics:
                 update_data['portfolio'] = portfolio_metrics
 
-            # WebSocket emit with error handling
-            emit_success = self._safe_emit('card_update', update_data, card_id)
+            # Store as last meaningful data
+            self.last_meaningful_data[card_id] = update_data.copy()
 
-            # Monitor WebSocket health
-            if emit_success:
-                self.last_successful_emit = current_time
-                self.total_emits += 1
-                # Reset failed counter on success
-                if self.failed_emit_counter[card_id] > 0:
-                    self.failed_emit_counter[card_id] = 0
-            else:
-                self.failed_emits += 1
+            # Get session ID for targeted emit
+            session_id = self.get_session_id_from_app_service()
+
+            # Emit to specific session
+            success = self.emit_to_session('card_update', update_data, session_id)
+
+            if not success:
                 self.failed_emit_counter[card_id] += 1
+            else:
+                self.failed_emit_counter[card_id] = 0
 
-                # If too many failures, reset counter to prevent spam
-                if self.failed_emit_counter[card_id] >= self.max_failed_emits:
-                    self.failed_emit_counter[card_id] = 0
-
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error in process_tick for {card_id}: {e}")
+            self.failed_emit_counter[card_id] += 1
 
     def _safe_emit(self, event: str, data: Dict, card_id: str) -> bool:
         """

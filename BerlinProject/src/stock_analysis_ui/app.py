@@ -1,21 +1,8 @@
-#!/usr/bin/env python3
-"""
-Complete Flask application with support for both Live Schwab and CS Replay modes
-Usage:
-  # Live mode (unchanged from original)
-  python app.py
-
-  # CS Replay mode
-  python app.py --replay-file pltr_pips.txt --symbol PLTR --config monitor_config.json
-
-  # CS Replay mode with multiple symbols
-  python app.py --replay-files PLTR:pltr_pips.txt NVDA:nvda_pips.txt --config config.json
-"""
-
 import os
 import sys
 import logging
 import argparse
+import uuid
 from flask import Flask
 from flask_socketio import SocketIO
 
@@ -36,8 +23,9 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Global app service
-app_service: AppService = None
+# CHANGED: Session-based app services instead of global
+session_app_services = {}  # session_id -> app_service
+app_service = None  # Keep for replay mode compatibility
 
 
 def parse_symbol_files(symbol_file_args):
@@ -320,43 +308,36 @@ def register_routes() -> None:
     register_websocket_events(socketio, app_service)
 
 
-# Update the create_app function in app.py
-
-# Update the create_app function in app.py
-
 def create_app():
     """Create and configure the Flask application"""
     register_routes()
 
+    # Store socketio reference on app for routes to access
     app.socketio = socketio
 
-    app.app_service = app_service
+    # Store session manager on app
+    app.session_app_services = session_app_services
 
-    if not hasattr(app, '__annotations__'):
-        app.__annotations__ = {}
-    app.__annotations__['app_service'] = AppService
+    # Make app_service available to routes (might be None for live mode)
+    app.app_service = app_service
 
     return app
 
 
-# Replace the main execution block in app.py with this:
-
+# Update the main execution block
 if __name__ == '__main__':
     # Parse command line arguments
     args = parse_arguments()
 
-    # Initialize app_service as None - will be created after authentication
-    app_service = None
-
     # Determine mode and setup accordingly
     if args.replay_file and args.symbol:
-        # Single symbol CS Replay mode
+        # Single symbol CS Replay mode - use global app_service
         if not setup_cs_replay_mode_single(args.replay_file, args.symbol.upper(), args.speed):
             print("Failed to set up CS Replay mode.")
             sys.exit(1)
 
     elif args.replay_files:
-        # Multi symbol CS Replay mode
+        # Multi symbol CS Replay mode - use global app_service
         symbol_files = parse_symbol_files(args.replay_files)
         if not symbol_files:
             print("No valid symbol:file pairs provided.")
@@ -368,8 +349,7 @@ if __name__ == '__main__':
 
     else:
         # Live mode - NO AUTOMATIC AUTHENTICATION
-        # Just initialize app_service as None
-        # Authentication will happen through the UI
+        # Authentication will happen through the UI per session
         print("Live mode - authentication will be handled through web interface")
         app_service = None
 
@@ -390,11 +370,11 @@ if __name__ == '__main__':
             mode += f" ({args.symbol})"
         mode += f" @ {args.speed}x speed"
     else:
-        mode = "Live Schwab (Authentication Required)"
+        mode = "Live Schwab (Session-based Authentication)"
 
     print(f"\n🚀 Starting Trading Dashboard at http://localhost:{args.port}")
     print(f"Mode: {mode}")
     if app_service is None:
-        print("🔐 Navigate to http://localhost:{args.port} to authenticate with Charles Schwab")
+        print("🔐 Each browser session will authenticate separately")
 
     socketio.run(app, debug=args.debug, host=args.host, port=args.port)
