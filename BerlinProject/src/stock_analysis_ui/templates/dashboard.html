@@ -20,6 +20,101 @@
             line-height: 1.6;
         }
 
+        /* Layout with sidebar */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 250px;
+            background: #161b22;
+            border-right: 1px solid #30363d;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f0f6fc;
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-subtitle {
+            font-size: 0.875rem;
+            color: #7d8590;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            color: #e6edf3;
+            text-decoration: none;
+            border-radius: 0 6px 6px 0;
+            margin-right: 0.75rem;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background: #21262d;
+            color: #58a6ff;
+        }
+
+        .nav-link.active {
+            background: #1f2937;
+            color: #58a6ff;
+            border-right: 3px solid #58a6ff;
+        }
+
+        .nav-link.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #58a6ff;
+        }
+
+        .nav-icon {
+            font-size: 1.125rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main content area */
+        .main-content {
+            margin-left: 250px;
+            flex: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mobile-menu-toggle {
+            display: none;
+        }
+
         .header {
             background: #161b22;
             padding: 1.5rem 2rem;
@@ -574,6 +669,31 @@
 
         /* Responsive design */
         @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+                background: none;
+                border: none;
+                color: #e6edf3;
+                font-size: 1.5rem;
+                cursor: pointer;
+                padding: 0.5rem;
+                margin-right: 1rem;
+                margin-left: -0.5rem;
+            }
+
             .cards-container {
                 grid-template-columns: 1fr;
                 padding: 1rem;
@@ -597,75 +717,103 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Trading Dashboard</h1>
-        <div class="status-bar">
-            <div class="status-item">
-                <div class="status-dot disconnected" id="connectionStatus"></div>
-                <span id="connectionText">Connecting...</span>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Trading Dashboard</div>
+                <div class="sidebar-subtitle">Navigation</div>
             </div>
-            <div class="status-item">
-                <div class="status-dot disconnected" id="streamingStatus"></div>
-                <span id="streamingText">Not Streaming</span>
-            </div>
-            <div class="status-item">
-                <span id="combinationsCount">0 Cards</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="controls">
-        <button class="add-card-button" onclick="openAddCardModal()">
-            + Add New Trading Card
-        </button>
-    </div>
-
-    <!-- Modal for adding cards -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 class="modal-title">Add New Trading Card</h2>
-                <button class="modal-close" onclick="closeAddCardModal()">&times;</button>
-            </div>
-
-            <div class="form-section">
-                <h3>Stock Symbol</h3>
-                <div class="form-group">
-                    <label for="modalSymbolInput">Enter stock symbol</label>
-                    <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="10">
+            <div class="sidebar-nav">
+                <div class="nav-item">
+                    <a href="/dashboard" class="nav-link active">
+                        <span class="nav-icon"></span>
+                        <span>Dashboard</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="/monitor-creation" class="nav-link">
+                        <span class="nav-icon"></span>
+                        <span>Monitor Creation</span>
+                    </a>
                 </div>
             </div>
+        </nav>
 
-            <div class="form-section">
-                <h3>Monitor Configuration File</h3>
-                <div class="form-group">
-                    <label for="modalFileInput">Select a JSON configuration file</label>
-                    <input type="file" id="modalFileInput" accept=".json" style="margin-bottom: 0.5rem;">
-                    <div id="selectedFileName" style="font-size: 0.875rem; color: #7d8590; margin-top: 0.5rem;">
-                        No file selected
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="header">
+                <button class="mobile-menu-toggle" onclick="toggleSidebar()">☰</button>
+                <h1>Trading Dashboard</h1>
+                <div class="status-bar">
+                    <div class="status-item">
+                        <div class="status-dot disconnected" id="connectionStatus"></div>
+                        <span id="connectionText">Connecting...</span>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-dot disconnected" id="streamingStatus"></div>
+                        <span id="streamingText">Not Streaming</span>
+                    </div>
+                    <div class="status-item">
+                        <span id="combinationsCount">0 Cards</span>
                     </div>
                 </div>
-                <div style="margin-top: 1rem;">
-                    <p style="font-size: 0.875rem; color: #7d8590;">
-                        💡 <strong>Tip:</strong> You can also drag and drop a JSON file onto the file input above.
-                    </p>
+            </div>
+
+            <div class="controls">
+                <button class="add-card-button" onclick="openAddCardModal()">
+                    + Add New Trading Card
+                </button>
+            </div>
+
+            <!-- Modal for adding cards -->
+            <div class="modal-overlay" id="modalOverlay">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Add New Trading Card</h2>
+                        <button class="modal-close" onclick="closeAddCardModal()">&times;</button>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Stock Symbol</h3>
+                        <div class="form-group">
+                            <label for="modalSymbolInput">Enter stock symbol</label>
+                            <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="10">
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Monitor Configuration File</h3>
+                        <div class="form-group">
+                            <label for="modalFileInput">Select a JSON configuration file</label>
+                            <input type="file" id="modalFileInput" accept=".json" style="margin-bottom: 0.5rem;">
+                            <div id="selectedFileName" style="font-size: 0.875rem; color: #7d8590; margin-top: 0.5rem;">
+                                No file selected
+                            </div>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <p style="font-size: 0.875rem; color: #7d8590;">
+                                💡 <strong>Tip:</strong> You can also drag and drop a JSON file onto the file input above.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
+                        <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>Add Card</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
-                <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>Add Card</button>
+            <div id="messages"></div>
+
+            <div class="cards-container" id="cardsContainer">
+                <div class="loading">
+                    <p>No trading cards added yet.</p>
+                    <p>Click "Add New Trading Card" above to get started.</p>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <div id="messages"></div>
-
-    <div class="cards-container" id="cardsContainer">
-        <div class="loading">
-            <p>No trading cards added yet.</p>
-            <p>Click "Add New Trading Card" above to get started.</p>
-        </div>
+        </main>
     </div>
 
     <script>
@@ -1195,6 +1343,24 @@
             });
         }
 
+        // Mobile sidebar toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.mobile-menu-toggle');
+
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(e.target) &&
+                !toggle.contains(e.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+
         // Event listeners that need to be set up after DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
             // Add input listener for symbol field
@@ -1258,4 +1424,3 @@
     </script>
 </body>
 </html>
-

@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <title>Monitor Creation - Trading Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -104,11 +103,9 @@
 
         /* Main content area */
         .main-content {
-            margin-left: 250px;
             flex: 1;
+            margin-left: 250px;
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
         }
 
         .header {
@@ -116,191 +113,206 @@
             padding: 1.5rem 2rem;
             border-bottom: 1px solid #30363d;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .mobile-menu-toggle {
-            display: none;
         }
 
         .header h1 {
             font-size: 1.875rem;
             font-weight: 600;
-            margin-bottom: 0.75rem;
             color: #f0f6fc;
+            margin-bottom: 0.5rem;
         }
 
-        .status-bar {
-            display: flex;
-            gap: 2rem;
+        .header-subtitle {
             font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        .status-dot.connected { background: #238636; }
-        .status-dot.disconnected { background: #da3633; }
-
-        .controls {
-            padding: 2rem;
-            background: #0d1117;
-            border-bottom: 1px solid #21262d;
-            text-align: center;
-        }
-
-        .add-card-button {
-            background: #238636;
-            color: #ffffff;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            font-size: 1.125rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);
-        }
-
-        .add-card-button:hover {
-            background: #2ea043;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
-        }
-
-        /* Modal Styles */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
-            backdrop-filter: blur(4px);
-            overflow-y: auto;
-            padding: 2rem 0;
-        }
-
-        .modal {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            max-width: 600px;
-            margin: 0 auto;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-            position: relative;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #30363d;
-        }
-
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #f0f6fc;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
             color: #7d8590;
-            cursor: pointer;
-            padding: 0.25rem;
-            border-radius: 4px;
-            transition: all 0.2s ease;
         }
 
-        .modal-close:hover {
-            color: #e6edf3;
-            background: #30363d;
+        /* Form Container */
+        .form-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 2rem;
         }
 
         .form-section {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #21262d;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
         }
 
-        .form-section:last-child {
-            border-bottom: none;
-        }
-
-        .form-section h3 {
-            font-size: 1rem;
+        .section-title {
+            font-size: 1.25rem;
             font-weight: 600;
             color: #f0f6fc;
             margin-bottom: 1rem;
         }
 
         .form-group {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
 
-        .form-group label {
+        .form-label {
             display: block;
-            font-size: 0.875rem;
-            color: #7d8590;
             margin-bottom: 0.5rem;
+            color: #e6edf3;
+            font-weight: 500;
         }
 
-        .form-group input[type="text"] {
+        .form-input,
+        .form-select,
+        .form-textarea {
             width: 100%;
             padding: 0.75rem;
             background: #0d1117;
             border: 1px solid #30363d;
             border-radius: 6px;
             color: #e6edf3;
-            font-size: 1rem;
-            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            transition: border-color 0.2s ease;
         }
 
-        .form-group input[type="text"]:focus {
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
             outline: none;
             border-color: #58a6ff;
             box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
         }
 
-        .form-group input[type="file"] {
-            width: 100%;
-            padding: 0.75rem;
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: #7d8590;
+        }
+
+        .form-textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-row-4 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 1rem;
+        }
+
+        /* Indicator Cards */
+        .indicator-card {
             background: #0d1117;
             border: 1px solid #30363d;
-            border-radius: 6px;
-            color: #e6edf3;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
         }
 
-        .form-group input[type="file"]:hover {
-            border-color: #58a6ff;
-        }
-
-        .modal-actions {
-            padding: 1.5rem 2rem;
+        .indicator-header {
             display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .indicator-name {
+            font-weight: 600;
+            color: #f0f6fc;
+            font-size: 1rem;
+        }
+
+        .remove-btn {
+            background: #da3633;
+            color: #ffffff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background 0.2s ease;
+        }
+
+        .remove-btn:hover {
+            background: #ff7b72;
+        }
+
+        /* Bar Cards */
+        .bar-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .bar-card.bull {
+            border-left: 4px solid #56d364;
+        }
+
+        .bar-card.bear {
+            border-left: 4px solid #ff7b72;
+        }
+
+        .bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .bar-name {
+            font-weight: 600;
+            color: #f0f6fc;
+            font-size: 1rem;
+        }
+
+        .bar-type {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .bar-type.bull {
+            background: rgba(86, 211, 100, 0.2);
+            color: #56d364;
+        }
+
+        .bar-type.bear {
+            background: rgba(255, 123, 114, 0.2);
+            color: #ff7b72;
+        }
+
+        .weight-input {
+            width: 80px;
+            padding: 0.5rem;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #e6edf3;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        .threshold-input {
+            width: 100px;
+            padding: 0.5rem;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #e6edf3;
+            font-size: 0.875rem;
+            text-align: center;
         }
 
         .btn {
@@ -311,6 +323,10 @@
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
         }
 
         .btn-primary {
@@ -318,14 +334,8 @@
             color: #ffffff;
         }
 
-        .btn-primary:hover:not(:disabled) {
+        .btn-primary:hover {
             background: #2ea043;
-        }
-
-        .btn-primary:disabled {
-            background: #21262d;
-            color: #7d8590;
-            cursor: not-allowed;
         }
 
         .btn-secondary {
@@ -338,412 +348,94 @@
             background: #30363d;
         }
 
-        /* Card Container */
-        .cards-container {
-            padding: 2rem;
-            background: #0d1117;
-            flex: 1;
+        .btn-outline {
+            background: transparent;
+            color: #58a6ff;
+            border: 1px solid #58a6ff;
         }
 
-        /* Combination Cards */
-        .combination-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            margin-bottom: 2rem;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
+        .btn-outline:hover {
+            background: #58a6ff;
+            color: #0d1117;
         }
 
-        .combination-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            border-color: #58a6ff;
-        }
-
-        .card-header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #30363d;
+        .btn-group {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1rem;
         }
 
-        .card-symbol {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #f0f6fc;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .card-status {
-            padding: 0.25rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .card-status.active {
-            background: rgba(35, 134, 54, 0.2);
-            color: #56d364;
-            border: 1px solid rgba(35, 134, 54, 0.3);
-        }
-
-        .card-status.inactive {
-            background: rgba(125, 133, 144, 0.2);
-            color: #8b949e;
-            border: 1px solid rgba(125, 133, 144, 0.3);
-        }
-
-        .card-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .card-action-btn {
-            background: none;
-            border: 1px solid #30363d;
-            color: #7d8590;
-            padding: 0.5rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-size: 0.875rem;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .card-action-btn:hover {
-            background: #21262d;
-            color: #e6edf3;
-            border-color: #7d8590;
-        }
-
-        .card-action-btn.danger:hover {
-            background: rgba(218, 54, 51, 0.2);
-            color: #ff7b72;
-            border-color: #da3633;
-        }
-
-        /* Price Section */
-        .price-section {
-            padding: 1rem 2rem;
-            border-bottom: 1px solid #21262d;
-            background: #0d1117;
-        }
-
-        .price-display {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .current-price {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #238636;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .price-change {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #7d8590;
-        }
-
-        .price-timestamp {
-            font-size: 0.75rem;
-            color: #7d8590;
-        }
-
-        /* Main Content Layout */
-        .main-content {
-            max-width: 1200px;
-            margin: 0 auto 2rem auto;
-            padding: 0 2rem;
-        }
-
-        .two-column-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            min-height: 500px;
-        }
-
-        /* Indicators & Bars Section (Left Column) */
-        .indicators-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #30363d;
-        }
-
-        .section-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #f0f6fc;
-        }
-
-        .section-subtitle {
-            font-size: 0.875rem;
-            color: #7d8590;
-            margin-top: 0.25rem;
-        }
-
-        /* Individual Indicators */
-        .indicators-list {
-            margin-bottom: 2rem;
-        }
-
-        /* Clean Compact Individual Indicators */
-        .indicators-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 0.75rem;
-        }
-
-        .indicator-card {
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 6px;
-            padding: 0.75rem;
-            transition: all 0.2s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .indicator-card:hover {
-            border-color: #30363d;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .indicator-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, #58a6ff, #7c3aed);
-        }
-
-        .indicator-name {
-            font-size: 0.75rem;
-            color: #7d8590;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.25rem;
-        }
-
-        .indicator-value {
-            font-size: 1.125rem;
-            font-weight: 600;
-            color: #e6edf3;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .indicator-meta {
-            font-size: 0.6875rem;
-            color: #7d8590;
-            margin-top: 0.25rem;
-        }
-
-        /* Portfolio Section (Right Column) */
-        .portfolio-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .portfolio-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #30363d;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .portfolio-header:hover {
-            background: rgba(33, 38, 45, 0.5);
-            margin: -0.5rem;
-            padding: 1.5rem 0.5rem 1.5rem 0.5rem;
-            border-radius: 6px;
-        }
-
-        .portfolio-toggle {
-            background: none;
+        .add-btn {
+            background: #238636;
+            color: #ffffff;
             border: none;
-            color: #e6edf3;
-            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
             cursor: pointer;
-            transition: transform 0.3s ease;
-            padding: 0.25rem;
-            border-radius: 4px;
+            font-size: 0.875rem;
+            transition: background 0.2s ease;
+            margin-bottom: 1rem;
         }
 
-        .portfolio-toggle:hover {
-            background: #30363d;
-            color: #e6edf3;
-            border-color: #7d8590;
+        .add-btn:hover {
+            background: #2ea043;
         }
 
-        .portfolio-toggle.collapsed {
-            transform: rotate(-90deg);
+        .message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid;
         }
 
-        .position-status {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-
-        .position-status.in-position {
-            background: rgba(35, 134, 54, 0.2);
-            color: #56d364;
-            border: 1px solid rgba(35, 134, 54, 0.3);
-        }
-
-        .position-status.no-position {
-            background: rgba(125, 133, 144, 0.2);
-            color: #8b949e;
-            border: 1px solid rgba(125, 133, 144, 0.3);
-        }
-
-        .portfolio-metrics {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-            overflow: hidden;
-            transition: all 0.3s ease;
-            opacity: 1;
-            max-height: 500px;
-        }
-
-        .portfolio-metrics.collapsed {
-            max-height: 0;
-            opacity: 0;
-            margin-top: 0;
-            padding-top: 0;
-        }
-
-        .metric-item {
-            background: #161b22;
-            border: 1px solid #21262d;
-            border-radius: 6px;
-            padding: 0.75rem;
-            text-align: center;
-        }
-
-        .metric-label {
-            font-size: 0.75rem;
-            color: #7d8590;
-            margin-bottom: 0.25rem;
-        }
-
-        .metric-value {
-            font-size: 1rem;
-            font-weight: 600;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .metric-value.positive {
+        .message.success {
+            background: rgba(35, 134, 54, 0.1);
+            border-color: #56d364;
             color: #56d364;
         }
 
-        .metric-value.negative {
+        .message.error {
+            background: rgba(218, 54, 51, 0.1);
+            border-color: #ff7b72;
             color: #ff7b72;
         }
 
-        .metric-value.neutral {
+        .json-preview {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-size: 0.875rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
             color: #e6edf3;
         }
 
-        .bars-container {
-            margin-bottom: 1.5rem;
-        }
-
-        .responsive-bar {
-            margin-bottom: 1rem;
-            padding: 0.75rem;
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-
-        .responsive-bar:hover {
-            border-color: #30363d;
-            transform: scale(1.02);
-        }
-
-        .bar-header {
+        .indicator-weight {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 0.5rem 0;
+            border-top: 1px solid #30363d;
+        }
+
+        .indicator-weight:first-child {
+            border-top: none;
+        }
+
+        .rule-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
             margin-bottom: 0.5rem;
-        }
-
-        .bar-label {
-            font-weight: 500;
-            color: #e6edf3;
-            font-size: 0.875rem;
-        }
-
-        .bar-value {
-            font-weight: 600;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            font-size: 0.875rem;
-        }
-
-        .bar-container {
-            background: #21262d;
-            border-radius: 4px;
-            height: 8px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .bar-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.5s ease;
-            position: relative;
-        }
-
-        .bar-fill.bullish {
-            background: linear-gradient(90deg, #238636, #2ea043);
-        }
-
-        .bar-fill.bearish {
-            background: linear-gradient(90deg, #da3633, #ff7b72);
-        }
-
-        .bar-fill.neutral {
-            background: linear-gradient(90deg, #656d76, #8b949e);
         }
 
         /* Responsive design */
@@ -772,20 +464,21 @@
                 margin-right: 1rem;
             }
 
-            .two-column-layout {
-                grid-template-columns: 1fr;
-                gap: 1rem;
+            .form-container {
+                padding: 0 1rem;
             }
 
-            .modal {
-                width: 95%;
-                margin: 1rem;
+            .form-row,
+            .form-row-3,
+            .form-row-4 {
+                grid-template-columns: 1fr;
             }
         }
 
-        /* Hide scrollbar but allow scrolling */
-        .modal::-webkit-scrollbar {
-            display: none;
+        @media (min-width: 769px) {
+            .mobile-menu-toggle {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -799,14 +492,14 @@
             </div>
             <div class="sidebar-nav">
                 <div class="nav-item">
-                    <a href="/dashboard" class="nav-link active">
-                        <span class="nav-icon">📊</span>
+                    <a href="/dashboard" class="nav-link">
+                        <span class="nav-icon"></span>
                         <span>Dashboard</span>
                     </a>
                 </div>
                 <div class="nav-item">
-                    <a href="/monitor-creation" class="nav-link">
-                        <span class="nav-icon">⚙️</span>
+                    <a href="/monitor-creation" class="nav-link active">
+                        <span class="nav-icon"></span>
                         <span>Monitor Creation</span>
                     </a>
                 </div>
@@ -817,604 +510,639 @@
         <main class="main-content">
             <div class="header">
                 <button class="mobile-menu-toggle" onclick="toggleSidebar()">☰</button>
-                <div>
-                    <h1>Trading Dashboard</h1>
-                    <div class="status-bar">
-                        <div class="status-item">
-                            <div class="status-dot disconnected" id="connectionStatus"></div>
-                            <span id="connectionText">Connecting...</span>
+                <h1>Monitor Creation</h1>
+                <div class="header-subtitle">Create and configure your trading monitor</div>
+            </div>
+
+            <div class="form-container">
+                <div id="messages"></div>
+
+                <!-- Basic Information -->
+                <div class="form-section">
+                    <h2 class="section-title">Basic Information</h2>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="monitorName">Monitor Name</label>
+                            <input type="text" id="monitorName" class="form-input" placeholder="My Trading Monitor">
                         </div>
-                        <div class="status-item">
-                            <div class="status-dot disconnected" id="streamingStatus"></div>
-                            <span id="streamingText">Not Streaming</span>
+                        <div class="form-group">
+                            <label class="form-label" for="testName">Test Name</label>
+                            <input type="text" id="testName" class="form-input" placeholder="my-test-monitor">
                         </div>
-                        <div class="status-item">
-                            <span id="combinationsCount">0 Cards</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="description">Description</label>
+                        <textarea id="description" class="form-textarea" placeholder="Describe your trading strategy..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Indicators Configuration -->
+                <div class="form-section">
+                    <h2 class="section-title">Indicators</h2>
+                    <p style="color: #7d8590; margin-bottom: 1rem;">Configure the indicators for your trading strategy</p>
+
+                    <button class="add-btn" onclick="addIndicator()">+ Add Indicator</button>
+
+                    <div id="indicatorsList">
+                        <!-- Indicators will be added here -->
+                    </div>
+                </div>
+
+                <!-- Bars Configuration -->
+                <div class="form-section">
+                    <h2 class="section-title">Bars (Signal Combinations)</h2>
+                    <p style="color: #7d8590; margin-bottom: 1rem;">Create both bear and bull bars before generating</p>
+
+                    <div class="form-row">
+                        <div>
+                            <h3 style="color: #56d364; margin-bottom: 0.5rem;">Bull Bars (Long Entry)</h3>
+                            <button class="add-btn" onclick="addBar('bull')">+ Add Bull Bar</button>
+                            <div id="bullBars">
+                                <!-- Bull bars will be added here -->
+                            </div>
+                        </div>
+                        <div>
+                            <h3 style="color: #ff7b72; margin-bottom: 0.5rem;">Bear Bars (Long Exit)</h3>
+                            <button class="add-btn" onclick="addBar('bear')">+ Add Bear Bar</button>
+                            <div id="bearBars">
+                                <!-- Bear bars will be added here -->
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="controls">
-                <button class="add-card-button" onclick="openAddCardModal()">
-                    + Add New Trading Card
-                </button>
-            </div>
+                <!-- Trading Rules -->
+                <div class="form-section">
+                    <h2 class="section-title">Trading Rules</h2>
+                    <p style="color: #7d8590; margin-bottom: 1rem;">Set trigger thresholds for entry and exit conditions</p>
 
-            <!-- Cards Container -->
-            <div class="cards-container" id="cardsContainer">
-                <!-- Trading cards will be dynamically added here -->
+                    <div class="form-row">
+                        <div>
+                            <h3 style="color: #56d364; margin-bottom: 0.5rem;">Entry Conditions</h3>
+                            <div id="entryRules">
+                                <!-- Entry rules will be populated here -->
+                            </div>
+                        </div>
+                        <div>
+                            <h3 style="color: #ff7b72; margin-bottom: 0.5rem;">Exit Conditions</h3>
+                            <div id="exitRules">
+                                <!-- Exit rules will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generate Configuration -->
+                <div class="form-section">
+                    <h2 class="section-title">Generate Configuration</h2>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="generateConfig()">Generate Configuration</button>
+                        <button class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+                    </div>
+
+                    <div id="configPreview" class="json-preview" style="display: none;">
+                        <!-- Generated configuration will appear here -->
+                    </div>
+
+                    <div class="btn-group" id="downloadSection" style="display: none;">
+                        <button class="btn btn-primary" onclick="downloadConfig()">📥 Download Configuration</button>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal for adding cards -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 class="modal-title">Add New Trading Card</h2>
-                <button class="modal-close" onclick="closeAddCardModal()">&times;</button>
-            </div>
-
-            <div class="form-section">
-                <h3>Stock Symbol</h3>
-                <div class="form-group">
-                    <label for="modalSymbolInput">Enter stock symbol</label>
-                    <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="10">
-                </div>
-            </div>
-
-            <div class="form-section">
-                <h3>Monitor Configuration File</h3>
-                <div class="form-group">
-                    <label for="modalFileInput">Select a JSON configuration file</label>
-                    <input type="file" id="modalFileInput" accept=".json" style="margin-bottom: 0.5rem;">
-                    <div id="selectedFileName" style="font-size: 0.875rem; color: #7d8590; margin-top: 0.5rem;">
-                        No file selected
-                    </div>
-                </div>
-                <div style="margin-top: 1rem;">
-                    <p style="font-size: 0.875rem; color: #7d8590;">
-                        💡 <strong>Tip:</strong> You can also drag and drop a JSON file onto the file input above.
-                    </p>
-                </div>
-            </div>
-
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
-                <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>
-                    Add Trading Card
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        // Global variables
-        let socket = null;
-        let isConnected = false;
-        let combinations = new Map();
-        let modalSelectedFile = null;
+        // Configuration state
+        let config = {
+            basicInfo: {},
+            indicators: [],
+            bars: { bull: {}, bear: {} },
+            tradingRules: { entry: {}, exit: {} }
+        };
 
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeWebSocket();
-            setupEventListeners();
-            updateCombinationsCount();
-        });
+        let generatedConfig = null;
+        let indicatorCounter = 1;
+        let barCounter = 1;
 
-        function initializeWebSocket() {
-            try {
-                socket = io({
-                    transports: ['websocket', 'polling'],
-                    upgrade: true,
-                    rememberUpgrade: true
-                });
+        // Available indicator functions
+        const indicatorFunctions = {
+            'sma_crossover': {
+                name: 'SMA Crossover',
+                parameters: [
+                    { name: 'period', type: 'number', default: 20, min: 1, max: 200 },
+                    { name: 'trend', type: 'select', options: ['bullish', 'bearish'], default: 'bullish' },
+                    { name: 'crossover_value', type: 'number', default: 0.001, min: 0, max: 1, step: 0.0001 },
+                    { name: 'lookback', type: 'number', default: 10, min: 1, max: 100 }
+                ]
+            },
+            'macd_histogram_crossover': {
+                name: 'MACD Histogram Crossover',
+                parameters: [
+                    { name: 'slow', type: 'number', default: 26, min: 1, max: 100 },
+                    { name: 'fast', type: 'number', default: 12, min: 1, max: 100 },
+                    { name: 'signal', type: 'number', default: 9, min: 1, max: 50 },
+                    { name: 'histogram_threshold', type: 'number', default: 0.001, min: 0, max: 1, step: 0.0001 },
+                    { name: 'lookback', type: 'number', default: 10, min: 1, max: 100 },
+                    { name: 'trend', type: 'select', options: ['bullish', 'bearish'], default: 'bullish' }
+                ]
+            },
+            'bol_bands_lower_band_bounce': {
+                name: 'Bollinger Bands Lower Band Bounce',
+                parameters: [
+                    { name: 'period', type: 'number', default: 20, min: 1, max: 100 },
+                    { name: 'sd', type: 'number', default: 2.0, min: 0.1, max: 5.0, step: 0.1 },
+                    { name: 'candle_bounce_number', type: 'number', default: 1, min: 1, max: 10 },
+                    { name: 'bounce_trigger', type: 'number', default: 0.05, min: 0, max: 1, step: 0.01 },
+                    { name: 'lookback', type: 'number', default: 10, min: 1, max: 100 },
+                    { name: 'trend', type: 'select', options: ['bullish', 'bearish'], default: 'bullish' }
+                ]
+            }
+        };
 
-                socket.on('connect', function() {
-                    console.log('Connected to server');
-                    isConnected = true;
-                    updateConnectionStatus(true);
-                });
+        // Add new indicator
+        function addIndicator() {
+            const indicatorId = `indicator_${indicatorCounter++}`;
+            const indicator = {
+                id: indicatorId,
+                name: `indicator_${indicatorCounter - 1}`,
+                function: 'sma_crossover',
+                aggConfig: '1m-normal',
+                parameters: {}
+            };
 
-                socket.on('disconnect', function() {
-                    console.log('Disconnected from server');
-                    isConnected = false;
-                    updateConnectionStatus(false);
-                    updateStreamingStatus(false);
-                });
+            // Set default parameters
+            const funcData = indicatorFunctions[indicator.function];
+            funcData.parameters.forEach(param => {
+                indicator.parameters[param.name] = param.default;
+            });
 
-                socket.on('price_update', function(data) {
-                    updatePrice(data.symbol, data.price, data.timestamp);
-                });
+            config.indicators.push(indicator);
+            renderIndicators();
+        }
 
-                socket.on('combination_data', function(data) {
-                    updateCombinationData(data.symbol, data);
-                });
+        // Render indicators
+        function renderIndicators() {
+            const container = document.getElementById('indicatorsList');
+            container.innerHTML = '';
 
-                socket.on('streaming_status', function(data) {
-                    updateStreamingStatus(data.is_streaming, data.symbols);
-                });
+            config.indicators.forEach(indicator => {
+                const div = document.createElement('div');
+                div.className = 'indicator-card';
+                div.innerHTML = `
+                    <div class="indicator-header">
+                        <div class="indicator-name">${indicator.name}</div>
+                        <button class="remove-btn" onclick="removeIndicator('${indicator.id}')">Remove</button>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Indicator Name</label>
+                            <input type="text" class="form-input" value="${indicator.name}"
+                                   onchange="updateIndicator('${indicator.id}', 'name', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Function</label>
+                            <select class="form-select" onchange="updateIndicatorFunction('${indicator.id}', this.value)">
+                                ${Object.entries(indicatorFunctions).map(([key, func]) =>
+                                    `<option value="${key}" ${indicator.function === key ? 'selected' : ''}>${func.name}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Timeframe</label>
+                            <select class="form-select" onchange="updateAggConfig('${indicator.id}', this.value, '${indicator.aggConfig.split('-')[1]}')">
+                                <option value="1m" ${indicator.aggConfig.startsWith('1m') ? 'selected' : ''}>1 Minute</option>
+                                <option value="5m" ${indicator.aggConfig.startsWith('5m') ? 'selected' : ''}>5 Minutes</option>
+                                <option value="15m" ${indicator.aggConfig.startsWith('15m') ? 'selected' : ''}>15 Minutes</option>
+                                <option value="30m" ${indicator.aggConfig.startsWith('30m') ? 'selected' : ''}>30 Minutes</option>
+                                <option value="1h" ${indicator.aggConfig.startsWith('1h') ? 'selected' : ''}>1 Hour</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Candle Type</label>
+                            <select class="form-select" onchange="updateAggConfig('${indicator.id}', '${indicator.aggConfig.split('-')[0]}', this.value)">
+                                <option value="normal" ${indicator.aggConfig.endsWith('normal') ? 'selected' : ''}>Normal</option>
+                                <option value="Heiken" ${indicator.aggConfig.endsWith('Heiken') ? 'selected' : ''}>Heiken Ashi</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row-3">
+                        ${renderIndicatorParameters(indicator)}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
 
-                socket.on('error', function(error) {
-                    console.error('Socket error:', error);
-                    showMessage('Connection error: ' + error.message, 'error');
-                });
+        // Render indicator parameters
+        function renderIndicatorParameters(indicator) {
+            const funcData = indicatorFunctions[indicator.function];
+            return funcData.parameters.map(param => {
+                const value = indicator.parameters[param.name];
+                if (param.type === 'number') {
+                    return `
+                        <div class="form-group">
+                            <label class="form-label">${param.name.charAt(0).toUpperCase() + param.name.slice(1)}</label>
+                            <input type="number" class="form-input" value="${value}"
+                                   min="${param.min || ''}" max="${param.max || ''}" step="${param.step || 1}"
+                                   onchange="updateIndicatorParam('${indicator.id}', '${param.name}', parseFloat(this.value))">
+                        </div>
+                    `;
+                } else if (param.type === 'select') {
+                    return `
+                        <div class="form-group">
+                            <label class="form-label">${param.name.charAt(0).toUpperCase() + param.name.slice(1)}</label>
+                            <select class="form-select" onchange="updateIndicatorParam('${indicator.id}', '${param.name}', this.value)">
+                                ${param.options.map(option =>
+                                    `<option value="${option}" ${value === option ? 'selected' : ''}>${option}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
 
-            } catch (error) {
-                console.error('Failed to initialize WebSocket:', error);
-                showMessage('Failed to connect to server', 'error');
+        // Update indicator
+        function updateIndicator(id, field, value) {
+            const indicator = config.indicators.find(ind => ind.id === id);
+            if (indicator) {
+                indicator[field] = value;
+                if (field === 'name') {
+                    renderIndicators();
+                    renderBars();
+                }
             }
         }
 
-        function setupEventListeners() {
-            // Modal input event listeners
-            document.getElementById('modalSymbolInput').addEventListener('input', updateModalAddButton);
-            document.getElementById('modalFileInput').addEventListener('change', updateSelectedFileName);
+        // Update indicator function
+        function updateIndicatorFunction(id, functionName) {
+            const indicator = config.indicators.find(ind => ind.id === id);
+            if (indicator) {
+                indicator.function = functionName;
+                // Reset parameters for new function
+                const funcData = indicatorFunctions[functionName];
+                indicator.parameters = {};
+                funcData.parameters.forEach(param => {
+                    indicator.parameters[param.name] = param.default;
+                });
+                renderIndicators();
+            }
+        }
 
-            // Drag and drop for file input
-            const fileInput = document.getElementById('modalFileInput');
-            fileInput.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.style.borderColor = '#58a6ff';
+        // Update aggregation config
+        function updateAggConfig(id, timeframe, candleType) {
+            const indicator = config.indicators.find(ind => ind.id === id);
+            if (indicator) {
+                indicator.aggConfig = `${timeframe}-${candleType}`;
+            }
+        }
+
+        // Update indicator parameter
+        function updateIndicatorParam(id, paramName, value) {
+            const indicator = config.indicators.find(ind => ind.id === id);
+            if (indicator) {
+                indicator.parameters[paramName] = value;
+            }
+        }
+
+        // Remove indicator
+        function removeIndicator(id) {
+            config.indicators = config.indicators.filter(ind => ind.id !== id);
+            renderIndicators();
+            renderBars();
+        }
+
+        // Add bar
+        function addBar(type) {
+            const barName = prompt(`Enter name for new ${type} bar:`);
+            if (!barName) return;
+
+            config.bars[type][barName] = {
+                type: type,
+                indicators: {}
+            };
+            renderBars();
+        }
+
+        // Render bars
+        function renderBars() {
+            renderBarType('bull');
+            renderBarType('bear');
+            renderTradingRules();
+        }
+
+        // Render bar type
+        function renderBarType(type) {
+            const container = document.getElementById(`${type}Bars`);
+            container.innerHTML = '';
+
+            Object.entries(config.bars[type]).forEach(([barName, barData]) => {
+                const div = document.createElement('div');
+                div.className = `bar-card ${type}`;
+                div.innerHTML = `
+                    <div class="bar-header">
+                        <div class="bar-name">${barName}</div>
+                        <span class="bar-type ${type}">${type.toUpperCase()}</span>
+                        <button class="remove-btn" onclick="removeBar('${type}', '${barName}')">Remove</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Add Indicator</label>
+                        <select class="form-select" onchange="addIndicatorToBar('${type}', '${barName}', this.value); this.value='';">
+                            <option value="">Select indicator...</option>
+                            ${getAvailableIndicators(type).map(ind =>
+                                `<option value="${ind.id}">${ind.name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        ${renderBarIndicators(barName, barData, type)}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Render bar indicators
+        function renderBarIndicators(barName, barData, type) {
+            let html = '';
+
+            Object.entries(barData.indicators).forEach(([indicatorId, weight]) => {
+                const indicator = config.indicators.find(ind => ind.id === indicatorId);
+                const indicatorName = indicator ? indicator.name : 'Unknown';
+
+                html += `
+                    <div class="indicator-weight">
+                        <span>${indicatorName}</span>
+                        <div>
+                            <input type="number" class="weight-input"
+                                   value="${weight}"
+                                   step="0.1"
+                                   min="0"
+                                   max="10"
+                                   onchange="updateBarWeight('${type}', '${barName}', '${indicatorId}', parseFloat(this.value))">
+                            <button class="remove-btn" style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                                    onclick="removeIndicatorFromBar('${type}', '${barName}', '${indicatorId}')">×</button>
+                        </div>
+                    </div>
+                `;
             });
 
-            fileInput.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.style.borderColor = '#30363d';
-            });
+            return html || '<div style="color: #7d8590; text-align: center; padding: 1rem;">No indicators added</div>';
+        }
 
-            fileInput.addEventListener('drop', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.style.borderColor = '#30363d';
-
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    this.files = files;
-                    updateSelectedFileName();
+        // Get available indicators for bar type
+        function getAvailableIndicators(type) {
+            return config.indicators.filter(ind => {
+                const trend = ind.parameters.trend;
+                if (type === 'bull') {
+                    return trend === 'bullish';
+                } else {
+                    return trend === 'bearish';
                 }
             });
+        }
 
-            // Close modal when clicking outside
-            document.getElementById('modalOverlay').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeAddCardModal();
-                }
+        // Add indicator to bar
+        function addIndicatorToBar(type, barName, indicatorId) {
+            if (!indicatorId) return;
+
+            config.bars[type][barName].indicators[indicatorId] = 1.0;
+            renderBars();
+        }
+
+        // Update bar weight
+        function updateBarWeight(type, barName, indicatorId, weight) {
+            config.bars[type][barName].indicators[indicatorId] = weight;
+        }
+
+        // Remove indicator from bar
+        function removeIndicatorFromBar(type, barName, indicatorId) {
+            delete config.bars[type][barName].indicators[indicatorId];
+            renderBars();
+        }
+
+        // Remove bar
+        function removeBar(type, barName) {
+            delete config.bars[type][barName];
+            renderBars();
+        }
+
+        // Render trading rules
+        function renderTradingRules() {
+            renderRuleType('entry', 'entryRules', config.bars.bull);
+            renderRuleType('exit', 'exitRules', config.bars.bear);
+        }
+
+        // Render rule type
+        function renderRuleType(ruleType, containerId, bars) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            Object.keys(bars).forEach(barName => {
+                const currentThreshold = config.tradingRules[ruleType][barName] || 0.5;
+
+                const div = document.createElement('div');
+                div.className = 'rule-item';
+                div.innerHTML = `
+                    <span>${barName} >=</span>
+                    <input type="number" class="threshold-input"
+                           value="${currentThreshold}"
+                           min="0"
+                           max="1"
+                           step="0.1"
+                           onchange="updateThreshold('${ruleType}', '${barName}', parseFloat(this.value))">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Update threshold
+        function updateThreshold(ruleType, barName, threshold) {
+            config.tradingRules[ruleType][barName] = threshold;
+        }
+
+        // Generate configuration
+        function generateConfig() {
+            // Save basic info
+            config.basicInfo = {
+                monitorName: document.getElementById('monitorName').value.trim(),
+                testName: document.getElementById('testName').value.trim(),
+                description: document.getElementById('description').value.trim()
+            };
+
+            // Validation
+            if (!config.basicInfo.monitorName || !config.basicInfo.testName) {
+                showMessage('Please fill in monitor name and test name', 'error');
+                return;
+            }
+
+            if (config.indicators.length === 0) {
+                showMessage('Please add at least one indicator', 'error');
+                return;
+            }
+
+            const bullBars = Object.keys(config.bars.bull);
+            const bearBars = Object.keys(config.bars.bear);
+
+            if (bullBars.length === 0 || bearBars.length === 0) {
+                showMessage('Please create at least one bull bar and one bear bar', 'error');
+                return;
+            }
+
+            // Generate the configuration
+            generatedConfig = {
+                test_name: config.basicInfo.testName,
+                monitor: {
+                    _id: "generated_monitor_id",
+                    user_id: "user_id",
+                    name: config.basicInfo.monitorName,
+                    description: config.basicInfo.description,
+                    enter_long: [],
+                    exit_long: [],
+                    bars: {}
+                },
+                indicators: []
+            };
+
+            // Process entry conditions (bull bars)
+            bullBars.forEach(barName => {
+                const threshold = config.tradingRules.entry[barName] || 0.5;
+                generatedConfig.monitor.enter_long.push({
+                    name: barName,
+                    threshold: threshold
+                });
             });
 
-            // Keyboard shortcuts
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    closeAddCardModal();
-                }
+            // Process exit conditions (bear bars)
+            bearBars.forEach(barName => {
+                const threshold = config.tradingRules.exit[barName] || 0.5;
+                generatedConfig.monitor.exit_long.push({
+                    name: barName,
+                    threshold: threshold
+                });
             });
+
+            // Process bars
+            ['bull', 'bear'].forEach(type => {
+                Object.entries(config.bars[type]).forEach(([barName, barData]) => {
+                    const barIndicators = {};
+
+                    // Convert indicator IDs to names and weights
+                    Object.entries(barData.indicators).forEach(([indicatorId, weight]) => {
+                        const indicator = config.indicators.find(ind => ind.id === indicatorId);
+                        if (indicator) {
+                            barIndicators[indicator.name] = weight;
+                        }
+                    });
+
+                    generatedConfig.monitor.bars[barName] = {
+                        type: type,
+                        indicators: barIndicators
+                    };
+                });
+            });
+
+            // Process indicators
+            config.indicators.forEach(indicator => {
+                generatedConfig.indicators.push({
+                    name: indicator.name,
+                    type: "Indicator",
+                    function: indicator.function,
+                    agg_config: indicator.aggConfig,
+                    calc_on_pip: false,
+                    parameters: indicator.parameters
+                });
+            });
+
+            // Display preview
+            document.getElementById('configPreview').style.display = 'block';
+            document.getElementById('configPreview').textContent = JSON.stringify(generatedConfig, null, 2);
+            document.getElementById('downloadSection').style.display = 'block';
+
+            showMessage('Configuration generated successfully!', 'success');
         }
 
-        function updateConnectionStatus(connected) {
-            const statusDot = document.getElementById('connectionStatus');
-            const statusText = document.getElementById('connectionText');
+        // Download configuration
+        function downloadConfig() {
+            if (!generatedConfig) {
+                showMessage('No configuration to download', 'error');
+                return;
+            }
 
-            if (connected) {
-                statusDot.classList.remove('disconnected');
-                statusDot.classList.add('connected');
-                statusText.textContent = 'Connected';
-            } else {
-                statusDot.classList.remove('connected');
-                statusDot.classList.add('disconnected');
-                statusText.textContent = 'Disconnected';
+            const jsonString = JSON.stringify(generatedConfig, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${generatedConfig.test_name}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showMessage('Configuration downloaded successfully!', 'success');
+        }
+
+        // Clear all
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all configuration? This cannot be undone.')) {
+                config = {
+                    basicInfo: {},
+                    indicators: [],
+                    bars: { bull: {}, bear: {} },
+                    tradingRules: { entry: {}, exit: {} }
+                };
+                generatedConfig = null;
+                indicatorCounter = 1;
+                barCounter = 1;
+
+                // Clear form fields
+                document.getElementById('monitorName').value = '';
+                document.getElementById('testName').value = '';
+                document.getElementById('description').value = '';
+
+                // Clear displays
+                document.getElementById('indicatorsList').innerHTML = '';
+                document.getElementById('bullBars').innerHTML = '';
+                document.getElementById('bearBars').innerHTML = '';
+                document.getElementById('entryRules').innerHTML = '';
+                document.getElementById('exitRules').innerHTML = '';
+                document.getElementById('configPreview').style.display = 'none';
+                document.getElementById('downloadSection').style.display = 'none';
+
+                clearMessages();
             }
         }
 
-        function updateStreamingStatus(streaming, symbols = []) {
-            const statusDot = document.getElementById('streamingStatus');
-            const statusText = document.getElementById('streamingText');
+        // Show message
+        function showMessage(message, type) {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = `<div class="message ${type}">${message}</div>`;
 
-            if (streaming) {
-                statusDot.classList.remove('disconnected');
-                statusDot.classList.add('connected');
-                statusText.textContent = `Streaming (${symbols.length} symbols)`;
-            } else {
-                statusDot.classList.remove('connected');
-                statusDot.classList.add('disconnected');
-                statusText.textContent = 'Not Streaming';
-            }
-        }
-
-        function updateCombinationsCount() {
-            const countElement = document.getElementById('combinationsCount');
-            const count = combinations.size;
-            countElement.textContent = `${count} Card${count !== 1 ? 's' : ''}`;
-        }
-
-        function showMessage(message, type = 'info') {
-            // Create message element
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            messageDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 1rem 1.5rem;
-                border-radius: 8px;
-                color: #ffffff;
-                font-weight: 500;
-                z-index: 10000;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                backdrop-filter: blur(8px);
-                max-width: 400px;
-                word-wrap: break-word;
-                animation: slideIn 0.3s ease;
-            `;
-
-            // Set background color based on type
-            switch (type) {
-                case 'success':
-                    messageDiv.style.background = 'rgba(35, 134, 54, 0.9)';
-                    break;
-                case 'error':
-                    messageDiv.style.background = 'rgba(218, 54, 51, 0.9)';
-                    break;
-                case 'warning':
-                    messageDiv.style.background = 'rgba(255, 193, 7, 0.9)';
-                    break;
-                default:
-                    messageDiv.style.background = 'rgba(88, 166, 255, 0.9)';
-            }
-
-            messageDiv.textContent = message;
-            document.body.appendChild(messageDiv);
-
-            // Auto-remove after 5 seconds
             setTimeout(() => {
-                messageDiv.remove();
+                clearMessages();
             }, 5000);
         }
 
-        // Modal functions
-        function openAddCardModal() {
-            document.getElementById('modalOverlay').style.display = 'block';
-            document.body.style.overflow = 'hidden';
-            document.getElementById('modalFileInput').value = '';
-            updateSelectedFileName();
+        // Clear messages
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
         }
 
-        function closeAddCardModal() {
-            document.getElementById('modalOverlay').style.display = 'none';
-            document.body.style.overflow = 'auto';
-            document.getElementById('modalSymbolInput').value = '';
-            document.getElementById('modalFileInput').value = '';
-            modalSelectedFile = null;
-            updateSelectedFileName();
-            updateModalAddButton();
-        }
-
-        function updateSelectedFileName() {
-            const fileInput = document.getElementById('modalFileInput');
-            const fileNameDiv = document.getElementById('selectedFileName');
-
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                fileNameDiv.textContent = `Selected: ${file.name}`;
-                fileNameDiv.style.color = '#56d364';
-                modalSelectedFile = file;
-            } else {
-                fileNameDiv.textContent = 'No file selected';
-                fileNameDiv.style.color = '#7d8590';
-                modalSelectedFile = null;
-            }
-
-            updateModalAddButton();
-        }
-
-        function updateModalAddButton() {
-            const symbol = document.getElementById('modalSymbolInput').value.trim();
-            const button = document.getElementById('modalAddButton');
-
-            const isValid = symbol.length > 0 && modalSelectedFile;
-            button.disabled = !isValid;
-        }
-
-        async function addCombinationFromModal() {
-            const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
-            const file = modalSelectedFile;
-
-            if (!symbol || !file) {
-                showMessage('Please provide both symbol and configuration file', 'error');
-                return;
-            }
-
-            try {
-                // Read file content
-                const fileContent = await readFileAsText(file);
-                let config;
-
-                try {
-                    config = JSON.parse(fileContent);
-                } catch (e) {
-                    showMessage('Invalid JSON file format', 'error');
-                    return;
-                }
-
-                // Send to server
-                const response = await fetch('/api/combinations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        symbol: symbol,
-                        config: config
-                    })
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    showMessage(`Added ${symbol} successfully!`, 'success');
-                    closeAddCardModal();
-
-                    // Add to local combinations map
-                    combinations.set(symbol, {
-                        symbol: symbol,
-                        config: config,
-                        isActive: false,
-                        price: null,
-                        timestamp: null,
-                        indicators: [],
-                        bars: []
-                    });
-
-                    updateCombinationsCount();
-                    renderCombination(symbol);
-                } else {
-                    const error = await response.json();
-                    showMessage(`Error adding ${symbol}: ${error.message}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error adding combination:', error);
-                showMessage('Error adding combination: ' + error.message, 'error');
-            }
-        }
-
-        function readFileAsText(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.onerror = e => reject(e.target.error);
-                reader.readAsText(file);
-            });
-        }
-
-        function renderCombination(symbol) {
-            const data = combinations.get(symbol);
-            if (!data) return;
-
-            const container = document.getElementById('cardsContainer');
-
-            // Remove existing card if it exists
-            const existingCard = document.getElementById(`card-${symbol}`);
-            if (existingCard) {
-                existingCard.remove();
-            }
-
-            const cardHtml = `
-                <div class="combination-card" id="card-${symbol}">
-                    <div class="card-header">
-                        <div>
-                            <div class="card-symbol">${symbol}</div>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <div class="card-status ${data.isActive ? 'active' : 'inactive'}">
-                                ${data.isActive ? 'Active' : 'Inactive'}
-                            </div>
-                            <div class="card-actions">
-                                <button class="card-action-btn" onclick="toggleCombination('${symbol}')" title="Toggle">
-                                    ${data.isActive ? '⏸️' : '▶️'}
-                                </button>
-                                <button class="card-action-btn" onclick="viewCombinationDetails('${symbol}')" title="View Details">
-                                    👁️
-                                </button>
-                                <button class="card-action-btn danger" onclick="removeCombination('${symbol}')" title="Remove">
-                                    🗑️
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="price-section">
-                        <div class="price-display">
-                            <div class="current-price" id="price-${symbol}">
-                                ${data.price ? `${data.price.toFixed(2)}` : 'No Price Data'}
-                            </div>
-                            <div class="price-timestamp" id="timestamp-${symbol}">
-                                ${data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : ''}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="two-column-layout">
-                        <div class="indicators-section">
-                            <div class="section-header">
-                                <div>
-                                    <div class="section-title">Indicators</div>
-                                    <div class="section-subtitle">Technical analysis values</div>
-                                </div>
-                            </div>
-                            <div class="indicators-grid" id="indicators-${symbol}">
-                                ${renderIndicators(data.indicators)}
-                            </div>
-                        </div>
-
-                        <div class="portfolio-section">
-                            <div class="section-header">
-                                <div>
-                                    <div class="section-title">Signal Bars</div>
-                                    <div class="section-subtitle">Combined indicator signals</div>
-                                </div>
-                            </div>
-                            <div class="bars-container" id="bars-${symbol}">
-                                ${renderBars(data.bars)}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            container.insertAdjacentHTML('beforeend', cardHtml);
-        }
-
-        function renderIndicators(indicators) {
-            if (!indicators || indicators.length === 0) {
-                return '<div style="color: #7d8590; text-align: center; padding: 2rem;">No indicator data available</div>';
-            }
-
-            return indicators.map(indicator => `
-                <div class="indicator-card">
-                    <div class="indicator-name">${indicator.name}</div>
-                    <div class="indicator-value">${indicator.value}</div>
-                    <div class="indicator-meta">${indicator.timeframe || ''}</div>
-                </div>
-            `).join('');
-        }
-
-        function renderBars(bars) {
-            if (!bars || bars.length === 0) {
-                return '<div style="color: #7d8590; text-align: center; padding: 2rem;">No bar data available</div>';
-            }
-
-            return bars.map(bar => `
-                <div class="responsive-bar">
-                    <div class="bar-header">
-                        <div class="bar-label">${bar.name}</div>
-                        <div class="bar-value">${bar.value}%</div>
-                    </div>
-                    <div class="bar-container">
-                        <div class="bar-fill ${bar.type}" style="width: ${bar.value}%"></div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function updatePrice(symbol, price, timestamp) {
-            const priceElement = document.getElementById(`price-${symbol}`);
-            const timestampElement = document.getElementById(`timestamp-${symbol}`);
-
-            if (priceElement) {
-                priceElement.textContent = `${price.toFixed(2)}`;
-            }
-
-            if (timestampElement) {
-                timestampElement.textContent = new Date(timestamp).toLocaleTimeString();
-            }
-
-            // Update combination data
-            if (combinations.has(symbol)) {
-                const data = combinations.get(symbol);
-                data.price = price;
-                data.timestamp = timestamp;
-            }
-        }
-
-        function updateCombinationData(symbol, data) {
-            if (!combinations.has(symbol)) return;
-
-            const combinationData = combinations.get(symbol);
-
-            // Update indicators
-            if (data.indicators) {
-                combinationData.indicators = data.indicators;
-                const indicatorsContainer = document.getElementById(`indicators-${symbol}`);
-                if (indicatorsContainer) {
-                    indicatorsContainer.innerHTML = renderIndicators(data.indicators);
-                }
-            }
-
-            // Update bars
-            if (data.bars) {
-                combinationData.bars = data.bars;
-                const barsContainer = document.getElementById(`bars-${symbol}`);
-                if (barsContainer) {
-                    barsContainer.innerHTML = renderBars(data.bars);
-                }
-            }
-        }
-
-        async function toggleCombination(symbol) {
-            try {
-                const response = await fetch(`/api/combinations/${symbol}/toggle`, {
-                    method: 'POST'
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-
-                    // Update local state
-                    if (combinations.has(symbol)) {
-                        const data = combinations.get(symbol);
-                        data.isActive = result.isActive;
-
-                        // Update UI
-                        const statusElement = document.querySelector(`#card-${symbol} .card-status`);
-                        const buttonElement = document.querySelector(`#card-${symbol} .card-action-btn`);
-
-                        if (statusElement) {
-                            statusElement.className = `card-status ${result.isActive ? 'active' : 'inactive'}`;
-                            statusElement.textContent = result.isActive ? 'Active' : 'Inactive';
-                        }
-
-                        if (buttonElement) {
-                            buttonElement.textContent = result.isActive ? '⏸️' : '▶️';
-                        }
-                    }
-
-                    showMessage(`${symbol} ${result.isActive ? 'activated' : 'deactivated'}`, 'success');
-                } else {
-                    const error = await response.json();
-                    showMessage(`Error toggling ${symbol}: ${error.message}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error toggling combination:', error);
-                showMessage('Error toggling combination: ' + error.message, 'error');
-            }
-        }
-
-        function viewCombinationDetails(symbol) {
-            window.open(`/combination/${symbol}`, '_blank');
-        }
-
-        async function removeCombination(symbol) {
-            if (!confirm(`Are you sure you want to remove ${symbol}?`)) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/combinations/${symbol}`, {
-                    method: 'DELETE'
-                });
-
-                if (response.ok) {
-                    // Remove from local combinations
-                    combinations.delete(symbol);
-
-                    // Remove from UI
-                    const cardElement = document.getElementById(`card-${symbol}`);
-                    if (cardElement) {
-                        cardElement.remove();
-                    }
-
-                    updateCombinationsCount();
-                    showMessage(`${symbol} removed successfully`, 'success');
-                } else {
-                    const error = await response.json();
-                    showMessage(`Error removing ${symbol}: ${error.message}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error removing combination:', error);
-                showMessage('Error removing combination: ' + error.message, 'error');
-            }
-        }
+        // Auto-generate test name from monitor name
+        document.getElementById('monitorName').addEventListener('input', function() {
+            const testName = this.value.toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '');
+            document.getElementById('testName').value = testName;
+        });
 
         // Mobile sidebar toggle
         function toggleSidebar() {
@@ -1434,21 +1162,12 @@
             }
         });
 
-        // Add animation keyframes
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-        `;
-        document.head.appendChild(style);
+        // Initialize with empty state
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start with no indicators or bars
+            renderIndicators();
+            renderBars();
+        });
     </script>
 </body>
 </html>
