@@ -60,8 +60,11 @@ if __name__ == "__main__":
     if log_p.exists():
         log_p.unlink()
 
-    # NEW: Create optimizer config with separate data file
-    io = MlfOptimizerConfig.from_file(input_path, ga_config, data_config_file)
+    # FIXED: Load JSON manually and call from_json() instead of from_file()
+    with open(input_path) as f:
+        config_data = json.load(f)
+
+    io = MlfOptimizerConfig.from_json(config_data, data_config_file)
 
     # Create and run genetic algorithm
     genetic_algorithm = io.create_project()

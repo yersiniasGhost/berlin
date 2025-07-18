@@ -56,6 +56,7 @@ class MlfOptimizerConfig:
 
         # FIXED: Only pass monitor_configuration
         problem_domain = MlfProblem(
+            fitness_calculator=self.fitness_calculator,  # Add this line
             monitor_configuration=self.monitor_config
         )
 
