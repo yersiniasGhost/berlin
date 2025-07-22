@@ -34,16 +34,18 @@ class MlfOptimizerConfig:
         trade_executor = TradeExecutorNew(
             monitor_config=self.monitor_config,
             default_position_size=100.0,
-            stop_loss_pct=0.01,
-            take_profit_pct=0.02
+            stop_loss_pct=0.02,
+            take_profit_pct=0.01
         )
 
+        # Always create shared streamer
         backtest_streamer = BacktestDataStreamer(
             monitor_config=self.monitor_config,
             data_config_file=self.data_config_file,
             trade_executor=trade_executor
         )
 
+        # Always pass shared streamer
         self.fitness_calculator = MlfFitnessCalculator(
             backtest_streamer=backtest_streamer
         )

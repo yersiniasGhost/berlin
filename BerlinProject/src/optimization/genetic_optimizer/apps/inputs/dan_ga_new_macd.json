@@ -112,18 +112,18 @@
     },
     {
       "objective": "MinimizeLosingTrades",
-      "weight": 2.0
+      "weight": 1.0
     },
     {
       "objective": "MinimizeLoss",
-      "weight": 5.0
+      "weight": 1.0
     }
   ],
   "ga_hyperparameters": {
     "number_of_iterations": 10,
     "population_size": 50,
     "propagation_fraction": 0.5,
-    "elite_size": 2,
+    "elite_size": 5,
     "chance_of_mutation": 0.1,
     "chance_of_crossover": 0.1
   }
