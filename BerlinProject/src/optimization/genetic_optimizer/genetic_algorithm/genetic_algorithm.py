@@ -73,6 +73,7 @@ class GeneticAlgorithm:
     def run_ga_iterations(self, show_step: int) -> Iterable[Tuple[Observer, StatisticsObserver]]:
         population = self.__initial_generation()
         for iteration in range(0, self.number_of_generations):
+            print(iteration)
             self.iteration_index = iteration
             observer = Observer(iteration=iteration)
             fitness_results = self.__calculate_fitness(iteration=iteration, population=population)

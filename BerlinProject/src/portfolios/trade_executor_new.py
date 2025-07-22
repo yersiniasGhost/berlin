@@ -80,14 +80,14 @@ class TradeExecutorNew(TradeExecutor):
 
         # 1. Check Stop Loss (highest priority)
         if self.stop_loss_price and current_price <= self.stop_loss_price:
-            logger.info(f"STOP LOSS executed @ ${current_price:.2f} (Stop: ${self.stop_loss_price:.2f})")
+            # logger.info(f"STOP LOSS executed @ ${current_price:.2f} (Stop: ${self.stop_loss_price:.2f})")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.STOP_LOSS)
             self._clear_exit_levels()
             return
 
         # 2. Check Take Profit
         if self.take_profit_price and current_price >= self.take_profit_price:
-            logger.info(f"TAKE PROFIT executed @ ${current_price:.2f} (Target: ${self.take_profit_price:.2f})")
+            # logger.info(f"TAKE PROFIT executed @ ${current_price:.2f} (Target: ${self.take_profit_price:.2f})")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.TAKE_PROFIT)
             self._clear_exit_levels()
             return
@@ -95,7 +95,7 @@ class TradeExecutorNew(TradeExecutor):
         # 3. Check Exit Long Signals
         exit_triggered = self._check_exit_long_signals(bar_scores)
         if exit_triggered:
-            logger.info(f"EXIT LONG SIGNAL executed @ ${current_price:.2f}")
+            # logger.info(f"EXIT LONG SIGNAL executed @ ${current_price:.2f}")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.EXIT_LONG)
             self._clear_exit_levels()
             return
@@ -116,11 +116,11 @@ class TradeExecutorNew(TradeExecutor):
             bar_score = bar_scores.get(bar_name, 0.0)
 
             if bar_score >= threshold:
-                logger.info(f"Exit signal triggered: {bar_name} = {bar_score:.3f} "
-                            f"(threshold: {threshold:.3f})")
+                # logger.info(f"Exit signal triggered: {bar_name} = {bar_score:.3f} "
+                #             f"(threshold: {threshold:.3f})")
                 return True
-            else:
-                logger.debug(f"Exit signal {bar_name}: {bar_score:.3f} < {threshold:.3f}")
+            # else:
+                # logger.debug(f"Exit signal {bar_name}: {bar_score:.3f} < {threshold:.3f}")
 
         return False
 
@@ -134,16 +134,16 @@ class TradeExecutorNew(TradeExecutor):
         # Check each enter_long condition
         for condition in enter_conditions:
             bar_name = condition.get('name')
-            threshold = condition.get('threshold', 0.5)
-            bar_score = bar_scores.get(bar_name, 0.0)
+            threshold = condition.get('threshold')
+            bar_score = bar_scores.get(bar_name)
 
             if bar_score >= threshold:
-                logger.info(f"BUY SIGNAL triggered: {bar_name} = {bar_score:.3f} "
-                            f"(threshold: {threshold:.3f})")
+                # logger.info(f"BUY SIGNAL triggered: {bar_name} = {bar_score:.3f} "
+                #             f"(threshold: {threshold:.3f})")
                 self._execute_buy(timestamp, current_price)
                 return  # Exit after first successful entry
             else:
-                logger.debug(f"Entry signal {bar_name}: {bar_score:.3f} < {threshold:.3f}")
+                logger.debug(f"No entry {bar_name}: {bar_score:.3f} < {threshold:.3f}")
 
     def _execute_buy(self, timestamp: int, current_price: float) -> None:
         """
@@ -156,8 +156,8 @@ class TradeExecutorNew(TradeExecutor):
         # Execute the buy
         self.portfolio.buy(timestamp, current_price, TradeReason.ENTER_LONG, self.default_position_size)
 
-        logger.info(f"BUY executed: {self.default_position_size} @ ${current_price:.2f} "
-                    f"Stop: ${self.stop_loss_price:.2f} Target: ${self.take_profit_price:.2f}")
+        # logger.info(f"BUY executed: {self.default_position_size} @ ${current_price:.2f} "
+        #             f"Stop: ${self.stop_loss_price:.2f} Target: ${self.take_profit_price:.2f}")
 
     def _clear_exit_levels(self) -> None:
         """Clear stop loss and take profit levels after exit"""

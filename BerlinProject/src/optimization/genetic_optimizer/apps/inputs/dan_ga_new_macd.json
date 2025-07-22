@@ -14,7 +14,7 @@
     "exit_long": [
       {
         "name": "macd_bear",
-        "threshold": 0.8
+        "threshold": 0.9
       }
     ],
     "bars": {
@@ -46,7 +46,7 @@
         "fast": 12,
         "signal": 9,
         "histogram_threshold": 0.0008,
-        "lookback": 10,
+        "lookback": 50,
         "trend": "bullish"
       },
       "ranges": {
@@ -54,7 +54,7 @@
         "fast": {"t": "int", "r": [8, 18]},
         "signal": {"t": "int", "r": [5, 15]},
 		"histogram_threshold": {"t": "float", "r": [0.00002, 0.002]},
-        "lookback": {"t": "int", "r": [3, 15]},
+        "lookback": {"t": "int", "r": [3, 70]},
         "trend": {"t": "skip"}
       }
     },
@@ -69,13 +69,13 @@
         "fast": 12,
         "signal": 9,
         "histogram_threshold": 0.0005,
-        "lookback": 10,
+        "lookback": 50,
         "trend": "bullish"
       },
       "ranges": {
         "slow": {"t": "int", "r": [20, 35]},
         "fast": {"t": "int", "r": [8, 18]},
-        "signal": {"t": "int", "r": [5, 15]},
+        "signal": {"t": "int", "r": [3, 70]},
 		"histogram_threshold": {"t": "float", "r": [0.00002, 0.002]},
         "lookback": {"t": "int", "r": [3, 15]},
         "trend": {"t": "skip"}
@@ -91,8 +91,8 @@
         "slow": 26,
         "fast": 12,
         "signal": 9,
-        "histogram_threshold": 0.0005,
-        "lookback": 10,
+        "histogram_threshold": 0.015,
+        "lookback": 50,
         "trend": "bearish"
       },
       "ranges": {
@@ -100,7 +100,7 @@
         "fast": {"t": "int", "r": [8, 18]},
         "signal": {"t": "int", "r": [5, 15]},
 		"histogram_threshold": {"t": "float", "r": [0.00002, 0.002]},
-        "lookback": {"t": "int", "r": [3, 15]},
+        "lookback": {"t": "int", "r": [3, 70]},
         "trend": {"t": "skip"}
       }
     }
@@ -120,8 +120,8 @@
     }
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 2,
-    "population_size": 5,
+    "number_of_iterations": 10,
+    "population_size": 50,
     "propagation_fraction": 0.5,
     "elite_size": 2,
     "chance_of_mutation": 0.1,

@@ -40,7 +40,7 @@ class BacktestDataStreamer:
 
         # Use injected trade executor
         self.trade_executor = trade_executor
-
+        self.load_historical_data()
         logger.info(f"BacktestDataStreamer created with {type(trade_executor).__name__}")
 
     def load_historical_data(self):
@@ -60,52 +60,37 @@ class BacktestDataStreamer:
                 f"  {timeframe} ({agg_type}): {history_count} completed + {1 if has_current else 0} current candles")
 
     def run_backtest(self):
-        """
-        Run backtest simulation - process all historical data through indicators and trading
-        """
-        logger.info("Starting backtest simulation...")
-
-        # Get primary timeframe for simulation
+        """Simple backtest simulation"""
         primary_timeframe = self._get_primary_timeframe()
         primary_aggregator = self.aggregators[primary_timeframe]
+        all_candles = primary_aggregator.get_history()
 
-        # Get all candles for simulation
-        all_candles = primary_aggregator.get_history().copy()
-        if primary_aggregator.get_current_candle():
-            all_candles.append(primary_aggregator.get_current_candle())
+        if len(all_candles) == 0:
+            print("BAD! NO CANDLES")
 
-        logger.info(f"Processing {len(all_candles)} candles")
-
-        # Process each candle (similar to DataStreamer.process_tick)
         for i, candle in enumerate(all_candles):
-            # Create tick data from candle
             tick_data = TickData(
                 symbol=self.ticker,
                 timestamp=candle.timestamp,
-                open=candle.close,
-                high=candle.close,
-                low=candle.close,
+                open=candle.open,
+                high=candle.high,
+                low=candle.low,
                 close=candle.close,
                 volume=candle.volume,
                 time_increment="BACKTEST"
             )
 
-            # Calculate indicators (same as DataStreamer)
+            for timeframe_key, aggregator in self.aggregators.items():
+                aggregator.process_tick(tick_data)
+
             indicators, raw_indicators, bar_scores = (
                 self.indicator_processor.calculate_indicators_new(self.aggregators))
 
-            # Execute trading logic (same as DataStreamer)
             self.trade_executor.make_decision(
                 tick=tick_data,
                 indicators=indicators,
                 bar_scores=bar_scores
             )
-
-            # Log progress
-            if i % 100 == 0:
-                logger.info(f"Processed {i + 1}/{len(all_candles)} candles")
-
-        logger.info("Backtest simulation completed")
 
     def replace_monitor_config(self, monitor_config: MonitorConfiguration):
 
@@ -116,32 +101,24 @@ class BacktestDataStreamer:
         self.trade_executor.portfolio.reset()
         self.trade_executor.monitor_config = monitor_config
 
-    def replace_monitor_config(self, monitor_config: MonitorConfiguration):
-
-        self.monitor_config = monitor_config
-        self.indicator_processor = IndicatorProcessor(monitor_config)
-        self.trade_executor.portfolio.reset()
-        self.trade_executor.monitor_config = monitor_config
-
-        # Clear any trade executor state (stop loss, take profit levels)
-        if hasattr(self.trade_executor, '_clear_exit_levels'):
-            self.trade_executor._clear_exit_levels()
-
     def _get_primary_timeframe(self) -> str:
-        """Get primary timeframe for simulation"""
-        timeframes = list(self.aggregators.keys())
 
-        priority = ['1m', '5m', '15m', '30m', '1h']
+        timeframe_minutes = {key: self._timeframe_to_minutes(key) for key in self.aggregators.keys()}
+        return min(timeframe_minutes.keys(), key=lambda x: timeframe_minutes[x])
 
-        for tf in priority:
-            for available_tf in timeframes:
-                if tf in available_tf:
-                    return available_tf
+    def _timeframe_to_minutes(self, aggregator_key: str) -> int:
+        """Convert aggregator key to minutes"""
+        base_timeframe = aggregator_key.split('-')[0] if '-' in aggregator_key else aggregator_key
 
-        return timeframes[0] if timeframes else '1m'
+        timeframe_map = {
+            "1m": 1, "5m": 5, "15m": 15, "30m": 30,
+            "1h": 60
+        }
+
+        return timeframe_map.get(base_timeframe)
 
     def run(self) -> Portfolio:
         """Complete backtest process"""
-        self.load_historical_data()
+        # self.load_historical_data()
         self.run_backtest()
         return self.trade_executor.portfolio
