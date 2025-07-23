@@ -23,6 +23,9 @@ class MaximizeProfit(ObjectiveFunctionBase):
         return (1.0 / total_profit) / self.normalization_factor * self.weight
 
 
+
+
+
 @dataclass
 class MinimizeLoss(ObjectiveFunctionBase):
 

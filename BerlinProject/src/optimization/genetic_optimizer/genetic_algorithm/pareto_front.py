@@ -28,21 +28,28 @@ def collect_domination_statistics(individuals: List[IndividualStats]):
                 solution_b.dominated_by_solution()
 
 
-def get_pareto_front(individuals: List[IndividualStats], index: int) -> List[IndividualStats]:
-    output = [ind for ind in individuals if ind.dominated_by_count == index]
-    return output
+def get_pareto_front(individuals: List[IndividualStats], index: int, max_index: int) -> Tuple[List[IndividualStats], int]:
+    output = []
+    while len(output) == 0 and index <= max_index:
+        output = [ind for ind in individuals if ind.dominated_by_count == index]
+        index += 1
+
+    return output, index
 
 
 
 def collect_fronts(individuals: List[IndividualStats]) -> Dict[int, List]:
     index = 0
+    max_domination = max([i.dominated_by_count for i in individuals])
     pareto_fronts = dict()
+    cnt = 0
     while True:
-        front = get_pareto_front(individuals, index)
+        front, index = get_pareto_front(individuals, index, max_domination)
         if len(front) == 0:
             break
-        pareto_fronts[index] = balance_fronts(front)
-        index += 1
+        pareto_fronts[cnt] = balance_fronts(front)
+        cnt += 1
+        # index += 1
     return pareto_fronts
 
 

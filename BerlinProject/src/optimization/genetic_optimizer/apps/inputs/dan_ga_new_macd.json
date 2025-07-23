@@ -14,7 +14,7 @@
     "exit_long": [
       {
         "name": "macd_bear",
-        "threshold": 0.9
+        "threshold": 1
       }
     ],
     "bars": {
@@ -108,22 +108,18 @@
   "objectives": [
     {
       "objective": "MaximizeProfit",
-      "weight": 5.0
+      "weight": 4.0
     },
-    {
-      "objective": "MinimizeLosingTrades",
-      "weight": 2.0
-    },
-    {
+        {
       "objective": "MinimizeLoss",
       "weight": 0.25
     }
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 100,
-    "population_size": 100,
-    "propagation_fraction": 0.2,
-    "elite_size": 5,
+    "number_of_iterations": 50,
+    "population_size": 200,
+    "propagation_fraction": 0.3,
+    "elite_size": 10,
     "chance_of_mutation": 0.02,
     "chance_of_crossover": 0.02
   }

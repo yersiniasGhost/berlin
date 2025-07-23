@@ -34,8 +34,8 @@ class MlfOptimizerConfig:
         trade_executor = TradeExecutorNew(
             monitor_config=self.monitor_config,
             default_position_size=100.0,
-            stop_loss_pct=0.02,
-            take_profit_pct=0.01
+            stop_loss_pct=0.1,
+            take_profit_pct=0.05
         )
 
         # Always create shared streamer

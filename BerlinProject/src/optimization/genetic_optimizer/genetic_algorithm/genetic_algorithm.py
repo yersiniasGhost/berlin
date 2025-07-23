@@ -77,6 +77,8 @@ class GeneticAlgorithm:
             self.iteration_index = iteration
             observer = Observer(iteration=iteration)
             fitness_results = self.__calculate_fitness(iteration=iteration, population=population)
+            if iteration == 25:
+                print('here')
             collect_domination_statistics(fitness_results)
             fronts = collect_fronts(fitness_results)
 
@@ -127,6 +129,7 @@ class GeneticAlgorithm:
         self.debug_population(elitists, 'e4')
 
         left = self.population_size - len(elitists)
+        last_left = left
         while left > 0:
             print("MISSING", left)
             for p in parents:
@@ -136,6 +139,9 @@ class GeneticAlgorithm:
                 left = self.population_size - len(elitists)
                 if left <= 0:
                     break
+            if last_left == left:
+                print('WTF')
+            last_left = left
 
         self.debug_population(elitists, 'e3')
 

@@ -98,8 +98,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set random seeds
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    np.random.seed(69)
+    random.seed(69)
 
     # Parse file paths
     input_path = Path('.') / args.payload[0]
@@ -165,7 +165,9 @@ if __name__ == "__main__":
         metrics = zip(objectives, stats[1].best_metric_iteration)
         metric_out = [f"{a}={b:.4f}" for a, b in metrics]
 
-        eta = (dt / (stats[0].iteration + 1)) * (genetic_algorithm.number_of_generations - stats[0].iteration)
+        eta = dt * (genetic_algorithm.number_of_generations - stats[0].iteration)
+        # eta = (dt / (stats[0].iteration + 1)) * (genetic_algorithm.number_of_generations - stats[0].iteration)
+
         out_str = f"{test_name}, {stats[0].iteration}/{genetic_algorithm.number_of_generations}, " \
                   f"{dt:.2f}s, eta: {eta / 60:.2f}m, {metric_out}"
 
