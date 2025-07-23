@@ -204,7 +204,7 @@ class Portfolio:
                     exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
 
                 # Calculate P&L percentage
-                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price)
 
                 # Add to profits if positive
                 if pnl_percent > 0:
@@ -233,7 +233,7 @@ class Portfolio:
                     exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
 
                 # Calculate P&L percentage
-                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price)
 
                 # Add to losses if negative (convert to positive)
                 if pnl_percent < 0:

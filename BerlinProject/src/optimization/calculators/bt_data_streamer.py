@@ -4,28 +4,27 @@ from typing import Dict, List, Optional, Any
 
 from models.monitor_configuration import MonitorConfiguration
 from candle_aggregator.candle_aggregator import CandleAggregator
-from candle_aggregator.candle_aggregator_normal import CANormal
-from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
-from data_streamer.indicator_processor import IndicatorProcessor
+from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 from portfolios.portfolio_tool import Portfolio
 from portfolios.trade_executor import TradeExecutor
-from portfolios.trade_executor_new import TradeExecutorNew
 from models.tick_data import TickData
 
 logger = logging.getLogger('BacktestDataStreamer')
 
 
-#TODO: add candle chart in the details
-#  filter out bad data from schwab pips
-# TODO: changebar colors based on what the parameter types on each bar.
-# TODO: add monitor creation/ edit page for UI / get into MONGO!
-
 class BacktestDataStreamer:
+    """
+    Simple optimized version for genetic algorithms:
+    1. Load Yahoo data once (1m, 5m candles)
+    2. Build tick history once
+    3. For each GA individual: calculate all indicators at once, then execute trades
+    """
 
     def __init__(self, monitor_config: MonitorConfiguration, data_config_file: str,
                  trade_executor: TradeExecutor):
         self.monitor_config = monitor_config
+        self.trade_executor = trade_executor
 
         # Load data config
         with open(data_config_file, 'r') as f:
@@ -35,113 +34,102 @@ class BacktestDataStreamer:
         self.start_date = data_config['start_date']
         self.end_date = data_config['end_date']
 
+        # Load all historical data once
         self.aggregators: Dict[str, CandleAggregator] = {}
-        self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
+        self.load_historical_data()
 
-        # Use injected trade executor
-        self.trade_executor = trade_executor
+        # Build tick history once from primary timeframe
+        self.primary_timeframe = self._get_primary_timeframe()
+        self.primary_aggregator = self.aggregators[self.primary_timeframe]
+        all_candles = self.primary_aggregator.get_history()
 
-        logger.info(f"BacktestDataStreamer created with {type(trade_executor).__name__}")
+        if len(all_candles) == 0:
+            logger.error("BAD! NO CANDLES")
+            self.tick_history = []
+            return
+
+        # Convert candles to tick history once
+        self.tick_history = []
+        for candle in all_candles:
+            tick_data = TickData(
+                symbol=self.ticker,
+                timestamp=candle.timestamp,
+                open=candle.open,
+                high=candle.high,
+                low=candle.low,
+                close=candle.close,
+                volume=candle.volume,
+                time_increment="BACKTEST"
+            )
+            self.tick_history.append(tick_data)
+
+        logger.info(f"BacktestDataStreamer created with {len(self.tick_history)} ticks")
 
     def load_historical_data(self):
-        """Load historical data into aggregators via YahooFinanceHistorical"""
+        """Load historical data into aggregators via YahooFinanceHistorical - happens once"""
         yahoo_source = YahooFinanceHistorical()
         yahoo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
 
-        # Get the fully populated aggregators from YahooFinanceHistorical
         self.aggregators = yahoo_source.aggregators
         logger.info(f"Got {len(self.aggregators)} aggregators from YahooFinanceHistorical:")
 
         for timeframe, aggregator in self.aggregators.items():
             history_count = len(aggregator.get_history())
-            has_current = aggregator.get_current_candle() is not None
-            agg_type = aggregator._get_aggregator_type()
-            logger.info(
-                f"  {timeframe} ({agg_type}): {history_count} completed + {1 if has_current else 0} current candles")
+            logger.info(f"  {timeframe}: {history_count} candles")
 
     def run_backtest(self):
         """
-        Run backtest simulation - process all historical data through indicators and trading
+        OPTIMIZED: Calculate ALL indicators at once, then execute trades
+        This is the key change for GA performance
         """
-        logger.info("Starting backtest simulation...")
+        logger.debug(f"Running optimized backtest with {len(self.tick_history)} ticks")
 
-        # Get primary timeframe for simulation
-        primary_timeframe = self._get_primary_timeframe()
-        primary_aggregator = self.aggregators[primary_timeframe]
+        # STEP 1: Calculate ALL indicators for entire timeline at once (batch processing)
+        indicator_processor = IndicatorProcessorHistoricalNew(self.monitor_config)
+        indicator_history, raw_indicator_history, bar_score_history = (
+            indicator_processor.calculate_indicators(self.aggregators)
+        )
 
-        # Get all candles for simulation
-        all_candles = primary_aggregator.get_history().copy()
-        if primary_aggregator.get_current_candle():
-            all_candles.append(primary_aggregator.get_current_candle())
+        # STEP 2: Execute trades using pre-calculated indicators
+        for i, tick_data in enumerate(self.tick_history):
+            # Get pre-calculated indicators for this time point
+            indicators = {}
+            bar_scores = {}
 
-        logger.info(f"Processing {len(all_candles)} candles")
+            # Extract indicators for this tick
+            for indicator_name, values in indicator_history.items():
+                indicators[indicator_name] = values[i] if i < len(values) else 0.0
 
-        # Process each candle (similar to DataStreamer.process_tick)
-        for i, candle in enumerate(all_candles):
-            # Create tick data from candle
-            tick_data = TickData(
-                symbol=self.ticker,
-                timestamp=candle.timestamp,
-                open=candle.close,
-                high=candle.close,
-                low=candle.close,
-                close=candle.close,
-                volume=candle.volume,
-                time_increment="BACKTEST"
-            )
+            # Extract bar scores for this tick
+            for bar_name, values in bar_score_history.items():
+                bar_scores[bar_name] = values[i] if i < len(values) else 0.0
 
-            # Calculate indicators (same as DataStreamer)
-            indicators, raw_indicators, bar_scores = (
-                self.indicator_processor.calculate_indicators_new(self.aggregators))
-
-            # Execute trading logic (same as DataStreamer)
+            # Execute trading decision with pre-calculated data
             self.trade_executor.make_decision(
                 tick=tick_data,
                 indicators=indicators,
                 bar_scores=bar_scores
             )
 
-            # Log progress
-            if i % 100 == 0:
-                logger.info(f"Processed {i + 1}/{len(all_candles)} candles")
-
-        logger.info("Backtest simulation completed")
-
     def replace_monitor_config(self, monitor_config: MonitorConfiguration):
-
-        #  reinit portfolio
-        # reset indicator values for our streamer run method
+        """Replace configuration - data stays loaded, just reset portfolio"""
         self.monitor_config = monitor_config
-        self.indicator_processor = IndicatorProcessor(monitor_config)
         self.trade_executor.portfolio.reset()
         self.trade_executor.monitor_config = monitor_config
-
-    def replace_monitor_config(self, monitor_config: MonitorConfiguration):
-
-        self.monitor_config = monitor_config
-        self.indicator_processor = IndicatorProcessor(monitor_config)
-        self.trade_executor.portfolio.reset()
-        self.trade_executor.monitor_config = monitor_config
-
-        # Clear any trade executor state (stop loss, take profit levels)
-        if hasattr(self.trade_executor, '_clear_exit_levels'):
-            self.trade_executor._clear_exit_levels()
 
     def _get_primary_timeframe(self) -> str:
-        """Get primary timeframe for simulation"""
-        timeframes = list(self.aggregators.keys())
+        timeframe_minutes = {key: self._timeframe_to_minutes(key) for key in self.aggregators.keys()}
+        return min(timeframe_minutes.keys(), key=lambda x: timeframe_minutes[x])
 
-        priority = ['1m', '5m', '15m', '30m', '1h']
-
-        for tf in priority:
-            for available_tf in timeframes:
-                if tf in available_tf:
-                    return available_tf
-
-        return timeframes[0] if timeframes else '1m'
+    def _timeframe_to_minutes(self, aggregator_key: str) -> int:
+        """Convert aggregator key to minutes"""
+        base_timeframe = aggregator_key.split('-')[0] if '-' in aggregator_key else aggregator_key
+        timeframe_map = {
+            "1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60
+        }
+        return timeframe_map.get(base_timeframe, 1)
 
     def run(self) -> Portfolio:
         """Complete backtest process"""
-        self.load_historical_data()
         self.run_backtest()
         return self.trade_executor.portfolio

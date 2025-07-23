@@ -15,9 +15,9 @@ class CANormal(CandleAggregator):
         return TickData(
             symbol=self.symbol,
             timestamp=candle_start_time,
-            open=tick_data.close,
-            high=tick_data.close,
-            low=tick_data.close,
+            open=tick_data.open,
+            high=tick_data.high,
+            low=tick_data.low,
             close=tick_data.close,
             volume=tick_data.volume,
             time_increment=self.timeframe

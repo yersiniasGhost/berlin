@@ -1,33 +1,56 @@
-# File: BerlinProject/src/stock_analysis_ui/routes/api_routes.py
-# Complete API routes with debugging and WebSocket monitoring
-
+# File: routes/api_routes.py
 """
-API routes for AppService with enhanced debugging capabilities
+API routes for AppService with session-based support
 """
 
 import json
 import logging
 import time
+import uuid
 from datetime import datetime
-import base64
-import requests
+from functools import wraps
 
 import numpy as np
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, session
 
-from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+# Import the services we need
 from stock_analysis_ui.services.app_service import AppService
-
+from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 
 logger = logging.getLogger('APIRoutes')
 api_bp = Blueprint('api', __name__)
 
 
-# Add this to your api_routes.py file
+def get_session_app_service():
+    """Get the app_service for the current session"""
+    session_id = session.get('session_id')
+    if not session_id:
+        return None
 
+    return current_app.session_app_services.get(session_id)
+
+
+def require_session_auth(f):
+    """Decorator to require valid session authentication"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('authenticated') or not session.get('session_id'):
+            return jsonify({'success': False, 'error': 'Authentication required'}), 401
+
+        app_service = get_session_app_service()
+        if not app_service:
+            return jsonify({'success': False, 'error': 'Invalid session'}), 401
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+# AUTHENTICATION ROUTE (no decorator needed)
 @api_bp.route('/authenticate', methods=['POST'])
 def authenticate():
-    """Handle Schwab authentication from UI"""
+    """Handle Schwab authentication from UI - Session-based"""
     try:
         data = request.json
         auth_url = data.get('auth_url', '').strip()
@@ -38,10 +61,17 @@ def authenticate():
         if 'code=' not in auth_url:
             return jsonify({'success': False, 'error': 'Invalid auth URL - must contain authorization code'}), 400
 
+        # Create unique session ID for this user
+        session_id = str(uuid.uuid4())
+        session['session_id'] = session_id
+        session['authenticated'] = True
+
+        logger.info(f"Creating new session: {session_id}")
+
         # Create auth manager and process the URL
         auth_manager = SchwabAuthManager()
 
-        # Extract code from URL (same logic as current authenticate method)
+        # Extract code from URL
         from urllib.parse import urlparse, parse_qs
         try:
             parsed_url = urlparse(auth_url)
@@ -51,6 +81,10 @@ def authenticate():
                 return jsonify({'success': False, 'error': 'Authorization code not found in URL'}), 400
 
             response_code = query_params['code'][0]
+
+            # Process the authorization code
+            import base64
+            import requests
 
             credentials = f"{auth_manager.app_key}:{auth_manager.app_secret}"
             base64_credentials = base64.b64encode(credentials.encode()).decode()
@@ -90,26 +124,25 @@ def authenticate():
             if not auth_manager._get_streamer_info():
                 return jsonify({'success': False, 'error': 'Failed to get user preferences'}), 400
 
-            # Save tokens (current behavior - but we'll move to session later)
-            auth_manager.save_tokens()
-
-            # Create app service with authenticated manager (same as current startup)
-            # Get socketio from the Flask app instance (stored in create_app)
+            # Create session-specific app_service
             socketio = current_app.socketio
+            session_app_service = AppService(socketio, auth_manager, session_id=session_id)
 
-            app_service = AppService(socketio, auth_manager)
-
-            # Attach to current Flask app instance
-            current_app.app_service = app_service
+            # Store in session manager
+            current_app.session_app_services[session_id] = session_app_service
 
             # Start streaming infrastructure
-            if not app_service.start_streaming():
+            if not session_app_service.start_streaming():
+                # Clean up on failure
+                del current_app.session_app_services[session_id]
                 return jsonify({'success': False, 'error': 'Failed to start streaming infrastructure'}), 500
 
-            logger.info("Authentication successful via UI")
+            logger.info(f"Authentication successful for session: {session_id}")
+
             return jsonify({
                 'success': True,
                 'message': 'Authentication successful',
+                'session_id': session_id,
                 'redirect_url': '/dashboard'
             })
 
@@ -121,15 +154,17 @@ def authenticate():
         logger.error(f"Error in authentication endpoint: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# SESSION-BASED ROUTES
 @api_bp.route('/status')
+@require_session_auth
 def get_status():
-    """Get current application status - supports both live and replay modes"""
+    """Get current application status - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
         combinations = app_service.get_combinations()
 
-        # Handle both live and replay modes
-        authenticated = True  # Default for replay mode
+        authenticated = True
         if app_service.auth_manager is not None:
             authenticated = app_service.auth_manager.is_authenticated()
 
@@ -138,7 +173,8 @@ def get_status():
             'streaming': app_service.is_streaming,
             'combinations': combinations['combinations'],
             'total_combinations': combinations['total'],
-            'mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Unknown'
+            'session_id': session.get('session_id'),
+            'mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Live Schwab'
         })
 
     except Exception as e:
@@ -147,10 +183,12 @@ def get_status():
 
 
 @api_bp.route('/combinations', methods=['POST'])
+@require_session_auth
 def add_combination():
-    """Add a new combination - handles file content directly"""
+    """Add a new combination - session-based"""
     try:
         data = request.json
+        app_service = get_session_app_service()
 
         symbol = data.get('symbol', '').upper().strip()
         config_content = data.get('config_content', '')
@@ -184,11 +222,11 @@ def add_combination():
             if not monitor_config:
                 return jsonify({'success': False, 'error': 'Failed to parse monitor configuration'}), 400
 
-            app_service = current_app.app_service
             result = app_service.add_combination(symbol, temp_config_path)
 
             if result['success']:
-                logger.info(f"Successfully added combination: {result['card_id']} with uploaded config: {config_name}")
+                logger.info(
+                    f"Successfully added combination: {result['card_id']} for session {session.get('session_id')}")
                 return jsonify(result)
             else:
                 logger.error(f"Failed to add combination: {result.get('error', 'Unknown error')}")
@@ -199,7 +237,7 @@ def add_combination():
             try:
                 os.unlink(temp_config_path)
             except:
-                pass  # Ignore cleanup errors
+                pass
 
     except Exception as e:
         logger.error(f"Error adding combination: {e}")
@@ -209,14 +247,15 @@ def add_combination():
 
 
 @api_bp.route('/combinations/<card_id>', methods=['DELETE'])
+@require_session_auth
 def remove_combination(card_id: str):
-    """Remove a combination by card ID"""
+    """Remove a combination by card ID - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
         result = app_service.remove_combination(card_id)
 
         if result['success']:
-            logger.info(f"Successfully removed combination: {card_id}")
+            logger.info(f"Successfully removed combination: {card_id} for session {session.get('session_id')}")
             return jsonify(result)
         else:
             logger.error(f"Failed to remove combination {card_id}: {result.get('error', 'Unknown error')}")
@@ -228,10 +267,11 @@ def remove_combination(card_id: str):
 
 
 @api_bp.route('/combinations')
+@require_session_auth
 def get_combinations():
-    """Get all active combinations"""
+    """Get all active combinations - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
         combinations = app_service.get_combinations()
         return jsonify(combinations)
 
@@ -241,10 +281,11 @@ def get_combinations():
 
 
 @api_bp.route('/configs')
+@require_session_auth
 def get_available_configs():
-    """Get list of available configuration files"""
+    """Get list of available configuration files - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
         configs = app_service.get_available_configs()
 
         return jsonify({
@@ -258,48 +299,12 @@ def get_available_configs():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_bp.route('/streaming/start', methods=['POST'])
-def start_streaming():
-    """Start streaming infrastructure"""
-    try:
-        app_service = current_app.app_service
-
-        if app_service.start_streaming():
-            logger.info("Streaming started via API")
-            return jsonify({'success': True, 'message': 'Streaming started'})
-        else:
-            logger.error("Failed to start streaming via API")
-            return jsonify({'success': False, 'error': 'Failed to start streaming'}), 500
-
-    except Exception as e:
-        logger.error(f"Error starting streaming: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@api_bp.route('/streaming/stop', methods=['POST'])
-def stop_streaming():
-    """Stop streaming"""
-    try:
-        app_service = current_app.app_service
-
-        if app_service.stop_streaming():
-            logger.info("Streaming stopped via API")
-            return jsonify({'success': True, 'message': 'Streaming stopped'})
-        else:
-            logger.error("Failed to stop streaming via API")
-            return jsonify({'success': False, 'error': 'Failed to stop streaming'}), 500
-
-    except Exception as e:
-        logger.error(f"Error stopping streaming: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# Add this to your api_routes.py file - modify the get_card_details function
-
 @api_bp.route('/combinations/<card_id>/details')
+@require_session_auth
 def get_card_details(card_id: str):
-    """Get detailed indicator history and current values for a specific card"""
+    """Get detailed indicator history and current values for a specific card - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
 
         # Check if card exists
         if card_id not in app_service.combinations:
@@ -335,18 +340,14 @@ def get_card_details(card_id: str):
         # Get REAL indicator history from processor
         indicator_history = data_streamer.indicator_processor.get_history_data()
 
-        # UPDATED: Convert monitor_config to dict format for new structure
+        # Convert monitor_config to dict format
         monitor_config_dict = {
             'name': monitor_config.name,
             'description': monitor_config.description,
-            # NEW: Include enter_long and exit_long arrays
             'enter_long': monitor_config.enter_long,
             'exit_long': monitor_config.exit_long,
-            # Keep bars configuration
             'bars': monitor_config.bars,
-            # Keep aggregator type if available
             'aggregator_type': getattr(monitor_config, 'aggregator_type', 'normal'),
-            # Add summary info for UI
             'enter_conditions_count': len(monitor_config.enter_long),
             'exit_conditions_count': len(monitor_config.exit_long)
         }
@@ -389,11 +390,13 @@ def get_card_details(card_id: str):
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @api_bp.route('/combinations/<card_id>/portfolio')
+@require_session_auth
 def get_card_portfolio(card_id: str):
-    """Get current portfolio metrics for a specific card"""
+    """Get current portfolio metrics for a specific card - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
 
         # Check if card exists
         if card_id not in app_service.combinations:
@@ -418,10 +421,11 @@ def get_card_portfolio(card_id: str):
 
 
 @api_bp.route('/portfolios')
+@require_session_auth
 def get_all_portfolios():
-    """Get portfolio metrics for all active cards"""
+    """Get portfolio metrics for all active cards - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
 
         portfolios = {}
         for card_id, combination in app_service.combinations.items():
@@ -440,21 +444,58 @@ def get_all_portfolios():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# ============================================================================
-# DEBUG ENDPOINTS
-# ============================================================================
-
-@api_bp.route('/debug/streaming')
-def debug_streaming():
-    """Get detailed streaming debug information"""
+@api_bp.route('/streaming/start', methods=['POST'])
+@require_session_auth
+def start_streaming():
+    """Start streaming infrastructure - session-based"""
     try:
-        app_service = current_app.app_service
+        app_service = get_session_app_service()
+
+        if app_service.start_streaming():
+            logger.info("Streaming started via API")
+            return jsonify({'success': True, 'message': 'Streaming started'})
+        else:
+            logger.error("Failed to start streaming via API")
+            return jsonify({'success': False, 'error': 'Failed to start streaming'}), 500
+
+    except Exception as e:
+        logger.error(f"Error starting streaming: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/streaming/stop', methods=['POST'])
+@require_session_auth
+def stop_streaming():
+    """Stop streaming - session-based"""
+    try:
+        app_service = get_session_app_service()
+
+        if app_service.stop_streaming():
+            logger.info("Streaming stopped via API")
+            return jsonify({'success': True, 'message': 'Streaming stopped'})
+        else:
+            logger.error("Failed to stop streaming via API")
+            return jsonify({'success': False, 'error': 'Failed to stop streaming'}), 500
+
+    except Exception as e:
+        logger.error(f"Error stopping streaming: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# DEBUG ENDPOINTS
+@api_bp.route('/debug/streaming')
+@require_session_auth
+def debug_streaming():
+    """Get detailed streaming debug information - session-based"""
+    try:
+        app_service = get_session_app_service()
 
         debug_info = {
             'app_service_streaming': app_service.is_streaming,
             'app_service_mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Unknown',
             'combinations_count': len(app_service.combinations),
-            'data_link_type': type(app_service.data_link).__name__ if app_service.data_link else 'None'
+            'data_link_type': type(app_service.data_link).__name__ if app_service.data_link else 'None',
+            'session_id': session.get('session_id')
         }
 
         # Get CSReplayDataLink specific debug info
@@ -488,17 +529,87 @@ def debug_streaming():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_bp.route('/debug/websocket-health')
-def websocket_health():
-    """Get WebSocket health status"""
+@api_bp.route('/generate-monitor-config', methods=['POST'])
+@require_session_auth
+def generate_monitor_config():
+    """Generate monitor configuration JSON from wizard data"""
     try:
-        app_service = current_app.app_service
+        data = request.json
+
+        # Extract wizard data
+        basic_info = data.get('basicInfo', {})
+        indicators = data.get('indicators', [])
+        bars = data.get('bars', {})
+        trading_rules = data.get('tradingRules', {})
+
+        # Generate the complete monitor configuration
+        config = {
+            "test_name": basic_info.get('testName', ''),
+            "monitor": {
+                "_id": "generated_monitor_id",
+                "user_id": "user_id",
+                "name": basic_info.get('monitorName', ''),
+                "description": basic_info.get('description', ''),
+                "enter_long": [],
+                "exit_long": [],
+                "bars": {}
+            },
+            "indicators": []
+        }
+
+        # Process bars into enter/exit conditions
+        for bar_name, bar_data in bars.items():
+            if bar_data.get('type') == 'bull':
+                config["monitor"]["enter_long"].append({
+                    "name": bar_name,
+                    "threshold": trading_rules.get('entry', {}).get(bar_name, 0.5)
+                })
+            elif bar_data.get('type') == 'bear':
+                config["monitor"]["exit_long"].append({
+                    "name": bar_name,
+                    "threshold": trading_rules.get('exit', {}).get(bar_name, 0.5)
+                })
+
+            # Add bar configuration
+            config["monitor"]["bars"][bar_name] = {
+                "type": bar_data.get('type'),
+                "indicators": bar_data.get('indicators', {})
+            }
+
+        # Process indicators
+        for indicator in indicators:
+            config["indicators"].append({
+                "name": indicator.get('name'),
+                "type": "Indicator",
+                "function": indicator.get('function'),
+                "agg_config": indicator.get('aggConfig'),
+                "calc_on_pip": False,
+                "parameters": indicator.get('parameters', {})
+            })
+
+        return jsonify({
+            'success': True,
+            'config': config
+        })
+
+    except Exception as e:
+        logger.error(f"Error generating monitor config: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/debug/websocket-health')
+@require_session_auth
+def websocket_health():
+    """Get WebSocket health status - session-based"""
+    try:
+        app_service = get_session_app_service()
 
         health_data = {
             'timestamp': datetime.now().isoformat(),
             'ui_tool_health': app_service.ui_tool.get_health_status(),
             'active_combinations': len(app_service.combinations),
-            'streaming_active': app_service.is_streaming
+            'streaming_active': app_service.is_streaming,
+            'session_id': session.get('session_id')
         }
 
         return jsonify({
@@ -508,136 +619,4 @@ def websocket_health():
 
     except Exception as e:
         logger.error(f"Error getting WebSocket health: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@api_bp.route('/debug/force-restart-streaming', methods=['POST'])
-def force_restart_streaming():
-    """Force restart streaming if it gets stuck"""
-    try:
-        app_service = current_app.app_service
-
-        logger.info("🔄 Force restarting streaming...")
-
-        # Stop current streaming
-        if app_service.data_link and hasattr(app_service.data_link, 'stop_streaming'):
-            app_service.data_link.stop_streaming()
-
-        app_service.is_streaming = False
-
-        # Wait a moment
-        time.sleep(1)
-
-        # Restart
-        success = app_service.start_streaming()
-
-        return jsonify({
-            'success': success,
-            'message': 'Streaming restart attempted',
-            'new_status': app_service.is_streaming
-        })
-
-    except Exception as e:
-        logger.error(f"Error restarting streaming: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@api_bp.route('/debug/force-ui-update', methods=['POST'])
-def force_ui_update():
-    """Force send test update to all cards"""
-    try:
-        app_service = current_app.app_service
-
-        updates_sent = 0
-        for card_id, combo in app_service.combinations.items():
-            symbol = combo['symbol']
-
-            # Send test update
-            test_data = {
-                'card_id': card_id,
-                'symbol': symbol,
-                'price': 100.00,
-                'timestamp': datetime.now().isoformat(),
-                'ohlc': [100, 100, 100, 100],
-                'volume': 1000,
-                'indicators': {'test': 0.5},
-                'bar_scores': {'test_bar': 0.75},
-                'raw_indicators': {},
-                'test_update': True,
-                'portfolio': {
-                    'position': {
-                        'is_in_position': False,
-                        'position_size': 0,
-                        'entry_price': 0,
-                        'current_price': 100
-                    },
-                    'pnl': {
-                        'realized_pnl_percent': 0,
-                        'unrealized_pnl_percent': 0,
-                        'total_pnl_percent': 0
-                    }
-                }
-            }
-
-            try:
-                app_service.ui_tool.socketio.emit('card_update', test_data)
-                updates_sent += 1
-                logger.info(f"Sent test update to {card_id}")
-            except Exception as emit_error:
-                logger.error(f"Failed to send test update to {card_id}: {emit_error}")
-
-        return jsonify({
-            'success': True,
-            'updates_sent': updates_sent,
-            'total_cards': len(app_service.combinations),
-            'message': f'Sent test updates to {updates_sent} cards'
-        })
-
-    except Exception as e:
-        logger.error(f"Error forcing UI update: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@api_bp.route('/debug/card/<card_id>')
-def debug_card(card_id: str):
-    """Debug endpoint to see what's happening with a specific card"""
-    try:
-        app_service = current_app.app_service
-
-        if card_id not in app_service.combinations:
-            return jsonify({'error': f'Card {card_id} not found'}), 404
-
-        combination = app_service.combinations[card_id]
-        data_streamer = combination['data_streamer']
-
-        # Get all candle data
-        all_candle_data = data_streamer._get_all_candle_data()
-
-        # Get current indicators
-        current_indicators, current_raw, current_bars = data_streamer.indicator_processor.calculate_indicators(
-            all_candle_data, None
-        )
-
-        # Build debug info
-        debug_info = {
-            'card_id': card_id,
-            'symbol': data_streamer.symbol,
-            'timeframes': list(all_candle_data.keys()),
-            'candle_counts': {tf: len(candles) for tf, candles in all_candle_data.items()},
-            'current_indicators': current_indicators,
-            'current_raw': current_raw,
-            'current_bars': current_bars,
-            'stored_values': data_streamer.indicator_processor.stored_values if hasattr(
-                data_streamer.indicator_processor, 'stored_values') else {}
-        }
-
-        return jsonify({
-            'success': True,
-            'debug_info': debug_info
-        })
-
-    except Exception as e:
-        logger.error(f"Error in debug endpoint: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

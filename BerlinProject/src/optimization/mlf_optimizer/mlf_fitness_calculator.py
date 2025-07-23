@@ -1,20 +1,23 @@
 from dataclasses import dataclass
 import numpy as np
-from typing import List, Optional, Dict
+from typing import List, Optional
+import logging
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
-from data_streamer import DataStreamer
-from operations.monitor_backtest_results import MonitorResultsBacktest
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
+
+logger = logging.getLogger('MlfFitnessCalculator')
 
 
 @dataclass
+@dataclass
 class MlfFitnessCalculator(FitnessCalculator):
-    backtest_streamer: Optional[BacktestDataStreamer] = None
+    backtest_streamer: [BacktestDataStreamer] = None
     display_results: bool = False
+    data_config_file: str = ""
 
     def __post_init__(self):
         pass
@@ -28,78 +31,63 @@ class MlfFitnessCalculator(FitnessCalculator):
     def set_final_result(self, display: bool):
         self.display_results = display
 
-    # This is the entry point for all simulations to be executed for each of the
-    # individual set of rules.  Calculate the state of the system for every time stamp
-    # and send the data to the objective functions.  See __calculate_individual_stat
-    # def calculate_fitness_functions_old(self, iteration_key: int, population: List[MlfIndividual]) -> List[IndividualStats]:
-    #     fitness_results: List[IndividualStats] = []
-    #     cnt = 0
-    #     for individual in population:
-    #         # Run through the monitor back test and collect the results
-    #         bt = MonitorResultsBacktest("Optimizer", individual.monitor)
-    #         self.data_streamer.replace_monitor_configuration(individual.monitor_configuration)
-    #         # self.data_streamer.replace_external_tools(bt)
-    #         self.data_streamer.run()
-    #         if self.display_results:
-    #             print("Final Result?")
-    #             print(cnt, "fitness: ", bt.results, f"profit: %{(bt.get_total_percent_profits() * 100.0):.3f}", f"loss: %{(bt.get_total_percent_losses()*100.0):.3f}" )
-    #             print("Bull triggers:", individual.monitor.triggers)
-    #             print("Bear triggers:", individual.monitor.bear_triggers)
-    #             print("Thresholds", individual.monitor.threshold, individual.monitor.bear_threshold)
-    #             for indicator in individual.monitor_configuration.indicators:
-    #                 print(indicator.name, indicator.parameters)
-    #             print("-----------")
-    #         cnt += 1
-    #         individual_stats = self.__calculate_individual_stats(individual, bt, cnt)
-    #         fitness_results.append(individual_stats)
-    #     return fitness_results
-
     def calculate_fitness_functions(self, iteration_key: int, population: List[MlfIndividual]) -> List[IndividualStats]:
+        """
+        SIMPLIFIED: Always use shared streamer since data is always the same
+        """
         fitness_results: List[IndividualStats] = []
-        cnt = 0
-        for individual in population:
 
-            # Replace monitor config
-            self.backtest_streamer.replace_monitor_config(individual.monitor_configuration)
+        logger.debug(f"Evaluating population of {len(population)} individuals for iteration {iteration_key}")
 
-            # Run backtest - returns Portfolio object
-            portfolio = self.backtest_streamer.run()
+        for cnt, individual in enumerate(population):
+            try:
+                # Always use shared streamer - data loaded once, config swapped per individual
+                self.backtest_streamer.replace_monitor_config(individual.monitor_configuration)
+                portfolio = self.backtest_streamer.run()
 
-            if self.display_results:
-                print("Final Result?")
-                print(cnt, "trades:", portfolio.get_winning_trades_count() + portfolio.get_losing_trades_count(),
-                      f"profit: %{portfolio.get_total_percent_profits():.3f}",
-                      f"loss: %{portfolio.get_total_percent_losses():.3f}")
-                print("-----------")
-            cnt += 1
+                # Progress logging
+                if self.display_results or cnt % 50 == 0:
+                    total_trades = portfolio.get_winning_trades_count() + portfolio.get_losing_trades_count()
+                    profit_pct = portfolio.get_total_percent_profits()
+                    loss_pct = portfolio.get_total_percent_losses()
 
-            # Pass Portfolio object (not dictionary)
-            individual_stats = self.__calculate_individual_stats(individual, portfolio, cnt)
-            fitness_results.append(individual_stats)
+                    logger.info(f"Individual {cnt + 1}/{len(population)}: "
+                                f"{total_trades} trades, "
+                                f"profit: {profit_pct:.3f}%, "
+                                f"loss: {loss_pct:.3f}%")
+
+                # Calculate fitness
+                individual_stats = self.__calculate_individual_stats(individual, portfolio, cnt)
+                fitness_results.append(individual_stats)
+
+            except Exception as e:
+                logger.error(f"Error evaluating individual {cnt}: {e}")
+                # Penalty for failed individuals
+                fitness_values = np.array([100.0] * len(self.objectives))
+                individual_stats = IndividualStats(index=cnt, fitness_values=fitness_values, individual=individual)
+                fitness_results.append(individual_stats)
+
+        logger.info(f"Completed evaluation of {len(population)} individuals")
         return fitness_results
 
     def __calculate_individual_stats(self, individual: MlfIndividual, portfolio: Portfolio, index: int):
-        # portfolio is now consistently a Portfolio object
-        fitness_values = np.array(
-            [objective.calculate_objective(individual, portfolio) for objective in self.objectives])
+        """Calculate fitness values for an individual"""
+        try:
+            fitness_values = np.array([
+                objective.calculate_objective(individual, portfolio)
+                for objective in self.objectives
+            ])
 
-        if fitness_values[0] == 100.0:
-            fitness_values = np.ones_like(fitness_values) * 100.0
+            if fitness_values[0] == 100.0:
+                fitness_values = np.ones_like(fitness_values) * 100.0
 
-        individual_stats = IndividualStats(index=index,
-                                           fitness_values=fitness_values,
-                                           individual=individual)
-        return individual_stats
+            return IndividualStats(
+                index=index,
+                fitness_values=fitness_values,
+                individual=individual
+            )
 
-    # def calculate_individual(self, individual: MlfIndividual):
-    #     return self.__calculate_individual_stats(individual, 0)
-
-    # def __calculate_individual_stats_old(self, individual: MlfIndividual, bt: MonitorResultsBacktest, index: int):
-    #     # Calculate the objectives.
-    #     fitness_values = np.array([objective.calculate_objective(individual, bt) for objective in self.objectives])
-    #     if fitness_values[0] == 100.0:
-    #         fitness_values = np.ones_like(fitness_values) * 100.0
-    #     individual_stats = IndividualStats(index=index,
-    #                                        fitness_values=fitness_values,
-    #                                        individual=individual)
-    #     return individual_stats
+        except Exception as e:
+            logger.error(f"Error calculating individual stats: {e}")
+            fitness_values = np.array([100.0] * len(self.objectives))
+            return IndividualStats(index=index, fitness_values=fitness_values, individual=individual)

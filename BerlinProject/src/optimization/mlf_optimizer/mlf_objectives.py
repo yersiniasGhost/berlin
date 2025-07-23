@@ -6,8 +6,6 @@ from .mlf_individual import MlfIndividual
 
 @dataclass
 class MaximizeProfit(ObjectiveFunctionBase):
-    mode: str = "negative"  # Could be "reciprocal" or "scaling"
-    expected_total_profit: float = 2.0
 
     def __post_init__(self):
         self.name = "Maximize Profit"
@@ -25,9 +23,11 @@ class MaximizeProfit(ObjectiveFunctionBase):
         return (1.0 / total_profit) / self.normalization_factor * self.weight
 
 
+
+
+
 @dataclass
 class MinimizeLoss(ObjectiveFunctionBase):
-    mode: str = "negative"  # Could be "reciprocal" or "scaling"
 
     def __post_init__(self):
         self.name = "Minimize Loss"
@@ -56,9 +56,10 @@ class MinimizeLosingTrades(ObjectiveFunctionBase):
         total_trades = losing_trades + winning_trades
 
         if total_trades == 0:
-            return 1.0  # High penalty for no trading activity
+            return 100.0  # High penalty for no trading activity
 
-        # Calculate ratio of losing trades (0.0 = no losing trades, 1.0 = all trades losing)
         losing_ratio = losing_trades / total_trades
 
         return losing_ratio / self.normalization_factor * self.weight
+
+

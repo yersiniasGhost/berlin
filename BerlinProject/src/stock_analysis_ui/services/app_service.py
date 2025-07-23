@@ -22,20 +22,20 @@ class AppService:
     Updated application service that supports both live Schwab streaming and CSReplayDataLink
     """
 
-    # In app_service.py, modify the __init__ method
-
-    def __init__(self, socketio: SocketIO, auth_manager: Optional[SchwabAuthManager] = None) -> None:
+    def __init__(self, socketio: SocketIO, auth_manager: Optional[SchwabAuthManager] = None,
+                 session_id: str = None) -> None:
         """
         Initialize AppService
 
         Args:
             socketio: SocketIO instance for WebSocket communication
             auth_manager: SchwabAuthManager for live mode (None for replay mode)
+            session_id: Session ID for this app service instance
         """
         self.socketio: SocketIO = socketio
         self.auth_manager: Optional[SchwabAuthManager] = auth_manager
+        self.session_id: str = session_id  # NEW: Track session ID
 
-        # Core components - data_link can be either SchwabDataLink or CSReplayDataLink
         self.data_link: Optional[Union[SchwabDataLink, CSReplayDataLink]] = None
         # MODIFIED: Pass self to UIExternalTool so it can access combination data
         self.ui_tool: UIExternalTool = UIExternalTool(socketio, app_service=self)
@@ -45,11 +45,29 @@ class AppService:
         self.combinations: Dict[str, Dict[str, Any]] = {}
         self.card_counter: int = 0
         self.subscribed_symbols: set = set()
-        self.logger = logging.getLogger('AppService')
+        self.logger = logging.getLogger(f'AppService-{session_id or "global"}')
 
         # Determine mode for logging
         mode = "CS Replay" if auth_manager is None else "Live Schwab"
-        self.logger.info(f"AppService initialized for {mode} mode")
+        session_info = f" (Session: {session_id})" if session_id else ""
+        self.logger.info(f"AppService initialized for {mode} mode{session_info}")
+
+    # Add cleanup method
+    def cleanup(self):
+        """Cleanup resources when session ends"""
+        try:
+            if self.is_streaming:
+                self.stop_streaming()
+
+            if self.data_link:
+                if hasattr(self.data_link, 'disconnect'):
+                    self.data_link.disconnect()
+
+            self.combinations.clear()
+            self.logger.info(f"AppService cleanup completed for session {self.session_id}")
+
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
 
     def start_streaming(self) -> bool:
         """Initialize streaming infrastructure - supports both live and replay modes"""
