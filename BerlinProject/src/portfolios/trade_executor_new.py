@@ -42,8 +42,16 @@ class TradeExecutorNew(TradeExecutor):
         self.stop_loss_price: Optional[float] = None
         self.take_profit_price: Optional[float] = None
 
+        # DEBUG: Add debug mode flag
+        self.debug_mode = False
+        self.trade_count = 0
+
         logger.info(f"TradeExecutorNew initialized: "
                     f"Stop Loss: {stop_loss_pct:.1%}, Take Profit: {take_profit_pct:.1%}")
+
+    def enable_debug_mode(self):
+        """Enable debug logging for first few trades"""
+        self.debug_mode = True
 
     def make_decision(self, tick: TickData, indicators: Dict[str, float],
                       bar_scores: Dict[str, float] = None) -> None:
@@ -61,44 +69,69 @@ class TradeExecutorNew(TradeExecutor):
         current_price = tick.close
         timestamp = int(tick.timestamp.timestamp() * 1000)  # Convert to milliseconds
 
+        # DEBUG: Log first 10 decisions
+        if self.trade_count < 10 and self.debug_mode:
+            print(f"\n=== TRADE DECISION #{self.trade_count} ===")
+            print(f"Time: {tick.timestamp}")
+            print(f"Price: ${current_price:.2f}")
+            print(f"In Position: {self.portfolio.is_in_position()}")
+            print(f"Position Size: {self.portfolio.position_size}")
+            print(f"Bar Scores: {bar_scores}")
+            print(f"Enter Conditions: {getattr(self.monitor_config, 'enter_long', [])}")
+            print(f"Exit Conditions: {getattr(self.monitor_config, 'exit_long', [])}")
+
         # If we're in a position, check for exits FIRST
         if self.portfolio.is_in_position():
-            self._check_exit_conditions(timestamp, current_price, bar_scores)
+            exit_executed = self._check_exit_conditions(timestamp, current_price, bar_scores)
+            if exit_executed and self.debug_mode:
+                print(f"EXIT executed at ${current_price:.2f}")
 
         # If not in position (or just exited), check for entry signals
         if not self.portfolio.is_in_position():
-            self._check_entry_conditions(timestamp, current_price, bar_scores)
+            entry_executed = self._check_entry_conditions(timestamp, current_price, bar_scores)
+            if entry_executed and self.debug_mode:
+                print(f"ENTRY executed at ${current_price:.2f}")
+
+        self.trade_count += 1
 
     def _check_exit_conditions(self, timestamp: int, current_price: float,
-                               bar_scores: Dict[str, float]) -> None:
+                               bar_scores: Dict[str, float]) -> bool:
         """
         Check all exit conditions in priority order:
         1. Stop Loss
         2. Take Profit
         3. Exit Long Signals
+
+        Returns:
+            True if exit was executed
         """
 
         # 1. Check Stop Loss (highest priority)
         if self.stop_loss_price and current_price <= self.stop_loss_price:
-            # logger.info(f"STOP LOSS executed @ ${current_price:.2f} (Stop: ${self.stop_loss_price:.2f})")
+            if self.debug_mode:
+                print(f"STOP LOSS TRIGGERED: ${current_price:.2f} <= ${self.stop_loss_price:.2f}")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.STOP_LOSS)
             self._clear_exit_levels()
-            return
+            return True
 
         # 2. Check Take Profit
         if self.take_profit_price and current_price >= self.take_profit_price:
-            # logger.info(f"TAKE PROFIT executed @ ${current_price:.2f} (Target: ${self.take_profit_price:.2f})")
+            if self.debug_mode:
+                print(f"TAKE PROFIT TRIGGERED: ${current_price:.2f} >= ${self.take_profit_price:.2f}")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.TAKE_PROFIT)
             self._clear_exit_levels()
-            return
+            return True
 
         # 3. Check Exit Long Signals
         exit_triggered = self._check_exit_long_signals(bar_scores)
         if exit_triggered:
-            # logger.info(f"EXIT LONG SIGNAL executed @ ${current_price:.2f}")
+            if self.debug_mode:
+                print(f"EXIT SIGNAL TRIGGERED")
             self.portfolio.exit_long(timestamp, current_price, TradeReason.EXIT_LONG)
             self._clear_exit_levels()
-            return
+            return True
+
+        return False
 
     def _check_exit_long_signals(self, bar_scores: Dict[str, float]) -> bool:
         """
@@ -115,35 +148,42 @@ class TradeExecutorNew(TradeExecutor):
             threshold = condition.get('threshold', 0.8)
             bar_score = bar_scores.get(bar_name, 0.0)
 
+            if self.debug_mode and self.trade_count < 10:
+                print(f"Exit Check: {bar_name} = {bar_score:.3f} vs threshold {threshold:.3f}")
+
             if bar_score >= threshold:
-                # logger.info(f"Exit signal triggered: {bar_name} = {bar_score:.3f} "
-                #             f"(threshold: {threshold:.3f})")
+                if self.debug_mode:
+                    print(f"EXIT SIGNAL: {bar_name} = {bar_score:.3f} >= {threshold:.3f}")
                 return True
-            # else:
-                # logger.debug(f"Exit signal {bar_name}: {bar_score:.3f} < {threshold:.3f}")
 
         return False
 
     def _check_entry_conditions(self, timestamp: int, current_price: float,
-                                bar_scores: Dict[str, float]) -> None:
+                                bar_scores: Dict[str, float]) -> bool:
         """
         Check if enter_long conditions are triggered for entry
+
+        Returns:
+            True if entry was executed
         """
         enter_conditions = getattr(self.monitor_config, 'enter_long', [])
 
         # Check each enter_long condition
         for condition in enter_conditions:
             bar_name = condition.get('name')
-            threshold = condition.get('threshold')
-            bar_score = bar_scores.get(bar_name)
+            threshold = condition.get('threshold', 0.5)
+            bar_score = bar_scores.get(bar_name, 0.0)
+
+            if self.debug_mode and self.trade_count < 10:
+                print(f"Entry Check: {bar_name} = {bar_score:.3f} vs threshold {threshold:.3f}")
 
             if bar_score >= threshold:
-                # logger.info(f"BUY SIGNAL triggered: {bar_name} = {bar_score:.3f} "
-                #             f"(threshold: {threshold:.3f})")
+                if self.debug_mode:
+                    print(f"ENTRY SIGNAL: {bar_name} = {bar_score:.3f} >= {threshold:.3f}")
                 self._execute_buy(timestamp, current_price)
-                return  # Exit after first successful entry
-            else:
-                logger.debug(f"No entry {bar_name}: {bar_score:.3f} < {threshold:.3f}")
+                return True
+
+        return False
 
     def _execute_buy(self, timestamp: int, current_price: float) -> None:
         """
@@ -156,8 +196,10 @@ class TradeExecutorNew(TradeExecutor):
         # Execute the buy
         self.portfolio.buy(timestamp, current_price, TradeReason.ENTER_LONG, self.default_position_size)
 
-        # logger.info(f"BUY executed: {self.default_position_size} @ ${current_price:.2f} "
-        #             f"Stop: ${self.stop_loss_price:.2f} Target: ${self.take_profit_price:.2f}")
+        if self.debug_mode:
+            print(f"BUY EXECUTED: {self.default_position_size} @ ${current_price:.2f}")
+            print(f"Stop Loss: ${self.stop_loss_price:.2f}")
+            print(f"Take Profit: ${self.take_profit_price:.2f}")
 
     def _clear_exit_levels(self) -> None:
         """Clear stop loss and take profit levels after exit"""

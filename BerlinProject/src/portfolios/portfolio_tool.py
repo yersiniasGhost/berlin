@@ -36,6 +36,13 @@ class Portfolio:
     # P&L tracking - NEW: Track realized P&L properly
     total_realized_pnl_percent: float = 0.0  # Cumulative realized P&L as percentage
 
+    # DEBUG: Add debug mode
+    debug_mode: bool = False
+
+    def enable_debug_mode(self):
+        """Enable debug logging"""
+        self.debug_mode = True
+
     def buy(self, time: int, price: float, reason: TradeReason, size: float) -> None:
         # Update position
         self.position_size += size
@@ -49,15 +56,31 @@ class Portfolio:
         )
         self.trade_history.append(trade)
 
+        if self.debug_mode:
+            print(f"BUY RECORDED: {size} @ ${price:.2f} - Reason: {reason.value}")
+            print(f"New Position Size: {self.position_size}")
+
     def exit_long(self, time: int, price: float, reason: TradeReason = TradeReason.EXIT_LONG) -> None:
         """Exit long position and properly add to realized P&L"""
 
+        if self.position_size <= 0:
+            if self.debug_mode:
+                print(f"WARNING: Attempted to exit long but position size is {self.position_size}")
+            return
+
         entry_price = self.get_entry_price()
         if entry_price and entry_price > 0 and self.position_size > 0:
-            realized_pnl_percent = ((price - entry_price) / entry_price) * 100.0
+            # Calculate P&L as PERCENTAGE (not multiplied by 100)
+            realized_pnl_percent = (price - entry_price) / entry_price
 
             # Add to cumulative realized P&L
             self.total_realized_pnl_percent += realized_pnl_percent
+
+            if self.debug_mode:
+                print(f"EXIT LONG: Entry ${entry_price:.2f} -> Exit ${price:.2f}")
+                print(f"Trade P&L: {realized_pnl_percent:.4f} ({realized_pnl_percent * 100:.2f}%)")
+                print(
+                    f"Total Realized P&L: {self.total_realized_pnl_percent:.4f} ({self.total_realized_pnl_percent * 100:.2f}%)")
 
         # Record the exit trade
         trade = Trade(
@@ -81,7 +104,7 @@ class Portfolio:
         )
         self.trade_history.append(trade)
 
-    #THIS STUFF IS USED FOR UI
+    # THIS STUFF IS USED FOR UI
 
     def is_in_position(self) -> bool:
         """Check if currently in a position"""
@@ -189,7 +212,9 @@ class Portfolio:
 
     def get_total_percent_profits(self) -> float:
         """
-        Sum of all profitable trades as percentages -used in Maximize profit OF.
+        Sum of all profitable trades as percentages - used in Maximize profit OF.
+
+        FIXED: Return as percentage value (not decimal)
         """
         total_profits = 0.0
 
@@ -203,22 +228,30 @@ class Portfolio:
             if (entry_trade.reason == TradeReason.ENTER_LONG and
                     exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
 
-                # Calculate P&L percentage
-                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price)
+                # Calculate P&L percentage (as percentage, not decimal)
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
 
                 # Add to profits if positive
                 if pnl_percent > 0:
                     total_profits += pnl_percent
 
+                if self.debug_mode:
+                    print(
+                        f"Profit Trade: Entry ${entry_trade.price:.2f} -> Exit ${exit_trade.price:.2f} = {pnl_percent:.2f}%")
+
                 i += 2  # Skip both trades
             else:
                 i += 1
 
+        if self.debug_mode:
+            print(f"Total Profits: {total_profits:.2f}%")
         return total_profits
 
     def get_total_percent_losses(self) -> float:
         """
         Sum of all losing trades as percentages (returned as positive values) - used in minimize loss OF
+
+        FIXED: Return as percentage value (not decimal)
         """
         total_losses = 0.0
 
@@ -232,17 +265,23 @@ class Portfolio:
             if (entry_trade.reason == TradeReason.ENTER_LONG and
                     exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
 
-                # Calculate P&L percentage
-                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price)
+                # Calculate P&L percentage (as percentage, not decimal)
+                pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
 
                 # Add to losses if negative (convert to positive)
                 if pnl_percent < 0:
                     total_losses += abs(pnl_percent)
 
+                if self.debug_mode:
+                    print(
+                        f"Loss Trade: Entry ${entry_trade.price:.2f} -> Exit ${exit_trade.price:.2f} = {pnl_percent:.2f}%")
+
                 i += 2  # Skip both trades
             else:
                 i += 1
 
+        if self.debug_mode:
+            print(f"Total Losses: {total_losses:.2f}%")
         return total_losses
 
     def get_losing_trades_count(self) -> int:
@@ -302,7 +341,6 @@ class Portfolio:
                 i += 1
 
         return winning_count
-
 
     def reset(self) -> None:
         """Reset portfolio to initial state"""

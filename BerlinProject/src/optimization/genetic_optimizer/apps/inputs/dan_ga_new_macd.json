@@ -1,34 +1,36 @@
 {
-  "test_name": "Dan-Simple-MACD-Test",
+  "test_name": "Dan-Improved-MACD-Selective",
   "monitor": {
     "_id": "65f2d5555555555555555555",
     "user_id": "65f2d6666666666666666666",
-    "name": "Dan Simple MACD",
-    "description": "2 MACD bulls 1m, 5m. 1 MACD bear 1m.",
+    "name": "Dan Selective MACD Strategy",
+    "description": "More selective MACD strategy with tougher entry/exit conditions",
     "enter_long": [
       {
-        "name": "macd_bull",
-        "threshold": 0.5
+        "name": "macd_bull_strong",
+        "threshold": 0.7
       }
     ],
     "exit_long": [
       {
-        "name": "macd_bear",
-        "threshold": 1
+        "name": "macd_bear_strong",
+        "threshold": 0.6
       }
     ],
     "bars": {
-      "macd_bull": {
+      "macd_bull_strong": {
         "type": "bull",
+        "description": "Strong bullish signal requiring both timeframes",
         "indicators": {
-          "macd1m": 1.0,
-          "macd5m": 1.0
+          "macd1m": 2.0,
+          "macd5m": 3.0
         }
       },
-      "macd_bear": {
+      "macd_bear_strong": {
         "type": "bear",
+        "description": "Strong bearish signal for exits",
         "indicators": {
-          "macdbear": 1.0
+          "macdbear": 2.5
         }
       }
     }
@@ -45,16 +47,16 @@
         "slow": 26,
         "fast": 12,
         "signal": 9,
-        "histogram_threshold": 0.0008,
-        "lookback": 10,
+        "histogram_threshold": 0.002,
+        "lookback": 15,
         "trend": "bullish"
       },
       "ranges": {
-        "slow": {"t": "int", "r": [20, 35]},
-        "fast": {"t": "int", "r": [8, 18]},
-        "signal": {"t": "int", "r": [5, 15]},
-		"histogram_threshold": {"t": "float", "r": [0.00002, 0.002]},
-        "lookback": {"t": "int", "r": [3, 20]},
+        "slow": {"t": "int", "r": [22, 35]},
+        "fast": {"t": "int", "r": [10, 18]},
+        "signal": {"t": "int", "r": [7, 15]},
+        "histogram_threshold": {"t": "float", "r": [0.001, 0.005]},
+        "lookback": {"t": "int", "r": [10, 25]},
         "trend": {"t": "skip"}
       }
     },
@@ -68,16 +70,16 @@
         "slow": 26,
         "fast": 12,
         "signal": 9,
-        "histogram_threshold": 0.0005,
-        "lookback": 10,
+        "histogram_threshold": 0.0015,
+        "lookback": 12,
         "trend": "bullish"
       },
       "ranges": {
-        "slow": {"t": "int", "r": [20, 35]},
-        "fast": {"t": "int", "r": [8, 18]},
-        "signal": {"t": "int", "r": [3, 14]},
-		"histogram_threshold": {"t": "float", "r": [0.00002, 0.002]},
-        "lookback": {"t": "int", "r": [3, 15]},
+        "slow": {"t": "int", "r": [20, 30]},
+        "fast": {"t": "int", "r": [8, 16]},
+        "signal": {"t": "int", "r": [6, 12]},
+        "histogram_threshold": {"t": "float", "r": [0.0008, 0.004]},
+        "lookback": {"t": "int", "r": [8, 20]},
         "trend": {"t": "skip"}
       }
     },
@@ -91,16 +93,16 @@
         "slow": 26,
         "fast": 12,
         "signal": 9,
-        "histogram_threshold": 0.015,
-        "lookback": 10,
+        "histogram_threshold": 0.0025,
+        "lookback": 12,
         "trend": "bearish"
       },
       "ranges": {
-        "slow": {"t": "int", "r": [20, 35]},
-        "fast": {"t": "int", "r": [8, 18]},
-        "signal": {"t": "int", "r": [5, 15]},
-		"histogram_threshold": {"t": "float", "r": [0.00002, 0.002]},
-        "lookback": {"t": "int", "r": [3, 20]},
+        "slow": {"t": "int", "r": [22, 32]},
+        "fast": {"t": "int", "r": [10, 16]},
+        "signal": {"t": "int", "r": [7, 13]},
+        "histogram_threshold": {"t": "float", "r": [0.0015, 0.006]},
+        "lookback": {"t": "int", "r": [8, 18]},
         "trend": {"t": "skip"}
       }
     }
@@ -108,19 +110,23 @@
   "objectives": [
     {
       "objective": "MaximizeProfit",
-      "weight": 4.0
+      "weight": 50.0
     },
-        {
+    {
       "objective": "MinimizeLoss",
-      "weight": 0.25
+      "weight": 0.001
+    },
+    {
+      "objective": "MinimizeLosingTrades",
+      "weight": 2.0
     }
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 50,
+    "number_of_iterations": 25,
     "population_size": 200,
-    "propagation_fraction": 0.3,
-    "elite_size": 10,
-    "chance_of_mutation": 0.02,
-    "chance_of_crossover": 0.02
+    "propagation_fraction": 0.4,
+    "elite_size": 20,
+    "chance_of_mutation": 0.05,
+    "chance_of_crossover": 0.08
   }
 }
