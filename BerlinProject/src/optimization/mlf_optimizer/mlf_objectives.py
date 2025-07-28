@@ -12,18 +12,25 @@ class MaximizeProfit(ObjectiveFunctionBase):
 
     def calculate_objective(self, *args) -> float:
         individual: MlfIndividual = args[0]
-        portfolio: Portfolio = args[1]  # Changed from MonitorResultsBacktest to Portfolio
+        portfolio: Portfolio = args[1]
 
-        total_profit = portfolio.get_total_percent_profits()  # Use new Portfolio method
+        total_profit = portfolio.get_total_percent_profits()  # This returns percentage values
 
-        if total_profit == 0.0:
-            return 100.0  # High penalty for no profits
+        # DEBUG: Print for first few individuals
+        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
+            print(f"MaximizeProfit: Total profits = {total_profit:.2f}%")
 
-        # Use reciprocal - higher profits give lower objective values (better for minimization)
-        return (1.0 / total_profit) / self.normalization_factor * self.weight
+        if total_profit <= 0.0:
+            return 100.0  # High penalty for no profits or losses
 
+        # FIXED: For maximization in a minimization framework, use reciprocal
+        # Lower objective value = better fitness
+        objective_value = 1.0 / total_profit
 
+        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
+            print(f"MaximizeProfit: Objective value = {objective_value:.6f} (lower is better)")
 
+        return objective_value * self.weight
 
 
 @dataclass
@@ -33,12 +40,22 @@ class MinimizeLoss(ObjectiveFunctionBase):
         self.name = "Minimize Loss"
 
     def calculate_objective(self, *args) -> float:
-        # Ensure there is no grid charges during this time frame.
         individual: MlfIndividual = args[0]
-        bt: Portfolio = args[1]
-        total_loss = bt.get_total_percent_losses()
-        return total_loss / self.normalization_factor * self.weight
-        # return -total_profit / self.normalization_factor * self.weight
+        portfolio: Portfolio = args[1]
+
+        total_loss = portfolio.get_total_percent_losses()  # This returns percentage values
+
+        # DEBUG: Print for first few individuals
+        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
+            print(f"MinimizeLoss: Total losses = {total_loss:.2f}%")
+
+        # FIXED: Direct minimization - higher losses = higher objective value (worse)
+        objective_value = total_loss
+
+        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
+            print(f"MinimizeLoss: Objective value = {objective_value:.6f} (lower is better)")
+
+        return objective_value * self.weight
 
 
 @dataclass
@@ -51,15 +68,20 @@ class MinimizeLosingTrades(ObjectiveFunctionBase):
         individual: MlfIndividual = args[0]
         portfolio: Portfolio = args[1]
 
-        losing_trades = portfolio.get_losing_trades_count()  # Use new Portfolio method
-        winning_trades = portfolio.get_winning_trades_count()  # Use new Portfolio method
+        losing_trades = portfolio.get_losing_trades_count()
+        winning_trades = portfolio.get_winning_trades_count()
         total_trades = losing_trades + winning_trades
+
+        # DEBUG: Print for first few individuals
+        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
+            print(f"MinimizeLosingTrades: {losing_trades} losing, {winning_trades} winning, {total_trades} total")
 
         if total_trades == 0:
             return 100.0  # High penalty for no trading activity
 
         losing_ratio = losing_trades / total_trades
 
-        return losing_ratio / self.normalization_factor * self.weight
+        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
+            print(f"MinimizeLosingTrades: Losing ratio = {losing_ratio:.3f}")
 
-
+        return losing_ratio * self.weight
