@@ -122,8 +122,8 @@
     }
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 25,
-    "population_size": 200,
+    "number_of_iterations": 1,
+    "population_size": 10,
     "propagation_fraction": 0.4,
     "elite_size": 20,
     "chance_of_mutation": 0.05,
