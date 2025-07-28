@@ -251,23 +251,16 @@ def upload_file():
         uploads_dir = Path('uploads')
         uploads_dir.mkdir(exist_ok=True)
 
-        # Save file with timestamp to avoid conflicts
-        import time
-        timestamp = int(time.time())
-        filename = f"{file_type}_{timestamp}_{file.filename}"
-        filepath = uploads_dir / filename
-        file.save(str(filepath))
+        # Save file with original name
+        file_path = uploads_dir / file.filename
+        file.save(str(file_path))
 
-        # Validate JSON
-        try:
-            with open(filepath, 'r') as f:
-                json.load(f)
-                logger.info(f"Successfully uploaded and validated {file_type}: {filename}")
-        except json.JSONDecodeError as e:
-            filepath.unlink()
-            return jsonify({'success': False, 'error': f'Invalid JSON file: {str(e)}'})
-
-        return jsonify({'success': True, 'filepath': str(filepath), 'filename': filename})
+        return jsonify({
+            'success': True,
+            'file_path': str(file_path),
+            'file_type': file_type,
+            'filename': file.filename
+        })
 
     except Exception as e:
         logger.error(f"Error uploading file: {e}")
@@ -276,37 +269,35 @@ def upload_file():
 
 @app.route('/api/load_configs', methods=['POST'])
 def load_configs():
-    """Load and validate the genetic algorithm monitor JSON and data config files"""
+    """Load and parse configuration files"""
     try:
         data = request.get_json()
         ga_config_path = data.get('ga_config_path')
         data_config_path = data.get('data_config_path')
 
-        logger.info(f"Loading configs - GA: {ga_config_path}, Data: {data_config_path}")
-
         if not ga_config_path or not data_config_path:
-            return jsonify({'success': False, 'error': 'Both config files are required'})
+            return jsonify({'success': False, 'error': 'Both config file paths required'})
 
-        # Validate file paths
-        if not os.path.exists(ga_config_path):
+        # Check files exist
+        if not Path(ga_config_path).exists():
             return jsonify({'success': False, 'error': f'GA config file not found: {ga_config_path}'})
-
-        if not os.path.exists(data_config_path):
+        if not Path(data_config_path).exists():
             return jsonify({'success': False, 'error': f'Data config file not found: {data_config_path}'})
 
-        # Load configs
+        # Load and parse configs
         with open(ga_config_path, 'r') as f:
             ga_config = json.load(f)
 
         with open(data_config_path, 'r') as f:
             data_config = json.load(f)
 
-        # Extract summary info
+        # Build summary
         summary = {
             'ga_config': {
-                'name': ga_config.get('monitor', {}).get('name', 'Unnamed Strategy'),
-                'indicators': len(ga_config.get('indicators', [])),
-                'bars': list(ga_config.get('monitor', {}).get('bars', {}).keys())
+                'test_name': ga_config.get('test_name', 'Unknown'),
+                'population_size': ga_config.get('population_size', 'Unknown'),
+                'generations': ga_config.get('generations', 'Unknown'),
+                'mutation_rate': ga_config.get('mutation_rate', 'Unknown')
             },
             'data_config': {
                 'ticker': data_config.get('ticker', 'Unknown'),
