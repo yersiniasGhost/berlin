@@ -133,7 +133,7 @@
         <div id="chartsSection" style="display: none;">
             <!-- Main Candlestick Chart -->
             <div class="chart-container">
-                <h4>Price Chart with Buy/Sell Signals</h4>
+                <h4>Price Chart with Trade Entry/Exit Arrows</h4>
                 <div id="candlestickChart" style="height: 500px;"></div>
             </div>
 
@@ -228,41 +228,37 @@
                     throw new Error(`Data config upload failed: ${dataUpload.error}`);
                 }
 
-                console.log('Files uploaded successfully, loading configurations...');
+                // Store paths for optimization call
+                configPaths = {
+                    ga_config_path: gaUpload.file_path,
+                    data_config_path: dataUpload.file_path
+                };
 
-                // Load configurations on server
-                const response = await fetch('/api/load_configs', {
+                // Call API to load configs and get summary
+                const loadResponse = await fetch('/api/load_configs', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        ga_config_path: gaUpload.filepath,
-                        data_config_path: dataUpload.filepath
-                    })
+                    body: JSON.stringify(configPaths)
                 });
 
-                const result = await response.json();
-                console.log('Load configs result:', result);
+                const loadResult = await loadResponse.json();
 
-                if (!result.success) {
-                    throw new Error(result.error);
+                if (!loadResult.success) {
+                    throw new Error(loadResult.error);
                 }
 
-                // Store config paths for optimization
-                configPaths = {
-                    ga_config_path: result.ga_config_path,
-                    data_config_path: result.data_config_path
-                };
+                // Display configuration summary
+                displayConfigSummary(loadResult.summary);
 
-                displayConfigSummary(result.summary);
                 configsLoaded = true;
                 document.getElementById('runOptimizationBtn').disabled = false;
                 updateAppStatus('Configurations loaded successfully', 'ready');
 
             } catch (error) {
                 console.error('Error loading configurations:', error);
-                updateAppStatus('Error loading configurations', 'error');
+                updateAppStatus('Configuration load failed', 'error');
                 alert('Error loading configurations: ' + error.message);
             }
         }
@@ -272,8 +268,6 @@
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('file_type', fileType);
-
-                console.log(`Uploading ${fileType} file:`, file.name);
 
                 const response = await fetch('/api/upload_file', {
                     method: 'POST',
@@ -309,9 +303,10 @@
             const dataSummary = document.getElementById('dataSummary');
 
             gaSummary.innerHTML = `
-                <p><strong>Strategy:</strong> ${summary.ga_config.name}</p>
-                <p><strong>Indicators:</strong> ${summary.ga_config.indicators}</p>
-                <p><strong>Bars:</strong> ${summary.ga_config.bars.join(', ')}</p>
+                <p><strong>Test Name:</strong> ${summary.ga_config.test_name}</p>
+                <p><strong>Population Size:</strong> ${summary.ga_config.population_size}</p>
+                <p><strong>Generations:</strong> ${summary.ga_config.generations}</p>
+                <p><strong>Mutation Rate:</strong> ${summary.ga_config.mutation_rate}</p>
             `;
 
             dataSummary.innerHTML = `
@@ -361,7 +356,7 @@
 
                 updateAppStatus('Optimization complete', 'ready');
                 document.getElementById('optimizationStatus').innerHTML =
-                    `<span class="text-success"><i class="fas fa-check me-1"></i>Complete - ${result.total_candles} candles, ${result.triggers.length} signals</span>`;
+                    `<span class="text-success"><i class="fas fa-check me-1"></i>Complete - ${result.total_candles} candles, ${result.total_trades} trades</span>`;
 
             } catch (error) {
                 console.error('Error running optimization:', error);
@@ -373,12 +368,35 @@
         }
 
         function createCandlestickChart() {
-            const buyTriggers = optimizationData.triggers.filter(t => t.type === 'buy');
-            const sellTriggers = optimizationData.triggers.filter(t => t.type === 'sell');
+            // Process trade_history to create entry/exit arrows
+            const buyArrows = [];
+            const sellArrows = [];
+
+            if (optimizationData.trade_history && optimizationData.trade_history.length > 0) {
+                optimizationData.trade_history.forEach(trade => {
+                    if (trade.type === 'buy') {
+                        buyArrows.push({
+                            x: trade.timestamp,
+                            y: trade.price, // Position arrow AT the actual trade price
+                            reason: trade.reason,
+                            price: trade.price,
+                            quantity: trade.quantity
+                        });
+                    } else if (trade.type === 'sell') {
+                        sellArrows.push({
+                            x: trade.timestamp,
+                            y: trade.price, // Position arrow AT the actual trade price
+                            reason: trade.reason,
+                            price: trade.price,
+                            quantity: trade.quantity
+                        });
+                    }
+                });
+            }
 
             candlestickChart = Highcharts.stockChart('candlestickChart', {
                 title: {
-                    text: `${optimizationData.ticker} - Price with Buy/Sell Signals`
+                    text: `${optimizationData.ticker} - Price with Trade Entry/Exit Arrows`
                 },
 
                 rangeSelector: {
@@ -389,12 +407,12 @@
                 plotOptions: {
                     candlestick: {
                         dataGrouping: {
-                            enabled: false  // Disable all data grouping
+                            enabled: false  // Disable grouping for candlesticks
                         }
                     },
                     scatter: {
                         dataGrouping: {
-                            enabled: false  // Disable grouping for signals too
+                            enabled: false  // Disable grouping for arrows
                         }
                     }
                 },
@@ -436,55 +454,51 @@
                     lineColor: '#ff4444',
                     upLineColor: '#00aa00',
                     dataGrouping: {
-                        enabled: false  // Explicitly disable for this series
+                        enabled: false  // Disable grouping for candlesticks
                     }
                 }, {
                     type: 'scatter',
-                    name: 'Buy Signals',
-                    data: buyTriggers.map(t => {
-                        // Find the corresponding candle to position arrow below it
-                        const candleData = optimizationData.candlestick_data.find(c =>
-                            Math.abs(c[0] - t.timestamp) < 60000 // Within 1 minute
-                        );
-                        const lowPrice = candleData ? candleData[3] : t.price; // Use candle low
-                        return [t.timestamp, lowPrice * 0.998]; // Position 0.2% below candle low
-                    }),
+                    name: 'Buy Entries',
+                    data: buyArrows.map(arrow => [arrow.x, arrow.y]),
                     marker: {
                         symbol: 'triangle',
                         fillColor: '#00aa00',
                         lineColor: '#006600',
-                        lineWidth: 1,
-                        radius: 6  // Smaller arrows
+                        lineWidth: 2,
+                        radius: 10  // Larger arrows for visibility
                     },
                     tooltip: {
-                        pointFormat: '<b>BUY SIGNAL</b><br/>Price: ${point.y:.2f}<br/>Reason: {point.reason}'
+                        pointFormatter: function() {
+                            const arrow = buyArrows.find(a => a.x === this.x && Math.abs(a.y - this.y) < 0.01);
+                            return `<b>BUY ENTRY</b><br/>
+                                   Reason: ${arrow.reason}<br/>
+                                   Price: $${arrow.price.toFixed(2)}`;
+                        }
                     },
                     dataGrouping: {
-                        enabled: false  // Disable grouping for buy signals
+                        enabled: false  // Disable grouping for buy arrows
                     }
                 }, {
                     type: 'scatter',
-                    name: 'Sell Signals',
-                    data: sellTriggers.map(t => {
-                        // Find the corresponding candle to position arrow below it
-                        const candleData = optimizationData.candlestick_data.find(c =>
-                            Math.abs(c[0] - t.timestamp) < 60000 // Within 1 minute
-                        );
-                        const lowPrice = candleData ? candleData[3] : t.price; // Use candle low
-                        return [t.timestamp, lowPrice * 0.996]; // Position 0.4% below candle low
-                    }),
+                    name: 'Sell Exits',
+                    data: sellArrows.map(arrow => [arrow.x, arrow.y]),
                     marker: {
                         symbol: 'triangle-down',
                         fillColor: '#ff4444',
                         lineColor: '#cc0000',
-                        lineWidth: 1,
-                        radius: 6  // Smaller arrows
+                        lineWidth: 2,
+                        radius: 10  // Larger arrows for visibility
                     },
                     tooltip: {
-                        pointFormat: '<b>SELL SIGNAL</b><br/>Price: ${point.y:.2f}<br/>Reason: {point.reason}'
+                        pointFormatter: function() {
+                            const arrow = sellArrows.find(a => a.x === this.x && Math.abs(a.y - this.y) < 0.01);
+                            return `<b>SELL EXIT</b><br/>
+                                   Reason: ${arrow.reason}<br/>
+                                   Price: $${arrow.price.toFixed(2)}`;
+                        }
                     },
                     dataGrouping: {
-                        enabled: false  // Disable grouping for sell signals
+                        enabled: false  // Disable grouping for sell arrows
                     }
                 }]
             });
@@ -571,6 +585,12 @@
             const barChartsContainer = document.getElementById('barChartsContainer');
             barChartsContainer.innerHTML = '';
 
+            // Check if we have bar scores history
+            if (!optimizationData.bar_scores_history || optimizationData.bar_scores_history.length === 0) {
+                barChartsContainer.innerHTML = '<div class="text-center py-4"><div class="text-muted">No bar scores data available</div></div>';
+                return;
+            }
+
             // Get unique bar names from the data
             const barNames = new Set();
             optimizationData.bar_scores_history.forEach(entry => {
@@ -617,6 +637,65 @@
                     ];
                 }
 
+                // Build plot lines array - start with neutral line
+                const plotLines = [{
+                    value: 0.5,
+                    color: 'gray',
+                    dashStyle: 'dash',
+                    width: 1,
+                    label: {
+                        text: 'Neutral (0.5)',
+                        align: 'right'
+                    }
+                }];
+
+                // Add threshold lines if threshold_config is available
+                if (optimizationData.threshold_config) {
+                    // Check entry thresholds
+                    if (optimizationData.threshold_config.enter_long) {
+                        optimizationData.threshold_config.enter_long.forEach(condition => {
+                            if (condition.name === barName && condition.threshold !== undefined) {
+                                plotLines.push({
+                                    value: condition.threshold,
+                                    color: '#00aa00',
+                                    dashStyle: 'solid',
+                                    width: 2,
+                                    label: {
+                                        text: `Entry (${condition.threshold.toFixed(2)})`,
+                                        align: 'left',
+                                        style: {
+                                            color: '#00aa00',
+                                            fontWeight: 'bold'
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    // Check exit thresholds
+                    if (optimizationData.threshold_config.exit_long) {
+                        optimizationData.threshold_config.exit_long.forEach(condition => {
+                            if (condition.name === barName && condition.threshold !== undefined) {
+                                plotLines.push({
+                                    value: condition.threshold,
+                                    color: '#ff4444',
+                                    dashStyle: 'solid',
+                                    width: 2,
+                                    label: {
+                                        text: `Exit (${condition.threshold.toFixed(2)})`,
+                                        align: 'left',
+                                        style: {
+                                            color: '#ff4444',
+                                            fontWeight: 'bold'
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+
                 // Create the chart
                 barCharts[barName] = Highcharts.stockChart(`barChart_${barName}`, {
                     title: {
@@ -633,16 +712,7 @@
                         },
                         min: 0,
                         max: 1,
-                        plotLines: [{
-                            value: 0.5,
-                            color: 'gray',
-                            dashStyle: 'dash',
-                            width: 1,
-                            label: {
-                                text: 'Neutral (0.5)',
-                                align: 'right'
-                            }
-                        }]
+                        plotLines: plotLines  // Use the dynamically built plotLines array
                     },
 
                     series: [{

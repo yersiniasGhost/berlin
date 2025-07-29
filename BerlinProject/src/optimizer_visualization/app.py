@@ -66,65 +66,84 @@ def run_genetic_algorithm(ga_config_path: str, data_config_path: str):
     return best_individual, optimization_stats, io, test_name
 
 
-def load_raw_candle_data(data_config_path: str):
-    """Load pure 1-minute candle data directly from MongoDB"""
+def load_raw_candle_data(data_config_path: str, io=None):
+    """Load the SAME candle data that trade execution uses"""
     # Load data config
     with open(data_config_path, 'r') as f:
         data_config = json.load(f)
 
-    # Get pure 1-minute candle data directly from YahooFinanceHistorical
-    yahoo_data = YahooFinanceHistorical()
+    if io is not None:
+        # Use the SAME data that the backtest streamer uses
+        backtest_streamer = io.fitness_calculator.backtest_streamer
 
-    # Load the raw tick data directly (pure 1-minute data from MongoDB)
-    raw_ticks = yahoo_data._load_raw_ticks(
-        data_config['ticker'],
-        data_config['start_date'],
-        data_config['end_date']
-    )
+        # Get the tick history that was used for trade execution
+        tick_history = backtest_streamer.tick_history
 
-    if not raw_ticks:
-        raise Exception('Failed to load raw 1-minute tick data from MongoDB')
+        logger.info(f"📈 Using SAME tick history as trade execution: {len(tick_history)} ticks")
 
-    logger.info(f"📈 Loaded {len(raw_ticks)} raw ticks from MongoDB")
+        # DEBUG: Log some sample data to verify consistency
+        if len(tick_history) > 10:
+            sample_tick = tick_history[10]
+            logger.info(
+                f"Sample tick from trade execution data: {sample_tick.timestamp} OHLC=({sample_tick.open:.2f}, {sample_tick.high:.2f}, {sample_tick.low:.2f}, {sample_tick.close:.2f})")
 
-    # Deduplicate ticks by timestamp - keep the first occurrence of each minute
-    seen_timestamps = set()
-    deduplicated_ticks = []
-    duplicates_removed = 0
+        # Format candlestick data for Highcharts from the SAME tick data
+        candlestick_data = []
+        for tick in tick_history:
+            timestamp = int(tick.timestamp.timestamp() * 1000)
+            candlestick_data.append([
+                timestamp,
+                tick.open,
+                tick.high,
+                tick.low,
+                tick.close
+            ])
 
-    for tick in raw_ticks:
-        timestamp_key = tick.timestamp
-        if timestamp_key not in seen_timestamps:
-            seen_timestamps.add(timestamp_key)
-            deduplicated_ticks.append(tick)
-        else:
-            duplicates_removed += 1
+        logger.info(f"📊 Using SAME data for chart: {len(candlestick_data)} candles")
 
-    logger.info(f"📊 Removed {duplicates_removed} duplicate timestamps")
-    logger.info(f"📈 Using {len(deduplicated_ticks)} unique 1-minute candles")
+        # DEBUG: Log sample candlestick data to verify
+        if len(candlestick_data) > 10:
+            sample_candle = candlestick_data[10]
+            logger.info(f"Sample candle for chart: {sample_candle}")
 
-    # Format candlestick data for Highcharts
-    candlestick_data = []
-    for tick in deduplicated_ticks:
-        timestamp = int(tick.timestamp.timestamp() * 1000)
-        candlestick_data.append([
-            timestamp,
-            tick.open,
-            tick.high,
-            tick.low,
-            tick.close
-        ])
+        return candlestick_data, data_config
 
-    logger.info(f"📊 Prepared {len(candlestick_data)} unique 1-minute candles for chart")
+    else:
+        # Fallback to original method if io not available
+        yahoo_data = YahooFinanceHistorical()
+        raw_ticks = yahoo_data._load_raw_ticks(
+            data_config['ticker'],
+            data_config['start_date'],
+            data_config['end_date']
+        )
 
-    return candlestick_data, data_config
+        if not raw_ticks:
+            raise Exception('Failed to load raw 1-minute tick data from MongoDB')
+
+        logger.info(f"📈 Loaded {len(raw_ticks)} raw ticks from MongoDB")
+
+        # Format candlestick data for Highcharts
+        candlestick_data = []
+        for tick in raw_ticks:
+            timestamp = int(tick.timestamp.timestamp() * 1000)
+            candlestick_data.append([
+                timestamp,
+                tick.open,
+                tick.high,
+                tick.low,
+                tick.close
+            ])
+
+        logger.info(f"📊 Prepared {len(candlestick_data)} candles for chart")
+        return candlestick_data, data_config
 
 
 def extract_trade_history_and_pnl(best_individual, io):
-    """Extract trade history and calculate P&L from the best individual"""
+    """Extract trade history, calculate P&L, and get bar scores history from the best individual"""
     trade_history = []
     triggers = []
     pnl_history = []
+    bar_scores_history = []  # Changed from {} to []
 
     try:
         logger.info("🔄 Running backtest with best individual to generate trade history...")
@@ -132,6 +151,49 @@ def extract_trade_history_and_pnl(best_individual, io):
         # Get the backtest streamer and replace monitor config
         backtest_streamer = io.fitness_calculator.backtest_streamer
         backtest_streamer.replace_monitor_config(best_individual.monitor_configuration)
+
+        # Try to get bar scores history from the backtest process
+        try:
+            # Run a fresh backtest to get indicator and bar score timeline
+            from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
+
+            indicator_processor = IndicatorProcessorHistoricalNew(best_individual.monitor_configuration)
+            indicator_history, raw_indicator_history, bar_score_history_dict = (
+                indicator_processor.calculate_indicators(backtest_streamer.aggregators)
+            )
+
+            # Convert bar_score_history_dict to the format expected by frontend
+            if bar_score_history_dict and backtest_streamer.tick_history:
+                logger.info(f"📊 Converting bar scores history with {len(bar_score_history_dict)} bars")
+
+                # Get the length of the timeline
+                timeline_length = len(backtest_streamer.tick_history)
+
+                # Create bar scores history in the expected format
+                for i in range(timeline_length):
+                    if i < len(backtest_streamer.tick_history):
+                        tick = backtest_streamer.tick_history[i]
+                        timestamp = int(tick.timestamp.timestamp() * 1000)
+
+                        scores = {}
+                        for bar_name, bar_values in bar_score_history_dict.items():
+                            if i < len(bar_values):
+                                scores[bar_name] = bar_values[i]
+                            else:
+                                scores[bar_name] = 0.0
+
+                        bar_scores_history.append({
+                            'timestamp': timestamp,
+                            'scores': scores
+                        })
+
+                logger.info(f"📈 Generated {len(bar_scores_history)} bar score history entries")
+            else:
+                logger.warning("⚠️  No bar score history data available")
+
+        except Exception as bar_error:
+            logger.warning(f"⚠️  Could not generate bar scores history: {bar_error}")
+            # Continue without bar scores history
 
         # Run the backtest to populate portfolio with trades
         portfolio = backtest_streamer.run()
@@ -199,11 +261,19 @@ def extract_trade_history_and_pnl(best_individual, io):
         import traceback
         traceback.print_exc()
 
-    return trade_history, triggers, pnl_history
+    return trade_history, triggers, pnl_history, bar_scores_history
 
-
-def build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name):
+def build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name,
+                   bar_scores_history=None, threshold_config=None):
     """Build the final response object"""
+
+    # Handle default values for new parameters
+    if bar_scores_history is None:
+        bar_scores_history = []
+
+    if threshold_config is None:
+        threshold_config = {}
+
     response = {
         'success': True,
         'ticker': data_config['ticker'],
@@ -221,7 +291,8 @@ def build_response(data_config, candlestick_data, triggers, trade_history, pnl_h
             'test_name': test_name,
             'generation': 1
         },
-        'bar_scores_history': []  # Will add this later
+        'bar_scores_history': bar_scores_history,
+        'threshold_config': threshold_config
     }
 
     logger.info(f"✅ Response prepared: {len(candlestick_data)} candles, {len(triggers)} signals")
@@ -336,14 +407,32 @@ def run_optimization():
         if not best_individual:
             return jsonify({'success': False, 'error': 'No optimization results generated'})
 
-        # Step 2: Load pure 1-minute candle data
-        candlestick_data, data_config = load_raw_candle_data(data_config_path)
+        # Step 2: Load candle data using THE SAME data as trade execution
+        candlestick_data, data_config = load_raw_candle_data(data_config_path, io)  # Pass io object
 
-        # Step 3: Extract trade history and calculate P&L
-        trade_history, triggers, pnl_history = extract_trade_history_and_pnl(best_individual, io)
+        # Step 3: Extract trade history, calculate P&L, and get bar scores history
+        trade_history, triggers, pnl_history, bar_scores_history = extract_trade_history_and_pnl(best_individual, io)
 
-        # Step 4: Build and return response
-        response = build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name)
+        # Step 4: Get threshold config from best individual
+        threshold_config = {}
+        if hasattr(best_individual, 'monitor_configuration'):
+            monitor_config = best_individual.monitor_configuration
+            threshold_config = {
+                'enter_long': getattr(monitor_config, 'enter_long', []),
+                'exit_long': getattr(monitor_config, 'exit_long', [])
+            }
+
+        # Step 5: Build and return response with all parameters
+        response = build_response(
+            data_config,
+            candlestick_data,
+            triggers,
+            trade_history,
+            pnl_history,
+            test_name,
+            bar_scores_history,
+            threshold_config
+        )
 
         return jsonify(response)
 
