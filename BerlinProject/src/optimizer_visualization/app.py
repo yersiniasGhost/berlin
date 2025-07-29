@@ -22,6 +22,10 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ga-viz-secret-key'
 
 
+#TODO: REFACTOR THIS CODE OUT
+# PAUSE AND CANCEL BUTTONS
+# BAR GRAPH UNDERNEATH
+
 def run_genetic_algorithm(ga_config_path: str, data_config_path: str):
     """Run the genetic algorithm optimization and return best individual"""
     logger.info("🚀 Starting optimization following the_optimizer_new.py pattern")
@@ -120,6 +124,42 @@ def load_raw_candle_data(data_config_path: str):
     return candlestick_data, data_config
 
 
+def extract_threshold_configuration(best_individual):
+    """Extract threshold configuration for each bar from the best individual"""
+    threshold_config = {}
+
+    try:
+        # Get enter_long thresholds (entry conditions)
+        enter_conditions = getattr(best_individual.monitor_configuration, 'enter_long', [])
+        for condition in enter_conditions:
+            bar_name = condition.get('name')
+            threshold = condition.get('threshold', 0.5)
+            threshold_config[bar_name] = {
+                'threshold': threshold,
+                'type': 'entry',
+                'color': '#28a745'  # Green for entry
+            }
+
+        # Get exit_long thresholds (exit conditions)
+        exit_conditions = getattr(best_individual.monitor_configuration, 'exit_long', [])
+        for condition in exit_conditions:
+            bar_name = condition.get('name')
+            threshold = condition.get('threshold', 0.6)
+            threshold_config[bar_name] = {
+                'threshold': threshold,
+                'type': 'exit',
+                'color': '#dc3545'  # Red for exit
+            }
+
+        logger.info(f"📏 Extracted thresholds for {len(threshold_config)} bars")
+        for bar_name, config in threshold_config.items():
+            logger.info(f"   {bar_name}: {config['threshold']:.3f} ({config['type']})")
+
+    except Exception as e:
+        logger.error(f"❌ Error extracting threshold configuration: {e}")
+
+    return threshold_config
+
 def extract_trade_history_and_pnl(best_individual, io):
     """Extract trade history and calculate P&L from the best individual"""
     trade_history = []
@@ -202,7 +242,7 @@ def extract_trade_history_and_pnl(best_individual, io):
     return trade_history, triggers, pnl_history
 
 
-def build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name):
+def build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name, bar_scores_history, threshold_config):
     """Build the final response object"""
     response = {
         'success': True,
@@ -221,11 +261,55 @@ def build_response(data_config, candlestick_data, triggers, trade_history, pnl_h
             'test_name': test_name,
             'generation': 1
         },
-        'bar_scores_history': []  # Will add this later
+        'bar_scores_history': bar_scores_history,
+        'threshold_config': threshold_config  # Add threshold config
     }
 
-    logger.info(f"✅ Response prepared: {len(candlestick_data)} candles, {len(triggers)} signals")
+    logger.info(f"✅ Response prepared: {len(candlestick_data)} candles, {len(triggers)} signals, {len(bar_scores_history)} bar scores")
     return response
+
+
+def extract_bar_scores_history_from_backtest(best_individual, io, candlestick_data):
+    """Extract bar scores history during backtest for charting"""
+    bar_scores_history = []
+
+    try:
+        logger.info("🔄 Extracting bar scores history from backtest...")
+
+        # Get the backtest streamer and replace monitor config
+        backtest_streamer = io.fitness_calculator.backtest_streamer
+        backtest_streamer.replace_monitor_config(best_individual.monitor_configuration)
+
+        # Get indicator processor to calculate bar scores
+        from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
+        indicator_processor = IndicatorProcessorHistoricalNew(best_individual.monitor_configuration)
+        indicator_history, raw_indicator_history, bar_score_history = (
+            indicator_processor.calculate_indicators(backtest_streamer.aggregators)
+        )
+
+        # Convert bar_score_history to timeline format
+        if bar_score_history and candlestick_data:
+            for i, candle_data in enumerate(candlestick_data):
+                timestamp = candle_data[0]  # First element is timestamp
+
+                # Get bar scores for this time point
+                bar_scores = {}
+                for bar_name, values in bar_score_history.items():
+                    bar_scores[bar_name] = values[i] if i < len(values) else 0.0
+
+                bar_scores_history.append({
+                    'timestamp': timestamp,
+                    'scores': bar_scores
+                })
+
+        logger.info(f"📊 Extracted {len(bar_scores_history)} bar score data points")
+
+    except Exception as e:
+        logger.error(f"❌ Error extracting bar scores history: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return bar_scores_history
 
 
 @app.route('/')
@@ -341,10 +425,13 @@ def run_optimization():
 
         # Step 3: Extract trade history and calculate P&L
         trade_history, triggers, pnl_history = extract_trade_history_and_pnl(best_individual, io)
+        # Step 4: Extract bar scores history and thresholds
+        bar_scores_history = extract_bar_scores_history_from_backtest(best_individual, io, candlestick_data)
+        threshold_config = extract_threshold_configuration(best_individual)
 
-        # Step 4: Build and return response
-        response = build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name)
-
+        # Step 5: Build and return response
+        response = build_response(data_config, candlestick_data, triggers, trade_history, pnl_history, test_name,
+                                  bar_scores_history, threshold_config)
         return jsonify(response)
 
     except Exception as e:
