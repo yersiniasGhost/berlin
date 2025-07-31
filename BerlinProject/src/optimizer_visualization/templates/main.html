@@ -7,7 +7,11 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
@@ -16,6 +20,14 @@
     <style>
         .config-panel {
             background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-panel {
+            background: #fff;
+            border: 1px solid #dee2e6;
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
@@ -38,6 +50,8 @@
 
         .status-ready { background: #d1ecf1; color: #0c5460; }
         .status-loading { background: #fff3cd; color: #856404; }
+        .status-running { background: #d1ecf1; color: #0c5460; }
+        .status-paused { background: #f0ad4e; color: #fff; }
         .status-error { background: #f8d7da; color: #721c24; }
 
         .bar-charts-grid {
@@ -64,6 +78,108 @@
             padding: 15px;
             margin-top: 15px;
         }
+
+        .optimization-progress {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .best-individuals-log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+
+        .collapsible-section {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .collapsible-header {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #dee2e6;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .collapsible-content {
+            padding: 15px;
+            display: block;
+        }
+
+        .collapsible-content.collapsed {
+            display: none;
+        }
+
+        .collapse-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .collapse-icon.rotated {
+            transform: rotate(180deg);
+        }
+
+        .metrics-table {
+            font-size: 0.8rem;
+            margin: 0;
+        }
+
+        .metrics-table th,
+        .metrics-table td {
+            padding: 6px 8px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+
+        .metrics-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-optimization {
+            min-width: 100px;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -80,50 +196,133 @@
         </nav>
 
         <!-- Configuration Panel -->
-        <div class="config-panel">
-            <h3 class="mb-3">Configuration Setup</h3>
-
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="file-input-group">
-                        <label for="gaConfigFile">Genetic Algorithm Monitor JSON</label>
-                        <input type="file" class="form-control" id="gaConfigFile" accept=".json">
-                        <div class="form-text">Select the genetic algorithm monitor configuration file</div>
-                    </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="file-input-group">
-                        <label for="dataConfigFile">Yahoo Finance Data Config</label>
-                        <input type="file" class="form-control" id="dataConfigFile" accept=".json">
-                        <div class="form-text">Select the Yahoo Finance data configuration file</div>
-                    </div>
-                </div>
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleCollapse('configPanel')">
+                <h3 class="mb-0">Configuration Setup</h3>
+                <i class="fas fa-chevron-down collapse-icon" id="configPanel-icon"></i>
             </div>
-
-            <div class="row mt-3">
-                <div class="col-12">
-                    <button id="loadConfigsBtn" class="btn btn-primary me-2" disabled>
-                        <i class="fas fa-upload me-1"></i> Load Configurations
-                    </button>
-                    <button id="runOptimizationBtn" class="btn btn-success" disabled>
-                        <i class="fas fa-play me-1"></i> Run Optimization (1 Epoch)
-                    </button>
-                    <span id="optimizationStatus" class="ms-3"></span>
-                </div>
-            </div>
-
-            <!-- Configuration Summary -->
-            <div id="configSummary" class="config-summary" style="display: none;">
-                <h5>Configuration Summary</h5>
+            <div id="configPanel" class="collapsible-content">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>GA Configuration</h6>
-                        <div id="gaSummary"></div>
+                        <div class="file-input-group">
+                            <label for="gaConfigFile">Genetic Algorithm Monitor JSON</label>
+                            <input type="file" class="form-control" id="gaConfigFile" accept=".json">
+                            <div class="form-text">Select the genetic algorithm monitor configuration file</div>
+                        </div>
                     </div>
+
                     <div class="col-md-6">
-                        <h6>Data Configuration</h6>
-                        <div id="dataSummary"></div>
+                        <div class="file-input-group">
+                            <label for="dataConfigFile">Yahoo Finance Data Config</label>
+                            <input type="file" class="form-control" id="dataConfigFile" accept=".json">
+                            <div class="form-text">Select the Yahoo Finance data configuration file</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button id="loadConfigsBtn" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i>Load Configurations
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Configuration Summary -->
+                <div id="configSummary" class="config-summary" style="display: none;">
+                    <h5>Configuration Summary</h5>
+                    <div id="configDetails"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div id="controlPanel" class="control-panel" style="display: none;">
+            <h3 class="mb-3">Optimization Control</h3>
+
+            <!-- Progress Information -->
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapse('optimizationProgress')">
+                    <h5 class="mb-0">Progress Information</h5>
+                    <i class="fas fa-chevron-down collapse-icon" id="optimizationProgress-icon"></i>
+                </div>
+                <div id="optimizationProgress" class="collapsible-content" style="display: none;">
+                    <div class="progress-info">
+                        <h5 id="testName">Test: Loading...</h5>
+                        <span id="generationInfo">Generation 0 / 0</span>
+                    </div>
+                    <div class="progress mb-3">
+                        <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            0%
+                        </div>
+                    </div>
+
+                    <!-- Objectives Chart and Metrics Table -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6>Optimization Progress - Objective Functions:</h6>
+                            <div id="objectivesChart" style="height: 800px; border: 1px solid #dee2e6; border-radius: 4px; background: white;"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Generation Metrics Summary:</h6>
+                            <div class="table-container">
+                                <table class="table table-sm metrics-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Gen</th>
+                                            <th>Total Trades</th>
+                                            <th>Winning</th>
+                                            <th>Losing</th>
+                                            <th>Total P&L (%)</th>
+                                            <th>Avg Win (%)</th>
+                                            <th>Avg Loss (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="metricsTableBody">
+                                        <tr>
+                                            <td colspan="7" class="text-muted">No data yet...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Current Best Individual Metrics:</h6>
+                            <div id="currentMetrics" class="small text-muted">No data yet...</div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Best Individuals Log:</h6>
+                            <div id="bestIndividualsLog" class="best-individuals-log" style="height: 200px;">
+                                <div class="text-muted">Optimization not started...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapse('controlButtons')">
+                    <h5 class="mb-0">Control Buttons</h5>
+                    <i class="fas fa-chevron-down collapse-icon" id="controlButtons-icon"></i>
+                </div>
+                <div id="controlButtons" class="collapsible-content">
+                    <div class="control-buttons">
+                        <button id="startBtn" class="btn btn-success btn-optimization">
+                            <i class="fas fa-play me-2"></i>Start
+                        </button>
+                        <button id="pauseBtn" class="btn btn-warning btn-optimization" style="display: none;">
+                            <i class="fas fa-pause me-2"></i>Pause
+                        </button>
+                        <button id="resumeBtn" class="btn btn-info btn-optimization" style="display: none;">
+                            <i class="fas fa-play me-2"></i>Resume
+                        </button>
+                        <button id="stopBtn" class="btn btn-danger btn-optimization" style="display: none;">
+                            <i class="fas fa-stop me-2"></i>Stop
+                        </button>
                     </div>
                 </div>
             </div>
@@ -131,24 +330,21 @@
 
         <!-- Charts Section -->
         <div id="chartsSection" style="display: none;">
-            <!-- Main Candlestick Chart -->
+            <!-- Candlestick Chart -->
             <div class="chart-container">
-                <h4>Price Chart with Trade Entry/Exit Arrows</h4>
+                <h4>Price Chart with Signals</h4>
                 <div id="candlestickChart" style="height: 500px;"></div>
             </div>
 
             <!-- P&L Chart -->
             <div class="chart-container">
-                <h4>Cumulative P&L (%)</h4>
+                <h4>Portfolio P&L</h4>
                 <div id="pnlChart" style="height: 300px;"></div>
             </div>
 
-            <!-- Bar Scores Charts -->
-            <div class="chart-container">
-                <h4>Bar Scores Evolution</h4>
-                <div id="barChartsContainer" class="bar-charts-grid">
-                    <!-- Bar score charts will be dynamically added here -->
-                </div>
+            <!-- Bar Scores Grid -->
+            <div id="barScoresContainer" class="bar-charts-grid">
+                <!-- Bar score charts will be dynamically inserted here -->
             </div>
         </div>
     </div>
@@ -156,247 +352,568 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Font Awesome -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
-
     <script>
+        // Initialize Socket.IO
+        const socket = io();
+
         // Global variables
-        let configsLoaded = false;
-        let optimizationData = null;
-        let candlestickChart = null;
-        let pnlChart = null; // Add reference to P&L chart
-        let barCharts = {};
-        let configPaths = {}; // Store config file paths
+        let uploadedFiles = {};
+        let optimizationRunning = false;
+        let charts = {};
+        let generationMetrics = []; // Store metrics for each generation
 
-        // DOM ready
-        document.addEventListener('DOMContentLoaded', function() {
-            setupEventListeners();
-            updateAppStatus('Ready to load configurations', 'ready');
-        });
+        // Collapsible section toggle function
+        function toggleCollapse(sectionId) {
+            const content = document.getElementById(sectionId);
+            const icon = document.getElementById(sectionId + '-icon');
 
-        function setupEventListeners() {
-            // File input change handlers
-            document.getElementById('gaConfigFile').addEventListener('change', checkFilesReady);
-            document.getElementById('dataConfigFile').addEventListener('change', checkFilesReady);
-
-            // Button handlers
-            document.getElementById('loadConfigsBtn').addEventListener('click', loadConfigurations);
-            document.getElementById('runOptimizationBtn').addEventListener('click', runOptimization);
+            if (content.classList.contains('collapsed') || content.style.display === 'none') {
+                content.classList.remove('collapsed');
+                content.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                content.classList.add('collapsed');
+                content.style.display = 'none';
+                icon.classList.add('rotated');
+            }
         }
 
-        function checkFilesReady() {
-            const gaFile = document.getElementById('gaConfigFile').files[0];
-            const dataFile = document.getElementById('dataConfigFile').files[0];
-            const loadBtn = document.getElementById('loadConfigsBtn');
+        // Update metrics table with generation data
+        function updateMetricsTable(generation, chartData) {
+            const tableBody = document.getElementById('metricsTableBody');
 
-            loadBtn.disabled = !(gaFile && dataFile);
-        }
+            // Calculate trade metrics
+            const trades = chartData.trade_history || [];
+            const totalTrades = trades.length;
 
-        function updateAppStatus(message, type) {
-            const statusElement = document.getElementById('appStatus');
-            statusElement.textContent = message;
-            statusElement.className = `status-badge status-${type}`;
-        }
+            // Separate winning and losing trades based on P&L
+            const completedTrades = chartData.pnl_history || [];
+            let winningTrades = 0;
+            let losingTrades = 0;
+            let totalWinPnL = 0;
+            let totalLossPnL = 0;
 
-        async function loadConfigurations() {
-            const gaFile = document.getElementById('gaConfigFile').files[0];
-            const dataFile = document.getElementById('dataConfigFile').files[0];
+            completedTrades.forEach(trade => {
+                if (trade.trade_pnl > 0) {
+                    winningTrades++;
+                    totalWinPnL += trade.trade_pnl;
+                } else if (trade.trade_pnl < 0) {
+                    losingTrades++;
+                    totalLossPnL += trade.trade_pnl;
+                }
+            });
 
-            if (!gaFile || !dataFile) {
-                alert('Please select both configuration files');
+            const totalPnL = completedTrades.length > 0
+                ? completedTrades[completedTrades.length - 1].cumulative_pnl
+                : 0;
+
+            const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
+            const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+
+            // Store metrics for this generation
+            const generationData = {
+                generation,
+                totalTrades,
+                winningTrades,
+                losingTrades,
+                totalPnL,
+                avgWin,
+                avgLoss
+            };
+
+            // Update or add to generationMetrics array
+            const existingIndex = generationMetrics.findIndex(g => g.generation === generation);
+            if (existingIndex >= 0) {
+                generationMetrics[existingIndex] = generationData;
+            } else {
+                generationMetrics.push(generationData);
+            }
+
+            // Sort by generation
+            generationMetrics.sort((a, b) => a.generation - b.generation);
+
+            // Rebuild table
+            if (generationMetrics.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-muted">No data yet...</td></tr>';
                 return;
             }
 
-            updateAppStatus('Loading configurations...', 'loading');
-            console.log('Starting file upload process...');
+            const tableRows = generationMetrics.map(data => `
+                <tr>
+                    <td><strong>${data.generation}</strong></td>
+                    <td>${data.totalTrades}</td>
+                    <td class="text-success">${data.winningTrades}</td>
+                    <td class="text-danger">${data.losingTrades}</td>
+                    <td class="${data.totalPnL >= 0 ? 'text-success' : 'text-danger'}">${data.totalPnL.toFixed(2)}%</td>
+                    <td class="text-success">${data.avgWin.toFixed(2)}%</td>
+                    <td class="text-danger">${data.avgLoss.toFixed(2)}%</td>
+                </tr>
+            `).join('');
 
-            try {
-                // Upload files to server
-                console.log('Uploading GA config file:', gaFile.name);
-                const gaUpload = await uploadFile(gaFile, 'ga_config');
-                console.log('GA upload result:', gaUpload);
+            tableBody.innerHTML = tableRows;
 
-                if (!gaUpload.success) {
-                    throw new Error(`GA config upload failed: ${gaUpload.error}`);
-                }
-
-                console.log('Uploading data config file:', dataFile.name);
-                const dataUpload = await uploadFile(dataFile, 'data_config');
-                console.log('Data upload result:', dataUpload);
-
-                if (!dataUpload.success) {
-                    throw new Error(`Data config upload failed: ${dataUpload.error}`);
-                }
-
-                // Store paths for optimization call
-                configPaths = {
-                    ga_config_path: gaUpload.file_path,
-                    data_config_path: dataUpload.file_path
-                };
-
-                // Call API to load configs and get summary
-                const loadResponse = await fetch('/api/load_configs', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(configPaths)
-                });
-
-                const loadResult = await loadResponse.json();
-
-                if (!loadResult.success) {
-                    throw new Error(loadResult.error);
-                }
-
-                // Display configuration summary
-                displayConfigSummary(loadResult.summary);
-
-                configsLoaded = true;
-                document.getElementById('runOptimizationBtn').disabled = false;
-                updateAppStatus('Configurations loaded successfully', 'ready');
-
-            } catch (error) {
-                console.error('Error loading configurations:', error);
-                updateAppStatus('Configuration load failed', 'error');
-                alert('Error loading configurations: ' + error.message);
-            }
+            // Scroll to latest entry
+            const tableContainer = document.querySelector('.table-container');
+            tableContainer.scrollTop = tableContainer.scrollHeight;
         }
 
-        async function uploadFile(file, fileType) {
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('file_type', fileType);
+        // Socket event handlers
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            updateStatus('Ready', 'ready');
+        });
 
+        socket.on('optimization_started', function(data) {
+            console.log('Optimization started:', data);
+            optimizationRunning = true;
+            updateStatus('Running', 'running');
+
+            document.getElementById('testName').textContent = `Test: ${data.test_name}`;
+            document.getElementById('generationInfo').textContent = `Generation 0 / ${data.total_generations}`;
+            document.getElementById('optimizationProgress').style.display = 'block';
+
+            // Clear previous data
+            generationMetrics = [];
+            document.getElementById('metricsTableBody').innerHTML = '<tr><td colspan="7" class="text-muted">Starting optimization...</td></tr>';
+
+            // Update button states
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+
+            // Clear previous data
+            document.getElementById('bestIndividualsLog').innerHTML = '<div class="text-muted">Starting optimization...</div>';
+        });
+
+        socket.on('generation_complete', function(data) {
+            console.log('Generation complete:', data);
+
+            // Update progress
+            const progress = (data.generation / data.total_generations) * 100;
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${Math.round(progress)}%`;
+            progressBar.setAttribute('aria-valuenow', progress);
+
+            document.getElementById('generationInfo').textContent = `Generation ${data.generation} / ${data.total_generations}`;
+
+            // Update current metrics
+            const metricsText = Object.entries(data.fitness_metrics)
+                .map(([key, value]) => `${key}: ${value.toFixed(4)}`)
+                .join(', ');
+            document.getElementById('currentMetrics').textContent = metricsText;
+
+            // Update best individuals log
+            updateBestIndividualsLog(data.best_individuals_log);
+
+            // Update charts with new data
+            updateCharts(data.chart_data);
+
+            // Update objectives chart
+            updateObjectivesChart(data.best_individuals_log);
+
+            // Update metrics table
+            updateMetricsTable(data.generation, data.chart_data);
+
+            // Show charts section
+            document.getElementById('chartsSection').style.display = 'block';
+
+            // Show charts section
+            document.getElementById('chartsSection').style.display = 'block';
+        });
+
+        socket.on('optimization_complete', function(data) {
+            console.log('Optimization complete:', data);
+            optimizationRunning = false;
+            updateStatus('Complete', 'ready');
+
+            // Update button states
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'none';
+        });
+
+        socket.on('optimization_paused', function(data) {
+            console.log('Optimization paused:', data);
+            updateStatus(`Paused at Generation ${data.generation}`, 'paused');
+
+            // Update button states
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'inline-block';
+        });
+
+        socket.on('optimization_resumed', function(data) {
+            console.log('Optimization resumed:', data);
+            updateStatus('Running', 'running');
+
+            // Update button states
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('resumeBtn').style.display = 'none';
+        });
+
+        socket.on('optimization_stopped', function(data) {
+            console.log('Optimization stopped:', data);
+            optimizationRunning = false;
+            updateStatus('Stopped', 'ready');
+
+            // Update button states
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'none';
+        });
+
+        socket.on('optimization_error', function(data) {
+            console.error('Optimization error:', data);
+            optimizationRunning = false;
+            updateStatus('Error', 'error');
+
+            // Update button states
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'none';
+
+            alert(`Optimization Error: ${data.error}`);
+        });
+
+        // Button event handlers
+        document.getElementById('startBtn').addEventListener('click', function() {
+            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
+                alert('Please load both configuration files first.');
+                return;
+            }
+
+            socket.emit('start_optimization', {
+                ga_config_path: uploadedFiles.ga_config,
+                data_config_path: uploadedFiles.data_config
+            });
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            socket.emit('pause_optimization');
+        });
+
+        document.getElementById('resumeBtn').addEventListener('click', function() {
+            socket.emit('resume_optimization');
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', function() {
+            if (confirm('Are you sure you want to stop the optimization?')) {
+                socket.emit('stop_optimization');
+            }
+        });
+
+        // File upload handlers
+        document.getElementById('gaConfigFile').addEventListener('change', async function(e) {
+            if (e.target.files.length > 0) {
+                await uploadFile(e.target.files[0], 'ga_config');
+            }
+        });
+
+        document.getElementById('dataConfigFile').addEventListener('change', async function(e) {
+            if (e.target.files.length > 0) {
+                await uploadFile(e.target.files[0], 'data_config');
+            }
+        });
+
+        document.getElementById('loadConfigsBtn').addEventListener('click', async function() {
+            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
+                alert('Please select both configuration files first.');
+                return;
+            }
+
+            await loadConfigurations();
+        });
+
+        // Helper functions
+        function updateStatus(text, type) {
+            const statusElement = document.getElementById('appStatus');
+            statusElement.textContent = text;
+            statusElement.className = `status-badge status-${type}`;
+        }
+
+        function updateBestIndividualsLog(logData) {
+            const logContainer = document.getElementById('bestIndividualsLog');
+
+            if (!logData || logData.length === 0) {
+                logContainer.innerHTML = '<div class="text-muted">No data yet...</div>';
+                return;
+            }
+
+            const logHtml = logData.map(entry => {
+                const metricsText = Object.entries(entry.metrics)
+                    .map(([key, value]) => `${key}=${value.toFixed(4)}`)
+                    .join(', ');
+                return `<div>Gen ${entry.generation}: ${metricsText}</div>`;
+            }).join('');
+
+            logContainer.innerHTML = logHtml;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        async function uploadFile(file, type) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', type);
+
+            try {
+                updateStatus('Uploading...', 'loading');
                 const response = await fetch('/api/upload_file', {
                     method: 'POST',
                     body: formData
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
                 const result = await response.json();
-                console.log(`Upload ${fileType} result:`, result);
 
-                return result;
+                if (result.success) {
+                    uploadedFiles[type] = result.filepath;
+                    console.log(`${type} uploaded:`, result.filepath);
+                    updateStatus('Ready', 'ready');
+                } else {
+                    throw new Error(result.error);
+                }
             } catch (error) {
-                console.error(`Error uploading ${fileType} file:`, error);
-                return { success: false, error: error.message };
+                console.error('Upload error:', error);
+                updateStatus('Error', 'error');
+                alert(`Upload failed: ${error.message}`);
             }
         }
 
-        function readFileAsText(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.onerror = reject;
-                reader.readAsText(file);
-            });
-        }
-
-        function displayConfigSummary(summary) {
-            const summaryDiv = document.getElementById('configSummary');
-            const gaSummary = document.getElementById('gaSummary');
-            const dataSummary = document.getElementById('dataSummary');
-
-            gaSummary.innerHTML = `
-                <p><strong>Test Name:</strong> ${summary.ga_config.test_name}</p>
-                <p><strong>Population Size:</strong> ${summary.ga_config.population_size}</p>
-                <p><strong>Generations:</strong> ${summary.ga_config.generations}</p>
-                <p><strong>Mutation Rate:</strong> ${summary.ga_config.mutation_rate}</p>
-            `;
-
-            dataSummary.innerHTML = `
-                <p><strong>Ticker:</strong> ${summary.data_config.ticker}</p>
-                <p><strong>Date Range:</strong> ${summary.data_config.start_date} to ${summary.data_config.end_date}</p>
-                <p><strong>Time Increment:</strong> ${summary.data_config.time_increment}m</p>
-            `;
-
-            summaryDiv.style.display = 'block';
-        }
-
-        async function runOptimization() {
-            if (!configsLoaded) {
-                alert('Please load configurations first');
-                return;
-            }
-
-            updateAppStatus('Running optimization...', 'loading');
-            document.getElementById('optimizationStatus').innerHTML =
-                '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
-
+        async function loadConfigurations() {
             try {
-                // Call the Flask API to run optimization
-                const response = await fetch('/api/run_optimization', {
+                updateStatus('Loading configs...', 'loading');
+
+                const response = await fetch('/api/load_configs', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(configPaths)  // Send the stored config paths
+                    body: JSON.stringify({
+                        ga_config_path: uploadedFiles.ga_config,
+                        data_config_path: uploadedFiles.data_config
+                    })
                 });
 
                 const result = await response.json();
 
-                if (!result.success) {
+                if (result.success) {
+                    displayConfigSummary(result);
+                    document.getElementById('controlPanel').style.display = 'block';
+                    updateStatus('Ready', 'ready');
+                } else {
                     throw new Error(result.error);
                 }
-
-                optimizationData = result;
-
-                // Show charts section
-                document.getElementById('chartsSection').style.display = 'block';
-
-                // Create charts with real data
-                createCandlestickChart();
-                createPnLChart();  // Add P&L chart
-                createBarScoreCharts();
-
-                updateAppStatus('Optimization complete', 'ready');
-                document.getElementById('optimizationStatus').innerHTML =
-                    `<span class="text-success"><i class="fas fa-check me-1"></i>Complete - ${result.total_candles} candles, ${result.total_trades} trades</span>`;
-
             } catch (error) {
-                console.error('Error running optimization:', error);
-                updateAppStatus('Optimization failed', 'error');
-                document.getElementById('optimizationStatus').innerHTML =
-                    '<span class="text-danger"><i class="fas fa-times me-1"></i>Failed</span>';
-                alert('Error running optimization: ' + error.message);
+                console.error('Config loading error:', error);
+                updateStatus('Error', 'error');
+                alert(`Failed to load configurations: ${error.message}`);
             }
         }
 
-        function createCandlestickChart() {
+        function displayConfigSummary(configData) {
+            const summaryElement = document.getElementById('configDetails');
+            const gaConfig = configData.ga_config;
+            const dataConfig = configData.data_config;
+
+            summaryElement.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Genetic Algorithm Config</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>Test Name:</strong> ${gaConfig.test_name}</li>
+                            <li><strong>Generations:</strong> ${gaConfig.genetic_algorithm?.number_of_generations || 'Not specified'}</li>
+                            <li><strong>Population:</strong> ${gaConfig.genetic_algorithm?.population_size || 'Not specified'}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Data Config</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>Ticker:</strong> ${dataConfig.ticker}</li>
+                            <li><strong>Start:</strong> ${dataConfig.start_date}</li>
+                            <li><strong>End:</strong> ${dataConfig.end_date}</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('configSummary').style.display = 'block';
+        }
+
+        function updateCharts(chartData) {
+            console.log('Updating charts with data:', chartData);
+
+            // Update candlestick chart
+            updateCandlestickChart(chartData);
+
+            // Update P&L chart
+            updatePnLChart(chartData);
+
+            // Update bar scores charts
+            updateBarScoresCharts(chartData);
+
+            // Show charts section
+            document.getElementById('chartsSection').style.display = 'block';
+        }
+
+        // Global function to sync all charts when one is zoomed (excluding objectives chart)
+        function syncAllCharts(extremes, sourceChart) {
+            if (!extremes || extremes.trigger === 'syncExtremes') return;
+
+            try {
+                // Don't sync objectives chart since it has different x-axis (generations vs time)
+                if (sourceChart === 'objectives') return;
+
+                // Sync candlestick chart
+                if (charts.candlestick && sourceChart !== 'candlestick') {
+                    charts.candlestick.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
+                }
+
+                // Sync P&L chart
+                if (charts.pnl && sourceChart !== 'pnl') {
+                    charts.pnl.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
+                }
+
+                // Sync all bar score charts
+                Object.keys(charts).forEach(chartKey => {
+                    if (chartKey.startsWith('barChart_') && sourceChart !== chartKey && charts[chartKey]) {
+                        charts[chartKey].xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
+                    }
+                });
+            } catch (error) {
+                console.warn('Error syncing charts:', error);
+            }
+        }
+
+        function updateObjectivesChart(bestIndividualsLog) {
+            const container = document.getElementById('objectivesChart');
+
+            if (!bestIndividualsLog || bestIndividualsLog.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">No objectives data available</div>';
+                return;
+            }
+
+            // Extract objective names from the first entry
+            const objectiveNames = Object.keys(bestIndividualsLog[0].metrics);
+
+            // Prepare series data for each objective
+            const series = objectiveNames.map(objName => {
+                const data = bestIndividualsLog.map(entry => [entry.generation, entry.metrics[objName]]);
+
+                // Assign colors based on objective type
+                let color = '#2196F3'; // Default blue
+                if (objName.toLowerCase().includes('profit')) {
+                    color = '#00C851'; // Green for profit
+                } else if (objName.toLowerCase().includes('loss')) {
+                    color = '#ff4444'; // Red for loss
+                } else if (objName.toLowerCase().includes('losing')) {
+                    color = '#ff9800'; // Orange for losing trades
+                }
+
+                return {
+                    name: objName,
+                    data: data,
+                    color: color,
+                    lineWidth: 2,
+                    marker: {
+                        enabled: true,
+                        radius: 4
+                    }
+                };
+            });
+
+            const chartConfig = {
+                chart: {
+                    type: 'line'
+                },
+                title: {
+                    text: 'Objective Functions Evolution'
+                },
+                xAxis: {
+                    title: {
+                        text: 'Generation'
+                    },
+                    min: 1,
+                    tickInterval: 1,
+                    events: {
+                        afterSetExtremes: function(e) {
+                            syncAllCharts(e, 'objectives');
+                        }
+                    }
+                },
+                yAxis: {
+                    title: {
+                        text: 'Objective Value'
+                    }
+                },
+                tooltip: {
+                    shared: true,
+                    crosshairs: true,
+                    pointFormat: '<b>{series.name}:</b> {point.y:.4f}<br/>'
+                },
+                legend: {
+                    enabled: true,
+                    align: 'bottom'
+                },
+                series: series,
+                plotOptions: {
+                    line: {
+                        connectNulls: false,
+                        marker: {
+                            enabled: true
+                        }
+                    }
+                }
+            };
+
+            if (charts.objectives) {
+                charts.objectives.destroy();
+            }
+            charts.objectives = Highcharts.chart(container, chartConfig);
+        }
+
+        function updateCandlestickChart(data) {
+            const container = document.getElementById('candlestickChart');
+
+            // Prepare candlestick data - already in correct format [timestamp, open, high, low, close]
+            const candlestickData = data.candlestick_data;
+
             // Process trade_history to create entry/exit arrows
             const buyArrows = [];
             const sellArrows = [];
 
-            if (optimizationData.trade_history && optimizationData.trade_history.length > 0) {
-                optimizationData.trade_history.forEach(trade => {
-                    if (trade.type === 'buy') {
+            if (data.triggers && data.triggers.length > 0) {
+                data.triggers.forEach(trigger => {
+                    if (trigger.type === 'buy') {
                         buyArrows.push({
-                            x: trade.timestamp,
-                            y: trade.price, // Position arrow AT the actual trade price
-                            reason: trade.reason,
-                            price: trade.price,
-                            quantity: trade.quantity
+                            x: trigger.timestamp,
+                            y: trigger.price,
+                            reason: trigger.reason,
+                            price: trigger.price
                         });
-                    } else if (trade.type === 'sell') {
+                    } else if (trigger.type === 'sell') {
                         sellArrows.push({
-                            x: trade.timestamp,
-                            y: trade.price, // Position arrow AT the actual trade price
-                            reason: trade.reason,
-                            price: trade.price,
-                            quantity: trade.quantity
+                            x: trigger.timestamp,
+                            y: trigger.price,
+                            reason: trigger.reason,
+                            price: trigger.price
                         });
                     }
                 });
             }
 
-            candlestickChart = Highcharts.stockChart('candlestickChart', {
+            const chartConfig = {
+                chart: {
+                    zoomType: 'xy', // Enable box zoom on both axes
+                    panning: {
+                        enabled: true,
+                        type: 'xy'
+                    },
+                    panKey: 'shift' // Hold shift to pan instead of zoom
+                },
                 title: {
-                    text: `${optimizationData.ticker} - Price with Trade Entry/Exit Arrows`
+                    text: `${data.ticker} - Price with Trade Entry/Exit Arrows`
                 },
 
                 rangeSelector: {
@@ -407,12 +924,12 @@
                 plotOptions: {
                     candlestick: {
                         dataGrouping: {
-                            enabled: false  // Disable grouping for candlesticks
+                            enabled: false
                         }
                     },
                     scatter: {
                         dataGrouping: {
-                            enabled: false  // Disable grouping for arrows
+                            enabled: false
                         }
                     }
                 },
@@ -429,93 +946,84 @@
                     lineWidth: 2
                 }],
 
-                tooltip: {
-                    split: true
-                },
-
                 // Add event handlers for zoom synchronization
                 xAxis: {
                     events: {
                         afterSetExtremes: function(e) {
-                            // Sync with P&L chart when user zooms/pans candlestick chart
-                            if (pnlChart && e.trigger !== 'syncExtremes') {
-                                pnlChart.xAxis[0].setExtremes(e.min, e.max, true, false, { trigger: 'syncExtremes' });
-                            }
+                            syncAllCharts(e, 'candlestick');
                         }
                     }
                 },
 
+                tooltip: {
+                    split: false,
+                    shared: true
+                },
+
                 series: [{
                     type: 'candlestick',
-                    name: optimizationData.ticker,
-                    data: optimizationData.candlestick_data,
-                    color: '#ff4444',
-                    upColor: '#00aa00',
-                    lineColor: '#ff4444',
-                    upLineColor: '#00aa00',
+                    name: data.ticker,
+                    data: candlestickData,
+                    yAxis: 0,
                     dataGrouping: {
-                        enabled: false  // Disable grouping for candlesticks
-                    }
+                        enabled: false
+                    },
+                    // Set proper candlestick colors
+                    color: '#ff4444', // Red for down candles
+                    upColor: '#00C851', // Green for up candles
+                    lineColor: '#ff4444', // Red border for down candles
+                    upLineColor: '#00C851' // Green border for up candles
                 }, {
                     type: 'scatter',
-                    name: 'Buy Entries',
-                    data: buyArrows.map(arrow => [arrow.x, arrow.y]),
+                    name: 'Buy Signals',
+                    data: buyArrows,
+                    color: 'green',
                     marker: {
                         symbol: 'triangle',
-                        fillColor: '#00aa00',
-                        lineColor: '#006600',
-                        lineWidth: 2,
-                        radius: 10  // Larger arrows for visibility
+                        radius: 8
+                    },
+                    yAxis: 0,
+                    dataGrouping: {
+                        enabled: false
                     },
                     tooltip: {
-                        pointFormatter: function() {
-                            const arrow = buyArrows.find(a => a.x === this.x && Math.abs(a.y - this.y) < 0.01);
-                            return `<b>BUY ENTRY</b><br/>
-                                   Reason: ${arrow.reason}<br/>
-                                   Price: $${arrow.price.toFixed(2)}`;
-                        }
-                    },
-                    dataGrouping: {
-                        enabled: false  // Disable grouping for buy arrows
+                        pointFormat: '<b>BUY:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}'
                     }
                 }, {
                     type: 'scatter',
-                    name: 'Sell Exits',
-                    data: sellArrows.map(arrow => [arrow.x, arrow.y]),
+                    name: 'Sell Signals',
+                    data: sellArrows,
+                    color: 'red',
                     marker: {
                         symbol: 'triangle-down',
-                        fillColor: '#ff4444',
-                        lineColor: '#cc0000',
-                        lineWidth: 2,
-                        radius: 10  // Larger arrows for visibility
+                        radius: 8
+                    },
+                    yAxis: 0,
+                    dataGrouping: {
+                        enabled: false
                     },
                     tooltip: {
-                        pointFormatter: function() {
-                            const arrow = sellArrows.find(a => a.x === this.x && Math.abs(a.y - this.y) < 0.01);
-                            return `<b>SELL EXIT</b><br/>
-                                   Reason: ${arrow.reason}<br/>
-                                   Price: $${arrow.price.toFixed(2)}`;
-                        }
-                    },
-                    dataGrouping: {
-                        enabled: false  // Disable grouping for sell arrows
+                        pointFormat: '<b>SELL:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}'
                     }
                 }]
-            });
+            };
+
+            if (charts.candlestick) {
+                charts.candlestick.destroy();
+            }
+            charts.candlestick = Highcharts.stockChart(container, chartConfig);
         }
 
-        function createPnLChart() {
-            if (!optimizationData.pnl_history || optimizationData.pnl_history.length === 0) {
-                document.getElementById('pnlChart').innerHTML = '<div class="text-center py-4"><div class="text-muted">No P&L data available</div></div>';
-                return;
-            }
+        function updatePnLChart(data) {
+            const container = document.getElementById('pnlChart');
 
-            const pnlData = optimizationData.pnl_history.map(entry => [
-                entry.timestamp,
-                entry.cumulative_pnl
+            // Prepare P&L data
+            const pnlData = data.pnl_history.map(point => [
+                point.timestamp,
+                point.cumulative_pnl
             ]);
 
-            pnlChart = Highcharts.stockChart('pnlChart', {
+            const chartConfig = {
                 title: {
                     text: `Portfolio Performance - Cumulative P&L`
                 },
@@ -552,10 +1060,7 @@
                 xAxis: {
                     events: {
                         afterSetExtremes: function(e) {
-                            // Sync with candlestick chart when user zooms/pans P&L chart
-                            if (candlestickChart && e.trigger !== 'syncExtremes') {
-                                candlestickChart.xAxis[0].setExtremes(e.min, e.max, true, false, { trigger: 'syncExtremes' });
-                            }
+                            syncAllCharts(e, 'pnl');
                         }
                     }
                 },
@@ -578,163 +1083,147 @@
                         enabled: false
                     }
                 }]
-            });
+            };
+
+            if (charts.pnl) {
+                charts.pnl.destroy();
+            }
+            charts.pnl = Highcharts.stockChart(container, chartConfig);
         }
 
-        function createBarScoreCharts() {
-            const barChartsContainer = document.getElementById('barChartsContainer');
-            barChartsContainer.innerHTML = '';
+        function updateBarScoresCharts(data) {
+            const container = document.getElementById('barScoresContainer');
 
-            // Check if we have bar scores history
-            if (!optimizationData.bar_scores_history || optimizationData.bar_scores_history.length === 0) {
-                barChartsContainer.innerHTML = '<div class="text-center py-4"><div class="text-muted">No bar scores data available</div></div>';
+            // Clear existing bar score charts
+            container.innerHTML = '';
+
+            if (!data.bar_scores_history || data.bar_scores_history.length === 0) {
+                container.innerHTML = '<div class="col-12"><div class="alert alert-info">No bar scores data available</div></div>';
                 return;
             }
 
-            // Get unique bar names from the data
-            const barNames = new Set();
-            optimizationData.bar_scores_history.forEach(entry => {
-                Object.keys(entry.scores).forEach(barName => barNames.add(barName));
+            // Create charts for each bar score type
+            const barScoreTypes = new Set();
+            data.bar_scores_history.forEach(point => {
+                Object.keys(point.scores).forEach(type => barScoreTypes.add(type));
             });
 
-            // Create a chart for each bar
-            barNames.forEach(barName => {
+            barScoreTypes.forEach(type => {
                 const chartDiv = document.createElement('div');
-                chartDiv.id = `barChart_${barName}`;
-                chartDiv.style.height = '300px';
-                chartDiv.style.marginBottom = '20px';
-                barChartsContainer.appendChild(chartDiv);
+                chartDiv.className = 'chart-container';
+                chartDiv.innerHTML = `
+                    <h5>Bar Scores: ${type}</h5>
+                    <div id="barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}" style="height: 300px;"></div>
+                `;
+                container.appendChild(chartDiv);
 
-                // Prepare data for this bar
-                const barData = optimizationData.bar_scores_history.map(entry => [
-                    entry.timestamp,
-                    entry.scores[barName] || 0
-                ]);
+                // Prepare data for this bar score type
+                const barData = data.bar_scores_history
+                    .filter(point => point.scores[type] !== undefined)
+                    .map(point => [point.timestamp, point.scores[type]]);
 
-                // Determine color based on bar name
-                let color = '#7cb5ec'; // Default blue
-                let zones = [];
+                // Find thresholds for this bar from enter_long and exit_long conditions
+                const plotLines = [];
 
-                if (barName.includes('bull')) {
-                    color = '#90ed7d'; // Green
-                    zones = [
-                        { value: 0.3, color: '#ff7979' },
-                        { value: 0.7, color: '#fdcb6e' },
-                        { color: '#00b894' }
-                    ];
-                } else if (barName.includes('bear')) {
-                    color = '#f7a35c'; // Orange
-                    zones = [
-                        { value: 0.3, color: '#00b894' },
-                        { value: 0.7, color: '#fdcb6e' },
-                        { color: '#ff7979' }
-                    ];
-                } else if (barName.includes('trigger')) {
-                    color = '#8085e9'; // Purple
-                    zones = [
-                        { value: 0.5, color: '#a29bfe' },
-                        { color: '#6c5ce7' }
-                    ];
+                // Check enter_long conditions (typically bull bars)
+                if (data.threshold_config && data.threshold_config.enter_long) {
+                    data.threshold_config.enter_long.forEach(condition => {
+                        if (condition.name === type) {
+                            plotLines.push({
+                                value: condition.threshold,
+                                color: '#00C851', // Green for entry threshold
+                                dashStyle: 'dash',
+                                width: 2,
+                                label: {
+                                    text: `Entry: ${condition.threshold}`,
+                                    align: 'right',
+                                    style: {
+                                        color: '#00C851',
+                                        fontWeight: 'bold'
+                                    }
+                                },
+                                zIndex: 5
+                            });
+                        }
+                    });
                 }
 
-                // Build plot lines array - start with neutral line
-                const plotLines = [{
-                    value: 0.5,
-                    color: 'gray',
-                    dashStyle: 'dash',
-                    width: 1,
-                    label: {
-                        text: 'Neutral (0.5)',
-                        align: 'right'
-                    }
-                }];
-
-                // Add threshold lines if threshold_config is available
-                if (optimizationData.threshold_config) {
-                    // Check entry thresholds
-                    if (optimizationData.threshold_config.enter_long) {
-                        optimizationData.threshold_config.enter_long.forEach(condition => {
-                            if (condition.name === barName && condition.threshold !== undefined) {
-                                plotLines.push({
-                                    value: condition.threshold,
-                                    color: '#00aa00',
-                                    dashStyle: 'solid',
-                                    width: 2,
-                                    label: {
-                                        text: `Entry (${condition.threshold.toFixed(2)})`,
-                                        align: 'left',
-                                        style: {
-                                            color: '#00aa00',
-                                            fontWeight: 'bold'
-                                        }
+                // Check exit_long conditions (typically bear bars)
+                if (data.threshold_config && data.threshold_config.exit_long) {
+                    data.threshold_config.exit_long.forEach(condition => {
+                        if (condition.name === type) {
+                            plotLines.push({
+                                value: condition.threshold,
+                                color: '#ff4444', // Red for exit threshold
+                                dashStyle: 'dash',
+                                width: 2,
+                                label: {
+                                    text: `Exit: ${condition.threshold}`,
+                                    align: 'right',
+                                    style: {
+                                        color: '#ff4444',
+                                        fontWeight: 'bold'
                                     }
-                                });
-                            }
-                        });
-                    }
-
-                    // Check exit thresholds
-                    if (optimizationData.threshold_config.exit_long) {
-                        optimizationData.threshold_config.exit_long.forEach(condition => {
-                            if (condition.name === barName && condition.threshold !== undefined) {
-                                plotLines.push({
-                                    value: condition.threshold,
-                                    color: '#ff4444',
-                                    dashStyle: 'solid',
-                                    width: 2,
-                                    label: {
-                                        text: `Exit (${condition.threshold.toFixed(2)})`,
-                                        align: 'left',
-                                        style: {
-                                            color: '#ff4444',
-                                            fontWeight: 'bold'
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    }
+                                },
+                                zIndex: 5
+                            });
+                        }
+                    });
                 }
 
-                // Create the chart
-                barCharts[barName] = Highcharts.stockChart(`barChart_${barName}`, {
+                const chartConfig = {
                     title: {
-                        text: `${barName.replace(/_/g, ' ').toUpperCase()} Score Evolution`
+                        text: `${type} Bar Scores Evolution`
                     },
 
                     rangeSelector: {
                         selected: 1
                     },
 
+                    plotOptions: {
+                        line: {
+                            dataGrouping: {
+                                enabled: false
+                            }
+                        }
+                    },
+
                     yAxis: {
                         title: {
                             text: 'Score'
                         },
+                        plotLines: plotLines, // Add threshold lines here
                         min: 0,
-                        max: 1,
-                        plotLines: plotLines  // Use the dynamically built plotLines array
+                        max: 1
+                    },
+
+                    // Add event handlers for zoom synchronization
+                    xAxis: {
+                        events: {
+                            afterSetExtremes: function(e) {
+                                syncAllCharts(e, chartId);
+                            }
+                        }
+                    },
+
+                    tooltip: {
+                        pointFormat: '<b>{series.name}:</b> {point.y:.4f}<br/>',
+                        shared: true
                     },
 
                     series: [{
-                        name: barName.replace(/_/g, ' ').toUpperCase(),
+                        name: type,
                         data: barData,
-                        color: color,
-                        lineWidth: 3,
-                        zones: zones,
-                        marker: {
-                            enabled: false,
-                            states: {
-                                hover: {
-                                    enabled: true,
-                                    radius: 6
-                                }
-                            }
-                        },
-                        tooltip: {
-                            pointFormat: '<b>{series.name}</b><br/>Score: {point.y:.3f}<br/>Time: {point.x:%Y-%m-%d %H:%M}'
+                        color: '#FF6B6B',
+                        lineWidth: 2,
+                        dataGrouping: {
+                            enabled: false
                         }
                     }]
-                });
+                };
+
+                const chartId = `barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                charts[chartId] = Highcharts.stockChart(chartId, chartConfig);
             });
         }
     </script>

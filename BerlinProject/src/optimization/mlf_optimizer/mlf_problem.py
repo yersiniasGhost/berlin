@@ -158,7 +158,8 @@ class MlfProblem(ProblemDomain):
                     current_threshold = enter_condition['threshold']
                     delta = percent_change * (1.0 - 0.0)  # Threshold range is 0.1 to 0.9
                     new_threshold = current_threshold + random.uniform(-delta, delta)
-                    new_threshold = max(0.0, min(new_threshold, 1.0))
+                    # new_threshold = max(0.0, min(new_threshold, 1.0))
+                    new_threshold = max(0.5, min(new_threshold, 1.0))
 
                     enter_condition['threshold'] = new_threshold
 
@@ -170,7 +171,7 @@ class MlfProblem(ProblemDomain):
                     current_threshold = exit_condition['threshold']
                     delta = percent_change * (0.9 - 0.1)  # Threshold range is 0.1 to 0.9
                     new_threshold = current_threshold + random.uniform(-delta, delta)
-                    new_threshold = max(0.1, min(new_threshold, 0.9))
+                    new_threshold = max(0.5, min(new_threshold, 0.9))
 
                     exit_condition['threshold'] = new_threshold
 
