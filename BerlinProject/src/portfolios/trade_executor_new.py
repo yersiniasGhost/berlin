@@ -53,21 +53,61 @@ class TradeExecutorNew(TradeExecutor):
         """Enable debug logging for first few trades"""
         self.debug_mode = True
 
+    def _check_signal_conflicts(self, bar_scores: Dict[str, float]) -> bool:
+        """
+        Check if both bullish and bearish signals are above their thresholds.
+        If there's a conflict, take no action (no buy, no sell).
+
+        Returns:
+            True if there's a signal conflict (both bull and bear active)
+        """
+        # Get configurations
+        enter_conditions = getattr(self.monitor_config, 'enter_long', [])
+        exit_conditions = getattr(self.monitor_config, 'exit_long', [])
+
+        # Check if any bullish signal is above threshold
+        bullish_active = False
+        for condition in enter_conditions:
+            bar_name = condition.get('name')
+            threshold = condition.get('threshold', 0.5)
+            bar_score = bar_scores.get(bar_name, 0.0)
+
+            if bar_score >= threshold:
+                bullish_active = True
+                break
+
+        # Check if any bearish signal is above threshold
+        bearish_active = False
+        for condition in exit_conditions:
+            bar_name = condition.get('name')
+            threshold = condition.get('threshold', 0.8)
+            bar_score = bar_scores.get(bar_name, 0.0)
+
+            if bar_score >= threshold:
+                bearish_active = True
+                break
+
+        # If both are active, we have a conflict
+        conflict = bullish_active and bearish_active
+
+        if self.debug_mode and conflict:
+            print(f"SIGNAL CONFLICT DETECTED: Bull={bullish_active}, Bear={bearish_active} - NO ACTION TAKEN")
+
+        return conflict
+
     def make_decision(self, tick: TickData, indicators: Dict[str, float],
                       bar_scores: Dict[str, float] = None) -> None:
         """
-        Main decision logic: check exits first, then entries
-
-        Args:
-            tick: Current tick data
-            indicators: Individual indicator values
-            bar_scores: Weighted bar scores (optional)
+        Enhanced decision logic with conflict resolution:
+        1. Check for signal conflicts first
+        2. If conflict exists, take no action
+        3. Otherwise, proceed with normal exit/entry logic
         """
         if bar_scores is None:
             bar_scores = {}
 
         current_price = tick.close
-        timestamp = int(tick.timestamp.timestamp() * 1000)  # Convert to milliseconds
+        timestamp = int(tick.timestamp.timestamp() * 1000)
 
         # DEBUG: Log first 10 decisions
         if self.trade_count < 10 and self.debug_mode:
@@ -75,24 +115,76 @@ class TradeExecutorNew(TradeExecutor):
             print(f"Time: {tick.timestamp}")
             print(f"Price: ${current_price:.2f}")
             print(f"In Position: {self.portfolio.is_in_position()}")
-            print(f"Position Size: {self.portfolio.position_size}")
             print(f"Bar Scores: {bar_scores}")
-            print(f"Enter Conditions: {getattr(self.monitor_config, 'enter_long', [])}")
-            print(f"Exit Conditions: {getattr(self.monitor_config, 'exit_long', [])}")
 
-        # If we're in a position, check for exits FIRST
+        # STEP 1: Check for signal conflicts FIRST
+        if self._check_signal_conflicts(bar_scores):
+            # If there's a conflict, take no action
+            if self.debug_mode:
+                print("CONFLICT RESOLUTION: No action taken due to opposing signals")
+            self.trade_count += 1
+            return
+
+        # STEP 2: If we're in a position, check for exits (only if no conflict)
         if self.portfolio.is_in_position():
             exit_executed = self._check_exit_conditions(timestamp, current_price, bar_scores)
             if exit_executed and self.debug_mode:
                 print(f"EXIT executed at ${current_price:.2f}")
 
-        # If not in position (or just exited), check for entry signals
+        # STEP 3: If not in position, check for entry signals (only if no conflict)
         if not self.portfolio.is_in_position():
             entry_executed = self._check_entry_conditions(timestamp, current_price, bar_scores)
             if entry_executed and self.debug_mode:
                 print(f"ENTRY executed at ${current_price:.2f}")
 
         self.trade_count += 1
+
+    # Alternative implementation: More granular conflict detection per bar type
+    def _check_signal_conflicts_by_bar_type(self, bar_scores: Dict[str, float]) -> bool:
+        """
+        Alternative: Check conflicts by examining bar types directly from bars config.
+        This is more sophisticated as it looks at the actual bar configuration types.
+        """
+        bars_config = getattr(self.monitor_config, 'bars', {})
+
+        # Find all bull and bear bars that are above their respective thresholds
+        active_bull_bars = []
+        active_bear_bars = []
+
+        for bar_name, bar_config in bars_config.items():
+            bar_score = bar_scores.get(bar_name, 0.0)
+            bar_type = bar_config.get('type', 'unknown')
+
+            # Check if this bar is being used in enter_long or exit_long conditions
+            enter_conditions = getattr(self.monitor_config, 'enter_long', [])
+            exit_conditions = getattr(self.monitor_config, 'exit_long', [])
+
+            # Check if bar is in enter_long with score above threshold
+            for condition in enter_conditions:
+                if condition.get('name') == bar_name:
+                    threshold = condition.get('threshold', 0.5)
+                    if bar_score >= threshold:
+                        if bar_type == 'bull':
+                            active_bull_bars.append(bar_name)
+                        break
+
+            # Check if bar is in exit_long with score above threshold
+            for condition in exit_conditions:
+                if condition.get('name') == bar_name:
+                    threshold = condition.get('threshold', 0.8)
+                    if bar_score >= threshold:
+                        if bar_type == 'bear':
+                            active_bear_bars.append(bar_name)
+                        break
+
+        # If we have both active bull and bear bars, it's a conflict
+        conflict = len(active_bull_bars) > 0 and len(active_bear_bars) > 0
+
+        if self.debug_mode and conflict:
+            print(f"BAR TYPE CONFLICT: Active Bull Bars: {active_bull_bars}, Active Bear Bars: {active_bear_bars}")
+            print("NO ACTION TAKEN")
+
+        return conflict
 
     def _check_exit_conditions(self, timestamp: int, current_price: float,
                                bar_scores: Dict[str, float]) -> bool:
