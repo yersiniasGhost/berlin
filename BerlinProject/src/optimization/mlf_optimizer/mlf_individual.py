@@ -13,11 +13,11 @@ def choose_weights(monitor_config: MonitorConfiguration):
 
     # NEW: Randomize thresholds for enter_long array
     for enter_condition in monitor_config.enter_long:
-        enter_condition['threshold'] = random.uniform(0.5, 0.9)
+        enter_condition['threshold'] = random.uniform(0.7, 0.9)
 
     # NEW: Randomize thresholds for exit_long array
     for exit_condition in monitor_config.exit_long:
-        exit_condition['threshold'] = random.uniform(0.5, 0.9)
+        exit_condition['threshold'] = random.uniform(0.7, 0.9)
 
 
 def choose_parameters(config: MonitorConfiguration):
