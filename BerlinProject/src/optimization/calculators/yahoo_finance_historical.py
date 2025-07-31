@@ -20,7 +20,7 @@ class YahooFinanceHistorical:
     def __init__(self, db_host='localhost', db_port=27017, db_name='MTA_devel'):
         self.client = MongoClient(db_host, db_port, serverSelectionTimeoutMS=5000)
         self.db = self.client[db_name]
-        self.collection = self.db['tick_history']
+        self.collection = self.db['tick_history_cs']
 
         self.aggregators: Dict[str, CandleAggregator] = {}
         self.ticker: str = ""

@@ -96,6 +96,7 @@ def load_raw_candle_data(data_config_path: str, io=None):
                 tick.open,
                 tick.high,
                 tick.low,
+                # TODO: THIS IS TEMP FIX TO GET RID OF SHIT CANDLES
                 tick.close
             ])
 
@@ -131,6 +132,7 @@ def load_raw_candle_data(data_config_path: str, io=None):
                 tick.open,
                 tick.high,
                 tick.low,
+                # TODO: HERE ALSO
                 tick.close
             ])
 
