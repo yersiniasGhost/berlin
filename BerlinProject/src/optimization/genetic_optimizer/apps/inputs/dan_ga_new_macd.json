@@ -110,23 +110,30 @@
   "objectives": [
     {
       "objective": "MaximizeProfit",
-      "weight":2.0
+      "weight": 10
     },
     {
       "objective": "MinimizeLoss",
-      "weight": 0.2
+      "weight": 1.0
     },
     {
       "objective": "MinimizeLosingTrades",
-      "weight": 1.0
-    }
+      "weight": 2.0
+    },
+    {
+      "objective": "MinimizeTrades",
+      "weight": 0.2
+    },
+    {
+      "objective": "MinimizeTrades",
+      "weight": 1}
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 100,
-    "population_size": 500,
+    "number_of_iterations": 20,
+    "population_size": 200,
     "propagation_fraction": 0.4,
-    "elite_size": 20,
-    "chance_of_mutation": 0.02,
-    "chance_of_crossover": 0.08
+    "elite_size": 8,
+    "chance_of_mutation": 0.05,
+    "chance_of_crossover": 0.03
   }
 }

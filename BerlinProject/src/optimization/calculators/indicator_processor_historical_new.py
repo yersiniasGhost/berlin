@@ -22,7 +22,7 @@ class IndicatorProcessorHistoricalNew:
 
     def __init__(self, configuration: MonitorConfiguration) -> None:
         self.config: MonitorConfiguration = configuration
-        logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
+        # logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
 
     def calculate_indicators(self, aggregators: Dict[str, CandleAggregator]) -> Tuple[
         Dict[str, List[float]],  # indicator_history
@@ -37,7 +37,7 @@ class IndicatorProcessorHistoricalNew:
             - raw_indicator_history: {indicator_name: [raw_value_at_tick_0, raw_value_at_tick_1, ...]}
             - bar_score_history: {bar_name: [score_at_tick_0, score_at_tick_1, ...]}
         """
-        logger.info("Starting batch historical indicator calculation...")
+        # logger.info("Starting batch historical indicator calculation...")
 
         # Extract all candle data from aggregators
         all_candle_data = self._extract_all_candle_data(aggregators)
@@ -45,7 +45,7 @@ class IndicatorProcessorHistoricalNew:
             return {}, {}, {}
 
         max_length = max(len(candles) for candles in all_candle_data.values())
-        logger.info(f"Processing timeline of {max_length} data points")
+        # logger.info(f"Processing timeline of {max_length} data points")
 
         # Process each indicator
         raw_indicator_history = {}
@@ -70,12 +70,12 @@ class IndicatorProcessorHistoricalNew:
             processed_values = self._apply_lookback_vectorized(raw_values, lookback)
             indicator_history[indicator_def.name] = processed_values
 
-            logger.debug(f"Processed {indicator_def.name}: {len(processed_values)} values")
+            # logger.debug(f"Processed {indicator_def.name}: {len(processed_values)} values")
 
         # Calculate bar scores for entire timeline
         bar_score_history = self._calculate_bar_scores_batch(indicator_history, max_length)
 
-        logger.info(f"Completed batch indicator calculation")
+        # logger.info(f"Completed batch indicator calculation")
         return indicator_history, raw_indicator_history, bar_score_history
 
     def _extract_all_candle_data(self, aggregators: Dict[str, CandleAggregator]) -> Dict[str, List[TickData]]:

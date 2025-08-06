@@ -12,7 +12,7 @@ from optimization.genetic_optimizer.abstractions.objective_function_base import 
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
-from portfolios.trade_executor_new import TradeExecutorNew
+from portfolios.trade_executor_no_bear import TradeExecutorNoBear
 
 
 @dataclass
@@ -31,11 +31,11 @@ class MlfOptimizerConfig:
         self.model_config = {"preprocess_config": "test_ds"}
 
     def create_project(self) -> GeneticAlgorithm:
-        trade_executor = TradeExecutorNew(
+        trade_executor = TradeExecutorNoBear(
             monitor_config=self.monitor_config,
             default_position_size=100.0,
-            stop_loss_pct=0.1,
-            take_profit_pct=0.05
+            stop_loss_pct=0.01,
+            take_profit_pct=0.01
         )
 
         # Always create shared streamer
