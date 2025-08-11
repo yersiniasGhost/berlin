@@ -22,7 +22,7 @@ class TradeExecutorNew(TradeExecutor):
     def __init__(self, monitor_config: MonitorConfiguration,
                  default_position_size: float = 100.0,
                  stop_loss_pct: float = 0.01,
-                 take_profit_pct: float = 0.01):
+                 take_profit_pct: float = 0.02):
         """
         Initialize TradeExecutorNew
 
