@@ -615,4 +615,4 @@ if __name__ == '__main__':
     uploads_dir.mkdir(exist_ok=True)
     logger.info(f"Created uploads directory: {uploads_dir.absolute()}")
 
-    socketio.run(app, debug=True, port=5001)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5001)

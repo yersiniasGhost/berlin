@@ -1,3 +1,5 @@
+# optimization/calculators/bt_data_streamer.py - Complete corrected version
+
 import logging
 import json
 from typing import Dict, List, Optional, Any
@@ -7,7 +9,7 @@ from candle_aggregator.candle_aggregator import CandleAggregator
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
 from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 from portfolios.portfolio_tool import Portfolio
-from portfolios.trade_executor import TradeExecutor
+from portfolios.trade_executor_unified import TradeExecutorUnified
 from models.tick_data import TickData
 
 logger = logging.getLogger('BacktestDataStreamer')
@@ -15,16 +17,14 @@ logger = logging.getLogger('BacktestDataStreamer')
 
 class BacktestDataStreamer:
     """
-    Simple optimized version for genetic algorithms:
+    Optimized backtest streamer for genetic algorithms using unified trade executor:
     1. Load Yahoo data once (1m, 5m candles)
     2. Build tick history once
     3. For each GA individual: calculate all indicators at once, then execute trades
     """
 
-    def __init__(self, monitor_config: MonitorConfiguration, data_config_file: str,
-                 trade_executor: TradeExecutor):
+    def __init__(self, monitor_config: MonitorConfiguration, data_config_file: str):
         self.monitor_config = monitor_config
-        self.trade_executor = trade_executor
 
         # Load data config
         with open(data_config_file, 'r') as f:
@@ -33,6 +33,10 @@ class BacktestDataStreamer:
         self.ticker = data_config['ticker']
         self.start_date = data_config['start_date']
         self.end_date = data_config['end_date']
+
+        # Create unified trade executor from monitor config
+        # This requires monitor_config to have trade_executor field
+        self.trade_executor = TradeExecutorUnified(monitor_config)
 
         # Load all historical data once
         self.aggregators: Dict[str, CandleAggregator] = {}
@@ -44,7 +48,7 @@ class BacktestDataStreamer:
         all_candles = self.primary_aggregator.get_history()
 
         if len(all_candles) == 0:
-            logger.error("BAD! NO CANDLES")
+            logger.error("No historical candles loaded!")
             self.tick_history = []
             return
 
@@ -112,12 +116,14 @@ class BacktestDataStreamer:
             )
 
     def replace_monitor_config(self, monitor_config: MonitorConfiguration):
-        """Replace configuration - data stays loaded, just reset portfolio"""
+        """Replace configuration - data stays loaded, just reset portfolio and trade executor"""
         self.monitor_config = monitor_config
-        self.trade_executor.portfolio.reset()
-        self.trade_executor.monitor_config = monitor_config
+
+        # Create new trade executor with new configuration
+        self.trade_executor = TradeExecutorUnified(monitor_config)
 
     def _get_primary_timeframe(self) -> str:
+        """Get the shortest timeframe as primary"""
         timeframe_minutes = {key: self._timeframe_to_minutes(key) for key in self.aggregators.keys()}
         return min(timeframe_minutes.keys(), key=lambda x: timeframe_minutes[x])
 

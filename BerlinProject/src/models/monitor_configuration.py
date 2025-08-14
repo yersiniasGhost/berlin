@@ -6,13 +6,40 @@ from pydantic import BaseModel, Field as PydanticField, model_validator
 from models.indicator_definition import IndicatorDefinition
 import os
 
+# models/monitor_configuration.py
+import json
+from typing import List, Dict, Optional, Set, Any
+from config.types import PyObjectId
+from pydantic import BaseModel, Field as PydanticField, model_validator
+from models.indicator_definition import IndicatorDefinition
+import os
+
+
+class TradeExecutorConfig(BaseModel):
+    """Configuration for trade executor parameters"""
+    default_position_size: float = PydanticField(default=100.0)
+    stop_loss_pct: float = PydanticField(default=0.01)
+    take_profit_pct: float = PydanticField(default=0.02)
+
+    # Behavior flags
+    ignore_bear_signals: bool = PydanticField(default=False)
+    # Note: check_signal_conflicts is always True and not configurable
+
+    # Trailing stop loss configuration
+    trailing_stop_loss: bool = PydanticField(default=False)
+    trailing_stop_distance_pct: float = PydanticField(default=0.01)
+    trailing_stop_activation_pct: float = PydanticField(default=0.005)
+
 
 class MonitorConfiguration(BaseModel):
     id: Optional[PyObjectId] = PydanticField(None, alias="_id")
     name: str
     description: str = PydanticField(default="")
 
-    # NEW: Arrays of conditions instead of single objects
+    # NEW: Required trade executor configuration
+    trade_executor: TradeExecutorConfig
+
+    # Arrays of conditions instead of single objects
     enter_long: List[Dict[str, Any]] = PydanticField(default_factory=list)
     exit_long: List[Dict[str, Any]] = PydanticField(default_factory=list)
 
@@ -34,10 +61,19 @@ class MonitorConfiguration(BaseModel):
                     # Item is a dictionary, convert to IndicatorDefinition
                     processed_indicators.append(IndicatorDefinition(**item))
             values['indicators'] = processed_indicators
+
+        # ENFORCE: trade_executor configuration is required
+        if 'trade_executor' in values and isinstance(values['trade_executor'], dict):
+            values['trade_executor'] = TradeExecutorConfig(**values['trade_executor'])
+        elif 'trade_executor' not in values:
+            raise ValueError(
+                "trade_executor configuration is required - please add trade_executor section to your JSON config")
+
         return values
 
     def __eq__(self, other: "MonitorConfiguration"):
-        return self.indicators == other.indicators
+        return (self.indicators == other.indicators and
+                self.trade_executor == other.trade_executor)
 
     def get_time_increments(self) -> Set[str]:
         """Get all unique timeframes from indicators"""
