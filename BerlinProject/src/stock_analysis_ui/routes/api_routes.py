@@ -1,6 +1,6 @@
 # File: routes/api_routes.py
 """
-API routes for AppService with session-based support
+API routes for AppService with session-based support - ENHANCED WITH CANDLESTICK ENDPOINTS
 """
 
 import json
@@ -212,54 +212,49 @@ def add_combination():
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
             temp_file.write(config_content)
-            temp_config_path = temp_file.name
+            temp_file_path = temp_file.name
 
         try:
-            # Load monitor configuration from temporary file
-            from models.monitor_configuration import load_monitor_config
-            monitor_config = load_monitor_config(temp_config_path)
-
-            if not monitor_config:
-                return jsonify({'success': False, 'error': 'Failed to parse monitor configuration'}), 400
-
-            result = app_service.add_combination(symbol, temp_config_path)
+            # Add the combination - FIXED: Only pass symbol and config_file_path
+            result = app_service.add_combination(symbol, temp_file_path)
 
             if result['success']:
-                logger.info(
-                    f"Successfully added combination: {result['card_id']} for session {session.get('session_id')}")
-                return jsonify(result)
+                return jsonify({
+                    'success': True,
+                    'card_id': result['card_id'],
+                    'message': f'Added {symbol} with configuration'
+                })
             else:
-                logger.error(f"Failed to add combination: {result.get('error', 'Unknown error')}")
-                return jsonify(result), 400
+                return jsonify({'success': False, 'error': result['error']}), 400
 
         finally:
             # Clean up temporary file
             try:
-                os.unlink(temp_config_path)
+                os.unlink(temp_file_path)
             except:
                 pass
 
     except Exception as e:
         logger.error(f"Error adding combination: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @api_bp.route('/combinations/<card_id>', methods=['DELETE'])
 @require_session_auth
 def remove_combination(card_id: str):
-    """Remove a combination by card ID - session-based"""
+    """Remove a combination - session-based"""
     try:
         app_service = get_session_app_service()
+
         result = app_service.remove_combination(card_id)
 
         if result['success']:
-            logger.info(f"Successfully removed combination: {card_id} for session {session.get('session_id')}")
-            return jsonify(result)
+            return jsonify({
+                'success': True,
+                'message': f'Removed combination {card_id}'
+            })
         else:
-            logger.error(f"Failed to remove combination {card_id}: {result.get('error', 'Unknown error')}")
-            return jsonify(result), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
 
     except Exception as e:
         logger.error(f"Error removing combination {card_id}: {e}")
@@ -269,33 +264,19 @@ def remove_combination(card_id: str):
 @api_bp.route('/combinations')
 @require_session_auth
 def get_combinations():
-    """Get all active combinations - session-based"""
+    """Get all combinations - session-based"""
     try:
         app_service = get_session_app_service()
         combinations = app_service.get_combinations()
-        return jsonify(combinations)
-
-    except Exception as e:
-        logger.error(f"Error getting combinations: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/configs')
-@require_session_auth
-def get_available_configs():
-    """Get list of available configuration files - session-based"""
-    try:
-        app_service = get_session_app_service()
-        configs = app_service.get_available_configs()
 
         return jsonify({
             'success': True,
-            'configs': configs,
-            'total': len(configs)
+            'combinations': combinations['combinations'],
+            'total': combinations['total']
         })
 
     except Exception as e:
-        logger.error(f"Error getting available configs: {e}")
+        logger.error(f"Error getting combinations: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -338,7 +319,8 @@ def get_card_details(card_id: str):
         )
 
         # Get REAL indicator history from processor
-        indicator_history = data_streamer.indicator_processor.get_history_data()
+        indicator_history = data_streamer.indicator_processor.get_history_data() if hasattr(
+            data_streamer.indicator_processor, 'get_history_data') else {}
 
         # Convert monitor_config to dict format
         monitor_config_dict = {
@@ -346,40 +328,30 @@ def get_card_details(card_id: str):
             'description': monitor_config.description,
             'enter_long': monitor_config.enter_long,
             'exit_long': monitor_config.exit_long,
-            'bars': monitor_config.bars,
-            'aggregator_type': getattr(monitor_config, 'aggregator_type', 'normal'),
-            'enter_conditions_count': len(monitor_config.enter_long),
-            'exit_conditions_count': len(monitor_config.exit_long)
+            'bars': monitor_config.bars if hasattr(monitor_config, 'bars') else {}
         }
 
-        # Build response
+        # Get portfolio data if available
+        portfolio_data = None
+        if hasattr(data_streamer, 'get_portfolio_metrics'):
+            portfolio_data = data_streamer.get_portfolio_metrics()
+
         response_data = {
             'success': True,
             'card_info': {
-                'card_id': card_id,
                 'symbol': symbol,
-                'config_name': monitor_config.name,
-                'timeframes': list(timeframes),
-                'total_indicators': len(monitor_config.indicators)
+                'card_id': card_id,
+                'config_name': monitor_config.name if hasattr(monitor_config, 'name') else 'Configuration'
             },
             'monitor_config': monitor_config_dict,
             'aggregator_info': aggregator_info,
             'current_values': {
                 'indicators': current_indicators,
                 'raw_indicators': current_raw,
-                'bar_scores': current_bars,
-                'timestamp': datetime.now().isoformat()
+                'bar_scores': current_bars
             },
             'indicator_history': indicator_history,
-            'indicator_definitions': [
-                {
-                    'name': ind.name,
-                    'function': ind.function,
-                    'timeframe': getattr(ind, 'time_increment', '1m'),
-                    'parameters': ind.parameters
-                }
-                for ind in monitor_config.indicators
-            ]
+            'portfolio_data': portfolio_data
         }
 
         return jsonify(response_data)
@@ -391,10 +363,142 @@ def get_card_details(card_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# NEW: Candlestick Data Endpoint
+@api_bp.route('/combinations/<card_id>/candlestick')
+@require_session_auth
+def get_candlestick_data(card_id: str):
+    """Get candlestick data for a specific card and timeframe - session-based"""
+    try:
+        app_service = get_session_app_service()
+
+        # Check if card exists
+        if card_id not in app_service.combinations:
+            return jsonify({'success': False, 'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        symbol = combination['symbol']
+        data_streamer = combination['data_streamer']
+
+        # Get timeframe from query parameter (default to 1m for intraday)
+        timeframe = request.args.get('timeframe', '1m')
+
+        # Map frontend timeframe to aggregator key
+        timeframe_mapping = {
+            '1m': '1m-normal',
+            '5m': '5m-normal',
+            '15m': '15m-normal',
+            '1h': '1h-normal',
+            '1d': '1d-normal'  # This might need special handling
+        }
+
+        aggregator_key = timeframe_mapping.get(timeframe, '1m-normal')
+
+        # Get candle data from the data streamer's aggregators
+        all_candle_data = data_streamer._get_all_candle_data()
+
+        candlestick_data = []
+
+        if aggregator_key in all_candle_data:
+            candles = all_candle_data[aggregator_key]
+
+            # Convert to Highcharts format: [timestamp, open, high, low, close]
+            for candle in candles:
+                timestamp = int(candle.timestamp.timestamp() * 1000)  # Convert to milliseconds
+                candlestick_data.append([
+                    timestamp,
+                    float(candle.open),
+                    float(candle.high),
+                    float(candle.low),
+                    float(candle.close)
+                ])
+        else:
+            # Try to find any aggregator with the timeframe
+            for key, candles in all_candle_data.items():
+                if key.startswith(timeframe):
+                    for candle in candles:
+                        timestamp = int(candle.timestamp.timestamp() * 1000)
+                        candlestick_data.append([
+                            timestamp,
+                            float(candle.open),
+                            float(candle.high),
+                            float(candle.low),
+                            float(candle.close)
+                        ])
+                    break
+
+        # Sort by timestamp to ensure correct order
+        candlestick_data.sort(key=lambda x: x[0])
+
+        # Limit to last 200 candles for performance
+        if len(candlestick_data) > 200:
+            candlestick_data = candlestick_data[-200:]
+
+        return jsonify({
+            'success': True,
+            'candlestick_data': candlestick_data,
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'total_candles': len(candlestick_data),
+            'aggregator_key': aggregator_key
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting candlestick data for {card_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# NEW: Available Aggregators Endpoint
+@api_bp.route('/combinations/<card_id>/aggregators')
+@require_session_auth
+def get_available_aggregators(card_id: str):
+    """Get available aggregator timeframes for a specific card - session-based"""
+    try:
+        app_service = get_session_app_service()
+
+        # Check if card exists
+        if card_id not in app_service.combinations:
+            return jsonify({'success': False, 'error': f'Card {card_id} not found'}), 404
+
+        combination = app_service.combinations[card_id]
+        data_streamer = combination['data_streamer']
+        monitor_config = combination['monitor_config']
+
+        # Get available timeframes from monitor config
+        timeframes = monitor_config.get_time_increments() if monitor_config else []
+
+        # Get all candle data to check what's actually available
+        all_candle_data = data_streamer._get_all_candle_data()
+
+        available_aggregators = {}
+        for agg_key, candles in all_candle_data.items():
+            # Extract timeframe from aggregator key (e.g., "1m-normal" -> "1m")
+            timeframe = agg_key.split('-')[0] if '-' in agg_key else agg_key
+
+            available_aggregators[timeframe] = {
+                'aggregator_key': agg_key,
+                'candle_count': len(candles),
+                'latest_timestamp': candles[-1].timestamp.isoformat() if candles else None,
+                'latest_price': float(candles[-1].close) if candles else None
+            }
+
+        return jsonify({
+            'success': True,
+            'available_aggregators': available_aggregators,
+            'symbol': combination['symbol'],
+            'card_id': card_id
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting available aggregators for {card_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/combinations/<card_id>/portfolio')
 @require_session_auth
-def get_card_portfolio(card_id: str):
-    """Get current portfolio metrics for a specific card - session-based"""
+def get_portfolio_metrics(card_id: str):
+    """Get portfolio metrics for a specific card - session-based"""
     try:
         app_service = get_session_app_service()
 
@@ -405,9 +509,9 @@ def get_card_portfolio(card_id: str):
         combination = app_service.combinations[card_id]
         data_streamer = combination['data_streamer']
 
-        # Get current portfolio metrics
-        portfolio_metrics = data_streamer.get_portfolio_metrics() if hasattr(data_streamer,
-                                                                             'get_portfolio_metrics') else {}
+        portfolio_metrics = {}
+        if hasattr(data_streamer, 'get_portfolio_metrics'):
+            portfolio_metrics = data_streamer.get_portfolio_metrics()
 
         return jsonify({
             'success': True,
@@ -482,50 +586,22 @@ def stop_streaming():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# DEBUG ENDPOINTS
-@api_bp.route('/debug/streaming')
+@api_bp.route('/available-configs')
 @require_session_auth
-def debug_streaming():
-    """Get detailed streaming debug information - session-based"""
+def get_available_configs():
+    """Get list of available configuration files - session-based"""
     try:
         app_service = get_session_app_service()
-
-        debug_info = {
-            'app_service_streaming': app_service.is_streaming,
-            'app_service_mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Unknown',
-            'combinations_count': len(app_service.combinations),
-            'data_link_type': type(app_service.data_link).__name__ if app_service.data_link else 'None',
-            'session_id': session.get('session_id')
-        }
-
-        # Get CSReplayDataLink specific debug info
-        if hasattr(app_service.data_link, 'get_debug_info'):
-            debug_info['replay_debug'] = app_service.data_link.get_debug_info()
-
-        # Get DataStreamer info
-        debug_info['data_streamers'] = {}
-        for card_id, combo in app_service.combinations.items():
-            symbol = combo['symbol']
-            data_streamer = combo['data_streamer']
-
-            debug_info['data_streamers'][card_id] = {
-                'symbol': symbol,
-                'card_id': card_id,
-                'aggregators_count': len(data_streamer.aggregators) if hasattr(data_streamer, 'aggregators') else 0,
-                'external_tools_count': len(data_streamer.external_tools) if hasattr(data_streamer,
-                                                                                     'external_tools') else 0
-            }
+        configs = app_service.get_available_configs()
 
         return jsonify({
             'success': True,
-            'debug_info': debug_info,
-            'timestamp': datetime.now().isoformat()
+            'configs': configs,
+            'total': len(configs)
         })
 
     except Exception as e:
-        logger.error(f"Error getting debug info: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error getting available configs: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -597,6 +673,53 @@ def generate_monitor_config():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# DEBUG ENDPOINTS
+@api_bp.route('/debug/streaming')
+@require_session_auth
+def debug_streaming():
+    """Get detailed streaming debug information - session-based"""
+    try:
+        app_service = get_session_app_service()
+
+        debug_info = {
+            'app_service_streaming': app_service.is_streaming,
+            'app_service_mode': app_service.get_mode() if hasattr(app_service, 'get_mode') else 'Unknown',
+            'combinations_count': len(app_service.combinations),
+            'data_link_type': type(app_service.data_link).__name__ if app_service.data_link else 'None',
+            'session_id': session.get('session_id')
+        }
+
+        # Get CSReplayDataLink specific debug info
+        if hasattr(app_service.data_link, 'get_debug_info'):
+            debug_info['replay_debug'] = app_service.data_link.get_debug_info()
+
+        # Get DataStreamer info
+        debug_info['data_streamers'] = {}
+        for card_id, combo in app_service.combinations.items():
+            symbol = combo['symbol']
+            data_streamer = combo['data_streamer']
+
+            debug_info['data_streamers'][card_id] = {
+                'symbol': symbol,
+                'card_id': card_id,
+                'aggregators_count': len(data_streamer.aggregators) if hasattr(data_streamer, 'aggregators') else 0,
+                'external_tools_count': len(data_streamer.external_tools) if hasattr(data_streamer,
+                                                                                     'external_tools') else 0
+            }
+
+        return jsonify({
+            'success': True,
+            'debug_info': debug_info,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting debug info: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/debug/websocket-health')
 @require_session_auth
 def websocket_health():
@@ -606,7 +729,8 @@ def websocket_health():
 
         health_data = {
             'timestamp': datetime.now().isoformat(),
-            'ui_tool_health': app_service.ui_tool.get_health_status(),
+            'ui_tool_health': app_service.ui_tool.get_health_status() if hasattr(app_service.ui_tool,
+                                                                                 'get_health_status') else {},
             'active_combinations': len(app_service.combinations),
             'streaming_active': app_service.is_streaming,
             'session_id': session.get('session_id')

@@ -1,0 +1,110 @@
+{
+  "test_name": "Dan-Improved-MACD-Selective",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "user_id": "65f2d6666666666666666666",
+    "name": "Dan Selective MACD Strategy",
+    "description": "simple 1m macd and sma combination",
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.05,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.015,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "enter_long": [
+      {
+        "name": "macd_bull_strong",
+        "threshold": 0.8
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "macd_bear_strong",
+        "threshold": 0.8
+      }
+    ],
+    "bars": {
+      "macd_bull_strong": {
+        "type": "bull",
+        "description": "needs macd and sma both triggered",
+        "indicators": {
+          "macd1m": 1.0,
+          "sma1m": 1.0
+        }
+      },
+      "macd_bear_strong": {
+        "type": "bear",
+        "description": "Strong bearish signal for exits",
+        "indicators": {
+          "macdbear": 2.5
+        }
+      }
+    }
+  },
+
+  "indicators": [
+    {
+      "name": "macd1m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "slow": 26,
+        "fast": 12,
+        "signal": 9,
+        "histogram_threshold": 0.08,
+        "lookback": 10,
+        "trend": "bullish"
+      },
+      "ranges": {
+        "slow": {"t": "int", "r": [12, 35]},
+        "fast": {"t": "int", "r": [7, 18]},
+        "signal": {"t": "int", "r": [6, 15]},
+        "histogram_threshold": {"t": "float", "r": [0.005, 0.12]},
+        "lookback": {"t": "int", "r": [5, 20]},
+        "trend": {"t": "skip"}
+      }
+    },
+    {
+      "name": "sma1m",
+      "type": "Indicator",
+      "function": "sma_crossover",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "period": 20,
+        "crossover_value": 0.01,
+        "lookback": 10,
+        "trend": "bullish"
+      },
+      "ranges": {
+        "period": {"t": "int", "r": [10, 40]},
+        "crossover_value": {"t": "float", "r": [0.001, 0.03]},
+        "lookback": {"t": "int", "r": [5, 20]},
+        "trend": {"t": "skip"}
+      }
+    }
+  ],
+  "objectives": [
+    {
+      "objective": "MaximizeProfit",
+      "weight": 10
+    },
+    {
+      "objective": "MaximizeNetPnL",
+      "weight": 2.0
+    }
+  ],
+  "ga_hyperparameters": {
+    "number_of_iterations": 20,
+    "population_size": 100,
+    "propagation_fraction": 0.4,
+    "elite_size": 6,
+    "chance_of_mutation": 0.05,
+    "chance_of_crossover": 0.03
+  }
+}

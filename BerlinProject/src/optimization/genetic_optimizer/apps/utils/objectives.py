@@ -3,6 +3,7 @@ from typing import Dict
 from optimization.genetic_optimizer.support.types import Json
 
 from optimization.mlf_optimizer.mlf_objectives import MaximizeProfit, MinimizeLosingTrades, MinimizeLoss
+from optimization.mlf_optimizer.mlf_objectives import MinimizeTrades
 
 
 @dataclass
@@ -24,5 +25,9 @@ class Objective:
             return MinimizeLosingTrades(weight=self.weight)
         elif self.name == "MinimizeLoss":
             return MinimizeLoss(weight=self.weight)
+        elif self.name == "MinimizeTrades":
+            return MinimizeTrades(weight=self.weight)
+        elif self.name == "MaximizeNetPnL":
+            return MinimizeTrades(weight=self.weight)
         raise ValueError(f"NO such objective {self.name}")
 

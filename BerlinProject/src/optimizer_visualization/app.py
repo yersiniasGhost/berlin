@@ -68,6 +68,7 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
         logger.info(f"   Test: {test_name}")
         logger.info(f"   Generations: {genetic_algorithm.number_of_generations}")
         logger.info(f"   Population Size: {genetic_algorithm.population_size}")
+        logger.info(f"   Elitist Size: {genetic_algorithm.elitist_size}")
 
         # Emit initial status
         socketio.emit('optimization_started', {

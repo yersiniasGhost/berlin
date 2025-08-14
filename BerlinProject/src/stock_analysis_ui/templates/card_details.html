@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Details - Trading Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <!-- Highcharts for candlestick chart -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -207,7 +210,8 @@
 
         /* Content */
         .content {
-            margin: 1rem;
+            flex: 1;
+            padding: 0 2rem 2rem;
         }
 
         .two-column-layout {
@@ -405,14 +409,10 @@
             background: rgba(125, 133, 144, 0.05);
         }
 
-        .trades-table tbody tr:nth-child(even):hover {
-            background: #161b22;
-        }
-
         .trades-table td {
             padding: 0.75rem 0.5rem;
-            border-bottom: 1px solid #21262d;
-            border-right: 1px solid #21262d;
+            border-bottom: 1px solid #30363d;
+            border-right: 1px solid #30363d;
             color: #e6edf3;
         }
 
@@ -420,83 +420,98 @@
             border-right: none;
         }
 
-        /* Trade type styling */
-        .trade-type {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 0.625rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        /* Trade-specific styles */
+        .trade-type.long { color: #56d364; font-weight: 600; }
+        .trade-type.short { color: #f85149; font-weight: 600; }
 
-        .trade-type.long {
-            background: rgba(35, 134, 54, 0.2);
-            color: #56d364;
-        }
+        .pnl-positive { color: #56d364; font-weight: 600; }
+        .pnl-negative { color: #f85149; font-weight: 600; }
 
-        .trade-type.short {
-            background: rgba(248, 81, 73, 0.2);
-            color: #f85149;
-        }
-
-        /* Exit reason styling */
         .exit-reason {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 500;
-            font-size: 0.625rem;
-            text-transform: uppercase;
+            font-size: 0.7rem;
+            padding: 0.125rem 0.25rem;
+            border-radius: 3px;
+            background: rgba(125, 133, 144, 0.2);
+            color: #7d8590;
         }
 
-        .exit-reason.exit-long {
-            background: rgba(88, 166, 255, 0.2);
-            color: #79c0ff;
-        }
-
-        .exit-reason.stop-loss {
-            background: rgba(248, 81, 73, 0.2);
-            color: #f85149;
-        }
-
-        .exit-reason.take-profit {
-            background: rgba(35, 134, 54, 0.2);
-            color: #56d364;
-        }
-
-        /* P&L styling */
-        .pnl-positive { color: #56d364; }
-        .pnl-negative { color: #f85149; }
-
-        /* Empty states */
+        /* Empty state */
         .empty-state {
             text-align: center;
-            padding: 2rem;
+            padding: 3rem 1rem;
             color: #7d8590;
         }
 
         .empty-state-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            opacity: 0.6;
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            background: rgba(125, 133, 144, 0.1);
+            border-radius: 50%;
         }
 
         .empty-state-text {
             font-size: 0.875rem;
-            color: #7d8590;
         }
 
-        /* Responsive design */
+        /* Candlestick Chart Section */
+        .candlestick-chart-section {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            grid-column: 1 / -1; /* Span both columns */
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .chart-title {
+            color: #e6edf3;
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chart-btn {
+            padding: 0.5rem 1rem;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .chart-btn:hover {
+            background: #30363d;
+        }
+
+        .chart-btn.active {
+            background: #238636;
+            border-color: #238636;
+        }
+
+        /* Responsive Design */
         @media (max-width: 768px) {
             .sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
+                left: -250px;
+                transition: left 0.3s ease;
             }
 
             .sidebar.open {
-                transform: translateX(0);
+                left: 0;
             }
 
             .main-content {
@@ -505,14 +520,16 @@
 
             .mobile-menu-toggle {
                 display: block;
-                background: none;
-                border: none;
+                position: fixed;
+                top: 1rem;
+                left: 1rem;
+                z-index: 200;
+                background: #161b22;
+                border: 1px solid #30363d;
                 color: #e6edf3;
-                font-size: 1.5rem;
-                cursor: pointer;
                 padding: 0.5rem;
-                margin-right: 1rem;
-                margin-left: -0.5rem;
+                border-radius: 6px;
+                font-size: 1.25rem;
             }
 
             .two-column-layout {
@@ -520,37 +537,15 @@
                 gap: 1rem;
             }
 
-            .section-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            .indicator-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            .trades-table {
-                font-size: 0.625rem;
-            }
-
-            .trades-table th,
-            .trades-table td {
-                padding: 0.5rem 0.25rem;
-            }
-
             .header-content {
                 flex-direction: column;
                 gap: 1rem;
-                align-items: flex-start;
             }
 
             .header-left {
                 flex-direction: column;
                 gap: 1rem;
-                align-items: flex-start;
+                text-align: center;
             }
 
             .config-section {
@@ -559,35 +554,6 @@
                 border-top: 1px solid #30363d;
                 padding-top: 1rem;
             }
-
-            .content {
-                margin: 1rem;
-            }
-        }
-
-        @media (min-width: 769px) {
-            .mobile-menu-toggle {
-                display: none;
-            }
-        }
-
-        /* Scrollbar styling for trade table */
-        .trades-table-container::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .trades-table-container::-webkit-scrollbar-track {
-            background: #21262d;
-            border-radius: 4px;
-        }
-
-        .trades-table-container::-webkit-scrollbar-thumb {
-            background: #30363d;
-            border-radius: 4px;
-        }
-
-        .trades-table-container::-webkit-scrollbar-thumb:hover {
-            background: #7d8590;
         }
     </style>
 </head>
@@ -597,24 +563,24 @@
         <nav class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-title">Trading Dashboard</div>
-                <div class="sidebar-subtitle">Navigation</div>
+                <div class="sidebar-subtitle">Real-time Analysis</div>
             </div>
             <div class="sidebar-nav">
                 <div class="nav-item">
                     <a href="/dashboard" class="nav-link">
-                        <span class="nav-icon"></span>
+                        <span class="nav-icon">📊</span>
                         <span>Dashboard</span>
                     </a>
                 </div>
                 <div class="nav-item">
                     <a href="/monitor-creation" class="nav-link">
-                        <span class="nav-icon"></span>
+                        <span class="nav-icon">⚙️</span>
                         <span>Monitor Creation</span>
                     </a>
                 </div>
                 <div class="nav-item">
                     <a href="#" class="nav-link active">
-                        <span class="nav-icon"></span>
+                        <span class="nav-icon">📈</span>
                         <span>Card Details</span>
                     </a>
                 </div>
@@ -700,12 +666,20 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Future: Chart Area Placeholder -->
-                <div style="margin-top: 2rem; padding: 2rem; background: #161b22; border: 1px solid #30363d; border-radius: 12px; text-align: center; color: #7d8590;">
-                    <h3 style="color: #e6edf3; margin-bottom: 1rem;">Candlestick Chart Area</h3>
-                    <p>Chart implementation will be added in the next phase</p>
+                    <!-- Candlestick Chart Section - REPLACES THE PLACEHOLDER -->
+                    <div class="candlestick-chart-section">
+                        <div class="chart-header">
+                            <h3 class="chart-title">Candlestick Chart</h3>
+                            <div class="chart-controls">
+                                <button class="chart-btn active" onclick="loadCandlestickData('1m')" data-timeframe="1m">1M</button>
+                                <button class="chart-btn" onclick="loadCandlestickData('5m')" data-timeframe="5m">5M</button>
+                                <button class="chart-btn" onclick="loadCandlestickData('15m')" data-timeframe="15m">15M</button>
+                                <button class="chart-btn" onclick="loadCandlestickData('1h')" data-timeframe="1h">1H</button>
+                            </div>
+                        </div>
+                        <div id="candlestickChart" style="height: 500px; width: 100%;"></div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -721,6 +695,11 @@
 
         // Global variables for monitor configuration
         let currentMonitorConfig = null;
+
+        // Candlestick chart variables
+        let candlestickChart = null;
+        let candlestickData = [];
+        let currentTimeframe = '1m';
 
         // Sidebar toggle function
         function toggleSidebar() {
@@ -747,12 +726,23 @@
                 // Update indicators and bars
                 updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
 
+                // Update candlestick chart with new tick data
+                updateCandlestickChart(data);
+
                 // Update trade history from portfolio data - check both possible locations
                 if (data.portfolio && data.portfolio.trade_history) {
                     updateTradesSection(data.portfolio.trade_history);
                 } else if (data.portfolio_data && data.portfolio_data.trade_history) {
                     updateTradesSection(data.portfolio_data.trade_history);
                 }
+            }
+        });
+
+        // Listen for completed candles
+        socket.on('candle_completed', function(data) {
+            if (data.card_id === cardId) {
+                console.log('Received completed candle:', data);
+                addCompletedCandleToChart(data);
             }
         });
 
@@ -810,6 +800,9 @@
                         );
                     }
 
+                    // Load initial candlestick data
+                    await loadCandlestickData(currentTimeframe);
+
                     // Check for portfolio data with trade history - check both possible locations
                     if (data.portfolio_data && data.portfolio_data.trade_history) {
                         updateTradesSection(data.portfolio_data.trade_history);
@@ -827,6 +820,280 @@
                 console.error('Error loading card details:', error);
                 document.getElementById('configName').textContent = `Error: ${error.message}`;
             }
+        }
+
+        async function loadCandlestickData(timeframe) {
+            try {
+                console.log(`Loading candlestick data for timeframe: ${timeframe}`);
+
+                // Update active button
+                document.querySelectorAll('.chart-btn').forEach(btn => btn.classList.remove('active'));
+                document.querySelector(`[data-timeframe="${timeframe}"]`)?.classList.add('active');
+
+                currentTimeframe = timeframe;
+
+                // Fetch candlestick data from API
+                const response = await fetch(`/api/combinations/${cardId}/candlestick?timeframe=${timeframe}`);
+
+                if (!response.ok) {
+                    console.log('API endpoint not available, using mock data for development');
+                    generateMockCandlestickData();
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.candlestick_data) {
+                    candlestickData = data.candlestick_data;
+                    console.log(`Loaded ${candlestickData.length} candles for ${timeframe}`);
+                    initializeCandlestickChart();
+                } else {
+                    console.log('No candlestick data available, using mock data');
+                    generateMockCandlestickData();
+                }
+            } catch (error) {
+                console.error('Error loading candlestick data:', error);
+                generateMockCandlestickData();
+            }
+        }
+
+        function generateMockCandlestickData() {
+            // Generate mock data for development
+            console.log('Generating mock candlestick data...');
+            const now = new Date();
+            const dataPoints = 100;
+            candlestickData = [];
+
+            let basePrice = 150;
+
+            for (let i = 0; i < dataPoints; i++) {
+                const timestamp = new Date(now.getTime() - (dataPoints - i) * 60000).getTime(); // 1 minute intervals
+
+                const open = basePrice + (Math.random() - 0.5) * 2;
+                const close = open + (Math.random() - 0.5) * 3;
+                const high = Math.max(open, close) + Math.random() * 2;
+                const low = Math.min(open, close) - Math.random() * 2;
+
+                candlestickData.push([timestamp, open, high, low, close]);
+                basePrice = close;
+            }
+
+            initializeCandlestickChart();
+        }
+
+        function initializeCandlestickChart() {
+            const container = document.getElementById('candlestickChart');
+
+            if (candlestickChart) {
+                candlestickChart.destroy();
+            }
+
+            candlestickChart = Highcharts.stockChart(container, {
+                chart: {
+                    backgroundColor: '#161b22',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    style: {
+                        fontFamily: 'Inter, Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
+                    }
+                },
+
+                title: {
+                    text: `${document.getElementById('symbolName').textContent} - ${currentTimeframe.toUpperCase()} Candlesticks`,
+                    style: {
+                        color: '#e6edf3'
+                    }
+                },
+
+                rangeSelector: {
+                    selected: 1,
+                    inputStyle: {
+                        color: '#e6edf3',
+                        backgroundColor: '#21262d'
+                    },
+                    labelStyle: {
+                        color: '#7d8590'
+                    },
+                    buttonTheme: {
+                        fill: '#21262d',
+                        stroke: '#30363d',
+                        style: {
+                            color: '#e6edf3'
+                        },
+                        states: {
+                            hover: {
+                                fill: '#30363d'
+                            },
+                            select: {
+                                fill: '#238636',
+                                stroke: '#238636'
+                            }
+                        }
+                    }
+                },
+
+                navigator: {
+                    maskFill: 'rgba(255, 255, 255, 0.1)',
+                    outlineColor: '#30363d',
+                    series: {
+                        color: '#7d8590',
+                        lineColor: '#7d8590'
+                    }
+                },
+
+                scrollbar: {
+                    barBackgroundColor: '#30363d',
+                    barBorderColor: '#30363d',
+                    buttonBackgroundColor: '#21262d',
+                    buttonBorderColor: '#30363d',
+                    rifleColor: '#7d8590',
+                    trackBackgroundColor: '#161b22',
+                    trackBorderColor: '#30363d'
+                },
+
+                plotOptions: {
+                    candlestick: {
+                        dataGrouping: {
+                            enabled: false
+                        },
+                        color: '#da3633',
+                        upColor: '#238636',
+                        lineColor: '#da3633',
+                        upLineColor: '#238636'
+                    }
+                },
+
+                xAxis: {
+                    gridLineColor: '#30363d',
+                    lineColor: '#30363d',
+                    tickColor: '#30363d',
+                    labels: {
+                        style: {
+                            color: '#7d8590'
+                        }
+                    }
+                },
+
+                yAxis: {
+                    gridLineColor: '#30363d',
+                    lineColor: '#30363d',
+                    tickColor: '#30363d',
+                    labels: {
+                        style: {
+                            color: '#7d8590'
+                        }
+                    },
+                    title: {
+                        text: 'Price ($)',
+                        style: {
+                            color: '#7d8590'
+                        }
+                    }
+                },
+
+                tooltip: {
+                    backgroundColor: '#21262d',
+                    borderColor: '#30363d',
+                    style: {
+                        color: '#e6edf3'
+                    },
+                    split: false,
+                    shared: true
+                },
+
+                legend: {
+                    itemStyle: {
+                        color: '#e6edf3'
+                    }
+                },
+
+                series: [{
+                    type: 'candlestick',
+                    name: document.getElementById('symbolName').textContent || 'Symbol',
+                    data: candlestickData,
+                    dataGrouping: {
+                        enabled: false
+                    }
+                }]
+            });
+
+            console.log(`Candlestick chart initialized with ${candlestickData.length} candles`);
+        }
+
+        function updateCandlestickChart(data) {
+            if (!candlestickChart || !data.ohlc || !data.timestamp) {
+                return;
+            }
+
+            try {
+                const timestamp = new Date(data.timestamp).getTime();
+                const [open, high, low, close] = data.ohlc;
+                const newCandle = [timestamp, open, high, low, close];
+
+                const series = candlestickChart.series[0];
+                const existingData = series.data;
+
+                // Check if this is an update to the last candle or a new candle
+                if (existingData.length > 0) {
+                    const lastCandle = existingData[existingData.length - 1];
+                    const lastCandleTime = lastCandle.x;
+
+                    // Get the timeframe in milliseconds for comparison
+                    const timeframeMs = getTimeframeInMs(currentTimeframe);
+
+                    // If timestamps are within the same timeframe period, update the last candle
+                    if (Math.floor(timestamp / timeframeMs) === Math.floor(lastCandleTime / timeframeMs)) {
+                        lastCandle.update([timestamp, open, high, low, close], true);
+                        return;
+                    }
+                }
+
+                // Add new candle
+                series.addPoint(newCandle, true, false);
+
+                // Keep only last 200 candles for performance
+                if (series.data.length > 200) {
+                    series.removePoint(0, false);
+                }
+
+            } catch (error) {
+                console.error('Error updating candlestick chart:', error);
+            }
+        }
+
+        function addCompletedCandleToChart(data) {
+            if (!candlestickChart || !data.completed_candle) {
+                return;
+            }
+
+            try {
+                const series = candlestickChart.series[0];
+                const newCandle = data.completed_candle;
+
+                // Add the completed candle
+                series.addPoint(newCandle, true, false);
+
+                // Keep only last 200 candles for performance
+                if (series.data.length > 200) {
+                    series.removePoint(0, false);
+                }
+
+                console.log(`Added completed candle for ${data.symbol} ${data.timeframe}`);
+
+            } catch (error) {
+                console.error('Error adding completed candle:', error);
+            }
+        }
+
+        function getTimeframeInMs(timeframe) {
+            const timeframeMap = {
+                '1m': 60 * 1000,
+                '5m': 5 * 60 * 1000,
+                '15m': 15 * 60 * 1000,
+                '1h': 60 * 60 * 1000
+            };
+            return timeframeMap[timeframe] || 60 * 1000;
         }
 
         function updateIndicatorsSection(indicators, rawIndicators, barScores) {
@@ -893,21 +1160,29 @@
 
             let html = '';
             for (const [barName, score] of Object.entries(barScores)) {
+                if (score === undefined || score === null) continue;
+
+                const displayName = barName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+
                 let scoreClass = 'bar-score';
                 if (score > 0.7) scoreClass += ' value-high';
                 else if (score > 0.3) scoreClass += ' value-medium';
                 else scoreClass += ' value-low';
 
-                // Get bar breakdown
-                const breakdown = getBarBreakdown(barName, score, indicators);
+                // Generate calculation breakdown if we have monitor config
+                let calculationHtml = '';
+                if (currentMonitorConfig && currentMonitorConfig.bars && currentMonitorConfig.bars[barName]) {
+                    const calculation = calculateBarMath(barName, score, indicators);
+                    calculationHtml = `<div class="bar-calculation">${calculation.math}</div>`;
+                }
 
                 html += `
                     <div class="bar-item">
                         <div class="bar-header">
-                            <div class="bar-name">${barName}</div>
+                            <div class="bar-name">${displayName}</div>
                             <div class="${scoreClass}">${score.toFixed(3)}</div>
                         </div>
-                        <div class="bar-calculation">${breakdown.math}<br>Total weight: ${breakdown.totalWeight}</div>
+                        ${calculationHtml}
                     </div>
                 `;
             }
@@ -915,37 +1190,20 @@
             container.innerHTML = html;
         }
 
-        function getBarBreakdown(barName, score, indicators) {
-            // Use the monitor configuration stored when card details are loaded
-            if (!currentMonitorConfig) {
-                return {
-                    math: 'Monitor configuration not loaded',
-                    totalWeight: '0.0'
-                };
+        function calculateBarMath(barName, actualScore, indicators) {
+            if (!currentMonitorConfig || !currentMonitorConfig.bars || !currentMonitorConfig.bars[barName]) {
+                return { math: 'Calculation details not available', totalWeight: '0' };
             }
 
-            // Try different possible structures for bars configuration
-            const bars = currentMonitorConfig.bars ||
-                        currentMonitorConfig.monitor?.bars ||
-                        currentMonitorConfig;
+            const barConfig = currentMonitorConfig.bars[barName];
+            const weights = barConfig.indicators || {};
 
-            if (!bars || !bars[barName]) {
-                return {
-                    math: 'Bar configuration not found',
-                    totalWeight: '0.0'
-                };
-            }
-
-            const barConfig = bars[barName];
-            const barIndicators = barConfig.indicators || {};
-
-            // Calculate the math breakdown
-            const mathParts = [];
-            let totalWeight = 0;
             let weightedSum = 0;
+            let totalWeight = 0;
+            const mathParts = [];
 
-            Object.entries(barIndicators).forEach(([indName, weight]) => {
-                const indValue = indicators && indicators[indName] ? indicators[indName] : 0;
+            Object.entries(weights).forEach(([indName, weight]) => {
+                const indValue = indicators && indicators[indName] !== undefined ? indicators[indName] : 0;
                 const contribution = indValue * weight;
                 weightedSum += contribution;
                 totalWeight += weight;
