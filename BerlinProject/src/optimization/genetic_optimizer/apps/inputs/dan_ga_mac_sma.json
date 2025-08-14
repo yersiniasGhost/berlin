@@ -4,14 +4,14 @@
     "_id": "65f2d5555555555555555555",
     "user_id": "65f2d6666666666666666666",
     "name": "Dan Selective MACD Strategy",
-    "description": "simple 1m macd and sma combination",
+    "description": "simple 1m macd and sma combination with bearish MACD exit",
     "trade_executor": {
       "default_position_size": 100.0,
-      "stop_loss_pct": 0.02,
+      "stop_loss_pct": 0.06,
       "take_profit_pct": 0.05,
       "ignore_bear_signals": false,
-      "trailing_stop_loss": true,
-      "trailing_stop_distance_pct": 0.015,
+      "trailing_stop_loss": false,
+      "trailing_stop_distance_pct": 0.06,
       "trailing_stop_activation_pct": 0.005
     },
     "enter_long": [
@@ -39,7 +39,7 @@
         "type": "bear",
         "description": "Strong bearish signal for exits",
         "indicators": {
-          "macdbear": 2.5
+          "macdbear1m": 2.5
         }
       }
     }
@@ -87,6 +87,29 @@
         "lookback": {"t": "int", "r": [5, 20]},
         "trend": {"t": "skip"}
       }
+    },
+    {
+      "name": "macdbear1m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "slow": 26,
+        "fast": 12,
+        "signal": 9,
+        "histogram_threshold": 0.01,
+        "lookback": 10,
+        "trend": "bearish"
+      },
+      "ranges": {
+        "slow": {"t": "int", "r": [12, 35]},
+        "fast": {"t": "int", "r": [7, 18]},
+        "signal": {"t": "int", "r": [6, 15]},
+        "histogram_threshold": {"t": "float", "r": [0.005, 0.02]},
+        "lookback": {"t": "int", "r": [5, 20]},
+        "trend": {"t": "skip"}
+      }
     }
   ],
   "objectives": [
@@ -96,6 +119,10 @@
     },
     {
       "objective": "MaximizeNetPnL",
+      "weight": 2.0
+    },
+    {
+      "objective": "MinimizeLosingTrades",
       "weight": 2.0
     }
   ],

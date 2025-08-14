@@ -973,38 +973,73 @@
                     upColor: '#00C851', // Green for up candles
                     lineColor: '#ff4444', // Red border for down candles
                     upLineColor: '#00C851' // Green border for up candles
-                }, {
-                    type: 'scatter',
-                    name: 'Buy Signals',
-                    data: buyArrows,
-                    color: 'green',
-                    marker: {
-                        symbol: 'triangle',
-                        radius: 8
-                    },
-                    yAxis: 0,
-                    dataGrouping: {
-                        enabled: false
-                    },
-                    tooltip: {
-                        pointFormat: '<b>BUY:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}'
+        // AFTER (with improved hover behavior):
+        }, {
+            type: 'scatter',
+            name: 'Buy Signals',
+            data: buyArrows,
+            color: 'green',
+            marker: {
+                symbol: 'triangle',
+                radius: 10,  // Increased size for easier hovering
+                fillColor: 'green',
+                lineColor: 'darkgreen',
+                lineWidth: 2,
+                states: {
+                    hover: {
+                        radius: 14,  // Larger on hover
+                        fillColor: 'lightgreen',
+                        lineColor: 'green',
+                        lineWidth: 3
                     }
-                }, {
-                    type: 'scatter',
-                    name: 'Sell Signals',
-                    data: sellArrows,
-                    color: 'red',
-                    marker: {
-                        symbol: 'triangle-down',
-                        radius: 8
-                    },
-                    yAxis: 0,
-                    dataGrouping: {
-                        enabled: false
-                    },
-                    tooltip: {
-                        pointFormat: '<b>SELL:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}'
+                }
+            },
+            yAxis: 0,
+            dataGrouping: {
+                enabled: false
+            },
+            tooltip: {
+                pointFormat: '<b>BUY:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
+                hideDelay: 1000,  // Keep tooltip visible longer
+                distance: 30      // Larger hover detection area
+            },
+            zIndex: 10,  // Ensure triangles are above candlesticks
+            enableMouseTracking: true,
+            stickyTracking: false,
+            findNearestPointBy: 'xy'
+        }, {
+            type: 'scatter',
+            name: 'Sell Signals',
+            data: sellArrows,
+            color: 'red',
+            marker: {
+                symbol: 'triangle-down',
+                radius: 10,  // Increased size for easier hovering
+                fillColor: 'red',
+                lineColor: 'darkred',
+                lineWidth: 2,
+                states: {
+                    hover: {
+                        radius: 14,  // Larger on hover
+                        fillColor: 'lightcoral',
+                        lineColor: 'red',
+                        lineWidth: 3
                     }
+                }
+            },
+            yAxis: 0,
+            dataGrouping: {
+                enabled: false
+            },
+            tooltip: {
+                pointFormat: '<b>SELL:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
+                hideDelay: 1000,  // Keep tooltip visible longer
+                distance: 30      // Larger hover detection area
+            },
+            zIndex: 10,  // Ensure triangles are above candlesticks
+            enableMouseTracking: true,
+            stickyTracking: false,
+            findNearestPointBy: 'xy'
                 }]
             };
 
