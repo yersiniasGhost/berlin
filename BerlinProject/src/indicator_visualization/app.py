@@ -48,7 +48,16 @@ class SimpleIndicatorVisualizer:
         monitor_config = MonitorConfiguration(
             name="indicator_viz_monitor",
             description="Temporary monitor for indicator visualization",
-            indicators=indicators
+            indicators=indicators,
+            trade_executor={
+                "default_position_size": 100.0,
+                "stop_loss_pct": 0.01,
+                "take_profit_pct": 0.02,
+                "ignore_bear_signals": False,
+                "trailing_stop_loss": False,
+                "trailing_stop_distance_pct": 0.01,
+                "trailing_stop_activation_pct": 0.005
+            }
         )
 
         # Process data using YahooFinanceHistorical (same as optimizer)

@@ -378,3 +378,4 @@ if __name__ == '__main__':
         print("🔐 Each browser session will authenticate separately")
 
     socketio.run(app, debug=args.debug, host=args.host, port=args.port)
+
