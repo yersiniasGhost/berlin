@@ -20,11 +20,12 @@ class MaximizeProfit(ObjectiveFunctionBase):
         if total_profit <= 0.0:
             return 100.0  # High penalty for no profits or losses
 
+        total_profit = total_profit / 100.0
         # FIXED: For maximization in a minimization framework, use reciprocal
         # Lower objective value = better fitness
         # objective_value = 1.0 - (total_profit/trade_count)
         objective_value = 1.0 / total_profit
-
+        print(objective_value, total_profit, objective_value*self.weight)
         return objective_value * self.weight
 
 
@@ -42,7 +43,8 @@ class MinimizeLoss(ObjectiveFunctionBase):
 
         total_loss = portfolio.get_total_percent_losses()  # This returns percentage values
         trade_count = portfolio.get_winning_trades_count()
-
+        if trade_count == 0:
+            return 100.0
         # FIXED: Direct minimization - higher losses = higher objective value (worse)
         objective_value = total_loss / trade_count
 
@@ -63,17 +65,10 @@ class MinimizeLosingTrades(ObjectiveFunctionBase):
         winning_trades = portfolio.get_winning_trades_count()
         total_trades = losing_trades + winning_trades
 
-        # DEBUG: Print for first few individuals
-        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
-            print(f"MinimizeLosingTrades: {losing_trades} losing, {winning_trades} winning, {total_trades} total")
-
         if total_trades == 0:
             return 100.0  # High penalty for no trading activity
 
         losing_ratio = losing_trades / total_trades
-
-        if hasattr(portfolio, 'debug_mode') and portfolio.debug_mode:
-            print(f"MinimizeLosingTrades: Losing ratio = {losing_ratio:.3f}")
 
         return losing_ratio * self.weight
 
@@ -106,12 +101,12 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
         total_profit = portfolio.get_total_percent_profits()
         total_loss = portfolio.get_total_percent_losses()
 
-        net_pnl = total_profit - total_loss
+        net_pnl = (total_profit - total_loss) / 100.0
 
         if total_profit == 0.0 and total_loss == 0.0:
             objective_value = 100.0
         elif net_pnl <= 0.0:
-            objective_value = abs(net_pnl) + 10.0
+            objective_value = 100.0  #   abs(net_pnl) + 10.0
         else:
             objective_value = 1.0 / net_pnl
 

@@ -33,7 +33,9 @@ class GeneticAlgorithm:
     propagation_size: int = None
     statistics_observer: Optional[StatisticsObserver] = None
     iteration_index: int = None
-    max_stalled_metric: int = 50
+    max_stalled_metric: int = 15,
+    mutation_decay_factor: float = 0.975
+
 
     def __post_init__(self):
         self.propagation_size = int(self.propagation_fraction * self.population_size)
@@ -148,6 +150,8 @@ class GeneticAlgorithm:
         return elitists
 
     def mutate_population(self, population: List[IndividualBase]):
+        com = self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index)
+        print("New mutation rate: ", com)
         for i in range(len(population)):
             self.problem_domain.mutation_function(population[i], self.chance_of_mutation, self.iteration_index)
         return population
