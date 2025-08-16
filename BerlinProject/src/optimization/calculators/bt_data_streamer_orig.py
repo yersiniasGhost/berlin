@@ -1,4 +1,4 @@
-# optimization/calculators/bt_data_streamer.py - Parallel processing compatible version
+# optimization/calculators/bt_data_streamer.py - Complete corrected version
 
 import logging
 import json
@@ -17,43 +17,15 @@ logger = logging.getLogger('BacktestDataStreamer')
 
 class BacktestDataStreamer:
     """
-    Optimized backtest streamer for genetic algorithms using unified trade executor.
-    Modified for parallel processing compatibility:
-    1. Constructor doesn't require arguments (for pickling)
-    2. Data loading separated from initialization
-    3. All attributes are pickle-friendly
+    Optimized backtest streamer for genetic algorithms using unified trade executor:
+    1. Load Yahoo data once (1m, 5m candles)
+    2. Build tick history once
+    3. For each GA individual: calculate all indicators at once, then execute trades
     """
 
-
-
-    def __init__(self, monitor_config: MonitorConfiguration = None, data_config_file: str = None):
-        """
-        Initialize with optional parameters for backward compatibility.
-        For parallel processing, use the parameterless constructor and set data manually.
-        """
+    def __init__(self, monitor_config: MonitorConfiguration, data_config_file: str):
         self.monitor_config = monitor_config
-        self.data_config_file = data_config_file
 
-        # Core data attributes (will be set by load_historical_data or copied from parent)
-        self.ticker = None
-        self.start_date = None
-        self.end_date = None
-        self.aggregators: Dict[str, CandleAggregator] = {}
-        self.tick_history: List[TickData] = []
-        self.primary_timeframe = None
-        self.primary_aggregator = None
-
-        # Trade executor (recreated for each individual)
-        self.trade_executor = None
-
-        # If both parameters provided, initialize fully (backward compatibility)
-        if monitor_config is not None and data_config_file is not None:
-            self._initialize_from_config(data_config_file)
-
-
-
-    def _initialize_from_config(self, data_config_file: str):
-        """Initialize from config file (original initialization logic)"""
         # Load data config
         with open(data_config_file, 'r') as f:
             data_config = json.load(f)
@@ -63,38 +35,12 @@ class BacktestDataStreamer:
         self.end_date = data_config['end_date']
 
         # Create unified trade executor from monitor config
-        self.trade_executor = TradeExecutorUnified(self.monitor_config)
+        # This requires monitor_config to have trade_executor field
+        self.trade_executor = TradeExecutorUnified(monitor_config)
 
         # Load all historical data once
+        self.aggregators: Dict[str, CandleAggregator] = {}
         self.load_historical_data()
-        self._build_tick_history()
-
-
-
-    def load_historical_data(self):
-        """Load historical data into aggregators via YahooFinanceHistorical - happens once"""
-        if not all([self.ticker, self.start_date, self.end_date, self.monitor_config]):
-            logger.error("Cannot load historical data: missing required parameters")
-            return
-
-        yahoo_source = YahooFinanceHistorical()
-        yahoo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
-
-        self.aggregators = yahoo_source.aggregators
-        logger.info(f"Got {len(self.aggregators)} aggregators from YahooFinanceHistorical:")
-
-        for timeframe, aggregator in self.aggregators.items():
-            history_count = len(aggregator.get_history())
-            logger.info(f"  {timeframe}: {history_count} candles")
-
-
-
-    def _build_tick_history(self):
-        """Build tick history from primary timeframe aggregator"""
-        if not self.aggregators:
-            logger.error("No aggregators available to build tick history")
-            self.tick_history = []
-            return
 
         # Build tick history once from primary timeframe
         self.primary_timeframe = self._get_primary_timeframe()
@@ -123,38 +69,23 @@ class BacktestDataStreamer:
 
         logger.info(f"BacktestDataStreamer created with {len(self.tick_history)} ticks")
 
+    def load_historical_data(self):
+        """Load historical data into aggregators via YahooFinanceHistorical - happens once"""
+        yahoo_source = YahooFinanceHistorical()
+        yahoo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
 
+        self.aggregators = yahoo_source.aggregators
+        logger.info(f"Got {len(self.aggregators)} aggregators from YahooFinanceHistorical:")
 
-    def copy_data_from(self, source_streamer: 'BacktestDataStreamer'):
-        """
-        Copy precomputed data from a source streamer (for parallel processing).
-        This avoids reloading data in each worker process.
-        """
-        self.ticker = source_streamer.ticker
-        self.start_date = source_streamer.start_date
-        self.end_date = source_streamer.end_date
-        self.aggregators = source_streamer.aggregators  # Shared read-only data
-        self.tick_history = source_streamer.tick_history  # Shared read-only data
-        self.primary_timeframe = source_streamer.primary_timeframe
-        self.primary_aggregator = source_streamer.primary_aggregator
-
-        logger.debug(f"Copied data: {len(self.tick_history)} ticks, {len(self.aggregators)} aggregators")
-
-
+        for timeframe, aggregator in self.aggregators.items():
+            history_count = len(aggregator.get_history())
+            logger.info(f"  {timeframe}: {history_count} candles")
 
     def run_backtest(self):
         """
         OPTIMIZED: Calculate ALL indicators at once, then execute trades
         This is the key change for GA performance
         """
-        if not self.tick_history:
-            logger.error("No tick history available for backtest")
-            return
-
-        if not self.trade_executor:
-            logger.error("No trade executor available - call replace_monitor_config() first")
-            return
-
         logger.debug(f"Running optimized backtest with {len(self.tick_history)} ticks")
 
         # STEP 1: Calculate ALL indicators for entire timeline at once (batch processing)
@@ -184,8 +115,6 @@ class BacktestDataStreamer:
                 bar_scores=bar_scores
             )
 
-
-
     def replace_monitor_config(self, monitor_config: MonitorConfiguration):
         """Replace configuration - data stays loaded, just reset portfolio and trade executor"""
         self.monitor_config = monitor_config
@@ -193,17 +122,10 @@ class BacktestDataStreamer:
         # Create new trade executor with new configuration
         self.trade_executor = TradeExecutorUnified(monitor_config)
 
-
-
     def _get_primary_timeframe(self) -> str:
         """Get the shortest timeframe as primary"""
-        if not self.aggregators:
-            return None
-
         timeframe_minutes = {key: self._timeframe_to_minutes(key) for key in self.aggregators.keys()}
         return min(timeframe_minutes.keys(), key=lambda x: timeframe_minutes[x])
-
-
 
     def _timeframe_to_minutes(self, aggregator_key: str) -> int:
         """Convert aggregator key to minutes"""
@@ -213,24 +135,7 @@ class BacktestDataStreamer:
         }
         return timeframe_map.get(base_timeframe, 1)
 
-
-
     def run(self) -> Portfolio:
         """Complete backtest process"""
         self.run_backtest()
         return self.trade_executor.portfolio
-
-
-
-    def __getstate__(self):
-        """Custom pickling to handle any non-pickleable attributes"""
-        state = self.__dict__.copy()
-        # Remove any non-pickleable attributes if needed
-        # (Add any problematic attributes here)
-        return state
-
-
-
-    def __setstate__(self, state):
-        """Custom unpickling"""
-        self.__dict__.update(state)

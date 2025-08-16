@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import logging
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
@@ -20,12 +20,14 @@ def evaluate_individual_worker(args):
     Worker function that runs in separate process.
     This function must be pickleable (defined at module level).
     """
-    individual, aggregators_data, objectives_data, worker_id = args
+    individual, source_streamer_data, objectives_data, worker_id = args
 
     try:
         # Create a new BacktestDataStreamer for this worker
         backtest_streamer = BacktestDataStreamer()
-        backtest_streamer.aggregators = aggregators_data
+
+        # Copy precomputed data from the source streamer
+        backtest_streamer.copy_data_from(source_streamer_data)
 
         # Set the monitor configuration and run backtest
         backtest_streamer.replace_monitor_config(individual.monitor_configuration)
@@ -37,9 +39,9 @@ def evaluate_individual_worker(args):
             for obj in objectives_data
         ])
 
-        # # Apply penalty if first objective indicates failure
-        # if fitness_values[0] == 100.0:
-        #     fitness_values = np.ones_like(fitness_values) * 100.0
+        # Apply penalty if first objective indicates failure
+        if fitness_values[0] == 100.0:
+            fitness_values = np.ones_like(fitness_values) * 100.0
 
         # Return success result
         return {
@@ -64,28 +66,38 @@ def evaluate_individual_worker(args):
         }
 
 
-
 @dataclass
 class MlfFitnessCalculator(FitnessCalculator):
-    backtest_streamer: [BacktestDataStreamer] = None
+    backtest_streamer: BacktestDataStreamer = None
     display_results: bool = False
     data_config_file: str = ""
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
 
+
+
     def __post_init__(self):
+        # Set default number of workers to CPU count
         if self.max_workers is None:
             self.max_workers = mp.cpu_count()
+
         logger.info(f"Initialized parallel fitness calculator with {self.max_workers} workers")
+
+
 
     def add_objective(self, obj: ObjectiveFunctionBase, weight: float = 1.0):
         self.objectives.append(obj)
 
+
+
     def initialize_objectives(self, population: List[MlfIndividual]):
         pass
 
+
+
     def set_final_result(self, display: bool):
         self.display_results = display
+
 
 
     def _get_executor(self):
@@ -96,16 +108,13 @@ class MlfFitnessCalculator(FitnessCalculator):
         return self._executor
 
 
+
     def shutdown_executor(self):
         """Shutdown the executor when done with all generations"""
         if self._executor is not None:
             self._executor.shutdown(wait=True)
             self._executor = None
             logger.info("Process pool executor shutdown complete")
-
-    def __del__(self):
-        """Cleanup executor when object is destroyed"""
-        self.shutdown_executor()
 
 
 
@@ -120,12 +129,12 @@ class MlfFitnessCalculator(FitnessCalculator):
 
         try:
             # Prepare data for workers (serialize once)
-            aggregators_data = self.backtest_streamer.aggregators
+            source_streamer_data = self.backtest_streamer  # Pass entire streamer for copying
             objectives_data = self.objectives
 
             # Create arguments for each worker
             worker_args = [
-                (individual, aggregators_data, objectives_data, i % self.max_workers)
+                (individual, source_streamer_data, objectives_data, i % self.max_workers)
                 for i, individual in enumerate(population)
             ]
 
@@ -187,17 +196,20 @@ class MlfFitnessCalculator(FitnessCalculator):
         logger.info(f"Completed parallel evaluation of {len(population)} individuals")
         return fitness_results
 
-    def _calculate_fitness_sequential(self, iteration_key: int, population: List[MlfIndividual]) -> List[IndividualStats]:
+
+
+    def _calculate_fitness_sequential(self, iteration_key: int, population: List[MlfIndividual]) -> List[
+        IndividualStats]:
         """
-        SIMPLIFIED: Always use shared streamer since data is always the same
+        Fallback sequential implementation (your original code)
         """
         fitness_results: List[IndividualStats] = []
 
-        logger.debug(f"Evaluating population of {len(population)} individuals for iteration {iteration_key}")
+        logger.debug(
+            f"Sequential evaluation of population of {len(population)} individuals for iteration {iteration_key}")
 
         for cnt, individual in enumerate(population):
             try:
-                # Always use shared streamer - data loaded once, config swapped per individual
                 self.backtest_streamer.replace_monitor_config(individual.monitor_configuration)
                 portfolio = self.backtest_streamer.run()
 
@@ -218,16 +230,16 @@ class MlfFitnessCalculator(FitnessCalculator):
 
             except Exception as e:
                 logger.error(f"Error evaluating individual {cnt}: {e}")
-                # Penalty for failed individuals
                 fitness_values = np.array([100.0] * len(self.objectives))
                 individual_stats = IndividualStats(index=cnt, fitness_values=fitness_values, individual=individual)
                 fitness_results.append(individual_stats)
 
-        logger.info(f"Completed evaluation of {len(population)} individuals")
         return fitness_results
 
+
+
     def __calculate_individual_stats(self, individual: MlfIndividual, portfolio: Portfolio, index: int):
-        """Calculate fitness values for an individual"""
+        """Calculate fitness values for an individual (used in sequential fallback)"""
         try:
             fitness_values = np.array([
                 objective.calculate_objective(individual, portfolio)
@@ -247,3 +259,9 @@ class MlfFitnessCalculator(FitnessCalculator):
             logger.error(f"Error calculating individual stats: {e}")
             fitness_values = np.array([100.0] * len(self.objectives))
             return IndividualStats(index=index, fitness_values=fitness_values, individual=individual)
+
+
+
+    def __del__(self):
+        """Cleanup executor when object is destroyed"""
+        self.shutdown_executor()
