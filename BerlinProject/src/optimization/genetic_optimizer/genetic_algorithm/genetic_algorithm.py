@@ -114,6 +114,7 @@ class GeneticAlgorithm:
         self.debug_population(parents, "p1")
         self.debug_population(elitists+parents, 'ep')
         mutate_these_elitist = []
+        original_elites = [e.copy_individual('original elite') for e in elitists]
         for grp in range(self.number_of_elitist_mutations):
             for e in elitists:
                 mutate_these_elitist.append(e.copy_individual(f"mutate elite #{grp}"))
@@ -134,8 +135,8 @@ class GeneticAlgorithm:
         left = self.population_size - len(elitists)
         last_left = left
         while left > 0:
-            print("MISSING", left)
-            for p in parents:
+            print("MUTATING more to fill population: ", left)
+            for p in original_elites + parents:
                 p2 = p.copy_individual("missing")
                 self.mutate_population([p2])
                 elitists += [p2]
