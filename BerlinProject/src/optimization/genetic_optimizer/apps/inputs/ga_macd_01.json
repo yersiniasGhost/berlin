@@ -1,10 +1,10 @@
 {
-  "test_name": "Dan-Improved-MACD-Selective",
+  "test_name": "MACD-enter-exit",
   "monitor": {
     "_id": "65f2d5555555555555555555",
     "user_id": "65f2d6666666666666666666",
-    "name": "Dan Selective MACD Strategy",
-    "description": "simple 1m macd and sma combination with bearish MACD exit",
+    "name": "Selective MACD Strategy",
+    "description": "Simple 1m macd and sma combination with 15m bearish MACD exit",
     "trade_executor": {
       "default_position_size": 100.0,
       "stop_loss_pct": 0.02,
@@ -40,7 +40,7 @@
         "type": "bear",
         "description": "Strong bearish signal for exits",
         "indicators": {
-          "macdbear1m": 2.5
+          "macdbear15m": 2.5
         }
       }
     }
@@ -112,7 +112,7 @@
       }
     },
     {
-      "name": "macdbear1m",
+      "name": "macdbear15m",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
       "agg_config": "15m-normal",
@@ -137,16 +137,12 @@
   ],
   "objectives": [
     {
-      "objective": "MaximizeProfit",
+      "objective": "MaximizeNetPnL",
       "weight": 1.0
     },
     {
-      "objective": "MaximizeNetPnL",
-      "weight": 5.0
-    },
-    {
       "objective": "MinimizeLosingTrades",
-      "weight": 5.0
+      "weight": 3.0
     },
     {
       "objective": "MinimizeLoss",
@@ -156,9 +152,9 @@
   "ga_hyperparameters": {
     "number_of_iterations": 75,
     "population_size":150,
-    "propagation_fraction": 0.4,
-    "elite_size": 12,
-    "chance_of_mutation": 0.1,
+    "propagation_fraction": 0.2,
+    "elite_size": 10,
+    "chance_of_mutation": 0.06,
     "chance_of_crossover": 0.1
   }
 }

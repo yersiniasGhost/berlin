@@ -25,7 +25,7 @@ class MaximizeProfit(ObjectiveFunctionBase):
         # Lower objective value = better fitness
         # objective_value = 1.0 - (total_profit/trade_count)
         objective_value = 1.0 / total_profit
-        print(objective_value, total_profit, objective_value*self.weight)
+        # print(objective_value, total_profit, objective_value*self.weight)
         return objective_value * self.weight
 
 
@@ -42,9 +42,9 @@ class MinimizeLoss(ObjectiveFunctionBase):
         portfolio: Portfolio = args[1]
 
         total_loss = portfolio.get_total_percent_losses()  # This returns percentage values
-        trade_count = portfolio.get_winning_trades_count()
+        trade_count = portfolio.get_losing_trades_count()
         if trade_count == 0:
-            return 100.0
+            return 0.0
         # FIXED: Direct minimization - higher losses = higher objective value (worse)
         objective_value = total_loss / trade_count
 
@@ -102,7 +102,6 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
         total_loss = portfolio.get_total_percent_losses()
 
         net_pnl = (total_profit - total_loss) / 100.0
-
         if total_profit == 0.0 and total_loss == 0.0:
             objective_value = 100.0
         elif net_pnl <= 0.0:

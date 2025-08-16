@@ -34,7 +34,8 @@ class GeneticAlgorithm:
     statistics_observer: Optional[StatisticsObserver] = None
     iteration_index: int = None
     max_stalled_metric: int = 15,
-    mutation_decay_factor: float = 0.975
+    mutation_decay_factor: float = 0.93
+    crossover_decay_factor: float = 0.95
 
 
     def __post_init__(self):
@@ -153,7 +154,7 @@ class GeneticAlgorithm:
         com = self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index)
         print("New mutation rate: ", com)
         for i in range(len(population)):
-            self.problem_domain.mutation_function(population[i], self.chance_of_mutation, self.iteration_index)
+            self.problem_domain.mutation_function(population[i], com, self.iteration_index)
         return population
 
     def create_elitist_offspring(self, elitists: List[IndividualBase]) -> List[IndividualBase]:
@@ -162,6 +163,9 @@ class GeneticAlgorithm:
             next_population += self.problem_domain.elitist_offspring(e)
 
     def create_offspring(self, retained_population_size: int, parents: List[IndividualBase]) -> List[IndividualBase]:
+        coc = self.chance_of_crossover * self.crossover_decay_factor ** self.iteration_index
+        print("New mutation rate: ", coc)
+
         next_population = []
         num_children = self.population_size - retained_population_size
         # TODO replace this with tournament selection
@@ -171,7 +175,7 @@ class GeneticAlgorithm:
             dad = parents[len(parents)-1-i]
             if mom == dad:
                 continue
-            next_population += self.problem_domain.cross_over_function(mom, dad, self.chance_of_crossover)
+            next_population += self.problem_domain.cross_over_function(mom, dad, coc)
             self.debug_population(next_population, f"{i}")
             if len(next_population) >= num_children:
                 break
