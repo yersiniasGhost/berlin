@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Visualization</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Highcharts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/indicators/indicators.min.js"></script>
+
+    <style>
+        /* Custom navbar styling */
+        .navbar-custom {
+            padding: 20px 0;
+            min-height: 80px;
+        }
+
+        .navbar-brand-custom {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-img {
+            height: 150px;
+            width: auto;
+            margin-right: 15px;
+        }
+
+        .config-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            margin: 20px 0;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-ready { background: #d1ecf1; color: #0c5460; }
+        .status-loading { background: #fff3cd; color: #856404; }
+        .status-complete { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+
+        .bar-charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .file-input-group {
+            margin-bottom: 15px;
+        }
+
+        .file-input-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .config-summary {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .collapsible-section {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .collapsible-header {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #dee2e6;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .collapsible-content {
+            padding: 15px;
+            display: block;
+        }
+
+        .collapsible-content.collapsed {
+            display: none;
+        }
+
+        .collapse-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .collapse-icon.rotated {
+            transform: rotate(180deg);
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .profit { color: #28a745; }
+        .loss { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <nav class="navbar navbar-dark bg-dark mb-4 navbar-custom">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 navbar-brand-custom">
+                    <img src="/static/logo.png" alt="Logo" class="logo-img">
+                    Monitor Visualization
+                </span>
+                <span id="appStatus" class="status-badge status-ready">Ready</span>
+            </div>
+        </nav>
+
+        <!-- Configuration Panel -->
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleCollapse('configPanel')">
+                <h3 class="mb-0">Configuration Setup</h3>
+                <i class="fas fa-chevron-down collapse-icon" id="configPanel-icon"></i>
+            </div>
+            <div id="configPanel" class="collapsible-content">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="file-input-group">
+                            <label for="monitorConfigFile">Monitor Configuration JSON</label>
+                            <input type="file" class="form-control" id="monitorConfigFile" accept=".json">
+                            <div class="form-text">Select the monitor configuration file (from GA optimization or manual)</div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="file-input-group">
+                            <label for="dataConfigFile">Yahoo Finance Data Config</label>
+                            <input type="file" class="form-control" id="dataConfigFile" accept=".json">
+                            <div class="form-text">Select the Yahoo Finance data configuration file</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button id="runVisualizationBtn" class="btn btn-primary">
+                            <i class="fas fa-chart-line me-2"></i>Run Visualization
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Configuration Summary -->
+                <div id="configSummary" class="config-summary" style="display: none;">
+                    <h5>Configuration Summary</h5>
+                    <div id="configDetails"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Summary -->
+        <div id="performanceSummary" style="display: none;">
+            <h4>Trading Performance Summary</h4>
+            <div id="summaryStats" class="summary-stats">
+                <!-- Stats will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div id="chartsSection" style="display: none;">
+            <!-- Candlestick Chart -->
+            <div class="chart-container">
+                <h4>Price Chart with Trading Signals</h4>
+                <div id="candlestickChart" style="height: 500px;"></div>
+            </div>
+
+            <!-- P&L Chart -->
+            <div class="chart-container">
+                <h4>Portfolio P&L Performance</h4>
+                <div id="pnlChart" style="height: 300px;"></div>
+            </div>
+
+            <!-- Bar Scores Grid -->
+            <div id="barScoresContainer" class="bar-charts-grid">
+                <!-- Bar score charts will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Global variables
+        let uploadedFiles = {};
+        let charts = {};
+
+        // Collapsible section toggle function
+        function toggleCollapse(sectionId) {
+            const content = document.getElementById(sectionId);
+            const icon = document.getElementById(sectionId + '-icon');
+
+            if (content.classList.contains('collapsed') || content.style.display === 'none') {
+                content.classList.remove('collapsed');
+                content.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                content.classList.add('collapsed');
+                content.style.display = 'none';
+                icon.classList.add('rotated');
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // File upload handlers
+            document.getElementById('monitorConfigFile').addEventListener('change', async function(e) {
+                if (e.target.files.length > 0) {
+                    await uploadFile(e.target.files[0], 'monitor_config');
+                }
+            });
+
+            document.getElementById('dataConfigFile').addEventListener('change', async function(e) {
+                if (e.target.files.length > 0) {
+                    await uploadFile(e.target.files[0], 'data_config');
+                }
+            });
+
+            document.getElementById('runVisualizationBtn').addEventListener('click', runVisualization);
+        });
+
+        // File upload function
+        async function uploadFile(file, type) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', type);
+
+            try {
+                updateStatus('Uploading...', 'loading');
+                const response = await fetch('/api/upload_file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    uploadedFiles[type] = result.filepath;
+                    console.log(`${type} uploaded:`, result.filepath);
+                    updateStatus('Ready', 'ready');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                updateStatus('Error', 'error');
+                alert(`Upload failed: ${error.message}`);
+            }
+        }
+
+        // Run visualization
+        async function runVisualization() {
+            if (!uploadedFiles.monitor_config || !uploadedFiles.data_config) {
+                alert('Please upload both configuration files first.');
+                return;
+            }
+
+            try {
+                updateStatus('Running backtest...', 'loading');
+
+                const response = await fetch('/api/run_visualization', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        monitor_config_path: uploadedFiles.monitor_config,
+                        data_config_path: uploadedFiles.data_config
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayConfigSummary(result.monitor_config, result.data_config);
+                    displayPerformanceSummary(result.chart_data);
+                    updateCharts(result.chart_data);
+                    updateStatus('Visualization Complete!', 'complete');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Visualization error:', error);
+                updateStatus('Error', 'error');
+                alert(`Visualization failed: ${error.message}`);
+            }
+        }
+
+        // Update status badge
+        function updateStatus(text, type) {
+            const statusElement = document.getElementById('appStatus');
+            statusElement.textContent = text;
+            statusElement.className = `status-badge status-${type}`;
+        }
+
+        // Display configuration summary
+        function displayConfigSummary(monitorConfig, dataConfig) {
+            const monitor = monitorConfig.monitor || monitorConfig;
+            const indicators = monitorConfig.indicators || [];
+
+            const summaryHtml = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Monitor Configuration</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>Name:</strong> ${monitor.name || 'Unnamed Monitor'}</li>
+                            <li><strong>Enter Conditions:</strong> ${monitor.enter_long?.length || 0}</li>
+                            <li><strong>Exit Conditions:</strong> ${monitor.exit_long?.length || 0}</li>
+                            <li><strong>Indicators:</strong> ${indicators.length}</li>
+                            <li><strong>Bar Types:</strong> ${Object.keys(monitor.bars || {}).length}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Data Configuration</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>Ticker:</strong> ${dataConfig.ticker}</li>
+                            <li><strong>Start Date:</strong> ${dataConfig.start_date}</li>
+                            <li><strong>End Date:</strong> ${dataConfig.end_date}</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('configDetails').innerHTML = summaryHtml;
+            document.getElementById('configSummary').style.display = 'block';
+        }
+
+        function displayPerformanceSummary(chartData) {
+            const trades = chartData.trade_history || [];
+            const pnlHistory = chartData.pnl_history || [];
+
+            // Initialize counters
+            let winningTrades = 0;
+            let losingTrades = 0;
+            let totalWinPnL = 0;
+            let totalLossPnL = 0;
+
+            // Calculate metrics from P&L history
+            pnlHistory.forEach(trade => {
+                if (trade.trade_pnl > 0) {
+                    winningTrades++;
+                    totalWinPnL += trade.trade_pnl;
+                } else if (trade.trade_pnl < 0) {
+                    losingTrades++;
+                    totalLossPnL += trade.trade_pnl;
+                }
+            });
+
+            // NOW calculate totalTrades after the loop:
+            let totalTrades = winningTrades + losingTrades;  // ✅ FIXED
+
+            const finalPnL = pnlHistory.length > 0 ? pnlHistory[pnlHistory.length - 1].cumulative_pnl : 0;
+            const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+            const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
+            const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalTrades}</div>
+                    <div class="stat-label">Total Trades</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value ${finalPnL >= 0 ? 'profit' : 'loss'}">${finalPnL.toFixed(2)}%</div>
+                    <div class="stat-label">Total P&L</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${winRate.toFixed(1)}%</div>
+                    <div class="stat-label">Win Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value profit">${avgWin.toFixed(2)}%</div>
+                    <div class="stat-label">Avg Win</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value loss">${Math.abs(avgLoss).toFixed(2)}%</div>
+                    <div class="stat-label">Avg Loss</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${chartData.total_candles || 0}</div>
+                    <div class="stat-label">Total Candles</div>
+                </div>
+            `;
+
+            document.getElementById('summaryStats').innerHTML = statsHtml;
+            document.getElementById('performanceSummary').style.display = 'block';
+        }
+
+        // Update charts with data
+        function updateCharts(chartData) {
+            console.log('Updating charts with data:', chartData);
+
+            // Update candlestick chart
+            updateCandlestickChart(chartData);
+
+            // Update P&L chart
+            updatePnLChart(chartData);
+
+            // Update bar scores charts
+            updateBarScoresCharts(chartData);
+
+            // Show charts section
+            document.getElementById('chartsSection').style.display = 'block';
+        }
+
+        // Global function to sync all charts when one is zoomed
+        function syncAllCharts(extremes, sourceChart) {
+            if (!extremes || extremes.trigger === 'syncExtremes') return;
+
+            try {
+                // Sync candlestick chart
+                if (charts.candlestick && sourceChart !== 'candlestick') {
+                    charts.candlestick.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
+                }
+
+                // Sync P&L chart
+                if (charts.pnl && sourceChart !== 'pnl') {
+                    charts.pnl.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
+                }
+
+                // Sync all bar score charts
+                Object.keys(charts).forEach(chartKey => {
+                    if (chartKey.startsWith('barChart_') && sourceChart !== chartKey && charts[chartKey]) {
+                        charts[chartKey].xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
+                    }
+                });
+            } catch (error) {
+                console.warn('Error syncing charts:', error);
+            }
+        }
+
+        function updateCandlestickChart(data) {
+            const container = document.getElementById('candlestickChart');
+
+            // Prepare candlestick data - already in correct format [timestamp, open, high, low, close]
+            const candlestickData = data.candlestick_data;
+
+            // Process trade_history to create entry/exit arrows
+            const buyArrows = [];
+            const sellArrows = [];
+
+            if (data.triggers && data.triggers.length > 0) {
+                data.triggers.forEach(trigger => {
+                    if (trigger.type === 'buy') {
+                        buyArrows.push({
+                            x: trigger.timestamp,
+                            y: trigger.price,
+                            reason: trigger.reason,
+                            price: trigger.price
+                        });
+                    } else if (trigger.type === 'sell') {
+                        sellArrows.push({
+                            x: trigger.timestamp,
+                            y: trigger.price,
+                            reason: trigger.reason,
+                            price: trigger.price
+                        });
+                    }
+                });
+            }
+
+            const chartConfig = {
+                chart: {
+                    zoomType: 'xy',
+                    panning: {
+                        enabled: true,
+                        type: 'xy'
+                    },
+                    panKey: 'shift'
+                },
+                title: {
+                    text: `${data.ticker} - Price with Trade Entry/Exit Signals`
+                },
+
+                rangeSelector: {
+                    selected: 1
+                },
+
+                plotOptions: {
+                    candlestick: {
+                        dataGrouping: {
+                            enabled: false
+                        }
+                    },
+                    scatter: {
+                        dataGrouping: {
+                            enabled: false
+                        }
+                    }
+                },
+
+                yAxis: [{
+                    labels: {
+                        align: 'right',
+                        x: -3
+                    },
+                    title: {
+                        text: 'Price ($)'
+                    },
+                    height: '100%',
+                    lineWidth: 2
+                }],
+
+                xAxis: {
+                    events: {
+                        afterSetExtremes: function(e) {
+                            syncAllCharts(e, 'candlestick');
+                        }
+                    }
+                },
+
+                tooltip: {
+                    split: false,
+                    shared: true
+                },
+
+                series: [{
+                    type: 'candlestick',
+                    name: data.ticker,
+                    data: candlestickData,
+                    yAxis: 0,
+                    dataGrouping: {
+                        enabled: false
+                    },
+                    color: '#ff4444',
+                    upColor: '#00C851',
+                    lineColor: '#ff4444',
+                    upLineColor: '#00C851'
+                }, {
+                    type: 'scatter',
+                    name: 'Buy Signals',
+                    data: buyArrows,
+                    color: 'green',
+                    marker: {
+                        symbol: 'triangle',
+                        radius: 10,
+                        fillColor: 'green',
+                        lineColor: 'darkgreen',
+                        lineWidth: 2,
+                        states: {
+                            hover: {
+                                radius: 14,
+                                fillColor: 'lightgreen',
+                                lineColor: 'green',
+                                lineWidth: 3
+                            }
+                        }
+                    },
+                    yAxis: 0,
+                    dataGrouping: {
+                        enabled: false
+                    },
+                    tooltip: {
+                        pointFormat: '<b>BUY:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
+                        hideDelay: 1000,
+                        distance: 30
+                    },
+                    zIndex: 10,
+                    enableMouseTracking: true,
+                    stickyTracking: false,
+                    findNearestPointBy: 'xy'
+                }, {
+                    type: 'scatter',
+                    name: 'Sell Signals',
+                    data: sellArrows,
+                    color: 'red',
+                    marker: {
+                        symbol: 'triangle-down',
+                        radius: 10,
+                        fillColor: 'red',
+                        lineColor: 'darkred',
+                        lineWidth: 2,
+                        states: {
+                            hover: {
+                                radius: 14,
+                                fillColor: 'lightcoral',
+                                lineColor: 'red',
+                                lineWidth: 3
+                            }
+                        }
+                    },
+                    yAxis: 0,
+                    dataGrouping: {
+                        enabled: false
+                    },
+                    tooltip: {
+                        pointFormat: '<b>SELL:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
+                        hideDelay: 1000,
+                        distance: 30
+                    },
+                    zIndex: 10,
+                    enableMouseTracking: true,
+                    stickyTracking: false,
+                    findNearestPointBy: 'xy'
+                }]
+            };
+
+            if (charts.candlestick) {
+                charts.candlestick.destroy();
+            }
+            charts.candlestick = Highcharts.stockChart(container, chartConfig);
+        }
+
+        function updatePnLChart(data) {
+            const container = document.getElementById('pnlChart');
+
+            // Prepare P&L data
+            const pnlData = data.pnl_history.map(point => [
+                point.timestamp,
+                point.cumulative_pnl
+            ]);
+
+            const chartConfig = {
+                title: {
+                    text: `Portfolio Performance - Cumulative P&L`
+                },
+
+                rangeSelector: {
+                    selected: 1
+                },
+
+                plotOptions: {
+                    line: {
+                        dataGrouping: {
+                            enabled: false
+                        }
+                    }
+                },
+
+                yAxis: {
+                    title: {
+                        text: 'Cumulative P&L (%)'
+                    },
+                    plotLines: [{
+                        value: 0,
+                        color: 'gray',
+                        dashStyle: 'dash',
+                        width: 1,
+                        label: {
+                            text: 'Break Even',
+                            align: 'right'
+                        }
+                    }]
+                },
+
+                xAxis: {
+                    events: {
+                        afterSetExtremes: function(e) {
+                            syncAllCharts(e, 'pnl');
+                        }
+                    }
+                },
+
+                tooltip: {
+                    pointFormat: '<b>P&L:</b> {point.y:.2f}%'
+                },
+
+                series: [{
+                    name: 'Cumulative P&L',
+                    data: pnlData,
+                    color: '#2E86AB',
+                    lineWidth: 2,
+                    marker: {
+                        enabled: true,
+                        radius: 3,
+                        fillColor: '#2E86AB'
+                    },
+                    dataGrouping: {
+                        enabled: false
+                    }
+                }]
+            };
+
+            if (charts.pnl) {
+                charts.pnl.destroy();
+            }
+            charts.pnl = Highcharts.stockChart(container, chartConfig);
+        }
+
+        function updateBarScoresCharts(data) {
+            const container = document.getElementById('barScoresContainer');
+
+            // Clear existing bar score charts
+            container.innerHTML = '';
+
+            if (!data.bar_scores_history || data.bar_scores_history.length === 0) {
+                container.innerHTML = '<div class="col-12"><div class="alert alert-info">No bar scores data available</div></div>';
+                return;
+            }
+
+            // Create charts for each bar score type
+            const barScoreTypes = new Set();
+            data.bar_scores_history.forEach(point => {
+                Object.keys(point.scores).forEach(type => barScoreTypes.add(type));
+            });
+
+            barScoreTypes.forEach(type => {
+                const chartDiv = document.createElement('div');
+                chartDiv.className = 'chart-container';
+                chartDiv.innerHTML = `
+                    <h5>Bar Scores: ${type}</h5>
+                    <div id="barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}" style="height: 300px;"></div>
+                `;
+                container.appendChild(chartDiv);
+
+                // Prepare data for this bar score type
+                const barData = data.bar_scores_history
+                    .filter(point => point.scores[type] !== undefined)
+                    .map(point => [point.timestamp, point.scores[type]]);
+
+                // Find thresholds for this bar from enter_long and exit_long conditions
+                const plotLines = [];
+
+                // Check enter_long conditions
+                if (data.threshold_config && data.threshold_config.enter_long) {
+                    data.threshold_config.enter_long.forEach(condition => {
+                        if (condition.name === type) {
+                            plotLines.push({
+                                value: condition.threshold,
+                                color: '#00C851',
+                                dashStyle: 'dash',
+                                width: 2,
+                                label: {
+                                    text: `Entry: ${condition.threshold}`,
+                                    align: 'right',
+                                    style: {
+                                        color: '#00C851',
+                                        fontWeight: 'bold'
+                                    }
+                                },
+                                zIndex: 5
+                            });
+                        }
+                    });
+                }
+
+                // Check exit_long conditions
+                if (data.threshold_config && data.threshold_config.exit_long) {
+                    data.threshold_config.exit_long.forEach(condition => {
+                        if (condition.name === type) {
+                            plotLines.push({
+                                value: condition.threshold,
+                                color: '#ff4444',
+                                dashStyle: 'dash',
+                                width: 2,
+                                label: {
+                                    text: `Exit: ${condition.threshold}`,
+                                    align: 'right',
+                                    style: {
+                                        color: '#ff4444',
+                                        fontWeight: 'bold'
+                                    }
+                                },
+                                zIndex: 5
+                            });
+                        }
+                    });
+                }
+
+                const chartConfig = {
+                    title: {
+                        text: `${type} Bar Scores Evolution`
+                    },
+
+                    rangeSelector: {
+                        selected: 1
+                    },
+
+                    plotOptions: {
+                        line: {
+                            dataGrouping: {
+                                enabled: false
+                            }
+                        }
+                    },
+
+                    yAxis: {
+                        title: {
+                            text: 'Score'
+                        },
+                        plotLines: plotLines,
+                        min: 0,
+                        max: 1
+                    },
+
+                    xAxis: {
+                        events: {
+                            afterSetExtremes: function(e) {
+                                const chartId = `barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                                syncAllCharts(e, chartId);
+                            }
+                        }
+                    },
+
+                    tooltip: {
+                        pointFormat: '<b>{series.name}:</b> {point.y:.4f}<br/>',
+                        shared: true
+                    },
+
+                    series: [{
+                        name: type,
+                        data: barData,
+                        color: '#FF6B6B',
+                        lineWidth: 2,
+                        dataGrouping: {
+                            enabled: false
+                        }
+                    }]
+                };
+
+                const chartId = `barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                charts[chartId] = Highcharts.stockChart(chartId, chartConfig);
+            });
+        }
+    </script>
+</body>
+</html>

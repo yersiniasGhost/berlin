@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Dict, Any
 
 
 @dataclass
@@ -7,6 +8,7 @@ class ObjectiveFunctionBase(ABC):
     normalization_factor: float = 1.0
     weight: float = 1.0
     name: str = "Unnamed"
+    parameters: Dict[str, Any]= field(default=dict)
 
     @abstractmethod
     def calculate_objective(self, *args) -> float:

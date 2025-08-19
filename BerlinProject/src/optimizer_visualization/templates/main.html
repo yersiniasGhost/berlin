@@ -14,6 +14,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
+    <!-- ONLY ADDITION: Parallel Coordinates module -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/parallel-coordinates.min.js"></script>
 
     <style>
         /* Custom navbar styling */
@@ -309,6 +311,25 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- ONLY ADDITION: Parallel Coordinates Chart Section -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <h6><i class="fas fa-project-diagram me-2"></i>Elite Population - Parallel Coordinates Analysis</h6>
+                            <div id="parallelCoordsChart" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                                <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                    <i class="fas fa-chart-line me-2"></i>Waiting for elite population data...
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    This chart shows the objective function values for elite individuals. Each line represents one elite solution across all objectives.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -349,6 +370,7 @@
         let uploadedFiles = {};
         let optimizationRunning = false;
         let charts = {};
+        let parallelCoordsChart = null; // ONLY ADDITION: Parallel coordinates chart variable
         let generationMetrics = []; // Store metrics for each generation
         let currentTestName = '';
         let currentTimestamp = '';
@@ -367,6 +389,146 @@
                 content.style.display = 'none';
                 icon.classList.add('rotated');
             }
+        }
+
+        // ONLY ADDITION: Update Parallel Coordinates Chart
+        function updateParallelCoordsChart(eliteData, objectiveNames) {
+            if (!eliteData || eliteData.length === 0 || !objectiveNames || objectiveNames.length === 0) {
+                if (parallelCoordsChart) {
+                    parallelCoordsChart.destroy();
+                    parallelCoordsChart = null;
+                }
+                document.getElementById('parallelCoordsChart').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-line me-2"></i>No elite data available
+                    </div>
+                `;
+                return;
+            }
+
+            // Generate colors for each elite individual
+            const colors = Highcharts.getOptions().colors;
+            const colorCount = colors.length;
+
+            // Prepare chart configuration
+            const chartConfig = {
+                chart: {
+                    type: 'line',
+                    parallelCoordinates: true,
+                    parallelAxes: {
+                        lineWidth: 2,
+                        gridlinesWidth: 1,
+                        title: {
+                            style: {
+                                fontWeight: 'bold',
+                                fontSize: '12px'
+                            }
+                        }
+                    }
+                },
+                title: {
+                    text: `Elite Population Analysis (${eliteData.length} Individuals)`,
+                    style: {
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                    }
+                },
+                plotOptions: {
+                    series: {
+                        animation: {
+                            duration: 500
+                        },
+                        lineWidth: 2.5,
+                        opacity: 0.75,
+                        states: {
+                            hover: {
+                                lineWidth: 4,
+                                opacity: 1
+                            }
+                        },
+                        marker: {
+                            enabled: false,
+                            states: {
+                                hover: {
+                                    enabled: true,
+                                    radius: 4
+                                }
+                            }
+                        }
+                    }
+                },
+                tooltip: {
+                    formatter: function() {
+                        let tooltipText = '<b>Elite Individual #' + (this.series.index + 1) + '</b><br/>';
+                        const individualData = eliteData[this.series.index];
+                        objectiveNames.forEach(function(objName, i) {
+                            tooltipText += objName + ': ' +
+                                         Highcharts.numberFormat(individualData[i], 4) + '<br/>';
+                        });
+                        return tooltipText;
+                    }
+                },
+                legend: {
+                    enabled: false
+                },
+                credits: {
+                    enabled: false
+                },
+                // Configure axes for each objective
+                xAxis: objectiveNames.map((objName, index) => ({
+                    lineWidth: 0,
+                    labels: {
+                        enabled: false
+                    },
+                    title: {
+                        text: objName,
+                        style: {
+                            fontWeight: 'bold',
+                            fontSize: '11px'
+                        }
+                    }
+                })),
+                yAxis: objectiveNames.map((objName, index) => {
+                    // Calculate min/max for this objective across all elites
+                    const values = eliteData.map(elite => elite[index]);
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    const padding = (max - min) * 0.1;
+
+                    return {
+                        lineWidth: 1,
+                        min: min - padding,
+                        max: max + padding,
+                        title: {
+                            text: '',
+                            style: {
+                                fontSize: '10px'
+                            }
+                        },
+                        labels: {
+                            format: '{value:.3f}',
+                            style: {
+                                fontSize: '9px'
+                            }
+                        }
+                    };
+                }),
+                // Create series for each elite individual
+                series: eliteData.map((elite, index) => ({
+                    name: `Elite ${index + 1}`,
+                    data: elite.map((value, objIndex) => [objIndex, value]),
+                    color: colors[index % colorCount],
+                    lineWidth: index === 0 ? 3 : 2.5, // Highlight best elite
+                    opacity: index === 0 ? 0.9 : 0.75
+                }))
+            };
+
+            // Destroy existing chart and create new one
+            if (parallelCoordsChart) {
+                parallelCoordsChart.destroy();
+            }
+
+            parallelCoordsChart = Highcharts.chart('parallelCoordsChart', chartConfig);
         }
 
         // Update metrics table with generation data
@@ -510,6 +672,11 @@
 
             // Update objectives chart
             updateObjectivesChart(data.best_individuals_log);
+
+            // ONLY ADDITION: Update parallel coordinates chart
+            if (data.elite_objective_values && data.objective_names) {
+                updateParallelCoordsChart(data.elite_objective_values, data.objective_names);
+            }
 
             // Update metrics table
             updateMetricsTable(data.generation, data.chart_data);

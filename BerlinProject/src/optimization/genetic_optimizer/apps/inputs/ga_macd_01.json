@@ -7,11 +7,11 @@
     "description": "Simple 1m macd and sma combination with 15m bearish MACD exit",
     "trade_executor": {
       "default_position_size": 100.0,
-      "stop_loss_pct": 0.02,
-      "take_profit_pct": 0.4,
+      "stop_loss_pct": 0.01,
+      "take_profit_pct": 0.08,
       "ignore_bear_signals": false,
       "trailing_stop_loss": true,
-      "trailing_stop_distance_pct": 0.02,
+      "trailing_stop_distance_pct": 0.01,
       "trailing_stop_activation_pct": 0.005
     },
     "enter_long": [
@@ -40,7 +40,7 @@
         "type": "bear",
         "description": "Strong bearish signal for exits",
         "indicators": {
-          "macdbear15m": 2.5
+          "macdbear5m-heiken": 2.5
         }
       }
     }
@@ -73,7 +73,7 @@
       "name": "macd15m",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
-      "agg_config": "1m-normal",
+      "agg_config": "15m-normal",
       "calc_on_pip": false,
       "parameters": {
         "slow": 26,
@@ -112,10 +112,10 @@
       }
     },
     {
-      "name": "macdbear15m",
+      "name": "macdbear5m-heiken",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
-      "agg_config": "15m-normal",
+      "agg_config": "5m-heiken",
       "calc_on_pip": false,
       "parameters": {
         "slow": 26,
@@ -137,23 +137,23 @@
   ],
   "objectives": [
     {
-      "objective": "MaximizeNetPnL",
+      "objective": "MaximizeProfit",
       "weight": 1.0
+    },
+    {
+      "objective": "MaximizeNetPnL",
+      "weight": 1
     },
     {
       "objective": "MinimizeLosingTrades",
-      "weight": 3.0
-    },
-    {
-      "objective": "MinimizeLoss",
-      "weight": 1.0
+      "weight": 3.5
     }
   ],
   "ga_hyperparameters": {
-    "number_of_iterations": 75,
-    "population_size":150,
-    "propagation_fraction": 0.2,
-    "elite_size": 10,
+    "number_of_iterations": 50,
+    "population_size":200,
+    "propagation_fraction": 0.10,
+    "elite_size": 20,
     "chance_of_mutation": 0.06,
     "chance_of_crossover": 0.1
   }

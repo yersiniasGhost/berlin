@@ -75,7 +75,6 @@ class MlfFitnessCalculator(FitnessCalculator):
     _executor: Optional[ProcessPoolExecutor] = None
 
 
-
     def __post_init__(self):
         # Set default number of workers to CPU count
         if self.max_workers is None:

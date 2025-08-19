@@ -7,8 +7,15 @@ import time
 import csv
 from pathlib import Path
 from datetime import datetime
+from typing import List, Dict, Tuple
+
+import numpy as np
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
+
+from optimization.genetic_optimizer.abstractions import IndividualBase
+from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+from optimization.genetic_optimizer.genetic_algorithm import crowd_sort
 
 # Add project path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +46,23 @@ optimization_state = {
     'last_best_individual': None,
     'test_name': None
 }
+
+
+def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
+    ideal_point = np.min([ind.fitness_values for ind in front], axis=0)
+    balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
+    return balanced_front
+
+
+def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) -> [List[IndividualStats]]:
+    elitists: List[IndividualStats] = []
+
+    for front in fronts.values():
+        sorted_front = balance_fronts(front)
+        for stat in sorted_front:
+            if len(elitists) < number_of_elites:
+                elitists.append(stat)
+    return elitists
 
 
 def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
@@ -84,7 +108,7 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
         })
 
         # Run optimization with generation-by-generation updates
-        for stats in genetic_algorithm.run_ga_iterations(1):
+        for observer, statsobserver in genetic_algorithm.run_ga_iterations(1):
             # Check if stopped
             if not optimization_state['running']:
                 logger.info("Optimization stopped by user")
@@ -100,11 +124,12 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
                 break
 
             # Fix generation numbering - stats returns 0-based, we want 1-based display
-            current_gen = stats[0].iteration + 1  # Convert from 0-based to 1-based
-            best_individual = stats[1].best_front[0].individual
-            metrics = stats[1].best_metric_iteration
+            current_gen = observer.iteration + 1  # Convert from 0-based to 1-based
+            best_individual = statsobserver.best_front[0].individual
+            metrics = statsobserver.best_metric_iteration
 
-            # Update state
+            elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)            # Update state
+            elite_objectives=[e.fitness_values for e in elites]
             optimization_state['current_generation'] = current_gen
             optimization_state['last_best_individual'] = best_individual
 
@@ -125,13 +150,20 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
             try:
                 chart_data = generate_chart_data_for_individual(best_individual, io, data_config_path)
 
-                # Emit update to frontend
+                # Get objective names dynamically
+                objectives = [o.name for o in io.fitness_calculator.objectives]
+
+                # Convert numpy arrays to regular Python lists for JSON serialization
+                elite_objectives = [e.fitness_values.tolist() for e in elites]
+
                 socketio.emit('generation_complete', {
                     'generation': current_gen,
                     'total_generations': genetic_algorithm.number_of_generations,
                     'fitness_metrics': dict(zip(objectives, metrics)),
                     'chart_data': chart_data,
-                    'best_individuals_log': optimization_state['best_individuals_log']
+                    'best_individuals_log': optimization_state['best_individuals_log'],
+                    'elite_objective_values': elite_objectives,
+                    'objective_names': objectives  # Add this line
                 })
 
             except Exception as e:
