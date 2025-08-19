@@ -33,7 +33,10 @@ class GeneticAlgorithm:
     propagation_size: int = None
     statistics_observer: Optional[StatisticsObserver] = None
     iteration_index: int = None
-    max_stalled_metric: int = 50
+    max_stalled_metric: int = 15,
+    mutation_decay_factor: float = 0.93
+    crossover_decay_factor: float = 0.95
+
 
     def __post_init__(self):
         self.propagation_size = int(self.propagation_fraction * self.population_size)
@@ -77,8 +80,6 @@ class GeneticAlgorithm:
             self.iteration_index = iteration
             observer = Observer(iteration=iteration)
             fitness_results = self.__calculate_fitness(iteration=iteration, population=population)
-            if iteration == 25:
-                print('here')
             collect_domination_statistics(fitness_results)
             fronts = collect_fronts(fitness_results)
 
@@ -106,11 +107,17 @@ class GeneticAlgorithm:
 
 
     def prepare_next_generation(self, fronts: Dict[int, List]) -> List[IndividualBase]:
+        com = self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index)
+        print("New mutation rate: ", com)
+        coc = self.chance_of_crossover * self.crossover_decay_factor ** self.iteration_index
+        print("New mutation rate: ", coc)
+
         elitists, parents = self.select_winning_population(fronts)
         self.debug_population(elitists, 'e1')
         self.debug_population(parents, "p1")
         self.debug_population(elitists+parents, 'ep')
         mutate_these_elitist = []
+        original_elites = [e.copy_individual('original elite') for e in elitists]
         for grp in range(self.number_of_elitist_mutations):
             for e in elitists:
                 mutate_these_elitist.append(e.copy_individual(f"mutate elite #{grp}"))
@@ -118,6 +125,8 @@ class GeneticAlgorithm:
         self.mutate_population(mutate_these_elitist)
         elitists += mutate_these_elitist
         self.mutate_population(parents)
+        offspring1 = self.create_offspring(self.population_size-20, original_elites)
+        elitists += offspring1
         offspring = self.create_offspring(len(elitists), parents)
         self.debug_population(offspring, 'off')
         elitists += offspring
@@ -131,8 +140,8 @@ class GeneticAlgorithm:
         left = self.population_size - len(elitists)
         last_left = left
         while left > 0:
-            print("MISSING", left)
-            for p in parents:
+            print("MUTATING more to fill population: ", left)
+            for p in original_elites + parents:
                 p2 = p.copy_individual("missing")
                 self.mutate_population([p2])
                 elitists += [p2]
@@ -148,8 +157,9 @@ class GeneticAlgorithm:
         return elitists
 
     def mutate_population(self, population: List[IndividualBase]):
+        com = max(0.01, self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index))
         for i in range(len(population)):
-            self.problem_domain.mutation_function(population[i], self.chance_of_mutation, self.iteration_index)
+            self.problem_domain.mutation_function(population[i], com, self.iteration_index)
         return population
 
     def create_elitist_offspring(self, elitists: List[IndividualBase]) -> List[IndividualBase]:
@@ -158,6 +168,8 @@ class GeneticAlgorithm:
             next_population += self.problem_domain.elitist_offspring(e)
 
     def create_offspring(self, retained_population_size: int, parents: List[IndividualBase]) -> List[IndividualBase]:
+        coc = max(0.01, self.chance_of_crossover * self.crossover_decay_factor ** self.iteration_index)
+
         next_population = []
         num_children = self.population_size - retained_population_size
         # TODO replace this with tournament selection
@@ -167,7 +179,7 @@ class GeneticAlgorithm:
             dad = parents[len(parents)-1-i]
             if mom == dad:
                 continue
-            next_population += self.problem_domain.cross_over_function(mom, dad, self.chance_of_crossover)
+            next_population += self.problem_domain.cross_over_function(mom, dad, coc)
             self.debug_population(next_population, f"{i}")
             if len(next_population) >= num_children:
                 break

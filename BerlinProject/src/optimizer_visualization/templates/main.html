@@ -14,10 +14,28 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/indicators/indicators.min.js"></script>
+    <!-- ONLY ADDITION: Parallel Coordinates module -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/parallel-coordinates.min.js"></script>
 
     <style>
+        /* Custom navbar styling */
+        .navbar-custom {
+            padding: 20px 0; /* Increase top/bottom padding */
+            min-height: 80px; /* Set minimum height */
+        }
+
+        .navbar-brand-custom {
+            font-size: 1.5rem; /* Larger text */
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-img {
+            height: 150px; /* Larger logo */
+            width: auto;
+            margin-right: 15px;
+        }
+
         .config-panel {
             background: #f8f9fa;
             border-radius: 8px;
@@ -53,13 +71,6 @@
         .status-running { background: #d1ecf1; color: #0c5460; }
         .status-paused { background: #f0ad4e; color: #fff; }
         .status-error { background: #f8d7da; color: #721c24; }
-
-        .bar-charts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
 
         .file-input-group {
             margin-bottom: 15px;
@@ -185,10 +196,10 @@
 <body>
     <div class="container-fluid">
         <!-- Header -->
-        <nav class="navbar navbar-dark bg-dark mb-4">
+        <nav class="navbar navbar-dark bg-dark mb-4 navbar-custom">
             <div class="container-fluid">
-                <span class="navbar-brand mb-0 h1">
-                    <i class="fas fa-chart-line me-2"></i>
+                <span class="navbar-brand mb-0 navbar-brand-custom">
+                    <img src="/static/mlf_logo.png" alt="Logo" class="logo-img">
                     Genetic Algorithm Visualization
                 </span>
                 <span id="appStatus" class="status-badge status-ready">Ready</span>
@@ -300,6 +311,25 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- ONLY ADDITION: Parallel Coordinates Chart Section -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <h6><i class="fas fa-project-diagram me-2"></i>Elite Population - Parallel Coordinates Analysis</h6>
+                            <div id="parallelCoordsChart" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                                <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                    <i class="fas fa-chart-line me-2"></i>Waiting for elite population data...
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    This chart shows the objective function values for elite individuals. Each line represents one elite solution across all objectives.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -327,26 +357,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Charts Section -->
-        <div id="chartsSection" style="display: none;">
-            <!-- Candlestick Chart -->
-            <div class="chart-container">
-                <h4>Price Chart with Signals</h4>
-                <div id="candlestickChart" style="height: 500px;"></div>
-            </div>
-
-            <!-- P&L Chart -->
-            <div class="chart-container">
-                <h4>Portfolio P&L</h4>
-                <div id="pnlChart" style="height: 300px;"></div>
-            </div>
-
-            <!-- Bar Scores Grid -->
-            <div id="barScoresContainer" class="bar-charts-grid">
-                <!-- Bar score charts will be dynamically inserted here -->
-            </div>
-        </div>
     </div>
 
     <!-- Bootstrap JS -->
@@ -360,7 +370,10 @@
         let uploadedFiles = {};
         let optimizationRunning = false;
         let charts = {};
+        let parallelCoordsChart = null; // ONLY ADDITION: Parallel coordinates chart variable
         let generationMetrics = []; // Store metrics for each generation
+        let currentTestName = '';
+        let currentTimestamp = '';
 
         // Collapsible section toggle function
         function toggleCollapse(sectionId) {
@@ -376,6 +389,146 @@
                 content.style.display = 'none';
                 icon.classList.add('rotated');
             }
+        }
+
+        // ONLY ADDITION: Update Parallel Coordinates Chart
+        function updateParallelCoordsChart(eliteData, objectiveNames) {
+            if (!eliteData || eliteData.length === 0 || !objectiveNames || objectiveNames.length === 0) {
+                if (parallelCoordsChart) {
+                    parallelCoordsChart.destroy();
+                    parallelCoordsChart = null;
+                }
+                document.getElementById('parallelCoordsChart').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-line me-2"></i>No elite data available
+                    </div>
+                `;
+                return;
+            }
+
+            // Generate colors for each elite individual
+            const colors = Highcharts.getOptions().colors;
+            const colorCount = colors.length;
+
+            // Prepare chart configuration
+            const chartConfig = {
+                chart: {
+                    type: 'line',
+                    parallelCoordinates: true,
+                    parallelAxes: {
+                        lineWidth: 2,
+                        gridlinesWidth: 1,
+                        title: {
+                            style: {
+                                fontWeight: 'bold',
+                                fontSize: '12px'
+                            }
+                        }
+                    }
+                },
+                title: {
+                    text: `Elite Population Analysis (${eliteData.length} Individuals)`,
+                    style: {
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                    }
+                },
+                plotOptions: {
+                    series: {
+                        animation: {
+                            duration: 500
+                        },
+                        lineWidth: 2.5,
+                        opacity: 0.75,
+                        states: {
+                            hover: {
+                                lineWidth: 4,
+                                opacity: 1
+                            }
+                        },
+                        marker: {
+                            enabled: false,
+                            states: {
+                                hover: {
+                                    enabled: true,
+                                    radius: 4
+                                }
+                            }
+                        }
+                    }
+                },
+                tooltip: {
+                    formatter: function() {
+                        let tooltipText = '<b>Elite Individual #' + (this.series.index + 1) + '</b><br/>';
+                        const individualData = eliteData[this.series.index];
+                        objectiveNames.forEach(function(objName, i) {
+                            tooltipText += objName + ': ' +
+                                         Highcharts.numberFormat(individualData[i], 4) + '<br/>';
+                        });
+                        return tooltipText;
+                    }
+                },
+                legend: {
+                    enabled: false
+                },
+                credits: {
+                    enabled: false
+                },
+                // Configure axes for each objective
+                xAxis: objectiveNames.map((objName, index) => ({
+                    lineWidth: 0,
+                    labels: {
+                        enabled: false
+                    },
+                    title: {
+                        text: objName,
+                        style: {
+                            fontWeight: 'bold',
+                            fontSize: '11px'
+                        }
+                    }
+                })),
+                yAxis: objectiveNames.map((objName, index) => {
+                    // Calculate min/max for this objective across all elites
+                    const values = eliteData.map(elite => elite[index]);
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    const padding = (max - min) * 0.1;
+
+                    return {
+                        lineWidth: 1,
+                        min: min - padding,
+                        max: max + padding,
+                        title: {
+                            text: '',
+                            style: {
+                                fontSize: '10px'
+                            }
+                        },
+                        labels: {
+                            format: '{value:.3f}',
+                            style: {
+                                fontSize: '9px'
+                            }
+                        }
+                    };
+                }),
+                // Create series for each elite individual
+                series: eliteData.map((elite, index) => ({
+                    name: `Elite ${index + 1}`,
+                    data: elite.map((value, objIndex) => [objIndex, value]),
+                    color: colors[index % colorCount],
+                    lineWidth: index === 0 ? 3 : 2.5, // Highlight best elite
+                    opacity: index === 0 ? 0.9 : 0.75
+                }))
+            };
+
+            // Destroy existing chart and create new one
+            if (parallelCoordsChart) {
+                parallelCoordsChart.destroy();
+            }
+
+            parallelCoordsChart = Highcharts.chart('parallelCoordsChart', chartConfig);
         }
 
         // Update metrics table with generation data
@@ -468,6 +621,17 @@
             optimizationRunning = true;
             updateStatus('Running', 'running');
 
+            // Store test info for results saving (use same timestamp format as backend)
+            currentTestName = data.test_name;
+            // Create timestamp in format: 2025-08-15_200721
+            const now = new Date();
+            currentTimestamp = now.getFullYear() + '-' +
+                              String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                              String(now.getDate()).padStart(2, '0') + '_' +
+                              String(now.getHours()).padStart(2, '0') +
+                              String(now.getMinutes()).padStart(2, '0') +
+                              String(now.getSeconds()).padStart(2, '0');
+
             document.getElementById('testName').textContent = `Test: ${data.test_name}`;
             document.getElementById('generationInfo').textContent = `Generation 0 / ${data.total_generations}`;
             document.getElementById('optimizationProgress').style.display = 'block';
@@ -506,26 +670,34 @@
             // Update best individuals log
             updateBestIndividualsLog(data.best_individuals_log);
 
-            // Update charts with new data
-            updateCharts(data.chart_data);
-
             // Update objectives chart
             updateObjectivesChart(data.best_individuals_log);
 
+            // ONLY ADDITION: Update parallel coordinates chart
+            if (data.elite_objective_values && data.objective_names) {
+                updateParallelCoordsChart(data.elite_objective_values, data.objective_names);
+            }
+
             // Update metrics table
             updateMetricsTable(data.generation, data.chart_data);
-
-            // Show charts section
-            document.getElementById('chartsSection').style.display = 'block';
-
-            // Show charts section
-            document.getElementById('chartsSection').style.display = 'block';
         });
 
         socket.on('optimization_complete', function(data) {
             console.log('Optimization complete:', data);
             optimizationRunning = false;
-            updateStatus('Complete', 'ready');
+            updateStatus('Complete - Results Saved!', 'ready');
+
+            // Save generation metrics to CSV
+            if (generationMetrics.length > 0) {
+                saveGenerationMetrics();
+            }
+
+            // Show results information
+            if (data.results_saved) {
+                showResultsInfo(data.results_saved);
+            } else if (data.save_error) {
+                alert(`Results saved with warning: ${data.save_error}`);
+            }
 
             // Update button states
             document.getElementById('startBtn').style.display = 'inline-block';
@@ -741,51 +913,6 @@
             document.getElementById('configSummary').style.display = 'block';
         }
 
-        function updateCharts(chartData) {
-            console.log('Updating charts with data:', chartData);
-
-            // Update candlestick chart
-            updateCandlestickChart(chartData);
-
-            // Update P&L chart
-            updatePnLChart(chartData);
-
-            // Update bar scores charts
-            updateBarScoresCharts(chartData);
-
-            // Show charts section
-            document.getElementById('chartsSection').style.display = 'block';
-        }
-
-        // Global function to sync all charts when one is zoomed (excluding objectives chart)
-        function syncAllCharts(extremes, sourceChart) {
-            if (!extremes || extremes.trigger === 'syncExtremes') return;
-
-            try {
-                // Don't sync objectives chart since it has different x-axis (generations vs time)
-                if (sourceChart === 'objectives') return;
-
-                // Sync candlestick chart
-                if (charts.candlestick && sourceChart !== 'candlestick') {
-                    charts.candlestick.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
-                }
-
-                // Sync P&L chart
-                if (charts.pnl && sourceChart !== 'pnl') {
-                    charts.pnl.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
-                }
-
-                // Sync all bar score charts
-                Object.keys(charts).forEach(chartKey => {
-                    if (chartKey.startsWith('barChart_') && sourceChart !== chartKey && charts[chartKey]) {
-                        charts[chartKey].xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
-                    }
-                });
-            } catch (error) {
-                console.warn('Error syncing charts:', error);
-            }
-        }
-
         function updateObjectivesChart(bestIndividualsLog) {
             const container = document.getElementById('objectivesChart');
 
@@ -835,12 +962,7 @@
                         text: 'Generation'
                     },
                     min: 1,
-                    tickInterval: 1,
-                    events: {
-                        afterSetExtremes: function(e) {
-                            syncAllCharts(e, 'objectives');
-                        }
-                    }
+                    tickInterval: 1
                 },
                 yAxis: {
                     title: {
@@ -873,393 +995,52 @@
             charts.objectives = Highcharts.chart(container, chartConfig);
         }
 
-        function updateCandlestickChart(data) {
-            const container = document.getElementById('candlestickChart');
-
-            // Prepare candlestick data - already in correct format [timestamp, open, high, low, close]
-            const candlestickData = data.candlestick_data;
-
-            // Process trade_history to create entry/exit arrows
-            const buyArrows = [];
-            const sellArrows = [];
-
-            if (data.triggers && data.triggers.length > 0) {
-                data.triggers.forEach(trigger => {
-                    if (trigger.type === 'buy') {
-                        buyArrows.push({
-                            x: trigger.timestamp,
-                            y: trigger.price,
-                            reason: trigger.reason,
-                            price: trigger.price
-                        });
-                    } else if (trigger.type === 'sell') {
-                        sellArrows.push({
-                            x: trigger.timestamp,
-                            y: trigger.price,
-                            reason: trigger.reason,
-                            price: trigger.price
-                        });
-                    }
+        // Save generation metrics to CSV
+        async function saveGenerationMetrics() {
+            try {
+                const response = await fetch('/api/save_generation_metrics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        test_name: currentTestName,
+                        generation_metrics: generationMetrics,
+                        timestamp: currentTimestamp
+                    })
                 });
-            }
 
-            const chartConfig = {
-                chart: {
-                    zoomType: 'xy', // Enable box zoom on both axes
-                    panning: {
-                        enabled: true,
-                        type: 'xy'
-                    },
-                    panKey: 'shift' // Hold shift to pan instead of zoom
-                },
-                title: {
-                    text: `${data.ticker} - Price with Trade Entry/Exit Arrows`
-                },
-
-                rangeSelector: {
-                    selected: 1
-                },
-
-                // FORCE NO DATA GROUPING - This is the key fix!
-                plotOptions: {
-                    candlestick: {
-                        dataGrouping: {
-                            enabled: false
-                        }
-                    },
-                    scatter: {
-                        dataGrouping: {
-                            enabled: false
-                        }
-                    }
-                },
-
-                yAxis: [{
-                    labels: {
-                        align: 'right',
-                        x: -3
-                    },
-                    title: {
-                        text: 'Price ($)'
-                    },
-                    height: '100%',
-                    lineWidth: 2
-                }],
-
-                // Add event handlers for zoom synchronization
-                xAxis: {
-                    events: {
-                        afterSetExtremes: function(e) {
-                            syncAllCharts(e, 'candlestick');
-                        }
-                    }
-                },
-
-                tooltip: {
-                    split: false,
-                    shared: true
-                },
-
-                series: [{
-                    type: 'candlestick',
-                    name: data.ticker,
-                    data: candlestickData,
-                    yAxis: 0,
-                    dataGrouping: {
-                        enabled: false
-                    },
-                    // Set proper candlestick colors
-                    color: '#ff4444', // Red for down candles
-                    upColor: '#00C851', // Green for up candles
-                    lineColor: '#ff4444', // Red border for down candles
-                    upLineColor: '#00C851' // Green border for up candles
-        // AFTER (with improved hover behavior):
-        }, {
-            type: 'scatter',
-            name: 'Buy Signals',
-            data: buyArrows,
-            color: 'green',
-            marker: {
-                symbol: 'triangle',
-                radius: 10,  // Increased size for easier hovering
-                fillColor: 'green',
-                lineColor: 'darkgreen',
-                lineWidth: 2,
-                states: {
-                    hover: {
-                        radius: 14,  // Larger on hover
-                        fillColor: 'lightgreen',
-                        lineColor: 'green',
-                        lineWidth: 3
-                    }
+                const result = await response.json();
+                if (result.success) {
+                    console.log(`✅ Saved ${result.metrics_count} generation metrics to ${result.file_path}`);
+                } else {
+                    console.error('❌ Error saving generation metrics:', result.error);
                 }
-            },
-            yAxis: 0,
-            dataGrouping: {
-                enabled: false
-            },
-            tooltip: {
-                pointFormat: '<b>BUY:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
-                hideDelay: 1000,  // Keep tooltip visible longer
-                distance: 30      // Larger hover detection area
-            },
-            zIndex: 10,  // Ensure triangles are above candlesticks
-            enableMouseTracking: true,
-            stickyTracking: false,
-            findNearestPointBy: 'xy'
-        }, {
-            type: 'scatter',
-            name: 'Sell Signals',
-            data: sellArrows,
-            color: 'red',
-            marker: {
-                symbol: 'triangle-down',
-                radius: 10,  // Increased size for easier hovering
-                fillColor: 'red',
-                lineColor: 'darkred',
-                lineWidth: 2,
-                states: {
-                    hover: {
-                        radius: 14,  // Larger on hover
-                        fillColor: 'lightcoral',
-                        lineColor: 'red',
-                        lineWidth: 3
-                    }
-                }
-            },
-            yAxis: 0,
-            dataGrouping: {
-                enabled: false
-            },
-            tooltip: {
-                pointFormat: '<b>SELL:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
-                hideDelay: 1000,  // Keep tooltip visible longer
-                distance: 30      // Larger hover detection area
-            },
-            zIndex: 10,  // Ensure triangles are above candlesticks
-            enableMouseTracking: true,
-            stickyTracking: false,
-            findNearestPointBy: 'xy'
-                }]
-            };
-
-            if (charts.candlestick) {
-                charts.candlestick.destroy();
+            } catch (error) {
+                console.error('❌ Error saving generation metrics:', error);
             }
-            charts.candlestick = Highcharts.stockChart(container, chartConfig);
         }
 
-        function updatePnLChart(data) {
-            const container = document.getElementById('pnlChart');
+        // Show results information modal/alert
+        function showResultsInfo(resultsInfo) {
+            const filesList = resultsInfo.files_created.map(file =>
+                `• ${file.split('/').pop()}`
+            ).join('\n');
 
-            // Prepare P&L data
-            const pnlData = data.pnl_history.map(point => [
-                point.timestamp,
-                point.cumulative_pnl
-            ]);
+            const message = `🎉 Optimization Complete! 🎉
 
-            const chartConfig = {
-                title: {
-                    text: `Portfolio Performance - Cumulative P&L`
-                },
+Results saved to: ${resultsInfo.results_dir}
 
-                rangeSelector: {
-                    selected: 1
-                },
+Files created:
+${filesList}
 
-                plotOptions: {
-                    line: {
-                        dataGrouping: {
-                            enabled: false  // Disable grouping
-                        }
-                    }
-                },
+✅ Best monitor configuration (JSON)
+✅ Objectives evolution (CSV)
+✅ Generation metrics summary (CSV)
+✅ Original GA config (JSON)
+✅ Summary report (TXT)`;
 
-                yAxis: {
-                    title: {
-                        text: 'Cumulative P&L (%)'
-                    },
-                    plotLines: [{
-                        value: 0,
-                        color: 'gray',
-                        dashStyle: 'dash',
-                        width: 1,
-                        label: {
-                            text: 'Break Even',
-                            align: 'right'
-                        }
-                    }]
-                },
-
-                // Add event handlers for zoom synchronization
-                xAxis: {
-                    events: {
-                        afterSetExtremes: function(e) {
-                            syncAllCharts(e, 'pnl');
-                        }
-                    }
-                },
-
-                tooltip: {
-                    pointFormat: '<b>P&L:</b> {point.y:.2f}%'
-                },
-
-                series: [{
-                    name: 'Cumulative P&L',
-                    data: pnlData,
-                    color: '#2E86AB',
-                    lineWidth: 2,
-                    marker: {
-                        enabled: true,
-                        radius: 3,
-                        fillColor: '#2E86AB'
-                    },
-                    dataGrouping: {
-                        enabled: false
-                    }
-                }]
-            };
-
-            if (charts.pnl) {
-                charts.pnl.destroy();
-            }
-            charts.pnl = Highcharts.stockChart(container, chartConfig);
-        }
-
-        function updateBarScoresCharts(data) {
-            const container = document.getElementById('barScoresContainer');
-
-            // Clear existing bar score charts
-            container.innerHTML = '';
-
-            if (!data.bar_scores_history || data.bar_scores_history.length === 0) {
-                container.innerHTML = '<div class="col-12"><div class="alert alert-info">No bar scores data available</div></div>';
-                return;
-            }
-
-            // Create charts for each bar score type
-            const barScoreTypes = new Set();
-            data.bar_scores_history.forEach(point => {
-                Object.keys(point.scores).forEach(type => barScoreTypes.add(type));
-            });
-
-            barScoreTypes.forEach(type => {
-                const chartDiv = document.createElement('div');
-                chartDiv.className = 'chart-container';
-                chartDiv.innerHTML = `
-                    <h5>Bar Scores: ${type}</h5>
-                    <div id="barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}" style="height: 300px;"></div>
-                `;
-                container.appendChild(chartDiv);
-
-                // Prepare data for this bar score type
-                const barData = data.bar_scores_history
-                    .filter(point => point.scores[type] !== undefined)
-                    .map(point => [point.timestamp, point.scores[type]]);
-
-                // Find thresholds for this bar from enter_long and exit_long conditions
-                const plotLines = [];
-
-                // Check enter_long conditions (typically bull bars)
-                if (data.threshold_config && data.threshold_config.enter_long) {
-                    data.threshold_config.enter_long.forEach(condition => {
-                        if (condition.name === type) {
-                            plotLines.push({
-                                value: condition.threshold,
-                                color: '#00C851', // Green for entry threshold
-                                dashStyle: 'dash',
-                                width: 2,
-                                label: {
-                                    text: `Entry: ${condition.threshold}`,
-                                    align: 'right',
-                                    style: {
-                                        color: '#00C851',
-                                        fontWeight: 'bold'
-                                    }
-                                },
-                                zIndex: 5
-                            });
-                        }
-                    });
-                }
-
-                // Check exit_long conditions (typically bear bars)
-                if (data.threshold_config && data.threshold_config.exit_long) {
-                    data.threshold_config.exit_long.forEach(condition => {
-                        if (condition.name === type) {
-                            plotLines.push({
-                                value: condition.threshold,
-                                color: '#ff4444', // Red for exit threshold
-                                dashStyle: 'dash',
-                                width: 2,
-                                label: {
-                                    text: `Exit: ${condition.threshold}`,
-                                    align: 'right',
-                                    style: {
-                                        color: '#ff4444',
-                                        fontWeight: 'bold'
-                                    }
-                                },
-                                zIndex: 5
-                            });
-                        }
-                    });
-                }
-
-                const chartConfig = {
-                    title: {
-                        text: `${type} Bar Scores Evolution`
-                    },
-
-                    rangeSelector: {
-                        selected: 1
-                    },
-
-                    plotOptions: {
-                        line: {
-                            dataGrouping: {
-                                enabled: false
-                            }
-                        }
-                    },
-
-                    yAxis: {
-                        title: {
-                            text: 'Score'
-                        },
-                        plotLines: plotLines, // Add threshold lines here
-                        min: 0,
-                        max: 1
-                    },
-
-                    // Add event handlers for zoom synchronization
-                    xAxis: {
-                        events: {
-                            afterSetExtremes: function(e) {
-                                syncAllCharts(e, chartId);
-                            }
-                        }
-                    },
-
-                    tooltip: {
-                        pointFormat: '<b>{series.name}:</b> {point.y:.4f}<br/>',
-                        shared: true
-                    },
-
-                    series: [{
-                        name: type,
-                        data: barData,
-                        color: '#FF6B6B',
-                        lineWidth: 2,
-                        dataGrouping: {
-                            enabled: false
-                        }
-                    }]
-                };
-
-                const chartId = `barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                charts[chartId] = Highcharts.stockChart(chartId, chartConfig);
-            });
+            alert(message);
         }
     </script>
 </body>
