@@ -14,24 +14,24 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
-    <!-- ONLY ADDITION: Parallel Coordinates module -->
+    <!-- Parallel Coordinates module -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/parallel-coordinates.min.js"></script>
 
     <style>
         /* Custom navbar styling */
         .navbar-custom {
-            padding: 20px 0; /* Increase top/bottom padding */
-            min-height: 80px; /* Set minimum height */
+            padding: 20px 0;
+            min-height: 80px;
         }
 
         .navbar-brand-custom {
-            font-size: 1.5rem; /* Larger text */
+            font-size: 1.5rem;
             display: flex;
             align-items: center;
         }
 
         .logo-img {
-            height: 150px; /* Larger logo */
+            height: 150px;
             width: auto;
             margin-right: 15px;
         }
@@ -191,6 +191,78 @@
             align-items: center;
             margin-bottom: 10px;
         }
+
+        /* JSON Editor Styles */
+        .json-editor-container {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        .json-editor-header {
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .json-text-area {
+            width: 100%;
+            min-height: 400px;
+            border: none;
+            outline: none;
+            padding: 15px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            resize: vertical;
+            background: #ffffff;
+            color: #333;
+        }
+
+        .json-text-area:focus {
+            box-shadow: inset 0 0 0 2px #007bff;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 8px 12px;
+            border-top: 1px solid #f5c6cb;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .success-message {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 8px 12px;
+            border-top: 1px solid #bee5eb;
+            font-size: 12px;
+        }
+
+        .modification-indicator {
+            color: #dc3545;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .btn-group-sm .btn {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+        }
+
+        .modification-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -239,10 +311,79 @@
                     </div>
                 </div>
 
-                <!-- Configuration Summary -->
+                <!-- JSON Configuration Editors -->
                 <div id="configSummary" class="config-summary" style="display: none;">
-                    <h5>Configuration Summary</h5>
-                    <div id="configDetails"></div>
+                    <h5>Configuration Editor</h5>
+
+                    <!-- Modification Warning -->
+                    <div id="modificationWarning" class="modification-warning" style="display: none;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Configuration Modified:</strong> Your changes will be used when you start optimization.
+                    </div>
+
+                    <div class="row">
+                        <!-- GA Config Editor -->
+                        <div class="col-md-6">
+                            <div class="json-editor-container">
+                                <div class="json-editor-header">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-robot me-2"></i>GA Configuration
+                                        <span id="gaModifiedIndicator" class="modification-indicator" style="display: none;">*</span>
+                                    </h6>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary" onclick="formatJSON('ga')" title="Format JSON">
+                                            <i class="fas fa-indent"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="validateJSON('ga')" title="Validate JSON">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="resetConfig('ga')" title="Reset to Original">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea
+                                    id="gaConfigEditor"
+                                    class="json-text-area"
+                                    placeholder="GA JSON will appear here..."
+                                    spellcheck="false"
+                                ></textarea>
+                                <div id="gaErrorMessage" class="error-message" style="display: none;"></div>
+                                <div id="gaSuccessMessage" class="success-message" style="display: none;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Data Config Editor -->
+                        <div class="col-md-6">
+                            <div class="json-editor-container">
+                                <div class="json-editor-header">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-chart-line me-2"></i>Data Configuration
+                                        <span id="dataModifiedIndicator" class="modification-indicator" style="display: none;">*</span>
+                                    </h6>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary" onclick="formatJSON('data')" title="Format JSON">
+                                            <i class="fas fa-indent"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="validateJSON('data')" title="Validate JSON">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="resetConfig('data')" title="Reset to Original">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea
+                                    id="dataConfigEditor"
+                                    class="json-text-area"
+                                    placeholder="Data JSON will appear here..."
+                                    spellcheck="false"
+                                ></textarea>
+                                <div id="dataErrorMessage" class="error-message" style="display: none;"></div>
+                                <div id="dataSuccessMessage" class="success-message" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -312,7 +453,7 @@
                         </div>
                     </div>
 
-                    <!-- ONLY ADDITION: Parallel Coordinates Chart Section -->
+                    <!-- Parallel Coordinates Chart Section -->
                     <div class="row mt-3">
                         <div class="col-md-12">
                             <h6><i class="fas fa-project-diagram me-2"></i>Elite Population - Parallel Coordinates Analysis</h6>
@@ -370,10 +511,18 @@
         let uploadedFiles = {};
         let optimizationRunning = false;
         let charts = {};
-        let parallelCoordsChart = null; // ONLY ADDITION: Parallel coordinates chart variable
-        let generationMetrics = []; // Store metrics for each generation
+        let parallelCoordsChart = null;
+        let generationMetrics = [];
         let currentTestName = '';
         let currentTimestamp = '';
+
+        // JSON Editor variables
+        let originalGAConfig = null;
+        let originalDataConfig = null;
+        let currentGAConfig = null;
+        let currentDataConfig = null;
+        let gaModified = false;
+        let dataModified = false;
 
         // Collapsible section toggle function
         function toggleCollapse(sectionId) {
@@ -391,7 +540,168 @@
             }
         }
 
-        // ONLY ADDITION: Update Parallel Coordinates Chart
+        // JSON Editor Functions
+        function handleTextChange(configType) {
+            const isGA = configType === 'ga';
+
+            if (isGA) {
+                gaModified = true;
+                // Update currentGAConfig in real-time
+                const gaEditor = document.getElementById('gaConfigEditor');
+                try {
+                    if (gaEditor.value.trim()) {
+                        currentGAConfig = JSON.parse(gaEditor.value);
+                    }
+                } catch (error) {
+                    // Keep previous valid config if current is invalid
+                }
+            } else {
+                dataModified = true;
+                // Update currentDataConfig in real-time
+                const dataEditor = document.getElementById('dataConfigEditor');
+                try {
+                    if (dataEditor.value.trim()) {
+                        currentDataConfig = JSON.parse(dataEditor.value);
+                    }
+                } catch (error) {
+                    // Keep previous valid config if current is invalid
+                }
+            }
+
+            updateModificationIndicators();
+
+            // Auto-validate after a short delay
+            clearTimeout(window.validationTimeout);
+            window.validationTimeout = setTimeout(() => {
+                validateJSON(configType, false); // Silent validation
+            }, 1000);
+        }
+
+        function updateModificationIndicators() {
+            const gaIndicator = document.getElementById('gaModifiedIndicator');
+            const dataIndicator = document.getElementById('dataModifiedIndicator');
+            const warning = document.getElementById('modificationWarning');
+            const loadBtn = document.getElementById('loadConfigsBtn');
+
+            gaIndicator.style.display = gaModified ? 'inline' : 'none';
+            dataIndicator.style.display = dataModified ? 'inline' : 'none';
+            warning.style.display = (gaModified || dataModified) ? 'block' : 'none';
+
+            // Update warning message to be less confusing
+            if (gaModified || dataModified) {
+                warning.innerHTML = '<i class="fas fa-info-circle me-2"></i><strong>Configuration Modified:</strong> Your changes will be used when you start optimization.';
+                loadBtn.innerHTML = '<i class="fas fa-sync me-2"></i>Reload from Files (Optional)';
+                loadBtn.className = 'btn btn-secondary';
+                loadBtn.title = 'Click to reload original files and discard edits';
+            } else {
+                loadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Load Configurations';
+                loadBtn.className = 'btn btn-primary';
+                loadBtn.title = 'Load configuration files';
+            }
+        }
+
+        function formatJSON(configType) {
+            const editor = document.getElementById(`${configType}ConfigEditor`);
+
+            try {
+                const parsed = JSON.parse(editor.value);
+                // Preserve original order by using the same spacing
+                const formatted = JSON.stringify(parsed, null, 2);
+                editor.value = formatted;
+
+                // Update the current config with the parsed version
+                if (configType === 'ga') {
+                    currentGAConfig = parsed;
+                } else {
+                    currentDataConfig = parsed;
+                }
+
+                showMessage(configType, 'JSON formatted successfully!', 'success');
+            } catch (error) {
+                showMessage(configType, `Invalid JSON: ${error.message}`, 'error');
+            }
+        }
+
+        function validateJSON(configType, showSuccess = true) {
+            const editor = document.getElementById(`${configType}ConfigEditor`);
+
+            try {
+                JSON.parse(editor.value);
+                if (showSuccess) {
+                    showMessage(configType, 'Valid JSON ✓', 'success');
+                } else {
+                    hideMessage(configType);
+                }
+                return true;
+            } catch (error) {
+                const errorMsg = `Invalid JSON: ${error.message}`;
+                if (error.message.includes('position')) {
+                    const position = error.message.match(/position (\d+)/);
+                    if (position) {
+                        const pos = parseInt(position[1]);
+                        const lines = editor.value.substring(0, pos).split('\n');
+                        const line = lines.length;
+                        const col = lines[lines.length - 1].length + 1;
+                        showMessage(configType, `${errorMsg} (Line ${line}, Column ${col})`, 'error');
+                    } else {
+                        showMessage(configType, errorMsg, 'error');
+                    }
+                } else {
+                    showMessage(configType, errorMsg, 'error');
+                }
+                return false;
+            }
+        }
+
+        function resetConfig(configType) {
+            if (!confirm(`Reset ${configType.toUpperCase()} configuration to original?`)) {
+                return;
+            }
+
+            const editor = document.getElementById(`${configType}ConfigEditor`);
+            const original = configType === 'ga' ? originalGAConfig : originalDataConfig;
+
+            if (original) {
+                editor.value = JSON.stringify(original, null, 2);
+
+                if (configType === 'ga') {
+                    gaModified = false;
+                } else {
+                    dataModified = false;
+                }
+
+                updateModificationIndicators();
+                hideMessage(configType);
+                showMessage(configType, 'Reset to original configuration', 'success');
+            }
+        }
+
+        function showMessage(configType, message, type) {
+            const errorDiv = document.getElementById(`${configType}ErrorMessage`);
+            const successDiv = document.getElementById(`${configType}SuccessMessage`);
+
+            if (type === 'error') {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                successDiv.style.display = 'none';
+            } else {
+                successDiv.textContent = message;
+                successDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+            }
+
+            // Auto-hide success messages
+            if (type === 'success') {
+                setTimeout(() => hideMessage(configType), 3000);
+            }
+        }
+
+        function hideMessage(configType) {
+            document.getElementById(`${configType}ErrorMessage`).style.display = 'none';
+            document.getElementById(`${configType}SuccessMessage`).style.display = 'none';
+        }
+
+        // Update Parallel Coordinates Chart
         function updateParallelCoordsChart(eliteData, objectiveNames) {
             if (!eliteData || eliteData.length === 0 || !objectiveNames || objectiveNames.length === 0) {
                 if (parallelCoordsChart) {
@@ -617,13 +927,12 @@
         });
 
         socket.on('optimization_started', function(data) {
-            console.log('Optimization started:', data);
+            console.log('🎯 Optimization started with data:', data);
             optimizationRunning = true;
             updateStatus('Running', 'running');
 
-            // Store test info for results saving (use same timestamp format as backend)
+            // Store test info for results saving
             currentTestName = data.test_name;
-            // Create timestamp in format: 2025-08-15_200721
             const now = new Date();
             currentTimestamp = now.getFullYear() + '-' +
                               String(now.getMonth() + 1).padStart(2, '0') + '-' +
@@ -631,6 +940,9 @@
                               String(now.getHours()).padStart(2, '0') +
                               String(now.getMinutes()).padStart(2, '0') +
                               String(now.getSeconds()).padStart(2, '0');
+
+            console.log('📊 Test Name from backend:', data.test_name);
+            console.log('📊 Total Generations:', data.total_generations);
 
             document.getElementById('testName').textContent = `Test: ${data.test_name}`;
             document.getElementById('generationInfo').textContent = `Generation 0 / ${data.total_generations}`;
@@ -647,6 +959,15 @@
 
             // Clear previous data
             document.getElementById('bestIndividualsLog').innerHTML = '<div class="text-muted">Starting optimization...</div>';
+
+            // Show confirmation that configs were used
+            setTimeout(() => {
+                const statusMsg = `✅ Optimization Started!\n\n` +
+                                `Using: ${data.test_name}\n` +
+                                `Generations: ${data.total_generations}\n\n` +
+                                `Your edited configurations are now running.`;
+                console.log(statusMsg);
+            }, 1000);
         });
 
         socket.on('generation_complete', function(data) {
@@ -673,7 +994,7 @@
             // Update objectives chart
             updateObjectivesChart(data.best_individuals_log);
 
-            // ONLY ADDITION: Update parallel coordinates chart
+            // Update parallel coordinates chart
             if (data.elite_objective_values && data.objective_names) {
                 updateParallelCoordsChart(data.elite_objective_values, data.objective_names);
             }
@@ -751,16 +1072,147 @@
         });
 
         // Button event handlers
-        document.getElementById('startBtn').addEventListener('click', function() {
-            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
+        document.getElementById('startBtn').addEventListener('click', async function() {
+            // Always get the latest content from editors
+            const gaEditor = document.getElementById('gaConfigEditor');
+            const dataEditor = document.getElementById('dataConfigEditor');
+
+            let currentGAFromEditor = null;
+            let currentDataFromEditor = null;
+
+            // Parse current editor content
+            try {
+                if (gaEditor.value.trim()) {
+                    currentGAFromEditor = JSON.parse(gaEditor.value);
+                    console.log('✅ Parsed GA config from editor:', currentGAFromEditor);
+                }
+                if (dataEditor.value.trim()) {
+                    currentDataFromEditor = JSON.parse(dataEditor.value);
+                    console.log('✅ Parsed Data config from editor:', currentDataFromEditor);
+                }
+            } catch (error) {
+                alert('Invalid JSON in editors. Please fix JSON errors before starting optimization.');
+                console.error('❌ JSON Parse Error:', error);
+                return;
+            }
+
+            // Use editor content if available, otherwise fall back to stored configs
+            const finalGAConfig = currentGAFromEditor || currentGAConfig;
+            const finalDataConfig = currentDataFromEditor || currentDataConfig;
+
+            if (!finalGAConfig || !finalDataConfig) {
                 alert('Please load both configuration files first.');
                 return;
             }
 
-            socket.emit('start_optimization', {
-                ga_config_path: uploadedFiles.ga_config,
-                data_config_path: uploadedFiles.data_config
+            // Check if we have file paths (needed for backend)
+            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
+                alert('Please upload both configuration files first.');
+                return;
+            }
+
+            // Show user what configs are being sent
+            const configSummary = {
+                ga_test_name: finalGAConfig.test_name || 'Unknown',
+                ga_generations: finalGAConfig.ga_hyperparameters?.number_of_iterations || 'Unknown',
+                data_ticker: finalDataConfig.ticker || 'Unknown',
+                data_start: finalDataConfig.start_date || 'Unknown',
+                data_end: finalDataConfig.end_date || 'Unknown'
+            };
+
+            console.log('🚀 Starting optimization with configs:', {
+                ga_config: finalGAConfig,
+                data_config: finalDataConfig,
+                summary: configSummary
             });
+
+            const confirmMsg = `🚀 Starting optimization with:\n\n` +
+                             `GA Config:\n` +
+                             `• Test Name: ${configSummary.ga_test_name}\n` +
+                             `• Generations: ${configSummary.ga_generations}\n\n` +
+                             `Data Config:\n` +
+                             `• Ticker: ${configSummary.data_ticker}\n` +
+                             `• Period: ${configSummary.data_start} to ${configSummary.data_end}\n\n` +
+                             `Continue?`;
+
+            if (confirm(confirmMsg)) {
+                try {
+                    updateStatus('Uploading modified configs...', 'loading');
+
+                    // WORKAROUND: Upload modified configs as new temporary files
+                    // since the backend only reads from file paths
+
+                    // Create temporary file for modified GA config with preserved formatting
+                    const gaConfigBlob = new Blob([gaEditor.value], {
+                        type: 'application/json'
+                    });
+                    const gaConfigFile = new File([gaConfigBlob], 'modified_ga_config.json', {
+                        type: 'application/json'
+                    });
+
+                    // Create temporary file for modified Data config with preserved formatting
+                    const dataConfigBlob = new Blob([dataEditor.value], {
+                        type: 'application/json'
+                    });
+                    const dataConfigFile = new File([dataConfigBlob], 'modified_data_config.json', {
+                        type: 'application/json'
+                    });
+
+                    // Upload modified GA config
+                    const gaFormData = new FormData();
+                    gaFormData.append('file', gaConfigFile);
+                    gaFormData.append('type', 'modified_ga_config');
+
+                    const gaResponse = await fetch('/api/upload_file', {
+                        method: 'POST',
+                        body: gaFormData
+                    });
+                    const gaResult = await gaResponse.json();
+
+                    if (!gaResult.success) {
+                        throw new Error(`GA config upload failed: ${gaResult.error}`);
+                    }
+
+                    // Upload modified Data config
+                    const dataFormData = new FormData();
+                    dataFormData.append('file', dataConfigFile);
+                    dataFormData.append('type', 'modified_data_config');
+
+                    const dataResponse = await fetch('/api/upload_file', {
+                        method: 'POST',
+                        body: dataFormData
+                    });
+                    const dataResult = await dataResponse.json();
+
+                    if (!dataResult.success) {
+                        throw new Error(`Data config upload failed: ${dataResult.error}`);
+                    }
+
+                    console.log('✅ Uploaded modified configs:', {
+                        ga_config_path: gaResult.filepath,
+                        data_config_path: dataResult.filepath
+                    });
+
+                    updateStatus('Starting optimization...', 'loading');
+
+                    // Now start optimization with the modified file paths
+                    const payloadToSend = {
+                        ga_config_path: gaResult.filepath,  // Use modified file paths
+                        data_config_path: dataResult.filepath,
+                        config_source: 'frontend_editor_modified_files',
+                        original_test_name: configSummary.ga_test_name
+                    };
+
+                    console.log('📤 SENDING TO BACKEND:', JSON.stringify(payloadToSend, null, 2));
+
+                    socket.emit('start_optimization', payloadToSend);
+
+                } catch (error) {
+                    console.error('❌ Error uploading modified configs:', error);
+                    updateStatus('Error', 'error');
+                    alert(`Failed to upload modified configurations: ${error.message}`);
+                }
+            }
         });
 
         document.getElementById('pauseBtn').addEventListener('click', function() {
@@ -798,6 +1250,10 @@
 
             await loadConfigurations();
         });
+
+        // Real-time editing handlers
+        document.getElementById('gaConfigEditor').addEventListener('input', () => handleTextChange('ga'));
+        document.getElementById('dataConfigEditor').addEventListener('input', () => handleTextChange('data'));
 
         // Helper functions
         function updateStatus(text, type) {
@@ -857,6 +1313,40 @@
             try {
                 updateStatus('Loading configs...', 'loading');
 
+                // Get current text from editors if they exist
+                const gaEditor = document.getElementById('gaConfigEditor');
+                const dataEditor = document.getElementById('dataConfigEditor');
+
+                let gaConfigToSend = null;
+                let dataConfigToSend = null;
+                let preserveGAEdits = false;
+                let preserveDataEdits = false;
+
+                // Check if editors have content (user has been editing)
+                if (gaEditor.value.trim()) {
+                    try {
+                        gaConfigToSend = JSON.parse(gaEditor.value);
+                        preserveGAEdits = true;
+                        console.log('🎯 Preserving GA edits:', gaConfigToSend);
+                    } catch (error) {
+                        alert('Invalid GA JSON configuration. Please fix errors before loading.');
+                        updateStatus('Error', 'error');
+                        return;
+                    }
+                }
+
+                if (dataEditor.value.trim()) {
+                    try {
+                        dataConfigToSend = JSON.parse(dataEditor.value);
+                        preserveDataEdits = true;
+                        console.log('🎯 Preserving Data edits:', dataConfigToSend);
+                    } catch (error) {
+                        alert('Invalid Data JSON configuration. Please fix errors before loading.');
+                        updateStatus('Error', 'error');
+                        return;
+                    }
+                }
+
                 const response = await fetch('/api/load_configs', {
                     method: 'POST',
                     headers: {
@@ -864,16 +1354,83 @@
                     },
                     body: JSON.stringify({
                         ga_config_path: uploadedFiles.ga_config,
-                        data_config_path: uploadedFiles.data_config
+                        data_config_path: uploadedFiles.data_config,
+                        modified_ga_config: gaConfigToSend,
+                        modified_data_config: dataConfigToSend
                     })
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
-                    displayConfigSummary(result);
+                    // Store original configurations from file
+                    originalGAConfig = result.ga_config;
+                    originalDataConfig = result.data_config;
+
+                    // Use edited content if available, otherwise use originals
+                    currentGAConfig = gaConfigToSend || originalGAConfig;
+                    currentDataConfig = dataConfigToSend || originalDataConfig;
+
+                    // IMPORTANT: Only update editors if they were empty (first load)
+                    // If user has been editing, preserve their edits!
+                    if (!preserveGAEdits) {
+                        gaEditor.value = JSON.stringify(originalGAConfig, null, 2);
+                        currentGAConfig = originalGAConfig;
+                    } else {
+                        // Keep user's edits and use them
+                        console.log('✅ Keeping GA edits in editor');
+                        currentGAConfig = gaConfigToSend;
+                    }
+
+                    if (!preserveDataEdits) {
+                        dataEditor.value = JSON.stringify(originalDataConfig, null, 2);
+                        currentDataConfig = originalDataConfig;
+                    } else {
+                        // Keep user's edits and use them
+                        console.log('✅ Keeping Data edits in editor');
+                        currentDataConfig = dataConfigToSend;
+                    }
+
+                    // Show editors and control panel
+                    document.getElementById('configSummary').style.display = 'block';
                     document.getElementById('controlPanel').style.display = 'block';
+
+                    // Reset modification indicators and button state
+                    gaModified = false;
+                    dataModified = false;
+                    updateModificationIndicators();
+
+                    // Clear any error messages
+                    hideMessage('ga');
+                    hideMessage('data');
+
                     updateStatus('Ready', 'ready');
+
+                    // Show confirmation message with details
+                    let confirmationMsg = '✅ Configurations loaded successfully!\n\n';
+
+                    if (preserveGAEdits || preserveDataEdits) {
+                        confirmationMsg += '🎯 Your edits have been preserved and will be used for optimization!\n\n';
+                        confirmationMsg += 'Active configs:\n';
+                        if (preserveGAEdits) {
+                            confirmationMsg += `• GA Config: "${currentGAConfig.test_name}" (your edited version)\n`;
+                        } else {
+                            confirmationMsg += `• GA Config: "${currentGAConfig.test_name}" (original file)\n`;
+                        }
+                        if (preserveDataEdits) {
+                            confirmationMsg += `• Data Config: "${currentDataConfig.ticker}" (your edited version)\n`;
+                        } else {
+                            confirmationMsg += `• Data Config: "${currentDataConfig.ticker}" (original file)\n`;
+                        }
+                    } else {
+                        confirmationMsg += 'Original file configurations loaded. You can now edit them in the text areas.\n\n';
+                        confirmationMsg += `Loaded configs:\n`;
+                        confirmationMsg += `• GA Config: "${currentGAConfig.test_name}"\n`;
+                        confirmationMsg += `• Data Config: "${currentDataConfig.ticker}"\n`;
+                    }
+
+                    confirmationMsg += '\n🚀 Ready to start optimization!';
+                    alert(confirmationMsg);
                 } else {
                     throw new Error(result.error);
                 }
@@ -882,35 +1439,6 @@
                 updateStatus('Error', 'error');
                 alert(`Failed to load configurations: ${error.message}`);
             }
-        }
-
-        function displayConfigSummary(configData) {
-            const summaryElement = document.getElementById('configDetails');
-            const gaConfig = configData.ga_config;
-            const dataConfig = configData.data_config;
-
-            summaryElement.innerHTML = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Genetic Algorithm Config</h6>
-                        <ul class="list-unstyled small">
-                            <li><strong>Test Name:</strong> ${gaConfig.test_name}</li>
-                            <li><strong>Generations:</strong> ${gaConfig.genetic_algorithm?.number_of_generations || 'Not specified'}</li>
-                            <li><strong>Population:</strong> ${gaConfig.genetic_algorithm?.population_size || 'Not specified'}</li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Data Config</h6>
-                        <ul class="list-unstyled small">
-                            <li><strong>Ticker:</strong> ${dataConfig.ticker}</li>
-                            <li><strong>Start:</strong> ${dataConfig.start_date}</li>
-                            <li><strong>End:</strong> ${dataConfig.end_date}</li>
-                        </ul>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('configSummary').style.display = 'block';
         }
 
         function updateObjectivesChart(bestIndividualsLog) {
@@ -1042,6 +1570,28 @@ ${filesList}
 
             alert(message);
         }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+S to load configurations (apply changes)
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                if (uploadedFiles.ga_config && uploadedFiles.data_config) {
+                    loadConfigurations();
+                }
+            }
+
+            // Ctrl+F to format current editor
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                const activeElement = document.activeElement;
+                if (activeElement.id === 'gaConfigEditor') {
+                    formatJSON('ga');
+                } else if (activeElement.id === 'dataConfigEditor') {
+                    formatJSON('data');
+                }
+            }
+        });
     </script>
 </body>
 </html>

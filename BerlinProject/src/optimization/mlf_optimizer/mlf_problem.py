@@ -144,9 +144,9 @@ class MlfProblem(ProblemDomain):
                         cnt += 1
 
                         current_weight = bar_config['indicators'][indicator_name]
-                        delta = percent_change * (3.0 - 0.1)  # Weight range is 0.1 to 3.0
+                        delta = percent_change * (10.0 - 0.1)  # Weight range is 0.1 to 3.0
                         new_weight = current_weight + random.uniform(-delta, delta)
-                        new_weight = max(0.1, min(new_weight, 3.0))
+                        new_weight = max(0.1, min(new_weight, 100.0))
 
                         bar_config['indicators'][indicator_name] = new_weight
 
@@ -192,5 +192,5 @@ class MlfProblem(ProblemDomain):
                                 new_value = value + random.uniform(-delta, delta)
                             new_value = max(low, min(new_value, high))
                             indicator.parameters[name] = new_value
-
+            print("mutated ", cnt)
         individual.source += f", mutated: {cnt}, idx: {iteration}"
