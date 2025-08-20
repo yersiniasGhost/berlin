@@ -762,12 +762,8 @@ def load_configs():
 
         return jsonify({
             'success': True,
-            'ga_config': {
-                'test_name': ga_config.get('test_name', 'Unknown'),
-                'monitor': ga_config.get('monitor', {}),
-                'genetic_algorithm': ga_config.get('genetic_algorithm', {})
-            },
-            'data_config': data_config
+            'ga_config': ga_config,  # Full config for editing
+            'data_config': data_config  # Full config for editing
         })
 
     except Exception as e:
