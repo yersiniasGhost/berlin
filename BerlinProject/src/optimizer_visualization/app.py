@@ -821,6 +821,232 @@ def save_generation_metrics():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/save_config', methods=['POST'])
+def save_config():
+    """Save a configuration (GA or data) to a file"""
+    try:
+        data = request.get_json()
+        config_data = data.get('config_data')
+        config_type = data.get('config_type')  # 'ga_config' or 'data_config'
+        filename = data.get('filename', 'config.json')
+
+        if not config_data:
+            return jsonify({'success': False, 'error': 'No configuration data provided'})
+
+        if not config_type:
+            return jsonify({'success': False, 'error': 'Configuration type not specified'})
+
+        # Create configs directory
+        configs_dir = Path('saved_configs')
+        configs_dir.mkdir(exist_ok=True)
+
+        # Generate timestamp for unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = f"{timestamp}_{config_type}_{filename}"
+        filepath = configs_dir / safe_filename
+
+        # Save configuration to file
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        logger.info(f"Saved {config_type} configuration to {filepath}")
+
+        return jsonify({
+            'success': True,
+            'filepath': str(filepath.absolute()),
+            'filename': safe_filename,
+            'message': f'{config_type.replace("_", " ").title()} configuration saved successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Error saving config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/download_config', methods=['POST'])
+def download_config():
+    """Prepare a configuration for download"""
+    try:
+        data = request.get_json()
+        config_data = data.get('config_data')
+        config_type = data.get('config_type', 'config')
+        test_name = data.get('test_name', 'unnamed')
+
+        if not config_data:
+            return jsonify({'success': False, 'error': 'No configuration data provided'})
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{timestamp}_{test_name}_{config_type}.json"
+
+        # Create downloads directory
+        downloads_dir = Path('downloads')
+        downloads_dir.mkdir(exist_ok=True)
+
+        filepath = downloads_dir / filename
+
+        # Save file for download
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        return jsonify({
+            'success': True,
+            'download_url': f'/api/download_file/{filename}',
+            'filename': filename,
+            'message': 'Configuration prepared for download'
+        })
+
+    except Exception as e:
+        logger.error(f"Error preparing config download: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/download_file/<filename>')
+def download_file(filename):
+    """Download a prepared file"""
+    try:
+        downloads_dir = Path('downloads')
+        filepath = downloads_dir / filename
+
+        if not filepath.exists():
+            return jsonify({'error': 'File not found'}), 404
+
+        return app.send_static_file(f'../downloads/{filename}')
+
+    except Exception as e:
+        logger.error(f"Error downloading file: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/validate_config', methods=['POST'])
+def validate_config():
+    """Validate a configuration structure"""
+    try:
+        data = request.get_json()
+        config_data = data.get('config_data')
+        config_type = data.get('config_type')
+
+        if not config_data:
+            return jsonify({'success': False, 'error': 'No configuration data provided'})
+
+        errors = []
+        warnings = []
+
+        if config_type == 'ga_config':
+            # Validate GA configuration structure
+            required_fields = ['test_name', 'monitor', 'indicators']
+            for field in required_fields:
+                if field not in config_data:
+                    errors.append(f"Missing required field: {field}")
+
+            # Validate GA-specific fields
+            if 'ga_hyperparameters' in config_data:
+                ga_params = config_data['ga_hyperparameters']
+                required_ga_fields = ['number_of_iterations', 'population_size', 'elite_size']
+                for field in required_ga_fields:
+                    if field not in ga_params:
+                        warnings.append(f"Missing GA parameter: {field}")
+
+            # Validate indicators have ranges for GA optimization
+            if 'indicators' in config_data:
+                for i, indicator in enumerate(config_data['indicators']):
+                    if 'ranges' not in indicator or not indicator['ranges']:
+                        warnings.append(f"Indicator {i+1} ({indicator.get('name', 'unnamed')}) has no optimization ranges")
+
+        elif config_type == 'data_config':
+            # Validate data configuration structure
+            required_fields = ['ticker', 'start_date', 'end_date']
+            for field in required_fields:
+                if field not in config_data:
+                    errors.append(f"Missing required field: {field}")
+
+            # Validate date format
+            try:
+                if 'start_date' in config_data and 'end_date' in config_data:
+                    start_date = datetime.strptime(config_data['start_date'], '%Y-%m-%d')
+                    end_date = datetime.strptime(config_data['end_date'], '%Y-%m-%d')
+                    if start_date >= end_date:
+                        errors.append("Start date must be before end date")
+            except ValueError as e:
+                errors.append(f"Invalid date format: {e}")
+
+        return jsonify({
+            'success': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings,
+            'message': 'Configuration is valid' if len(errors) == 0 else 'Configuration has errors'
+        })
+
+    except Exception as e:
+        logger.error(f"Error validating config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/load_example_configs', methods=['GET'])
+def load_example_configs():
+    """Load example configurations for form initialization"""
+    try:
+        examples = {}
+        
+        # Load example GA config
+        example_ga_path = Path('inputs/dan_fuck_around1.json')
+        if example_ga_path.exists():
+            with open(example_ga_path) as f:
+                examples['ga_config'] = json.load(f)
+        else:
+            # Provide default GA config structure
+            examples['ga_config'] = {
+                "test_name": "New_Test",
+                "monitor": {
+                    "name": "New Strategy",
+                    "description": "Description for new strategy",
+                    "trade_executor": {
+                        "default_position_size": 100.0,
+                        "stop_loss_pct": 0.02,
+                        "take_profit_pct": 0.04,
+                        "ignore_bear_signals": False,
+                        "trailing_stop_loss": True,
+                        "trailing_stop_distance_pct": 0.01,
+                        "trailing_stop_activation_pct": 0.005
+                    },
+                    "enter_long": [],
+                    "exit_long": [],
+                    "bars": {}
+                },
+                "indicators": [],
+                "objectives": [
+                    {
+                        "objective": "MaximizeProfit",
+                        "weight": 1.0
+                    }
+                ],
+                "ga_hyperparameters": {
+                    "number_of_iterations": 100,
+                    "population_size": 50,
+                    "propagation_fraction": 0.4,
+                    "elite_size": 12,
+                    "chance_of_mutation": 0.05,
+                    "chance_of_crossover": 0.03
+                }
+            }
+
+        # Provide default data config
+        examples['data_config'] = {
+            "ticker": "NVDA",
+            "start_date": "2024-01-01",
+            "end_date": "2024-12-31"
+        }
+
+        return jsonify({
+            'success': True,
+            'examples': examples
+        })
+
+    except Exception as e:
+        logger.error(f"Error loading example configs: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 if __name__ == '__main__':
     # Create uploads directory if it doesn't exist
     uploads_dir = Path('uploads')

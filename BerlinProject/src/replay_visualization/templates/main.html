@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor Visualization</title>
+    <title>Monitor Replay Visualization - Dynamic Configuration</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -13,10 +13,11 @@
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/indicators/indicators.min.js"></script>
+
+    <!-- Shared form components -->
+    <link rel="stylesheet" href="/static/css/config-form-builder.css">
 
     <style>
-        /* Custom navbar styling */
         .navbar-custom {
             padding: 20px 0;
             min-height: 80px;
@@ -34,20 +35,6 @@
             margin-right: 15px;
         }
 
-        .config-panel {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .chart-container {
-            margin: 20px 0;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 10px;
-        }
-
         .status-badge {
             display: inline-block;
             padding: 4px 8px;
@@ -58,33 +45,8 @@
 
         .status-ready { background: #d1ecf1; color: #0c5460; }
         .status-loading { background: #fff3cd; color: #856404; }
-        .status-complete { background: #d4edda; color: #155724; }
+        .status-running { background: #d1ecf1; color: #0c5460; }
         .status-error { background: #f8d7da; color: #721c24; }
-
-        .bar-charts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .file-input-group {
-            margin-bottom: 15px;
-        }
-
-        .file-input-group label {
-            font-weight: 600;
-            margin-bottom: 5px;
-            display: block;
-        }
-
-        .config-summary {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 15px;
-            margin-top: 15px;
-        }
 
         .collapsible-section {
             border: 1px solid #dee2e6;
@@ -125,35 +87,83 @@
             transform: rotate(180deg);
         }
 
-        .summary-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+        .configuration-tabs {
+            margin-bottom: 2rem;
         }
 
-        .stat-card {
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem;
+            padding: 1.5rem;
+            background: #fff;
+        }
+
+        .action-buttons {
+            margin: 1rem 0;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .config-actions {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+        }
+
+        .results-section {
             background: white;
             border: 1px solid #dee2e6;
             border-radius: 6px;
             padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .chart-container {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 15px 0;
+        }
+
+        .metrics-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .metric-item {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
             text-align: center;
         }
 
-        .stat-value {
+        .metric-value {
             font-size: 1.5rem;
             font-weight: bold;
-            color: #2c3e50;
+            color: #007bff;
         }
 
-        .stat-label {
+        .metric-label {
             font-size: 0.875rem;
             color: #6c757d;
             margin-top: 5px;
         }
 
-        .profit { color: #28a745; }
-        .loss { color: #dc3545; }
+        .positive { color: #28a745 !important; }
+        .negative { color: #dc3545 !important; }
     </style>
 </head>
 <body>
@@ -162,8 +172,8 @@
         <nav class="navbar navbar-dark bg-dark mb-4 navbar-custom">
             <div class="container-fluid">
                 <span class="navbar-brand mb-0 navbar-brand-custom">
-                    <img src="/static/logo.png" alt="Logo" class="logo-img">
-                    Monitor Visualization
+                    <img src="/static/mlf_logo.png" alt="Logo" class="logo-img">
+                    Monitor Replay Visualization - Dynamic Configuration
                 </span>
                 <span id="appStatus" class="status-badge status-ready">Ready</span>
             </div>
@@ -172,69 +182,218 @@
         <!-- Configuration Panel -->
         <div class="collapsible-section">
             <div class="collapsible-header" onclick="toggleCollapse('configPanel')">
-                <h3 class="mb-0">Configuration Setup</h3>
+                <h3 class="mb-0"><i class="fas fa-cogs"></i> Configuration Setup</h3>
                 <i class="fas fa-chevron-down collapse-icon" id="configPanel-icon"></i>
             </div>
             <div id="configPanel" class="collapsible-content">
+                
+                <!-- Configuration Actions -->
+                <div class="config-actions">
+                    <h5><i class="fas fa-file-upload"></i> Load Configuration Files</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="monitorConfigFile" class="form-label">Monitor Configuration JSON</label>
+                            <input type="file" class="form-control" id="monitorConfigFile" accept=".json">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dataConfigFile" class="form-label">Data Configuration JSON</label>
+                            <input type="file" class="form-control" id="dataConfigFile" accept=".json">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button id="loadFilesBtn" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Load Files
+                            </button>
+                            <button id="loadExampleBtn" class="btn btn-outline-secondary ms-2">
+                                <i class="fas fa-star"></i> Load Example
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Tabs -->
+                <div class="configuration-tabs">
+                    <ul class="nav nav-tabs" id="configTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="monitor-config-tab" data-bs-toggle="tab" data-bs-target="#monitor-config" type="button" role="tab">
+                                <i class="fas fa-chart-area"></i> Monitor Configuration
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="data-config-tab" data-bs-toggle="tab" data-bs-target="#data-config" type="button" role="tab">
+                                <i class="fas fa-chart-line"></i> Data Configuration
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="configTabContent">
+                        <!-- Monitor Configuration Form -->
+                        <div class="tab-pane fade show active" id="monitor-config" role="tabpanel">
+                            <div class="action-buttons">
+                                <button id="saveMonitorConfigBtn" class="btn btn-success btn-sm" disabled>
+                                    <i class="fas fa-save"></i> Save Monitor Config
+                                </button>
+                                <button id="downloadMonitorConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="fas fa-download"></i> Download Monitor Config
+                                </button>
+                                <button id="validateMonitorConfigBtn" class="btn btn-outline-info btn-sm" disabled>
+                                    <i class="fas fa-check-circle"></i> Validate Monitor Config
+                                </button>
+                            </div>
+                            <div id="monitorConfigFormContainer">
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-upload fa-3x mb-3"></i>
+                                    <p>Load a monitor configuration file or click "Load Example" to get started</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Configuration Form -->
+                        <div class="tab-pane fade" id="data-config" role="tabpanel">
+                            <div class="action-buttons">
+                                <button id="saveDataConfigBtn" class="btn btn-success btn-sm" disabled>
+                                    <i class="fas fa-save"></i> Save Data Config
+                                </button>
+                                <button id="downloadDataConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="fas fa-download"></i> Download Data Config
+                                </button>
+                                <button id="validateDataConfigBtn" class="btn btn-outline-info btn-sm" disabled>
+                                    <i class="fas fa-check-circle"></i> Validate Data Config
+                                </button>
+                            </div>
+                            <div id="dataConfigFormContainer">
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-chart-line fa-3x mb-3"></i>
+                                    <p>Load a data configuration file or click "Load Example" to get started</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Run Visualization Button -->
+                <div class="text-center">
+                    <button id="runVisualizationBtn" class="btn btn-success btn-lg" disabled>
+                        <i class="fas fa-play"></i> Run Monitor Visualization
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div id="resultsPanel" class="collapsible-section" style="display: none;">
+            <div class="collapsible-header" onclick="toggleCollapse('visualizationResults')">
+                <h3 class="mb-0"><i class="fas fa-chart-line"></i> Visualization Results</h3>
+                <i class="fas fa-chevron-down collapse-icon" id="visualizationResults-icon"></i>
+            </div>
+            <div id="visualizationResults" class="collapsible-content">
+                <!-- Strategy Overview -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5><i class="fas fa-info-circle"></i> Strategy Overview</h5>
+                        <div id="strategyOverview" class="metrics-display">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Strategy Name:</strong> <span id="strategyName">-</span><br>
+                                    <strong>Description:</strong> <span id="strategyDescription">-</span><br>
+                                    <strong>Symbol:</strong> <span id="dataTicker">-</span>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Date Range:</strong> <span id="dateRange">-</span><br>
+                                    <strong>Total Indicators:</strong> <span id="totalIndicators">-</span><br>
+                                    <strong>Entry Conditions:</strong> <span id="entryConditions">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Metrics -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5><i class="fas fa-calculator"></i> Performance Metrics</h5>
+                        <div id="keyMetrics" class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-value" id="totalTrades">-</div>
+                                <div class="metric-label">Total Trades</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value positive" id="winningTrades">-</div>
+                                <div class="metric-label">Winning Trades</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value negative" id="losingTrades">-</div>
+                                <div class="metric-label">Losing Trades</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value" id="winRate">-</div>
+                                <div class="metric-label">Win Rate</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value" id="totalPnL">-</div>
+                                <div class="metric-label">Total P&L (%)</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value positive" id="avgWin">-</div>
+                                <div class="metric-label">Avg Win (%)</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value negative" id="avgLoss">-</div>
+                                <div class="metric-label">Avg Loss (%)</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value" id="profitFactor">-</div>
+                                <div class="metric-label">Profit Factor</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
                 <div class="row">
                     <div class="col-md-6">
-                        <div class="file-input-group">
-                            <label for="monitorConfigFile">Monitor Configuration JSON</label>
-                            <input type="file" class="form-control" id="monitorConfigFile" accept=".json">
-                            <div class="form-text">Select the monitor configuration file (from GA optimization or manual)</div>
+                        <h6><i class="fas fa-chart-line"></i> Price & Signals Chart</h6>
+                        <div id="priceChart" class="chart-container" style="height: 500px;">
+                            <div class="text-center text-muted d-flex align-items-center justify-content-center h-100">
+                                <i class="fas fa-chart-line me-2"></i>Price chart will appear here after running visualization
+                            </div>
                         </div>
                     </div>
-
                     <div class="col-md-6">
-                        <div class="file-input-group">
-                            <label for="dataConfigFile">Yahoo Finance Data Config</label>
-                            <input type="file" class="form-control" id="dataConfigFile" accept=".json">
-                            <div class="form-text">Select the Yahoo Finance data configuration file</div>
+                        <h6><i class="fas fa-coins"></i> P&L Evolution Chart</h6>
+                        <div id="pnlChart" class="chart-container" style="height: 500px;">
+                            <div class="text-center text-muted d-flex align-items-center justify-content-center h-100">
+                                <i class="fas fa-coins me-2"></i>P&L chart will appear here after running visualization
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <button id="runVisualizationBtn" class="btn btn-primary">
-                            <i class="fas fa-chart-line me-2"></i>Run Visualization
-                        </button>
+                <!-- Trade History Table -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-list"></i> Trade History</h6>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-sm table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Price</th>
+                                        <th>Size</th>
+                                        <th>P&L</th>
+                                        <th>Cumulative P&L</th>
+                                        <th>Signal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tradeHistoryTable">
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">No trades to display</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Configuration Summary -->
-                <div id="configSummary" class="config-summary" style="display: none;">
-                    <h5>Configuration Summary</h5>
-                    <div id="configDetails"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Performance Summary -->
-        <div id="performanceSummary" style="display: none;">
-            <h4>Trading Performance Summary</h4>
-            <div id="summaryStats" class="summary-stats">
-                <!-- Stats will be populated by JavaScript -->
-            </div>
-        </div>
-
-        <!-- Charts Section -->
-        <div id="chartsSection" style="display: none;">
-            <!-- Candlestick Chart -->
-            <div class="chart-container">
-                <h4>Price Chart with Trading Signals</h4>
-                <div id="candlestickChart" style="height: 500px;"></div>
-            </div>
-
-            <!-- P&L Chart -->
-            <div class="chart-container">
-                <h4>Portfolio P&L Performance</h4>
-                <div id="pnlChart" style="height: 300px;"></div>
-            </div>
-
-            <!-- Bar Scores Grid -->
-            <div id="barScoresContainer" class="bar-charts-grid">
-                <!-- Bar score charts will be dynamically inserted here -->
             </div>
         </div>
     </div>
@@ -242,10 +401,23 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
+    <!-- Shared form components -->
+    <script src="/static/js/indicator-parameter-definitions.js"></script>
+    <script src="/static/js/config-form-builder.js"></script>
+    <script src="/static/js/data-config-form.js"></script>
+
     <script>
         // Global variables
         let uploadedFiles = {};
         let charts = {};
+
+        // Form builders
+        let monitorFormBuilder = null;
+        let dataFormBuilder = null;
+
+        // Configuration data
+        let currentMonitorConfig = null;
+        let currentDataConfig = null;
 
         // Collapsible section toggle function
         function toggleCollapse(sectionId) {
@@ -263,32 +435,41 @@
             }
         }
 
-        // Initialize page
+        // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             // File upload handlers
-            document.getElementById('monitorConfigFile').addEventListener('change', async function(e) {
-                if (e.target.files.length > 0) {
-                    await uploadFile(e.target.files[0], 'monitor_config');
-                }
-            });
-
-            document.getElementById('dataConfigFile').addEventListener('change', async function(e) {
-                if (e.target.files.length > 0) {
-                    await uploadFile(e.target.files[0], 'data_config');
-                }
-            });
-
+            document.getElementById('monitorConfigFile').addEventListener('change', handleFileUpload);
+            document.getElementById('dataConfigFile').addEventListener('change', handleFileUpload);
+            
+            // Button handlers
+            document.getElementById('loadFilesBtn').addEventListener('click', loadConfigurationFiles);
+            document.getElementById('loadExampleBtn').addEventListener('click', loadExampleConfigurations);
             document.getElementById('runVisualizationBtn').addEventListener('click', runVisualization);
+
+            // Config action handlers
+            document.getElementById('saveMonitorConfigBtn').addEventListener('click', () => saveConfiguration('monitor_config'));
+            document.getElementById('downloadMonitorConfigBtn').addEventListener('click', () => downloadConfiguration('monitor_config'));
+            document.getElementById('validateMonitorConfigBtn').addEventListener('click', () => validateConfiguration('monitor_config'));
+            
+            document.getElementById('saveDataConfigBtn').addEventListener('click', () => saveConfiguration('data_config'));
+            document.getElementById('downloadDataConfigBtn').addEventListener('click', () => downloadConfiguration('data_config'));
+            document.getElementById('validateDataConfigBtn').addEventListener('click', () => validateConfiguration('data_config'));
         });
 
-        // File upload function
-        async function uploadFile(file, type) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('type', type);
+        // File upload handler
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
+            const fileType = event.target.id === 'monitorConfigFile' ? 'monitor_config' : 'data_config';
+            
             try {
                 updateStatus('Uploading...', 'loading');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('type', fileType);
+
                 const response = await fetch('/api/upload_file', {
                     method: 'POST',
                     body: formData
@@ -297,9 +478,10 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    uploadedFiles[type] = result.filepath;
-                    console.log(`${type} uploaded:`, result.filepath);
+                    uploadedFiles[fileType] = result.filepath;
+                    console.log(`${fileType} uploaded:`, result.filepath);
                     updateStatus('Ready', 'ready');
+                    updateLoadButtonState();
                 } else {
                     throw new Error(result.error);
                 }
@@ -310,21 +492,20 @@
             }
         }
 
-        // Run visualization
-        async function runVisualization() {
+        // Load configuration files and generate forms
+        async function loadConfigurationFiles() {
             if (!uploadedFiles.monitor_config || !uploadedFiles.data_config) {
-                alert('Please upload both configuration files first.');
+                alert('Please select both configuration files first.');
                 return;
             }
 
             try {
-                updateStatus('Running backtest...', 'loading');
+                updateStatus('Loading configurations...', 'loading');
 
+                // Use existing API endpoint but adapt the parameters
                 const response = await fetch('/api/run_visualization', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         monitor_config_path: uploadedFiles.monitor_config,
                         data_config_path: uploadedFiles.data_config
@@ -334,71 +515,320 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    displayConfigSummary(result.monitor_config, result.data_config);
-                    displayPerformanceSummary(result.chart_data);
-                    updateCharts(result.chart_data);
-                    updateStatus('Visualization Complete!', 'complete');
+                    currentMonitorConfig = result.monitor_config;
+                    currentDataConfig = result.data_config;
+                    
+                    generateForms();
+                    updateStatus('Ready', 'ready');
                 } else {
                     throw new Error(result.error);
                 }
             } catch (error) {
-                console.error('Visualization error:', error);
+                console.error('Config loading error:', error);
                 updateStatus('Error', 'error');
-                alert(`Visualization failed: ${error.message}`);
+                alert(`Failed to load configurations: ${error.message}`);
             }
         }
 
-        // Update status badge
-        function updateStatus(text, type) {
-            const statusElement = document.getElementById('appStatus');
-            statusElement.textContent = text;
-            statusElement.className = `status-badge status-${type}`;
+        // Load example configurations
+        async function loadExampleConfigurations() {
+            try {
+                updateStatus('Loading examples...', 'loading');
+
+                const response = await fetch('/api/load_example_configs');
+                const result = await response.json();
+
+                if (result.success) {
+                    currentMonitorConfig = result.examples.monitor_config;
+                    currentDataConfig = result.examples.data_config;
+                    
+                    generateForms();
+                    updateStatus('Ready', 'ready');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Example loading error:', error);
+                updateStatus('Error', 'error');
+                alert(`Failed to load examples: ${error.message}`);
+            }
         }
 
-        // Display configuration summary
-        function displayConfigSummary(monitorConfig, dataConfig) {
-            const monitor = monitorConfig.monitor || monitorConfig;
-            const indicators = monitorConfig.indicators || [];
+        // Generate dynamic forms
+        function generateForms() {
+            // For replay visualization, we always use the full structure (including nested monitor)
+            // but tell the form builder not to show GA fields
+            monitorFormBuilder = new ConfigFormBuilder('monitorConfigFormContainer', {
+                showGAFields: false  // This is the key difference from optimizer visualization
+            });
+            monitorFormBuilder.generateForm(currentMonitorConfig);
 
-            const summaryHtml = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Monitor Configuration</h6>
-                        <ul class="list-unstyled small">
-                            <li><strong>Name:</strong> ${monitor.name || 'Unnamed Monitor'}</li>
-                            <li><strong>Enter Conditions:</strong> ${monitor.enter_long?.length || 0}</li>
-                            <li><strong>Exit Conditions:</strong> ${monitor.exit_long?.length || 0}</li>
-                            <li><strong>Indicators:</strong> ${indicators.length}</li>
-                            <li><strong>Bar Types:</strong> ${Object.keys(monitor.bars || {}).length}</li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Data Configuration</h6>
-                        <ul class="list-unstyled small">
-                            <li><strong>Ticker:</strong> ${dataConfig.ticker}</li>
-                            <li><strong>Start Date:</strong> ${dataConfig.start_date}</li>
-                            <li><strong>End Date:</strong> ${dataConfig.end_date}</li>
-                        </ul>
-                    </div>
-                </div>
-            `;
+            // Generate data configuration form
+            dataFormBuilder = new DataConfigForm('dataConfigFormContainer');
+            dataFormBuilder.generateForm(currentDataConfig);
 
-            document.getElementById('configDetails').innerHTML = summaryHtml;
-            document.getElementById('configSummary').style.display = 'block';
+            // Set up form change handlers
+            setupFormChangeHandlers();
+            
+            // Enable action buttons
+            enableActionButtons();
+
+            console.log('Forms generated successfully');
         }
 
-        function displayPerformanceSummary(chartData) {
-            const trades = chartData.trade_history || [];
-            const pnlHistory = chartData.pnl_history || [];
+        // Set up form change handlers
+        function setupFormChangeHandlers() {
+            // Listen for configuration changes
+            document.getElementById('monitorConfigFormContainer').addEventListener('configSave', (event) => {
+                currentMonitorConfig = event.detail;
+                console.log('Monitor Config updated:', currentMonitorConfig);
+            });
 
-            // Initialize counters
+            document.getElementById('dataConfigFormContainer').addEventListener('dataConfigSave', (event) => {
+                currentDataConfig = event.detail;
+                console.log('Data Config updated:', currentDataConfig);
+            });
+        }
+
+        // Enable action buttons
+        function enableActionButtons() {
+            ['saveMonitorConfigBtn', 'downloadMonitorConfigBtn', 'validateMonitorConfigBtn',
+             'saveDataConfigBtn', 'downloadDataConfigBtn', 'validateDataConfigBtn',
+             'runVisualizationBtn'].forEach(id => {
+                document.getElementById(id).disabled = false;
+            });
+        }
+
+        // Update load button state
+        function updateLoadButtonState() {
+            const hasFiles = uploadedFiles.monitor_config && uploadedFiles.data_config;
+            document.getElementById('loadFilesBtn').disabled = !hasFiles;
+        }
+
+        // Save configuration
+        async function saveConfiguration(configType) {
+            const configData = configType === 'monitor_config' ? 
+                (monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig) :
+                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+
+            if (!configData) {
+                alert('No configuration data to save');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/save_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config_data: configData,
+                        config_type: configType,
+                        filename: `${configData.name || configData.ticker || 'config'}.json`
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                alert(`Failed to save configuration: ${error.message}`);
+            }
+        }
+
+        // Download configuration
+        async function downloadConfiguration(configType) {
+            const configData = configType === 'monitor_config' ? 
+                (monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig) :
+                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+
+            if (!configData) {
+                alert('No configuration data to download');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/download_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config_data: configData,
+                        config_type: configType,
+                        test_name: configData.name || configData.ticker || 'config'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.href = result.download_url;
+                    link.download = result.filename;
+                    link.click();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                alert(`Failed to prepare download: ${error.message}`);
+            }
+        }
+
+        // Validate configuration
+        async function validateConfiguration(configType) {
+            let configData = configType === 'monitor_config' ? 
+                (monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig) :
+                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+
+            if (!configData) {
+                alert('No configuration data to validate');
+                return;
+            }
+
+            // For monitor config validation, ensure we're sending the full structure expected by the backend
+            if (configType === 'monitor_config' && !configData.monitor && configData.name) {
+                // If we have a flat monitor structure, wrap it properly
+                configData = {
+                    monitor: configData,
+                    indicators: currentMonitorConfig.indicators || []
+                };
+            }
+
+            try {
+                const response = await fetch('/api/validate_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config_data: configData,
+                        config_type: configType
+                    })
+                });
+
+                const result = await response.json();
+
+                let message = result.message;
+                if (result.warnings && result.warnings.length > 0) {
+                    message += '\n\nWarnings:\n• ' + result.warnings.join('\n• ');
+                }
+                if (result.errors && result.errors.length > 0) {
+                    message += '\n\nErrors:\n• ' + result.errors.join('\n• ');
+                }
+
+                alert(message);
+            } catch (error) {
+                console.error('Validation error:', error);
+                alert(`Failed to validate configuration: ${error.message}`);
+            }
+        }
+
+        // Run visualization
+        async function runVisualization() {
+            const monitorConfig = monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig;
+            const dataConfig = dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig;
+
+            if (!monitorConfig || !dataConfig) {
+                alert('Please configure both monitor and data settings before running visualization.');
+                return;
+            }
+
+            try {
+                updateStatus('Running visualization...', 'loading');
+
+                // Create temporary files for the current configurations
+                const monitorConfigBlob = new Blob([JSON.stringify(monitorConfig, null, 2)], { type: 'application/json' });
+                const dataConfigBlob = new Blob([JSON.stringify(dataConfig, null, 2)], { type: 'application/json' });
+
+                const monitorConfigFile = new File([monitorConfigBlob], 'current_monitor_config.json');
+                const dataConfigFile = new File([dataConfigBlob], 'current_data_config.json');
+
+                // Upload current configurations
+                const monitorFormData = new FormData();
+                monitorFormData.append('file', monitorConfigFile);
+                monitorFormData.append('type', 'current_monitor_config');
+
+                const dataFormData = new FormData();
+                dataFormData.append('file', dataConfigFile);
+                dataFormData.append('type', 'current_data_config');
+
+                const [monitorUploadResponse, dataUploadResponse] = await Promise.all([
+                    fetch('/api/upload_file', { method: 'POST', body: monitorFormData }),
+                    fetch('/api/upload_file', { method: 'POST', body: dataFormData })
+                ]);
+
+                const monitorUploadResult = await monitorUploadResponse.json();
+                const dataUploadResult = await dataUploadResponse.json();
+
+                if (!monitorUploadResult.success || !dataUploadResult.success) {
+                    throw new Error('Failed to upload configurations');
+                }
+
+                // Run visualization with uploaded file paths
+                const vizResponse = await fetch('/api/run_visualization', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        monitor_config_path: monitorUploadResult.filepath,
+                        data_config_path: dataUploadResult.filepath
+                    })
+                });
+
+                const vizResult = await vizResponse.json();
+
+                if (vizResult.success) {
+                    displayResults(vizResult.chart_data, vizResult.monitor_config, vizResult.data_config);
+                    updateStatus('Visualization Complete', 'ready');
+                    
+                    // Show results panel
+                    document.getElementById('resultsPanel').style.display = 'block';
+                    document.getElementById('visualizationResults').style.display = 'block';
+                } else {
+                    throw new Error(vizResult.error);
+                }
+
+            } catch (error) {
+                console.error('Visualization error:', error);
+                updateStatus('Error', 'error');
+                alert(`Failed to run visualization: ${error.message}`);
+            }
+        }
+
+        // Display visualization results
+        function displayResults(chartData, monitorConfig, dataConfig) {
+            // Update strategy overview
+            document.getElementById('strategyName').textContent = monitorConfig.name || 'Unknown';
+            document.getElementById('strategyDescription').textContent = monitorConfig.description || 'No description';
+            document.getElementById('dataTicker').textContent = dataConfig.ticker || 'Unknown';
+            document.getElementById('dateRange').textContent = `${dataConfig.start_date} to ${dataConfig.end_date}`;
+            document.getElementById('totalIndicators').textContent = (monitorConfig.indicators || []).length;
+            document.getElementById('entryConditions').textContent = (monitorConfig.enter_long || []).length;
+
+            // Calculate and display metrics
+            calculateAndDisplayMetrics(chartData);
+
+            // Generate charts
+            createPriceChart(chartData);
+            createPnLChart(chartData);
+
+            // Populate trade history table
+            populateTradeHistory(chartData);
+        }
+
+        // Calculate and display performance metrics
+        function calculateAndDisplayMetrics(chartData) {
+            const trades = chartData.pnl_history || [];
+            const totalTrades = trades.length;
+
             let winningTrades = 0;
             let losingTrades = 0;
             let totalWinPnL = 0;
             let totalLossPnL = 0;
 
-            // Calculate metrics from P&L history
-            pnlHistory.forEach(trade => {
+            trades.forEach(trade => {
                 if (trade.trade_pnl > 0) {
                     winningTrades++;
                     totalWinPnL += trade.trade_pnl;
@@ -408,470 +838,243 @@
                 }
             });
 
-            // NOW calculate totalTrades after the loop:
-            let totalTrades = winningTrades + losingTrades;  // ✅ FIXED
-
-            const finalPnL = pnlHistory.length > 0 ? pnlHistory[pnlHistory.length - 1].cumulative_pnl : 0;
             const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+            const totalPnL = trades.length > 0 ? trades[trades.length - 1].cumulative_pnl : 0;
             const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
             const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+            const profitFactor = Math.abs(totalLossPnL) > 0 ? totalWinPnL / Math.abs(totalLossPnL) : 0;
 
-            const statsHtml = `
-                <div class="stat-card">
-                    <div class="stat-value">${totalTrades}</div>
-                    <div class="stat-label">Total Trades</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value ${finalPnL >= 0 ? 'profit' : 'loss'}">${finalPnL.toFixed(2)}%</div>
-                    <div class="stat-label">Total P&L</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${winRate.toFixed(1)}%</div>
-                    <div class="stat-label">Win Rate</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value profit">${avgWin.toFixed(2)}%</div>
-                    <div class="stat-label">Avg Win</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value loss">${Math.abs(avgLoss).toFixed(2)}%</div>
-                    <div class="stat-label">Avg Loss</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${chartData.total_candles || 0}</div>
-                    <div class="stat-label">Total Candles</div>
-                </div>
-            `;
-
-            document.getElementById('summaryStats').innerHTML = statsHtml;
-            document.getElementById('performanceSummary').style.display = 'block';
+            // Update metrics display
+            document.getElementById('totalTrades').textContent = totalTrades;
+            document.getElementById('winningTrades').textContent = winningTrades;
+            document.getElementById('losingTrades').textContent = losingTrades;
+            document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
+            
+            const totalPnLElement = document.getElementById('totalPnL');
+            totalPnLElement.textContent = `${totalPnL.toFixed(2)}%`;
+            totalPnLElement.className = `metric-value ${totalPnL >= 0 ? 'positive' : 'negative'}`;
+            
+            document.getElementById('avgWin').textContent = `${avgWin.toFixed(2)}%`;
+            document.getElementById('avgLoss').textContent = `${avgLoss.toFixed(2)}%`;
+            document.getElementById('profitFactor').textContent = profitFactor.toFixed(2);
         }
 
-        // Update charts with data
-        function updateCharts(chartData) {
-            console.log('Updating charts with data:', chartData);
+        // Create price chart with buy/sell signals
+        function createPriceChart(chartData) {
+            const container = document.getElementById('priceChart');
 
-            // Update candlestick chart
-            updateCandlestickChart(chartData);
+            // Debug: Log the chart data structure
+            console.log('Chart data received:', chartData);
+            console.log('Available keys:', Object.keys(chartData));
 
-            // Update P&L chart
-            updatePnLChart(chartData);
-
-            // Update bar scores charts
-            updateBarScoresCharts(chartData);
-
-            // Show charts section
-            document.getElementById('chartsSection').style.display = 'block';
-        }
-
-        // Global function to sync all charts when one is zoomed
-        function syncAllCharts(extremes, sourceChart) {
-            if (!extremes || extremes.trigger === 'syncExtremes') return;
-
-            try {
-                // Sync candlestick chart
-                if (charts.candlestick && sourceChart !== 'candlestick') {
-                    charts.candlestick.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
-                }
-
-                // Sync P&L chart
-                if (charts.pnl && sourceChart !== 'pnl') {
-                    charts.pnl.xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
-                }
-
-                // Sync all bar score charts
-                Object.keys(charts).forEach(chartKey => {
-                    if (chartKey.startsWith('barChart_') && sourceChart !== chartKey && charts[chartKey]) {
-                        charts[chartKey].xAxis[0].setExtremes(extremes.min, extremes.max, true, false, { trigger: 'syncExtremes' });
-                    }
-                });
-            } catch (error) {
-                console.warn('Error syncing charts:', error);
+            // The backend returns candlestick_data already in Highcharts format [timestamp, open, high, low, close]
+            let priceData = chartData.candlestick_data || [];
+            
+            if (!priceData || priceData.length === 0) {
+                container.innerHTML = '<div class="alert alert-warning">No price data available. Available data keys: ' + Object.keys(chartData).join(', ') + '</div>';
+                return;
             }
-        }
 
-        function updateCandlestickChart(data) {
-            const container = document.getElementById('candlestickChart');
+            console.log('Candlestick data sample:', priceData.slice(0, 3));
 
-            // Prepare candlestick data - already in correct format [timestamp, open, high, low, close]
-            const candlestickData = data.candlestick_data;
+            // Prepare signal data
+            console.log('Trade history sample:', (chartData.trade_history || []).slice(0, 3));
+            
+            const buySignals = (chartData.trade_history || [])
+                .filter(trade => trade.type && trade.type.toLowerCase().includes('buy'))
+                .map(trade => ({
+                    x: new Date(trade.timestamp).getTime(),
+                    y: trade.price || trade.entry_price || 0,
+                    marker: { fillColor: 'green', symbol: 'triangle' }
+                }));
 
-            // Process trade_history to create entry/exit arrows
-            const buyArrows = [];
-            const sellArrows = [];
+            const sellSignals = (chartData.trade_history || [])
+                .filter(trade => trade.type && trade.type.toLowerCase().includes('sell'))
+                .map(trade => ({
+                    x: new Date(trade.timestamp).getTime(),
+                    y: trade.price || trade.exit_price || 0,
+                    marker: { fillColor: 'red', symbol: 'triangle-down' }
+                }));
 
-            if (data.triggers && data.triggers.length > 0) {
-                data.triggers.forEach(trigger => {
-                    if (trigger.type === 'buy') {
-                        buyArrows.push({
-                            x: trigger.timestamp,
-                            y: trigger.price,
-                            reason: trigger.reason,
-                            price: trigger.price
-                        });
-                    } else if (trigger.type === 'sell') {
-                        sellArrows.push({
-                            x: trigger.timestamp,
-                            y: trigger.price,
-                            reason: trigger.reason,
-                            price: trigger.price
-                        });
-                    }
-                });
-            }
+            console.log('Buy signals:', buySignals.length, 'Sell signals:', sellSignals.length);
 
             const chartConfig = {
-                chart: {
-                    zoomType: 'xy',
-                    panning: {
-                        enabled: true,
-                        type: 'xy'
-                    },
-                    panKey: 'shift'
+                chart: { 
+                    height: 450,
+                    zoomType: 'x'
                 },
-                title: {
-                    text: `${data.ticker} - Price with Trade Entry/Exit Signals`
+                title: { text: 'Price Chart with Trading Signals' },
+                xAxis: { 
+                    type: 'datetime',
+                    crosshair: true
                 },
-
+                yAxis: { 
+                    title: { text: 'Price' },
+                    crosshair: true
+                },
                 rangeSelector: {
-                    selected: 1
+                    enabled: false
                 },
-
-                plotOptions: {
-                    candlestick: {
-                        dataGrouping: {
-                            enabled: false
+                navigator: {
+                    enabled: false
+                },
+                scrollbar: {
+                    enabled: false
+                },
+                series: [
+                    {
+                        name: 'Price',
+                        data: priceData,
+                        type: 'candlestick',
+                        color: '#dc3545',        // red for down candles
+                        upColor: '#28a745',      // green for up candles
+                        lineColor: '#dc3545',    // red outline for down candles
+                        upLineColor: '#28a745'   // green outline for up candles
+                    },
+                    {
+                        name: 'Buy Signals',
+                        data: buySignals,
+                        type: 'scatter',
+                        color: '#28a745',
+                        marker: { 
+                            symbol: 'triangle',
+                            radius: 6,
+                            lineWidth: 2,
+                            lineColor: '#ffffff'
+                        },
+                        tooltip: {
+                            pointFormat: '<b>Buy Signal</b><br/>Price: ${point.y:.2f}'
                         }
                     },
-                    scatter: {
-                        dataGrouping: {
-                            enabled: false
+                    {
+                        name: 'Sell Signals',
+                        data: sellSignals,
+                        type: 'scatter',
+                        color: '#dc3545',
+                        marker: { 
+                            symbol: 'triangle-down',
+                            radius: 6,
+                            lineWidth: 2,
+                            lineColor: '#ffffff'
+                        },
+                        tooltip: {
+                            pointFormat: '<b>Sell Signal</b><br/>Price: ${point.y:.2f}'
                         }
                     }
-                },
-
-                yAxis: [{
-                    labels: {
-                        align: 'right',
-                        x: -3
-                    },
-                    title: {
-                        text: 'Price ($)'
-                    },
-                    height: '100%',
-                    lineWidth: 2
-                }],
-
-                xAxis: {
-                    events: {
-                        afterSetExtremes: function(e) {
-                            syncAllCharts(e, 'candlestick');
-                        }
-                    }
-                },
-
+                ],
                 tooltip: {
                     split: false,
-                    shared: true
+                    shared: true,
+                    crosshairs: true
                 },
-
-                series: [{
-                    type: 'candlestick',
-                    name: data.ticker,
-                    data: candlestickData,
-                    yAxis: 0,
-                    dataGrouping: {
-                        enabled: false
-                    },
-                    color: '#ff4444',
-                    upColor: '#00C851',
-                    lineColor: '#ff4444',
-                    upLineColor: '#00C851'
-                }, {
-                    type: 'scatter',
-                    name: 'Buy Signals',
-                    data: buyArrows,
-                    color: 'green',
-                    marker: {
-                        symbol: 'triangle',
-                        radius: 10,
-                        fillColor: 'green',
-                        lineColor: 'darkgreen',
-                        lineWidth: 2,
-                        states: {
-                            hover: {
-                                radius: 14,
-                                fillColor: 'lightgreen',
-                                lineColor: 'green',
-                                lineWidth: 3
-                            }
-                        }
-                    },
-                    yAxis: 0,
-                    dataGrouping: {
-                        enabled: false
-                    },
-                    tooltip: {
-                        pointFormat: '<b>BUY:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
-                        hideDelay: 1000,
-                        distance: 30
-                    },
-                    zIndex: 10,
-                    enableMouseTracking: true,
-                    stickyTracking: false,
-                    findNearestPointBy: 'xy'
-                }, {
-                    type: 'scatter',
-                    name: 'Sell Signals',
-                    data: sellArrows,
-                    color: 'red',
-                    marker: {
-                        symbol: 'triangle-down',
-                        radius: 10,
-                        fillColor: 'red',
-                        lineColor: 'darkred',
-                        lineWidth: 2,
-                        states: {
-                            hover: {
-                                radius: 14,
-                                fillColor: 'lightcoral',
-                                lineColor: 'red',
-                                lineWidth: 3
-                            }
-                        }
-                    },
-                    yAxis: 0,
-                    dataGrouping: {
-                        enabled: false
-                    },
-                    tooltip: {
-                        pointFormat: '<b>SELL:</b> ${point.y:.2f}<br/><b>Reason:</b> {point.reason}',
-                        hideDelay: 1000,
-                        distance: 30
-                    },
-                    zIndex: 10,
-                    enableMouseTracking: true,
-                    stickyTracking: false,
-                    findNearestPointBy: 'xy'
-                }]
+                plotOptions: {
+                    candlestick: {
+                        color: '#dc3545',
+                        upColor: '#28a745',
+                        lineColor: '#dc3545',
+                        upLineColor: '#28a745'
+                    }
+                },
+                credits: {
+                    enabled: false
+                }
             };
 
-            if (charts.candlestick) {
-                charts.candlestick.destroy();
+            if (charts.price) {
+                charts.price.destroy();
             }
-            charts.candlestick = Highcharts.stockChart(container, chartConfig);
+            charts.price = Highcharts.chart(container, chartConfig);
         }
 
-        function updatePnLChart(data) {
+        // Create P&L evolution chart
+        function createPnLChart(chartData) {
             const container = document.getElementById('pnlChart');
 
-            // Prepare P&L data
-            const pnlData = data.pnl_history.map(point => [
-                point.timestamp,
-                point.cumulative_pnl
+            if (!chartData.pnl_history || chartData.pnl_history.length === 0) {
+                container.innerHTML = '<div class="alert alert-warning">No P&L data available</div>';
+                return;
+            }
+
+            const pnlData = chartData.pnl_history.map(trade => [
+                new Date(trade.timestamp).getTime(),
+                trade.cumulative_pnl
             ]);
 
             const chartConfig = {
-                title: {
-                    text: `Portfolio Performance - Cumulative P&L`
-                },
-
-                rangeSelector: {
-                    selected: 1
-                },
-
-                plotOptions: {
-                    line: {
-                        dataGrouping: {
-                            enabled: false
-                        }
-                    }
-                },
-
-                yAxis: {
-                    title: {
-                        text: 'Cumulative P&L (%)'
-                    },
+                chart: { type: 'line', height: 450 },
+                title: { text: 'Cumulative P&L Evolution' },
+                xAxis: { type: 'datetime' },
+                yAxis: { 
+                    title: { text: 'Cumulative P&L (%)' },
                     plotLines: [{
                         value: 0,
-                        color: 'gray',
-                        dashStyle: 'dash',
+                        color: '#999',
                         width: 1,
-                        label: {
-                            text: 'Break Even',
-                            align: 'right'
-                        }
+                        dashStyle: 'dash'
                     }]
                 },
-
-                xAxis: {
-                    events: {
-                        afterSetExtremes: function(e) {
-                            syncAllCharts(e, 'pnl');
-                        }
-                    }
-                },
-
-                tooltip: {
-                    pointFormat: '<b>P&L:</b> {point.y:.2f}%'
-                },
-
                 series: [{
                     name: 'Cumulative P&L',
                     data: pnlData,
-                    color: '#2E86AB',
-                    lineWidth: 2,
-                    marker: {
-                        enabled: true,
-                        radius: 3,
-                        fillColor: '#2E86AB'
-                    },
-                    dataGrouping: {
-                        enabled: false
-                    }
-                }]
+                    color: '#007bff',
+                    lineWidth: 2
+                }],
+                tooltip: {
+                    pointFormat: '<b>{series.name}:</b> {point.y:.2f}%<br/>',
+                    shared: true,
+                    crosshairs: true
+                }
             };
 
             if (charts.pnl) {
                 charts.pnl.destroy();
             }
-            charts.pnl = Highcharts.stockChart(container, chartConfig);
+            charts.pnl = Highcharts.chart(container, chartConfig);
         }
 
-        function updateBarScoresCharts(data) {
-            const container = document.getElementById('barScoresContainer');
+        // Populate trade history table
+        function populateTradeHistory(chartData) {
+            const tableBody = document.getElementById('tradeHistoryTable');
 
-            // Clear existing bar score charts
-            container.innerHTML = '';
-
-            if (!data.bar_scores_history || data.bar_scores_history.length === 0) {
-                container.innerHTML = '<div class="col-12"><div class="alert alert-info">No bar scores data available</div></div>';
+            if (!chartData.trade_history || chartData.trade_history.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No trades to display</td></tr>';
                 return;
             }
 
-            // Create charts for each bar score type
-            const barScoreTypes = new Set();
-            data.bar_scores_history.forEach(point => {
-                Object.keys(point.scores).forEach(type => barScoreTypes.add(type));
+            // Combine trade history with P&L data
+            const pnlMap = new Map();
+            (chartData.pnl_history || []).forEach(pnl => {
+                pnlMap.set(pnl.timestamp, pnl);
             });
 
-            barScoreTypes.forEach(type => {
-                const chartDiv = document.createElement('div');
-                chartDiv.className = 'chart-container';
-                chartDiv.innerHTML = `
-                    <h5>Bar Scores: ${type}</h5>
-                    <div id="barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}" style="height: 300px;"></div>
+            const rows = chartData.trade_history.map(trade => {
+                const pnlData = pnlMap.get(trade.timestamp);
+                const tradePnL = pnlData ? pnlData.trade_pnl : 0;
+                const cumulativePnL = pnlData ? pnlData.cumulative_pnl : 0;
+
+                const pnlClass = tradePnL > 0 ? 'text-success' : (tradePnL < 0 ? 'text-danger' : '');
+
+                return `
+                    <tr>
+                        <td>${new Date(trade.timestamp).toLocaleDateString()}</td>
+                        <td>${trade.type}</td>
+                        <td>$${trade.price.toFixed(2)}</td>
+                        <td>${trade.quantity || trade.size}</td>
+                        <td class="${pnlClass}">${tradePnL.toFixed(2)}%</td>
+                        <td class="${cumulativePnL >= 0 ? 'text-success' : 'text-danger'}">${cumulativePnL.toFixed(2)}%</td>
+                        <td class="small">${trade.reason || '-'}</td>
+                    </tr>
                 `;
-                container.appendChild(chartDiv);
+            }).join('');
 
-                // Prepare data for this bar score type
-                const barData = data.bar_scores_history
-                    .filter(point => point.scores[type] !== undefined)
-                    .map(point => [point.timestamp, point.scores[type]]);
+            tableBody.innerHTML = rows;
+        }
 
-                // Find thresholds for this bar from enter_long and exit_long conditions
-                const plotLines = [];
-
-                // Check enter_long conditions
-                if (data.threshold_config && data.threshold_config.enter_long) {
-                    data.threshold_config.enter_long.forEach(condition => {
-                        if (condition.name === type) {
-                            plotLines.push({
-                                value: condition.threshold,
-                                color: '#00C851',
-                                dashStyle: 'dash',
-                                width: 2,
-                                label: {
-                                    text: `Entry: ${condition.threshold}`,
-                                    align: 'right',
-                                    style: {
-                                        color: '#00C851',
-                                        fontWeight: 'bold'
-                                    }
-                                },
-                                zIndex: 5
-                            });
-                        }
-                    });
-                }
-
-                // Check exit_long conditions
-                if (data.threshold_config && data.threshold_config.exit_long) {
-                    data.threshold_config.exit_long.forEach(condition => {
-                        if (condition.name === type) {
-                            plotLines.push({
-                                value: condition.threshold,
-                                color: '#ff4444',
-                                dashStyle: 'dash',
-                                width: 2,
-                                label: {
-                                    text: `Exit: ${condition.threshold}`,
-                                    align: 'right',
-                                    style: {
-                                        color: '#ff4444',
-                                        fontWeight: 'bold'
-                                    }
-                                },
-                                zIndex: 5
-                            });
-                        }
-                    });
-                }
-
-                const chartConfig = {
-                    title: {
-                        text: `${type} Bar Scores Evolution`
-                    },
-
-                    rangeSelector: {
-                        selected: 1
-                    },
-
-                    plotOptions: {
-                        line: {
-                            dataGrouping: {
-                                enabled: false
-                            }
-                        }
-                    },
-
-                    yAxis: {
-                        title: {
-                            text: 'Score'
-                        },
-                        plotLines: plotLines,
-                        min: 0,
-                        max: 1
-                    },
-
-                    xAxis: {
-                        events: {
-                            afterSetExtremes: function(e) {
-                                const chartId = `barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                                syncAllCharts(e, chartId);
-                            }
-                        }
-                    },
-
-                    tooltip: {
-                        pointFormat: '<b>{series.name}:</b> {point.y:.4f}<br/>',
-                        shared: true
-                    },
-
-                    series: [{
-                        name: type,
-                        data: barData,
-                        color: '#FF6B6B',
-                        lineWidth: 2,
-                        dataGrouping: {
-                            enabled: false
-                        }
-                    }]
-                };
-
-                const chartId = `barChart_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                charts[chartId] = Highcharts.stockChart(chartId, chartConfig);
-            });
+        // Update status badge
+        function updateStatus(text, type) {
+            const statusElement = document.getElementById('appStatus');
+            statusElement.textContent = text;
+            statusElement.className = `status-badge status-${type}`;
         }
     </script>
 </body>

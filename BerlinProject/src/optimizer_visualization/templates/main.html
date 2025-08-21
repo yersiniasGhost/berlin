@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Genetic Algorithm Visualization</title>
+    <title>Genetic Algorithm Optimizer - Dynamic Configuration</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -14,11 +14,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
     <!-- Parallel Coordinates module -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/parallel-coordinates.min.js"></script>
 
+    <!-- Shared form components -->
+    <link rel="stylesheet" href="/static/css/config-form-builder.css">
+
     <style>
-        /* Custom navbar styling */
         .navbar-custom {
             padding: 20px 0;
             min-height: 80px;
@@ -36,28 +39,6 @@
             margin-right: 15px;
         }
 
-        .config-panel {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .control-panel {
-            background: #fff;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .chart-container {
-            margin: 20px 0;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 10px;
-        }
-
         .status-badge {
             display: inline-block;
             padding: 4px 8px;
@@ -72,41 +53,11 @@
         .status-paused { background: #f0ad4e; color: #fff; }
         .status-error { background: #f8d7da; color: #721c24; }
 
-        .file-input-group {
-            margin-bottom: 15px;
-        }
-
-        .file-input-group label {
-            font-weight: 600;
-            margin-bottom: 5px;
-            display: block;
-        }
-
-        .config-summary {
-            background: white;
+        .chart-container {
+            margin: 20px 0;
             border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 15px;
-            margin-top: 15px;
-        }
-
-        .optimization-progress {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-
-        .best-individuals-log {
-            max-height: 200px;
-            overflow-y: auto;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
+            border-radius: 8px;
             padding: 10px;
-            font-family: monospace;
-            font-size: 0.875rem;
         }
 
         .collapsible-section {
@@ -146,6 +97,37 @@
 
         .collapse-icon.rotated {
             transform: rotate(180deg);
+        }
+
+        .configuration-tabs {
+            margin-bottom: 2rem;
+        }
+
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem;
+            padding: 1.5rem;
+            background: #fff;
+        }
+
+        .optimization-progress {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .best-individuals-log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.875rem;
         }
 
         .metrics-table {
@@ -192,76 +174,18 @@
             margin-bottom: 10px;
         }
 
-        /* JSON Editor Styles */
-        .json-editor-container {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            margin-top: 10px;
-        }
-
-        .json-editor-header {
-            background: #e9ecef;
-            padding: 8px 12px;
-            border-bottom: 1px solid #dee2e6;
+        .action-buttons {
+            margin: 1rem 0;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
 
-        .json-text-area {
-            width: 100%;
-            min-height: 400px;
-            border: none;
-            outline: none;
-            padding: 15px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 13px;
-            line-height: 1.5;
-            resize: vertical;
-            background: #ffffff;
-            color: #333;
-        }
-
-        .json-text-area:focus {
-            box-shadow: inset 0 0 0 2px #007bff;
-        }
-
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 8px 12px;
-            border-top: 1px solid #f5c6cb;
-            font-size: 12px;
-            font-family: monospace;
-        }
-
-        .success-message {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 8px 12px;
-            border-top: 1px solid #bee5eb;
-            font-size: 12px;
-        }
-
-        .modification-indicator {
-            color: #dc3545;
-            font-weight: bold;
-            margin-left: 5px;
-        }
-
-        .btn-group-sm .btn {
-            font-size: 0.7rem;
-            padding: 0.2rem 0.4rem;
-        }
-
-        .modification-warning {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 4px;
-            padding: 8px 12px;
-            margin-top: 10px;
-            font-size: 0.85rem;
+        .config-actions {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
         }
     </style>
 </head>
@@ -272,7 +196,7 @@
             <div class="container-fluid">
                 <span class="navbar-brand mb-0 navbar-brand-custom">
                     <img src="/static/mlf_logo.png" alt="Logo" class="logo-img">
-                    Genetic Algorithm Visualization
+                    Genetic Algorithm Optimizer - Dynamic Configuration
                 </span>
                 <span id="appStatus" class="status-badge status-ready">Ready</span>
             </div>
@@ -281,219 +205,192 @@
         <!-- Configuration Panel -->
         <div class="collapsible-section">
             <div class="collapsible-header" onclick="toggleCollapse('configPanel')">
-                <h3 class="mb-0">Configuration Setup</h3>
+                <h3 class="mb-0"><i class="fas fa-cogs"></i> Configuration Setup</h3>
                 <i class="fas fa-chevron-down collapse-icon" id="configPanel-icon"></i>
             </div>
             <div id="configPanel" class="collapsible-content">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="file-input-group">
-                            <label for="gaConfigFile">Genetic Algorithm Monitor JSON</label>
-                            <input type="file" class="form-control" id="gaConfigFile" accept=".json">
-                            <div class="form-text">Select the genetic algorithm monitor configuration file</div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="file-input-group">
-                            <label for="dataConfigFile">Yahoo Finance Data Config</label>
-                            <input type="file" class="form-control" id="dataConfigFile" accept=".json">
-                            <div class="form-text">Select the Yahoo Finance data configuration file</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <button id="loadConfigsBtn" class="btn btn-primary">
-                            <i class="fas fa-upload me-2"></i>Load Configurations
-                        </button>
-                    </div>
-                </div>
-
-                <!-- JSON Configuration Editors -->
-                <div id="configSummary" class="config-summary" style="display: none;">
-                    <h5>Configuration Editor</h5>
-
-                    <!-- Modification Warning -->
-                    <div id="modificationWarning" class="modification-warning" style="display: none;">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Configuration Modified:</strong> Your changes will be used when you start optimization.
-                    </div>
-
+                
+                <!-- Configuration Actions -->
+                <div class="config-actions">
+                    <h5><i class="fas fa-file-upload"></i> Load Configuration Files</h5>
                     <div class="row">
-                        <!-- GA Config Editor -->
-                        <div class="col-md-6">
-                            <div class="json-editor-container">
-                                <div class="json-editor-header">
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-robot me-2"></i>GA Configuration
-                                        <span id="gaModifiedIndicator" class="modification-indicator" style="display: none;">*</span>
-                                    </h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="formatJSON('ga')" title="Format JSON">
-                                            <i class="fas fa-indent"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info" onclick="validateJSON('ga')" title="Validate JSON">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="btn btn-outline-warning" onclick="resetConfig('ga')" title="Reset to Original">
-                                            <i class="fas fa-undo"></i>
-                                        </button>
-                                    </div>
+                        <div class="col-md-4">
+                            <label for="gaConfigFile" class="form-label">GA Configuration JSON</label>
+                            <input type="file" class="form-control" id="gaConfigFile" accept=".json">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dataConfigFile" class="form-label">Data Configuration JSON</label>
+                            <input type="file" class="form-control" id="dataConfigFile" accept=".json">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button id="loadFilesBtn" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Load Files
+                            </button>
+                            <button id="loadExampleBtn" class="btn btn-outline-secondary ms-2">
+                                <i class="fas fa-star"></i> Load Example
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Tabs -->
+                <div class="configuration-tabs">
+                    <ul class="nav nav-tabs" id="configTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="ga-config-tab" data-bs-toggle="tab" data-bs-target="#ga-config" type="button" role="tab">
+                                <i class="fas fa-robot"></i> GA Configuration
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="data-config-tab" data-bs-toggle="tab" data-bs-target="#data-config" type="button" role="tab">
+                                <i class="fas fa-chart-line"></i> Data Configuration
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="configTabContent">
+                        <!-- GA Configuration Form -->
+                        <div class="tab-pane fade show active" id="ga-config" role="tabpanel">
+                            <div class="action-buttons">
+                                <button id="saveGAConfigBtn" class="btn btn-success btn-sm" disabled>
+                                    <i class="fas fa-save"></i> Save GA Config
+                                </button>
+                                <button id="downloadGAConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="fas fa-download"></i> Download GA Config
+                                </button>
+                                <button id="validateGAConfigBtn" class="btn btn-outline-info btn-sm" disabled>
+                                    <i class="fas fa-check-circle"></i> Validate GA Config
+                                </button>
+                            </div>
+                            <div id="gaConfigFormContainer">
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-upload fa-3x mb-3"></i>
+                                    <p>Load a GA configuration file or click "Load Example" to get started</p>
                                 </div>
-                                <textarea
-                                    id="gaConfigEditor"
-                                    class="json-text-area"
-                                    placeholder="GA JSON will appear here..."
-                                    spellcheck="false"
-                                ></textarea>
-                                <div id="gaErrorMessage" class="error-message" style="display: none;"></div>
-                                <div id="gaSuccessMessage" class="success-message" style="display: none;"></div>
                             </div>
                         </div>
 
-                        <!-- Data Config Editor -->
-                        <div class="col-md-6">
-                            <div class="json-editor-container">
-                                <div class="json-editor-header">
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-chart-line me-2"></i>Data Configuration
-                                        <span id="dataModifiedIndicator" class="modification-indicator" style="display: none;">*</span>
-                                    </h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="formatJSON('data')" title="Format JSON">
-                                            <i class="fas fa-indent"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info" onclick="validateJSON('data')" title="Validate JSON">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="btn btn-outline-warning" onclick="resetConfig('data')" title="Reset to Original">
-                                            <i class="fas fa-undo"></i>
-                                        </button>
-                                    </div>
+                        <!-- Data Configuration Form -->
+                        <div class="tab-pane fade" id="data-config" role="tabpanel">
+                            <div class="action-buttons">
+                                <button id="saveDataConfigBtn" class="btn btn-success btn-sm" disabled>
+                                    <i class="fas fa-save"></i> Save Data Config
+                                </button>
+                                <button id="downloadDataConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="fas fa-download"></i> Download Data Config
+                                </button>
+                                <button id="validateDataConfigBtn" class="btn btn-outline-info btn-sm" disabled>
+                                    <i class="fas fa-check-circle"></i> Validate Data Config
+                                </button>
+                            </div>
+                            <div id="dataConfigFormContainer">
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-chart-line fa-3x mb-3"></i>
+                                    <p>Load a data configuration file or click "Load Example" to get started</p>
                                 </div>
-                                <textarea
-                                    id="dataConfigEditor"
-                                    class="json-text-area"
-                                    placeholder="Data JSON will appear here..."
-                                    spellcheck="false"
-                                ></textarea>
-                                <div id="dataErrorMessage" class="error-message" style="display: none;"></div>
-                                <div id="dataSuccessMessage" class="success-message" style="display: none;"></div>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Start Optimization Button -->
+                <div class="text-center">
+                    <button id="startOptimizationBtn" class="btn btn-success btn-lg" disabled>
+                        <i class="fas fa-play"></i> Start Genetic Algorithm Optimization
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Control Panel -->
-        <div id="controlPanel" class="control-panel" style="display: none;">
-            <h3 class="mb-3">Optimization Control</h3>
-
-            <!-- Progress Information -->
-            <div class="collapsible-section">
-                <div class="collapsible-header" onclick="toggleCollapse('optimizationProgress')">
-                    <h5 class="mb-0">Progress Information</h5>
-                    <i class="fas fa-chevron-down collapse-icon" id="optimizationProgress-icon"></i>
-                </div>
-                <div id="optimizationProgress" class="collapsible-content" style="display: none;">
-                    <div class="progress-info">
-                        <h5 id="testName">Test: Loading...</h5>
-                        <span id="generationInfo">Generation 0 / 0</span>
-                    </div>
-                    <div class="progress mb-3">
-                        <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                            0%
-                        </div>
-                    </div>
-
-                    <!-- Objectives Chart and Metrics Table -->
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <h6>Optimization Progress - Objective Functions:</h6>
-                            <div id="objectivesChart" style="height: 800px; border: 1px solid #dee2e6; border-radius: 4px; background: white;"></div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Generation Metrics Summary:</h6>
-                            <div class="table-container">
-                                <table class="table table-sm metrics-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Gen</th>
-                                            <th>Total Trades</th>
-                                            <th>Winning</th>
-                                            <th>Losing</th>
-                                            <th>Total P&L (%)</th>
-                                            <th>Avg Win (%)</th>
-                                            <th>Avg Loss (%)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="metricsTableBody">
-                                        <tr>
-                                            <td colspan="7" class="text-muted">No data yet...</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Current Best Individual Metrics:</h6>
-                            <div id="currentMetrics" class="small text-muted">No data yet...</div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Best Individuals Log:</h6>
-                            <div id="bestIndividualsLog" class="best-individuals-log" style="height: 200px;">
-                                <div class="text-muted">Optimization not started...</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Parallel Coordinates Chart Section -->
-                    <div class="row mt-3">
-                        <div class="col-md-12">
-                            <h6><i class="fas fa-project-diagram me-2"></i>Elite Population - Parallel Coordinates Analysis</h6>
-                            <div id="parallelCoordsChart" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
-                                <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
-                                    <i class="fas fa-chart-line me-2"></i>Waiting for elite population data...
-                                </div>
-                            </div>
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    This chart shows the objective function values for elite individuals. Each line represents one elite solution across all objectives.
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
+        <div id="controlPanel" class="collapsible-section" style="display: none;">
+            <div class="collapsible-header" onclick="toggleCollapse('optimizationProgress')">
+                <h3 class="mb-0"><i class="fas fa-chart-bar"></i> Optimization Progress</h3>
+                <i class="fas fa-chevron-down collapse-icon" id="optimizationProgress-icon"></i>
             </div>
-
-            <!-- Control Buttons -->
-            <div class="collapsible-section">
-                <div class="collapsible-header" onclick="toggleCollapse('controlButtons')">
-                    <h5 class="mb-0">Control Buttons</h5>
-                    <i class="fas fa-chevron-down collapse-icon" id="controlButtons-icon"></i>
+            <div id="optimizationProgress" class="collapsible-content" style="display: none;">
+                <div class="progress-info">
+                    <h5 id="testName">Test: Loading...</h5>
+                    <span id="generationInfo">Generation 0 / 0</span>
                 </div>
-                <div id="controlButtons" class="collapsible-content">
-                    <div class="control-buttons">
-                        <button id="startBtn" class="btn btn-success btn-optimization">
-                            <i class="fas fa-play me-2"></i>Start
-                        </button>
-                        <button id="pauseBtn" class="btn btn-warning btn-optimization" style="display: none;">
-                            <i class="fas fa-pause me-2"></i>Pause
-                        </button>
-                        <button id="resumeBtn" class="btn btn-info btn-optimization" style="display: none;">
-                            <i class="fas fa-play me-2"></i>Resume
-                        </button>
-                        <button id="stopBtn" class="btn btn-danger btn-optimization" style="display: none;">
-                            <i class="fas fa-stop me-2"></i>Stop
-                        </button>
+                <div class="progress mb-3">
+                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        0%
+                    </div>
+                </div>
+
+                <!-- Control Buttons -->
+                <div class="control-buttons">
+                    <button id="pauseBtn" class="btn btn-warning btn-optimization" style="display: none;">
+                        <i class="fas fa-pause me-2"></i>Pause
+                    </button>
+                    <button id="resumeBtn" class="btn btn-info btn-optimization" style="display: none;">
+                        <i class="fas fa-play me-2"></i>Resume
+                    </button>
+                    <button id="stopBtn" class="btn btn-danger btn-optimization" style="display: none;">
+                        <i class="fas fa-stop me-2"></i>Stop
+                    </button>
+                </div>
+
+                <!-- Objectives Chart and Metrics Table -->
+                <div class="row mb-3 mt-4">
+                    <div class="col-md-6">
+                        <h6>Optimization Progress - Objective Functions:</h6>
+                        <div id="objectivesChart" style="height: 800px; border: 1px solid #dee2e6; border-radius: 4px; background: white;"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Generation Metrics Summary:</h6>
+                        <div class="table-container">
+                            <table class="table table-sm metrics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Gen</th>
+                                        <th>Total Trades</th>
+                                        <th>Winning</th>
+                                        <th>Losing</th>
+                                        <th>Total P&L (%)</th>
+                                        <th>Avg Win (%)</th>
+                                        <th>Avg Loss (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="metricsTableBody">
+                                    <tr>
+                                        <td colspan="7" class="text-muted">No data yet...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Current Best Individual Metrics:</h6>
+                        <div id="currentMetrics" class="small text-muted">No data yet...</div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Best Individuals Log:</h6>
+                        <div id="bestIndividualsLog" class="best-individuals-log" style="height: 200px;">
+                            <div class="text-muted">Optimization not started...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parallel Coordinates Chart Section -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-project-diagram me-2"></i>Elite Population - Parallel Coordinates Analysis</h6>
+                        <div id="parallelCoordsChart" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                            <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                <i class="fas fa-chart-line me-2"></i>Waiting for elite population data...
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                This chart shows the objective function values for elite individuals. Each line represents one elite solution across all objectives.
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -502,6 +399,11 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Shared form components -->
+    <script src="/static/js/indicator-parameter-definitions.js"></script>
+    <script src="/static/js/config-form-builder.js"></script>
+    <script src="/static/js/data-config-form.js"></script>
 
     <script>
         // Initialize Socket.IO
@@ -516,13 +418,13 @@
         let currentTestName = '';
         let currentTimestamp = '';
 
-        // JSON Editor variables
-        let originalGAConfig = null;
-        let originalDataConfig = null;
+        // Form builders
+        let gaFormBuilder = null;
+        let dataFormBuilder = null;
+
+        // Configuration data
         let currentGAConfig = null;
         let currentDataConfig = null;
-        let gaModified = false;
-        let dataModified = false;
 
         // Collapsible section toggle function
         function toggleCollapse(sectionId) {
@@ -540,387 +442,360 @@
             }
         }
 
-        // JSON Editor Functions
-        function handleTextChange(configType) {
-            const isGA = configType === 'ga';
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            // File upload handlers
+            document.getElementById('gaConfigFile').addEventListener('change', handleFileUpload);
+            document.getElementById('dataConfigFile').addEventListener('change', handleFileUpload);
+            
+            // Button handlers
+            document.getElementById('loadFilesBtn').addEventListener('click', loadConfigurationFiles);
+            document.getElementById('loadExampleBtn').addEventListener('click', loadExampleConfigurations);
+            document.getElementById('startOptimizationBtn').addEventListener('click', startOptimization);
 
-            if (isGA) {
-                gaModified = true;
-                // Update currentGAConfig in real-time
-                const gaEditor = document.getElementById('gaConfigEditor');
-                try {
-                    if (gaEditor.value.trim()) {
-                        currentGAConfig = JSON.parse(gaEditor.value);
-                    }
-                } catch (error) {
-                    // Keep previous valid config if current is invalid
-                }
-            } else {
-                dataModified = true;
-                // Update currentDataConfig in real-time
-                const dataEditor = document.getElementById('dataConfigEditor');
-                try {
-                    if (dataEditor.value.trim()) {
-                        currentDataConfig = JSON.parse(dataEditor.value);
-                    }
-                } catch (error) {
-                    // Keep previous valid config if current is invalid
-                }
-            }
+            // Config action handlers
+            document.getElementById('saveGAConfigBtn').addEventListener('click', () => saveConfiguration('ga_config'));
+            document.getElementById('downloadGAConfigBtn').addEventListener('click', () => downloadConfiguration('ga_config'));
+            document.getElementById('validateGAConfigBtn').addEventListener('click', () => validateConfiguration('ga_config'));
+            
+            document.getElementById('saveDataConfigBtn').addEventListener('click', () => saveConfiguration('data_config'));
+            document.getElementById('downloadDataConfigBtn').addEventListener('click', () => downloadConfiguration('data_config'));
+            document.getElementById('validateDataConfigBtn').addEventListener('click', () => validateConfiguration('data_config'));
 
-            updateModificationIndicators();
-
-            // Auto-validate after a short delay
-            clearTimeout(window.validationTimeout);
-            window.validationTimeout = setTimeout(() => {
-                validateJSON(configType, false); // Silent validation
-            }, 1000);
-        }
-
-        function updateModificationIndicators() {
-            const gaIndicator = document.getElementById('gaModifiedIndicator');
-            const dataIndicator = document.getElementById('dataModifiedIndicator');
-            const warning = document.getElementById('modificationWarning');
-            const loadBtn = document.getElementById('loadConfigsBtn');
-
-            gaIndicator.style.display = gaModified ? 'inline' : 'none';
-            dataIndicator.style.display = dataModified ? 'inline' : 'none';
-            warning.style.display = (gaModified || dataModified) ? 'block' : 'none';
-
-            // Update warning message to be less confusing
-            if (gaModified || dataModified) {
-                warning.innerHTML = '<i class="fas fa-info-circle me-2"></i><strong>Configuration Modified:</strong> Your changes will be used when you start optimization.';
-                loadBtn.innerHTML = '<i class="fas fa-sync me-2"></i>Reload from Files (Optional)';
-                loadBtn.className = 'btn btn-secondary';
-                loadBtn.title = 'Click to reload original files and discard edits';
-            } else {
-                loadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Load Configurations';
-                loadBtn.className = 'btn btn-primary';
-                loadBtn.title = 'Load configuration files';
-            }
-        }
-
-        function formatJSON(configType) {
-            const editor = document.getElementById(`${configType}ConfigEditor`);
-
-            try {
-                const parsed = JSON.parse(editor.value);
-                // Preserve original order by using the same spacing
-                const formatted = JSON.stringify(parsed, null, 2);
-                editor.value = formatted;
-
-                // Update the current config with the parsed version
-                if (configType === 'ga') {
-                    currentGAConfig = parsed;
-                } else {
-                    currentDataConfig = parsed;
-                }
-
-                showMessage(configType, 'JSON formatted successfully!', 'success');
-            } catch (error) {
-                showMessage(configType, `Invalid JSON: ${error.message}`, 'error');
-            }
-        }
-
-        function validateJSON(configType, showSuccess = true) {
-            const editor = document.getElementById(`${configType}ConfigEditor`);
-
-            try {
-                JSON.parse(editor.value);
-                if (showSuccess) {
-                    showMessage(configType, 'Valid JSON ✓', 'success');
-                } else {
-                    hideMessage(configType);
-                }
-                return true;
-            } catch (error) {
-                const errorMsg = `Invalid JSON: ${error.message}`;
-                if (error.message.includes('position')) {
-                    const position = error.message.match(/position (\d+)/);
-                    if (position) {
-                        const pos = parseInt(position[1]);
-                        const lines = editor.value.substring(0, pos).split('\n');
-                        const line = lines.length;
-                        const col = lines[lines.length - 1].length + 1;
-                        showMessage(configType, `${errorMsg} (Line ${line}, Column ${col})`, 'error');
-                    } else {
-                        showMessage(configType, errorMsg, 'error');
-                    }
-                } else {
-                    showMessage(configType, errorMsg, 'error');
-                }
-                return false;
-            }
-        }
-
-        function resetConfig(configType) {
-            if (!confirm(`Reset ${configType.toUpperCase()} configuration to original?`)) {
-                return;
-            }
-
-            const editor = document.getElementById(`${configType}ConfigEditor`);
-            const original = configType === 'ga' ? originalGAConfig : originalDataConfig;
-
-            if (original) {
-                editor.value = JSON.stringify(original, null, 2);
-
-                if (configType === 'ga') {
-                    gaModified = false;
-                } else {
-                    dataModified = false;
-                }
-
-                updateModificationIndicators();
-                hideMessage(configType);
-                showMessage(configType, 'Reset to original configuration', 'success');
-            }
-        }
-
-        function showMessage(configType, message, type) {
-            const errorDiv = document.getElementById(`${configType}ErrorMessage`);
-            const successDiv = document.getElementById(`${configType}SuccessMessage`);
-
-            if (type === 'error') {
-                errorDiv.textContent = message;
-                errorDiv.style.display = 'block';
-                successDiv.style.display = 'none';
-            } else {
-                successDiv.textContent = message;
-                successDiv.style.display = 'block';
-                errorDiv.style.display = 'none';
-            }
-
-            // Auto-hide success messages
-            if (type === 'success') {
-                setTimeout(() => hideMessage(configType), 3000);
-            }
-        }
-
-        function hideMessage(configType) {
-            document.getElementById(`${configType}ErrorMessage`).style.display = 'none';
-            document.getElementById(`${configType}SuccessMessage`).style.display = 'none';
-        }
-
-        // Update Parallel Coordinates Chart
-        function updateParallelCoordsChart(eliteData, objectiveNames) {
-            if (!eliteData || eliteData.length === 0 || !objectiveNames || objectiveNames.length === 0) {
-                if (parallelCoordsChart) {
-                    parallelCoordsChart.destroy();
-                    parallelCoordsChart = null;
-                }
-                document.getElementById('parallelCoordsChart').innerHTML = `
-                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
-                        <i class="fas fa-chart-line me-2"></i>No elite data available
-                    </div>
-                `;
-                return;
-            }
-
-            // Generate colors for each elite individual
-            const colors = Highcharts.getOptions().colors;
-            const colorCount = colors.length;
-
-            // Prepare chart configuration
-            const chartConfig = {
-                chart: {
-                    type: 'line',
-                    parallelCoordinates: true,
-                    parallelAxes: {
-                        lineWidth: 2,
-                        gridlinesWidth: 1,
-                        title: {
-                            style: {
-                                fontWeight: 'bold',
-                                fontSize: '12px'
-                            }
-                        }
-                    }
-                },
-                title: {
-                    text: `Elite Population Analysis (${eliteData.length} Individuals)`,
-                    style: {
-                        fontSize: '14px',
-                        fontWeight: 'bold'
-                    }
-                },
-                plotOptions: {
-                    series: {
-                        animation: {
-                            duration: 500
-                        },
-                        lineWidth: 2.5,
-                        opacity: 0.75,
-                        states: {
-                            hover: {
-                                lineWidth: 4,
-                                opacity: 1
-                            }
-                        },
-                        marker: {
-                            enabled: false,
-                            states: {
-                                hover: {
-                                    enabled: true,
-                                    radius: 4
-                                }
-                            }
-                        }
-                    }
-                },
-                tooltip: {
-                    formatter: function() {
-                        let tooltipText = '<b>Elite Individual #' + (this.series.index + 1) + '</b><br/>';
-                        const individualData = eliteData[this.series.index];
-                        objectiveNames.forEach(function(objName, i) {
-                            tooltipText += objName + ': ' +
-                                         Highcharts.numberFormat(individualData[i], 4) + '<br/>';
-                        });
-                        return tooltipText;
-                    }
-                },
-                legend: {
-                    enabled: false
-                },
-                credits: {
-                    enabled: false
-                },
-                // Configure axes for each objective
-                xAxis: objectiveNames.map((objName, index) => ({
-                    lineWidth: 0,
-                    labels: {
-                        enabled: false
-                    },
-                    title: {
-                        text: objName,
-                        style: {
-                            fontWeight: 'bold',
-                            fontSize: '11px'
-                        }
-                    }
-                })),
-                yAxis: objectiveNames.map((objName, index) => {
-                    // Calculate min/max for this objective across all elites
-                    const values = eliteData.map(elite => elite[index]);
-                    const min = Math.min(...values);
-                    const max = Math.max(...values);
-                    const padding = (max - min) * 0.1;
-
-                    return {
-                        lineWidth: 1,
-                        min: min - padding,
-                        max: max + padding,
-                        title: {
-                            text: '',
-                            style: {
-                                fontSize: '10px'
-                            }
-                        },
-                        labels: {
-                            format: '{value:.3f}',
-                            style: {
-                                fontSize: '9px'
-                            }
-                        }
-                    };
-                }),
-                // Create series for each elite individual
-                series: eliteData.map((elite, index) => ({
-                    name: `Elite ${index + 1}`,
-                    data: elite.map((value, objIndex) => [objIndex, value]),
-                    color: colors[index % colorCount],
-                    lineWidth: index === 0 ? 3 : 2.5, // Highlight best elite
-                    opacity: index === 0 ? 0.9 : 0.75
-                }))
-            };
-
-            // Destroy existing chart and create new one
-            if (parallelCoordsChart) {
-                parallelCoordsChart.destroy();
-            }
-
-            parallelCoordsChart = Highcharts.chart('parallelCoordsChart', chartConfig);
-        }
-
-        // Update metrics table with generation data
-        function updateMetricsTable(generation, chartData) {
-            const tableBody = document.getElementById('metricsTableBody');
-
-            // Calculate trade metrics
-            const trades = chartData.trade_history || [];
-            const totalTrades = trades.length;
-
-            // Separate winning and losing trades based on P&L
-            const completedTrades = chartData.pnl_history || [];
-            let winningTrades = 0;
-            let losingTrades = 0;
-            let totalWinPnL = 0;
-            let totalLossPnL = 0;
-
-            completedTrades.forEach(trade => {
-                if (trade.trade_pnl > 0) {
-                    winningTrades++;
-                    totalWinPnL += trade.trade_pnl;
-                } else if (trade.trade_pnl < 0) {
-                    losingTrades++;
-                    totalLossPnL += trade.trade_pnl;
+            // Control button handlers
+            document.getElementById('pauseBtn').addEventListener('click', () => socket.emit('pause_optimization'));
+            document.getElementById('resumeBtn').addEventListener('click', () => socket.emit('resume_optimization'));
+            document.getElementById('stopBtn').addEventListener('click', () => {
+                if (confirm('Are you sure you want to stop the optimization?')) {
+                    socket.emit('stop_optimization');
                 }
             });
+        });
 
-            const totalPnL = completedTrades.length > 0
-                ? completedTrades[completedTrades.length - 1].cumulative_pnl
-                : 0;
+        // File upload handler
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
-            const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
-            const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+            const fileType = event.target.id === 'gaConfigFile' ? 'ga_config' : 'data_config';
+            
+            try {
+                updateStatus('Uploading...', 'loading');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('type', fileType);
 
-            // Store metrics for this generation
-            const generationData = {
-                generation,
-                totalTrades,
-                winningTrades,
-                losingTrades,
-                totalPnL,
-                avgWin,
-                avgLoss
-            };
+                const response = await fetch('/api/upload_file', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            // Update or add to generationMetrics array
-            const existingIndex = generationMetrics.findIndex(g => g.generation === generation);
-            if (existingIndex >= 0) {
-                generationMetrics[existingIndex] = generationData;
-            } else {
-                generationMetrics.push(generationData);
+                const result = await response.json();
+
+                if (result.success) {
+                    uploadedFiles[fileType] = result.filepath;
+                    console.log(`${fileType} uploaded:`, result.filepath);
+                    updateStatus('Ready', 'ready');
+                    updateLoadButtonState();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                updateStatus('Error', 'error');
+                alert(`Upload failed: ${error.message}`);
             }
+        }
 
-            // Sort by generation
-            generationMetrics.sort((a, b) => a.generation - b.generation);
-
-            // Rebuild table
-            if (generationMetrics.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" class="text-muted">No data yet...</td></tr>';
+        // Load configuration files and generate forms
+        async function loadConfigurationFiles() {
+            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
+                alert('Please select both configuration files first.');
                 return;
             }
 
-            const tableRows = generationMetrics.map(data => `
-                <tr>
-                    <td><strong>${data.generation}</strong></td>
-                    <td>${data.totalTrades}</td>
-                    <td class="text-success">${data.winningTrades}</td>
-                    <td class="text-danger">${data.losingTrades}</td>
-                    <td class="${data.totalPnL >= 0 ? 'text-success' : 'text-danger'}">${data.totalPnL.toFixed(2)}%</td>
-                    <td class="text-success">${data.avgWin.toFixed(2)}%</td>
-                    <td class="text-danger">${data.avgLoss.toFixed(2)}%</td>
-                </tr>
-            `).join('');
+            try {
+                updateStatus('Loading configurations...', 'loading');
 
-            tableBody.innerHTML = tableRows;
+                const response = await fetch('/api/load_configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ga_config_path: uploadedFiles.ga_config,
+                        data_config_path: uploadedFiles.data_config
+                    })
+                });
 
-            // Scroll to latest entry
-            const tableContainer = document.querySelector('.table-container');
-            tableContainer.scrollTop = tableContainer.scrollHeight;
+                const result = await response.json();
+
+                if (result.success) {
+                    currentGAConfig = result.ga_config;
+                    currentDataConfig = result.data_config;
+                    
+                    generateForms();
+                    updateStatus('Ready', 'ready');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Config loading error:', error);
+                updateStatus('Error', 'error');
+                alert(`Failed to load configurations: ${error.message}`);
+            }
         }
 
-        // Socket event handlers
+        // Load example configurations
+        async function loadExampleConfigurations() {
+            try {
+                updateStatus('Loading examples...', 'loading');
+
+                const response = await fetch('/api/load_example_configs');
+                const result = await response.json();
+
+                if (result.success) {
+                    currentGAConfig = result.examples.ga_config;
+                    currentDataConfig = result.examples.data_config;
+                    
+                    generateForms();
+                    updateStatus('Ready', 'ready');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Example loading error:', error);
+                updateStatus('Error', 'error');
+                alert(`Failed to load examples: ${error.message}`);
+            }
+        }
+
+        // Generate dynamic forms
+        function generateForms() {
+            // Generate GA configuration form
+            gaFormBuilder = new ConfigFormBuilder('gaConfigFormContainer', {
+                showGAFields: true
+            });
+            gaFormBuilder.generateForm(currentGAConfig);
+
+            // Generate data configuration form
+            dataFormBuilder = new DataConfigForm('dataConfigFormContainer');
+            dataFormBuilder.generateForm(currentDataConfig);
+
+            // Set up form change handlers
+            setupFormChangeHandlers();
+            
+            // Enable action buttons
+            enableActionButtons();
+
+            console.log('Forms generated successfully');
+        }
+
+        // Set up form change handlers
+        function setupFormChangeHandlers() {
+            // Listen for configuration changes
+            document.getElementById('gaConfigFormContainer').addEventListener('configSave', (event) => {
+                currentGAConfig = event.detail;
+                console.log('GA Config updated:', currentGAConfig);
+            });
+
+            document.getElementById('dataConfigFormContainer').addEventListener('dataConfigSave', (event) => {
+                currentDataConfig = event.detail;
+                console.log('Data Config updated:', currentDataConfig);
+            });
+        }
+
+        // Enable action buttons
+        function enableActionButtons() {
+            ['saveGAConfigBtn', 'downloadGAConfigBtn', 'validateGAConfigBtn',
+             'saveDataConfigBtn', 'downloadDataConfigBtn', 'validateDataConfigBtn',
+             'startOptimizationBtn'].forEach(id => {
+                document.getElementById(id).disabled = false;
+            });
+        }
+
+        // Update load button state
+        function updateLoadButtonState() {
+            const hasFiles = uploadedFiles.ga_config && uploadedFiles.data_config;
+            document.getElementById('loadFilesBtn').disabled = !hasFiles;
+        }
+
+        // Save configuration
+        async function saveConfiguration(configType) {
+            const configData = configType === 'ga_config' ? 
+                (gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig) :
+                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+
+            if (!configData) {
+                alert('No configuration data to save');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/save_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config_data: configData,
+                        config_type: configType,
+                        filename: `${configData.test_name || configData.ticker || 'config'}.json`
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                alert(`Failed to save configuration: ${error.message}`);
+            }
+        }
+
+        // Download configuration
+        async function downloadConfiguration(configType) {
+            const configData = configType === 'ga_config' ? 
+                (gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig) :
+                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+
+            if (!configData) {
+                alert('No configuration data to download');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/download_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config_data: configData,
+                        config_type: configType,
+                        test_name: configData.test_name || configData.ticker || 'config'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.href = result.download_url;
+                    link.download = result.filename;
+                    link.click();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                alert(`Failed to prepare download: ${error.message}`);
+            }
+        }
+
+        // Validate configuration
+        async function validateConfiguration(configType) {
+            const configData = configType === 'ga_config' ? 
+                (gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig) :
+                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+
+            if (!configData) {
+                alert('No configuration data to validate');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/validate_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config_data: configData,
+                        config_type: configType
+                    })
+                });
+
+                const result = await response.json();
+
+                let message = result.message;
+                if (result.warnings && result.warnings.length > 0) {
+                    message += '\n\nWarnings:\n• ' + result.warnings.join('\n• ');
+                }
+                if (result.errors && result.errors.length > 0) {
+                    message += '\n\nErrors:\n• ' + result.errors.join('\n• ');
+                }
+
+                alert(message);
+            } catch (error) {
+                console.error('Validation error:', error);
+                alert(`Failed to validate configuration: ${error.message}`);
+            }
+        }
+
+        // Start optimization
+        async function startOptimization() {
+            const gaConfig = gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig;
+            const dataConfig = dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig;
+
+            if (!gaConfig || !dataConfig) {
+                alert('Please configure both GA and data settings before starting optimization.');
+                return;
+            }
+
+            try {
+                updateStatus('Starting optimization...', 'loading');
+
+                // Create temporary files for the current configurations
+                const gaConfigBlob = new Blob([JSON.stringify(gaConfig, null, 2)], { type: 'application/json' });
+                const dataConfigBlob = new Blob([JSON.stringify(dataConfig, null, 2)], { type: 'application/json' });
+
+                const gaConfigFile = new File([gaConfigBlob], 'current_ga_config.json');
+                const dataConfigFile = new File([dataConfigBlob], 'current_data_config.json');
+
+                // Upload current configurations
+                const gaFormData = new FormData();
+                gaFormData.append('file', gaConfigFile);
+                gaFormData.append('type', 'current_ga_config');
+
+                const dataFormData = new FormData();
+                dataFormData.append('file', dataConfigFile);
+                dataFormData.append('type', 'current_data_config');
+
+                const [gaUploadResponse, dataUploadResponse] = await Promise.all([
+                    fetch('/api/upload_file', { method: 'POST', body: gaFormData }),
+                    fetch('/api/upload_file', { method: 'POST', body: dataFormData })
+                ]);
+
+                const gaUploadResult = await gaUploadResponse.json();
+                const dataUploadResult = await dataUploadResponse.json();
+
+                if (!gaUploadResult.success || !dataUploadResult.success) {
+                    throw new Error('Failed to upload configurations');
+                }
+
+                // Start optimization with uploaded file paths
+                socket.emit('start_optimization', {
+                    ga_config_path: gaUploadResult.filepath,
+                    data_config_path: dataUploadResult.filepath
+                });
+
+                // Show control panel
+                document.getElementById('controlPanel').style.display = 'block';
+
+            } catch (error) {
+                console.error('Start optimization error:', error);
+                updateStatus('Error', 'error');
+                alert(`Failed to start optimization: ${error.message}`);
+            }
+        }
+
+        // Update status badge
+        function updateStatus(text, type) {
+            const statusElement = document.getElementById('appStatus');
+            statusElement.textContent = text;
+            statusElement.className = `status-badge status-${type}`;
+        }
+
+        // Socket event handlers (keeping existing ones)
         socket.on('connect', function() {
             console.log('Connected to server');
             updateStatus('Ready', 'ready');
@@ -931,7 +806,6 @@
             optimizationRunning = true;
             updateStatus('Running', 'running');
 
-            // Store test info for results saving
             currentTestName = data.test_name;
             const now = new Date();
             currentTimestamp = now.getFullYear() + '-' +
@@ -941,33 +815,19 @@
                               String(now.getMinutes()).padStart(2, '0') +
                               String(now.getSeconds()).padStart(2, '0');
 
-            console.log('📊 Test Name from backend:', data.test_name);
-            console.log('📊 Total Generations:', data.total_generations);
-
             document.getElementById('testName').textContent = `Test: ${data.test_name}`;
             document.getElementById('generationInfo').textContent = `Generation 0 / ${data.total_generations}`;
             document.getElementById('optimizationProgress').style.display = 'block';
 
-            // Clear previous data
             generationMetrics = [];
             document.getElementById('metricsTableBody').innerHTML = '<tr><td colspan="7" class="text-muted">Starting optimization...</td></tr>';
 
             // Update button states
-            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('startOptimizationBtn').style.display = 'none';
             document.getElementById('pauseBtn').style.display = 'inline-block';
             document.getElementById('stopBtn').style.display = 'inline-block';
 
-            // Clear previous data
             document.getElementById('bestIndividualsLog').innerHTML = '<div class="text-muted">Starting optimization...</div>';
-
-            // Show confirmation that configs were used
-            setTimeout(() => {
-                const statusMsg = `✅ Optimization Started!\n\n` +
-                                `Using: ${data.test_name}\n` +
-                                `Generations: ${data.total_generations}\n\n` +
-                                `Your edited configurations are now running.`;
-                console.log(statusMsg);
-            }, 1000);
         });
 
         socket.on('generation_complete', function(data) {
@@ -1021,7 +881,7 @@
             }
 
             // Update button states
-            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startOptimizationBtn').style.display = 'inline-block';
             document.getElementById('pauseBtn').style.display = 'none';
             document.getElementById('resumeBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'none';
@@ -1031,7 +891,6 @@
             console.log('Optimization paused:', data);
             updateStatus(`Paused at Generation ${data.generation}`, 'paused');
 
-            // Update button states
             document.getElementById('pauseBtn').style.display = 'none';
             document.getElementById('resumeBtn').style.display = 'inline-block';
         });
@@ -1040,7 +899,6 @@
             console.log('Optimization resumed:', data);
             updateStatus('Running', 'running');
 
-            // Update button states
             document.getElementById('pauseBtn').style.display = 'inline-block';
             document.getElementById('resumeBtn').style.display = 'none';
         });
@@ -1050,8 +908,7 @@
             optimizationRunning = false;
             updateStatus('Stopped', 'ready');
 
-            // Update button states
-            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startOptimizationBtn').style.display = 'inline-block';
             document.getElementById('pauseBtn').style.display = 'none';
             document.getElementById('resumeBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'none';
@@ -1062,8 +919,7 @@
             optimizationRunning = false;
             updateStatus('Error', 'error');
 
-            // Update button states
-            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startOptimizationBtn').style.display = 'inline-block';
             document.getElementById('pauseBtn').style.display = 'none';
             document.getElementById('resumeBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'none';
@@ -1071,197 +927,7 @@
             alert(`Optimization Error: ${data.error}`);
         });
 
-        // Button event handlers
-        document.getElementById('startBtn').addEventListener('click', async function() {
-            // Always get the latest content from editors
-            const gaEditor = document.getElementById('gaConfigEditor');
-            const dataEditor = document.getElementById('dataConfigEditor');
-
-            let currentGAFromEditor = null;
-            let currentDataFromEditor = null;
-
-            // Parse current editor content
-            try {
-                if (gaEditor.value.trim()) {
-                    currentGAFromEditor = JSON.parse(gaEditor.value);
-                    console.log('✅ Parsed GA config from editor:', currentGAFromEditor);
-                }
-                if (dataEditor.value.trim()) {
-                    currentDataFromEditor = JSON.parse(dataEditor.value);
-                    console.log('✅ Parsed Data config from editor:', currentDataFromEditor);
-                }
-            } catch (error) {
-                alert('Invalid JSON in editors. Please fix JSON errors before starting optimization.');
-                console.error('❌ JSON Parse Error:', error);
-                return;
-            }
-
-            // Use editor content if available, otherwise fall back to stored configs
-            const finalGAConfig = currentGAFromEditor || currentGAConfig;
-            const finalDataConfig = currentDataFromEditor || currentDataConfig;
-
-            if (!finalGAConfig || !finalDataConfig) {
-                alert('Please load both configuration files first.');
-                return;
-            }
-
-            // Check if we have file paths (needed for backend)
-            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
-                alert('Please upload both configuration files first.');
-                return;
-            }
-
-            // Show user what configs are being sent
-            const configSummary = {
-                ga_test_name: finalGAConfig.test_name || 'Unknown',
-                ga_generations: finalGAConfig.ga_hyperparameters?.number_of_iterations || 'Unknown',
-                data_ticker: finalDataConfig.ticker || 'Unknown',
-                data_start: finalDataConfig.start_date || 'Unknown',
-                data_end: finalDataConfig.end_date || 'Unknown'
-            };
-
-            console.log('🚀 Starting optimization with configs:', {
-                ga_config: finalGAConfig,
-                data_config: finalDataConfig,
-                summary: configSummary
-            });
-
-            const confirmMsg = `🚀 Starting optimization with:\n\n` +
-                             `GA Config:\n` +
-                             `• Test Name: ${configSummary.ga_test_name}\n` +
-                             `• Generations: ${configSummary.ga_generations}\n\n` +
-                             `Data Config:\n` +
-                             `• Ticker: ${configSummary.data_ticker}\n` +
-                             `• Period: ${configSummary.data_start} to ${configSummary.data_end}\n\n` +
-                             `Continue?`;
-
-            if (confirm(confirmMsg)) {
-                try {
-                    updateStatus('Uploading modified configs...', 'loading');
-
-                    // WORKAROUND: Upload modified configs as new temporary files
-                    // since the backend only reads from file paths
-
-                    // Create temporary file for modified GA config with preserved formatting
-                    const gaConfigBlob = new Blob([gaEditor.value], {
-                        type: 'application/json'
-                    });
-                    const gaConfigFile = new File([gaConfigBlob], 'modified_ga_config.json', {
-                        type: 'application/json'
-                    });
-
-                    // Create temporary file for modified Data config with preserved formatting
-                    const dataConfigBlob = new Blob([dataEditor.value], {
-                        type: 'application/json'
-                    });
-                    const dataConfigFile = new File([dataConfigBlob], 'modified_data_config.json', {
-                        type: 'application/json'
-                    });
-
-                    // Upload modified GA config
-                    const gaFormData = new FormData();
-                    gaFormData.append('file', gaConfigFile);
-                    gaFormData.append('type', 'modified_ga_config');
-
-                    const gaResponse = await fetch('/api/upload_file', {
-                        method: 'POST',
-                        body: gaFormData
-                    });
-                    const gaResult = await gaResponse.json();
-
-                    if (!gaResult.success) {
-                        throw new Error(`GA config upload failed: ${gaResult.error}`);
-                    }
-
-                    // Upload modified Data config
-                    const dataFormData = new FormData();
-                    dataFormData.append('file', dataConfigFile);
-                    dataFormData.append('type', 'modified_data_config');
-
-                    const dataResponse = await fetch('/api/upload_file', {
-                        method: 'POST',
-                        body: dataFormData
-                    });
-                    const dataResult = await dataResponse.json();
-
-                    if (!dataResult.success) {
-                        throw new Error(`Data config upload failed: ${dataResult.error}`);
-                    }
-
-                    console.log('✅ Uploaded modified configs:', {
-                        ga_config_path: gaResult.filepath,
-                        data_config_path: dataResult.filepath
-                    });
-
-                    updateStatus('Starting optimization...', 'loading');
-
-                    // Now start optimization with the modified file paths
-                    const payloadToSend = {
-                        ga_config_path: gaResult.filepath,  // Use modified file paths
-                        data_config_path: dataResult.filepath,
-                        config_source: 'frontend_editor_modified_files',
-                        original_test_name: configSummary.ga_test_name
-                    };
-
-                    console.log('📤 SENDING TO BACKEND:', JSON.stringify(payloadToSend, null, 2));
-
-                    socket.emit('start_optimization', payloadToSend);
-
-                } catch (error) {
-                    console.error('❌ Error uploading modified configs:', error);
-                    updateStatus('Error', 'error');
-                    alert(`Failed to upload modified configurations: ${error.message}`);
-                }
-            }
-        });
-
-        document.getElementById('pauseBtn').addEventListener('click', function() {
-            socket.emit('pause_optimization');
-        });
-
-        document.getElementById('resumeBtn').addEventListener('click', function() {
-            socket.emit('resume_optimization');
-        });
-
-        document.getElementById('stopBtn').addEventListener('click', function() {
-            if (confirm('Are you sure you want to stop the optimization?')) {
-                socket.emit('stop_optimization');
-            }
-        });
-
-        // File upload handlers
-        document.getElementById('gaConfigFile').addEventListener('change', async function(e) {
-            if (e.target.files.length > 0) {
-                await uploadFile(e.target.files[0], 'ga_config');
-            }
-        });
-
-        document.getElementById('dataConfigFile').addEventListener('change', async function(e) {
-            if (e.target.files.length > 0) {
-                await uploadFile(e.target.files[0], 'data_config');
-            }
-        });
-
-        document.getElementById('loadConfigsBtn').addEventListener('click', async function() {
-            if (!uploadedFiles.ga_config || !uploadedFiles.data_config) {
-                alert('Please select both configuration files first.');
-                return;
-            }
-
-            await loadConfigurations();
-        });
-
-        // Real-time editing handlers
-        document.getElementById('gaConfigEditor').addEventListener('input', () => handleTextChange('ga'));
-        document.getElementById('dataConfigEditor').addEventListener('input', () => handleTextChange('data'));
-
-        // Helper functions
-        function updateStatus(text, type) {
-            const statusElement = document.getElementById('appStatus');
-            statusElement.textContent = text;
-            statusElement.className = `status-badge status-${type}`;
-        }
-
+        // Include existing chart and metrics functions
         function updateBestIndividualsLog(logData) {
             const logContainer = document.getElementById('bestIndividualsLog');
 
@@ -1281,166 +947,6 @@
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
-        async function uploadFile(file, type) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('type', type);
-
-            try {
-                updateStatus('Uploading...', 'loading');
-                const response = await fetch('/api/upload_file', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    uploadedFiles[type] = result.filepath;
-                    console.log(`${type} uploaded:`, result.filepath);
-                    updateStatus('Ready', 'ready');
-                } else {
-                    throw new Error(result.error);
-                }
-            } catch (error) {
-                console.error('Upload error:', error);
-                updateStatus('Error', 'error');
-                alert(`Upload failed: ${error.message}`);
-            }
-        }
-
-        async function loadConfigurations() {
-            try {
-                updateStatus('Loading configs...', 'loading');
-
-                // Get current text from editors if they exist
-                const gaEditor = document.getElementById('gaConfigEditor');
-                const dataEditor = document.getElementById('dataConfigEditor');
-
-                let gaConfigToSend = null;
-                let dataConfigToSend = null;
-                let preserveGAEdits = false;
-                let preserveDataEdits = false;
-
-                // Check if editors have content (user has been editing)
-                if (gaEditor.value.trim()) {
-                    try {
-                        gaConfigToSend = JSON.parse(gaEditor.value);
-                        preserveGAEdits = true;
-                        console.log('🎯 Preserving GA edits:', gaConfigToSend);
-                    } catch (error) {
-                        alert('Invalid GA JSON configuration. Please fix errors before loading.');
-                        updateStatus('Error', 'error');
-                        return;
-                    }
-                }
-
-                if (dataEditor.value.trim()) {
-                    try {
-                        dataConfigToSend = JSON.parse(dataEditor.value);
-                        preserveDataEdits = true;
-                        console.log('🎯 Preserving Data edits:', dataConfigToSend);
-                    } catch (error) {
-                        alert('Invalid Data JSON configuration. Please fix errors before loading.');
-                        updateStatus('Error', 'error');
-                        return;
-                    }
-                }
-
-                const response = await fetch('/api/load_configs', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        ga_config_path: uploadedFiles.ga_config,
-                        data_config_path: uploadedFiles.data_config,
-                        modified_ga_config: gaConfigToSend,
-                        modified_data_config: dataConfigToSend
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    // Store original configurations from file
-                    originalGAConfig = result.ga_config;
-                    originalDataConfig = result.data_config;
-
-                    // Use edited content if available, otherwise use originals
-                    currentGAConfig = gaConfigToSend || originalGAConfig;
-                    currentDataConfig = dataConfigToSend || originalDataConfig;
-
-                    // IMPORTANT: Only update editors if they were empty (first load)
-                    // If user has been editing, preserve their edits!
-                    if (!preserveGAEdits) {
-                        gaEditor.value = JSON.stringify(originalGAConfig, null, 2);
-                        currentGAConfig = originalGAConfig;
-                    } else {
-                        // Keep user's edits and use them
-                        console.log('✅ Keeping GA edits in editor');
-                        currentGAConfig = gaConfigToSend;
-                    }
-
-                    if (!preserveDataEdits) {
-                        dataEditor.value = JSON.stringify(originalDataConfig, null, 2);
-                        currentDataConfig = originalDataConfig;
-                    } else {
-                        // Keep user's edits and use them
-                        console.log('✅ Keeping Data edits in editor');
-                        currentDataConfig = dataConfigToSend;
-                    }
-
-                    // Show editors and control panel
-                    document.getElementById('configSummary').style.display = 'block';
-                    document.getElementById('controlPanel').style.display = 'block';
-
-                    // Reset modification indicators and button state
-                    gaModified = false;
-                    dataModified = false;
-                    updateModificationIndicators();
-
-                    // Clear any error messages
-                    hideMessage('ga');
-                    hideMessage('data');
-
-                    updateStatus('Ready', 'ready');
-
-                    // Show confirmation message with details
-                    let confirmationMsg = '✅ Configurations loaded successfully!\n\n';
-
-                    if (preserveGAEdits || preserveDataEdits) {
-                        confirmationMsg += '🎯 Your edits have been preserved and will be used for optimization!\n\n';
-                        confirmationMsg += 'Active configs:\n';
-                        if (preserveGAEdits) {
-                            confirmationMsg += `• GA Config: "${currentGAConfig.test_name}" (your edited version)\n`;
-                        } else {
-                            confirmationMsg += `• GA Config: "${currentGAConfig.test_name}" (original file)\n`;
-                        }
-                        if (preserveDataEdits) {
-                            confirmationMsg += `• Data Config: "${currentDataConfig.ticker}" (your edited version)\n`;
-                        } else {
-                            confirmationMsg += `• Data Config: "${currentDataConfig.ticker}" (original file)\n`;
-                        }
-                    } else {
-                        confirmationMsg += 'Original file configurations loaded. You can now edit them in the text areas.\n\n';
-                        confirmationMsg += `Loaded configs:\n`;
-                        confirmationMsg += `• GA Config: "${currentGAConfig.test_name}"\n`;
-                        confirmationMsg += `• Data Config: "${currentDataConfig.ticker}"\n`;
-                    }
-
-                    confirmationMsg += '\n🚀 Ready to start optimization!';
-                    alert(confirmationMsg);
-                } else {
-                    throw new Error(result.error);
-                }
-            } catch (error) {
-                console.error('Config loading error:', error);
-                updateStatus('Error', 'error');
-                alert(`Failed to load configurations: ${error.message}`);
-            }
-        }
-
         function updateObjectivesChart(bestIndividualsLog) {
             const container = document.getElementById('objectivesChart');
 
@@ -1449,21 +955,18 @@
                 return;
             }
 
-            // Extract objective names from the first entry
             const objectiveNames = Object.keys(bestIndividualsLog[0].metrics);
 
-            // Prepare series data for each objective
             const series = objectiveNames.map(objName => {
                 const data = bestIndividualsLog.map(entry => [entry.generation, entry.metrics[objName]]);
 
-                // Assign colors based on objective type
-                let color = '#2196F3'; // Default blue
+                let color = '#2196F3';
                 if (objName.toLowerCase().includes('profit')) {
-                    color = '#00C851'; // Green for profit
+                    color = '#00C851';
                 } else if (objName.toLowerCase().includes('loss')) {
-                    color = '#ff4444'; // Red for loss
+                    color = '#ff4444';
                 } else if (objName.toLowerCase().includes('losing')) {
-                    color = '#ff9800'; // Orange for losing trades
+                    color = '#ff9800';
                 }
 
                 return {
@@ -1471,48 +974,30 @@
                     data: data,
                     color: color,
                     lineWidth: 2,
-                    marker: {
-                        enabled: true,
-                        radius: 4
-                    }
+                    marker: { enabled: true, radius: 4 }
                 };
             });
 
             const chartConfig = {
-                chart: {
-                    type: 'line'
-                },
-                title: {
-                    text: 'Objective Functions Evolution'
-                },
+                chart: { type: 'line' },
+                title: { text: 'Objective Functions Evolution' },
                 xAxis: {
-                    title: {
-                        text: 'Generation'
-                    },
+                    title: { text: 'Generation' },
                     min: 1,
                     tickInterval: 1
                 },
-                yAxis: {
-                    title: {
-                        text: 'Objective Value'
-                    }
-                },
+                yAxis: { title: { text: 'Objective Value' } },
                 tooltip: {
                     shared: true,
                     crosshairs: true,
                     pointFormat: '<b>{series.name}:</b> {point.y:.4f}<br/>'
                 },
-                legend: {
-                    enabled: true,
-                    align: 'bottom'
-                },
+                legend: { enabled: true, align: 'bottom' },
                 series: series,
                 plotOptions: {
                     line: {
                         connectNulls: false,
-                        marker: {
-                            enabled: true
-                        }
+                        marker: { enabled: true }
                     }
                 }
             };
@@ -1523,14 +1008,184 @@
             charts.objectives = Highcharts.chart(container, chartConfig);
         }
 
-        // Save generation metrics to CSV
+        function updateParallelCoordsChart(eliteData, objectiveNames) {
+            if (!eliteData || eliteData.length === 0 || !objectiveNames || objectiveNames.length === 0) {
+                if (parallelCoordsChart) {
+                    parallelCoordsChart.destroy();
+                    parallelCoordsChart = null;
+                }
+                document.getElementById('parallelCoordsChart').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-line me-2"></i>No elite data available
+                    </div>
+                `;
+                return;
+            }
+
+            const colors = Highcharts.getOptions().colors;
+            const colorCount = colors.length;
+
+            const chartConfig = {
+                chart: {
+                    type: 'line',
+                    parallelCoordinates: true,
+                    parallelAxes: {
+                        lineWidth: 2,
+                        gridlinesWidth: 1,
+                        title: {
+                            style: { fontWeight: 'bold', fontSize: '12px' }
+                        }
+                    }
+                },
+                title: {
+                    text: `Elite Population Analysis (${eliteData.length} Individuals)`,
+                    style: { fontSize: '14px', fontWeight: 'bold' }
+                },
+                plotOptions: {
+                    series: {
+                        animation: { duration: 500 },
+                        lineWidth: 2.5,
+                        opacity: 0.75,
+                        states: {
+                            hover: { lineWidth: 4, opacity: 1 }
+                        },
+                        marker: {
+                            enabled: false,
+                            states: {
+                                hover: { enabled: true, radius: 4 }
+                            }
+                        }
+                    }
+                },
+                tooltip: {
+                    formatter: function() {
+                        let tooltipText = '<b>Elite Individual #' + (this.series.index + 1) + '</b><br/>';
+                        const individualData = eliteData[this.series.index];
+                        objectiveNames.forEach(function(objName, i) {
+                            tooltipText += objName + ': ' + Highcharts.numberFormat(individualData[i], 4) + '<br/>';
+                        });
+                        return tooltipText;
+                    }
+                },
+                legend: { enabled: false },
+                credits: { enabled: false },
+                xAxis: objectiveNames.map((objName, index) => ({
+                    lineWidth: 0,
+                    labels: { enabled: false },
+                    title: {
+                        text: objName,
+                        style: { fontWeight: 'bold', fontSize: '11px' }
+                    }
+                })),
+                yAxis: objectiveNames.map((objName, index) => {
+                    const values = eliteData.map(elite => elite[index]);
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    const padding = (max - min) * 0.1;
+
+                    return {
+                        lineWidth: 1,
+                        min: min - padding,
+                        max: max + padding,
+                        title: { text: '', style: { fontSize: '10px' } },
+                        labels: {
+                            format: '{value:.3f}',
+                            style: { fontSize: '9px' }
+                        }
+                    };
+                }),
+                series: eliteData.map((elite, index) => ({
+                    name: `Elite ${index + 1}`,
+                    data: elite.map((value, objIndex) => [objIndex, value]),
+                    color: colors[index % colorCount],
+                    lineWidth: index === 0 ? 3 : 2.5,
+                    opacity: index === 0 ? 0.9 : 0.75
+                }))
+            };
+
+            if (parallelCoordsChart) {
+                parallelCoordsChart.destroy();
+            }
+
+            parallelCoordsChart = Highcharts.chart('parallelCoordsChart', chartConfig);
+        }
+
+        function updateMetricsTable(generation, chartData) {
+            const tableBody = document.getElementById('metricsTableBody');
+
+            const trades = chartData.trade_history || [];
+            const totalTrades = trades.length;
+
+            const completedTrades = chartData.pnl_history || [];
+            let winningTrades = 0;
+            let losingTrades = 0;
+            let totalWinPnL = 0;
+            let totalLossPnL = 0;
+
+            completedTrades.forEach(trade => {
+                if (trade.trade_pnl > 0) {
+                    winningTrades++;
+                    totalWinPnL += trade.trade_pnl;
+                } else if (trade.trade_pnl < 0) {
+                    losingTrades++;
+                    totalLossPnL += trade.trade_pnl;
+                }
+            });
+
+            const totalPnL = completedTrades.length > 0
+                ? completedTrades[completedTrades.length - 1].cumulative_pnl
+                : 0;
+
+            const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
+            const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+
+            const generationData = {
+                generation,
+                totalTrades,
+                winningTrades,
+                losingTrades,
+                totalPnL,
+                avgWin,
+                avgLoss
+            };
+
+            const existingIndex = generationMetrics.findIndex(g => g.generation === generation);
+            if (existingIndex >= 0) {
+                generationMetrics[existingIndex] = generationData;
+            } else {
+                generationMetrics.push(generationData);
+            }
+
+            generationMetrics.sort((a, b) => a.generation - b.generation);
+
+            if (generationMetrics.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-muted">No data yet...</td></tr>';
+                return;
+            }
+
+            const tableRows = generationMetrics.map(data => `
+                <tr>
+                    <td><strong>${data.generation}</strong></td>
+                    <td>${data.totalTrades}</td>
+                    <td class="text-success">${data.winningTrades}</td>
+                    <td class="text-danger">${data.losingTrades}</td>
+                    <td class="${data.totalPnL >= 0 ? 'text-success' : 'text-danger'}">${data.totalPnL.toFixed(2)}%</td>
+                    <td class="text-success">${data.avgWin.toFixed(2)}%</td>
+                    <td class="text-danger">${data.avgLoss.toFixed(2)}%</td>
+                </tr>
+            `).join('');
+
+            tableBody.innerHTML = tableRows;
+
+            const tableContainer = document.querySelector('.table-container');
+            tableContainer.scrollTop = tableContainer.scrollHeight;
+        }
+
         async function saveGenerationMetrics() {
             try {
                 const response = await fetch('/api/save_generation_metrics', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         test_name: currentTestName,
                         generation_metrics: generationMetrics,
@@ -1549,7 +1204,6 @@
             }
         }
 
-        // Show results information modal/alert
         function showResultsInfo(resultsInfo) {
             const filesList = resultsInfo.files_created.map(file =>
                 `• ${file.split('/').pop()}`
@@ -1570,28 +1224,6 @@ ${filesList}
 
             alert(message);
         }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            // Ctrl+S to load configurations (apply changes)
-            if (e.ctrlKey && e.key === 's') {
-                e.preventDefault();
-                if (uploadedFiles.ga_config && uploadedFiles.data_config) {
-                    loadConfigurations();
-                }
-            }
-
-            // Ctrl+F to format current editor
-            if (e.ctrlKey && e.key === 'f') {
-                e.preventDefault();
-                const activeElement = document.activeElement;
-                if (activeElement.id === 'gaConfigEditor') {
-                    formatJSON('ga');
-                } else if (activeElement.id === 'dataConfigEditor') {
-                    formatJSON('data');
-                }
-            }
-        });
     </script>
 </body>
 </html>
