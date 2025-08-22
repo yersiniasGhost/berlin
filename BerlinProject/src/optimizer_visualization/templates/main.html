@@ -53,29 +53,24 @@
         .status-paused { background: #f0ad4e; color: #fff; }
         .status-error { background: #f8d7da; color: #721c24; }
 
-        .chart-container {
-            margin: 20px 0;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 10px;
-        }
 
         .collapsible-section {
             border: 1px solid #dee2e6;
             border-radius: 6px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             overflow: hidden;
         }
 
         .collapsible-header {
             background: #f8f9fa;
-            padding: 10px 15px;
+            padding: 8px 12px;
             cursor: pointer;
             border-bottom: 1px solid #dee2e6;
             user-select: none;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.9rem;
         }
 
         .collapsible-header:hover {
@@ -83,12 +78,60 @@
         }
 
         .collapsible-content {
-            padding: 15px;
+            padding: 10px;
             display: block;
         }
 
         .collapsible-content.collapsed {
             display: none;
+        }
+
+        /* Compact configuration form */
+        .config-actions {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .configuration-tabs {
+            margin-bottom: 1rem;
+        }
+
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem;
+            padding: 0.75rem;
+            background: #fff;
+        }
+
+        .action-buttons {
+            margin: 0.5rem 0;
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        /* Make form elements more compact */
+        .form-group {
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .form-label {
+            font-size: 0.825rem;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.775rem;
         }
 
         .collapse-icon {
@@ -99,25 +142,7 @@
             transform: rotate(180deg);
         }
 
-        .configuration-tabs {
-            margin-bottom: 2rem;
-        }
 
-        .tab-content {
-            border: 1px solid #dee2e6;
-            border-top: none;
-            border-radius: 0 0 0.375rem 0.375rem;
-            padding: 1.5rem;
-            background: #fff;
-        }
-
-        .optimization-progress {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
 
         .best-individuals-log {
             max-height: 200px;
@@ -174,19 +199,74 @@
             margin-bottom: 10px;
         }
 
-        .action-buttons {
-            margin: 1rem 0;
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .navbar-brand-custom {
+                font-size: 1.2rem;
+            }
+            
+            .logo-img {
+                height: 100px;
+            }
+            
+            .metrics-table {
+                font-size: 0.7rem;
+            }
+            
+            .chart-container {
+                height: 300px !important;
+            }
         }
 
-        .config-actions {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 0.375rem;
-            margin-bottom: 1rem;
+        @media (max-width: 576px) {
+            .navbar-brand-custom {
+                font-size: 1rem;
+            }
+            
+            .logo-img {
+                height: 80px;
+                margin-right: 8px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn-sm {
+                width: 100%;
+                margin-bottom: 0.25rem;
+            }
+            
+            .control-buttons {
+                flex-direction: column;
+            }
+            
+            .btn-optimization {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
         }
+
+        /* Enhanced chart styling */
+        .chart-container {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: white;
+        }
+
+        /* Improved optimization progress styling */
+        .optimization-progress {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
     </style>
 </head>
 <body>

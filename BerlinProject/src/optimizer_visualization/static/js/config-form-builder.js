@@ -32,6 +32,9 @@ class ConfigFormBuilder {
         const form = this.createElement('form', 'config-form', 'needs-validation');
         form.setAttribute('novalidate', '');
         
+        // Create single unified grid container for all cards
+        const cardsContainer = this.createElement('div', 'row');
+        
         // Handle different config structures
         let monitorData = null;
         let isNestedStructure = false;
@@ -46,29 +49,66 @@ class ConfigFormBuilder {
             isNestedStructure = false;
         }
         
-        // Generate sections based on config structure
+        // Add test name card
         if (isNestedStructure && config.test_name) {
-            form.appendChild(this.createTestNameSection(config.test_name));
+            cardsContainer.appendChild(this.createTestNameCard(config.test_name));
         }
         
+        // Add monitor info cards
         if (monitorData) {
-            form.appendChild(this.createMonitorSection(monitorData, isNestedStructure));
+            cardsContainer.appendChild(this.createMonitorNameCard(monitorData, isNestedStructure));
+            cardsContainer.appendChild(this.createMonitorDescriptionCard(monitorData, isNestedStructure));
+            
+            // Trade executor card
+            if (monitorData.trade_executor) {
+                cardsContainer.appendChild(this.createTradeExecutorCard(monitorData.trade_executor, isNestedStructure));
+            }
+            
+            // Enter/Exit condition cards
+            if (monitorData.enter_long) {
+                monitorData.enter_long.forEach((condition, index) => {
+                    cardsContainer.appendChild(this.createConditionCard('enter_long', condition, index, isNestedStructure));
+                });
+            }
+            
+            if (monitorData.exit_long) {
+                monitorData.exit_long.forEach((condition, index) => {
+                    cardsContainer.appendChild(this.createConditionCard('exit_long', condition, index, isNestedStructure));
+                });
+            }
+            
+            // Bars cards
+            if (monitorData.bars) {
+                Object.entries(monitorData.bars).forEach(([barName, barConfig]) => {
+                    cardsContainer.appendChild(this.createBarCard(barName, barConfig, isNestedStructure));
+                });
+            }
         }
         
+        // Indicator cards
         if (config.indicators) {
-            form.appendChild(this.createIndicatorsSection(config.indicators));
+            config.indicators.forEach((indicator, index) => {
+                cardsContainer.appendChild(this.createIndicatorItem(indicator, index));
+            });
         }
         
-        // GA-specific sections (only for optimizer)
+        // GA-specific cards (only for optimizer)
         if (this.options.showGAFields) {
             if (config.objectives) {
-                form.appendChild(this.createObjectivesSection(config.objectives));
+                config.objectives.forEach((objective, index) => {
+                    cardsContainer.appendChild(this.createObjectiveItem(objective, index));
+                });
             }
             
             if (config.ga_hyperparameters) {
-                form.appendChild(this.createGAHyperparametersSection(config.ga_hyperparameters));
+                cardsContainer.appendChild(this.createGAHyperparametersCard(config.ga_hyperparameters));
             }
         }
+        
+        // Add buttons for adding new items
+        cardsContainer.appendChild(this.createAddButtonsCard(isNestedStructure));
+        
+        form.appendChild(cardsContainer);
         
         // Form actions
         form.appendChild(this.createFormActions());
@@ -80,16 +120,398 @@ class ConfigFormBuilder {
     }
 
     /**
-     * Create test name section
+     * Create test name card
      */
-    createTestNameSection(testName) {
-        const section = this.createSection('Test Configuration', 'test-config');
-        const body = section.querySelector('.card-body');
+    createTestNameCard(testName) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
         
-        const testNameField = this.createTextField('test_name', 'Test Name', testName);
-        body.appendChild(testNameField);
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
         
-        return section;
+        // Header
+        const title = this.createElement('div', 'fw-bold compact-title');
+        title.innerHTML = '<i class="fas fa-tag"></i> Test Name';
+        cardHeader.appendChild(title);
+        
+        // Body
+        const input = this.createElement('input', 'form-control form-control-sm');
+        input.type = 'text';
+        input.name = 'test_name';
+        input.value = testName || '';
+        input.placeholder = 'Enter test name';
+        cardBody.appendChild(input);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create monitor name card
+     */
+    createMonitorNameCard(monitorData, isNestedStructure) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const title = this.createElement('div', 'fw-bold compact-title');
+        title.innerHTML = '<i class="fas fa-eye"></i> Monitor Name';
+        cardHeader.appendChild(title);
+        
+        // Body
+        const pathPrefix = isNestedStructure ? 'monitor.' : '';
+        const input = this.createElement('input', 'form-control form-control-sm');
+        input.type = 'text';
+        input.name = pathPrefix + 'name';
+        input.value = monitorData.name || '';
+        input.placeholder = 'Monitor name';
+        cardBody.appendChild(input);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create monitor description card
+     */
+    createMonitorDescriptionCard(monitorData, isNestedStructure) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const title = this.createElement('div', 'fw-bold compact-title');
+        title.innerHTML = '<i class="fas fa-file-text"></i> Description';
+        cardHeader.appendChild(title);
+        
+        // Body
+        const pathPrefix = isNestedStructure ? 'monitor.' : '';
+        const textarea = this.createElement('textarea', 'form-control form-control-sm');
+        textarea.name = pathPrefix + 'description';
+        textarea.value = monitorData.description || '';
+        textarea.placeholder = 'Monitor description';
+        textarea.rows = 2;
+        cardBody.appendChild(textarea);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create trade executor card
+     */
+    createTradeExecutorCard(tradeExecutor, isNestedStructure) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const title = this.createElement('div', 'fw-bold compact-title');
+        title.innerHTML = '<i class="fas fa-exchange-alt"></i> Trade Executor';
+        cardHeader.appendChild(title);
+        
+        // Body - compact fields
+        const pathPrefix = isNestedStructure ? 'monitor.' : '';
+        const compactForm = this.createElement('div', 'compact-form');
+        
+        // Type field
+        const typeField = this.createElement('div', 'mb-2');
+        const typeSelect = this.createElement('select', 'form-select form-select-sm');
+        typeSelect.name = pathPrefix + 'trade_executor.type';
+        ['PaperTradeExecutor', 'LiveTradeExecutor', 'BacktestExecutor'].forEach(type => {
+            const option = this.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            if (type === tradeExecutor.type) option.selected = true;
+            typeSelect.appendChild(option);
+        });
+        typeField.appendChild(typeSelect);
+        compactForm.appendChild(typeField);
+        
+        // Account value field
+        const accountField = this.createElement('div', 'mb-2');
+        const accountInput = this.createElement('input', 'form-control form-control-sm');
+        accountInput.type = 'number';
+        accountInput.name = pathPrefix + 'trade_executor.account_value';
+        accountInput.value = tradeExecutor.account_value || 10000;
+        accountInput.placeholder = 'Account Value';
+        accountField.appendChild(accountInput);
+        compactForm.appendChild(accountField);
+        
+        // Risk percentage field
+        const riskField = this.createElement('div', 'mb-2');
+        const riskInput = this.createElement('input', 'form-control form-control-sm');
+        riskInput.type = 'number';
+        riskInput.name = pathPrefix + 'trade_executor.risk_percentage';
+        riskInput.value = tradeExecutor.risk_percentage || 1;
+        riskInput.step = '0.1';
+        riskInput.placeholder = 'Risk %';
+        riskField.appendChild(riskInput);
+        compactForm.appendChild(riskField);
+        
+        cardBody.appendChild(compactForm);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create condition card
+     */
+    createConditionCard(conditionType, condition, index, isNestedStructure) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const titleContainer = this.createElement('div', 'd-flex flex-column');
+        const mainTitle = this.createElement('div', 'fw-bold text-truncate compact-title');
+        mainTitle.textContent = condition.name || conditionType;
+        
+        const subtitle = this.createElement('small', 'text-muted text-truncate');
+        subtitle.textContent = conditionType === 'enter_long' ? 'Enter Long' : 'Exit Long';
+        
+        titleContainer.appendChild(mainTitle);
+        titleContainer.appendChild(subtitle);
+        cardHeader.appendChild(titleContainer);
+        
+        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-xs');
+        removeBtn.type = 'button';
+        removeBtn.innerHTML = '<i class="fas fa-trash fa-xs"></i>';
+        removeBtn.onclick = () => this.removeCondition(conditionType, index, isNestedStructure);
+        cardHeader.appendChild(removeBtn);
+        
+        // Body
+        const pathPrefix = isNestedStructure ? 'monitor.' : '';
+        const compactForm = this.createElement('div', 'compact-form');
+        
+        // Name field
+        const nameField = this.createElement('div', 'mb-2');
+        const nameInput = this.createElement('input', 'form-control form-control-sm');
+        nameInput.type = 'text';
+        nameInput.name = `${pathPrefix}${conditionType}.${index}.name`;
+        nameInput.value = condition.name || '';
+        nameInput.placeholder = 'Condition Name';
+        nameField.appendChild(nameInput);
+        compactForm.appendChild(nameField);
+        
+        // Threshold field
+        const thresholdField = this.createElement('div', 'mb-2');
+        const thresholdInput = this.createElement('input', 'form-control form-control-sm');
+        thresholdInput.type = 'number';
+        thresholdInput.name = `${pathPrefix}${conditionType}.${index}.threshold`;
+        thresholdInput.value = condition.threshold || 0;
+        thresholdInput.step = '0.001';
+        thresholdInput.placeholder = 'Threshold';
+        thresholdField.appendChild(thresholdInput);
+        compactForm.appendChild(thresholdField);
+        
+        cardBody.appendChild(compactForm);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create bar card
+     */
+    createBarCard(barName, barConfig, isNestedStructure) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const titleContainer = this.createElement('div', 'd-flex flex-column');
+        const mainTitle = this.createElement('div', 'fw-bold text-truncate compact-title');
+        mainTitle.textContent = barName;
+        
+        const subtitle = this.createElement('small', 'text-muted text-truncate');
+        subtitle.textContent = barConfig.type || 'Bar Config';
+        
+        titleContainer.appendChild(mainTitle);
+        titleContainer.appendChild(subtitle);
+        cardHeader.appendChild(titleContainer);
+        
+        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-xs');
+        removeBtn.type = 'button';
+        removeBtn.innerHTML = '<i class="fas fa-trash fa-xs"></i>';
+        removeBtn.onclick = () => this.removeBar(barName, isNestedStructure);
+        cardHeader.appendChild(removeBtn);
+        
+        // Body
+        const pathPrefix = isNestedStructure ? 'monitor.' : '';
+        const compactForm = this.createElement('div', 'compact-form');
+        
+        // Type field
+        const typeField = this.createElement('div', 'mb-2');
+        const typeSelect = this.createElement('select', 'form-select form-select-sm');
+        typeSelect.name = `${pathPrefix}bars.${barName}.type`;
+        ['bull', 'bear'].forEach(type => {
+            const option = this.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            if (type === barConfig.type) option.selected = true;
+            typeSelect.appendChild(option);
+        });
+        typeField.appendChild(typeSelect);
+        compactForm.appendChild(typeField);
+        
+        // Indicators display
+        if (barConfig.indicators) {
+            const indicatorsInfo = this.createElement('div', 'compact-params');
+            const indicatorsLabel = this.createElement('small', 'text-muted fw-bold');
+            indicatorsLabel.textContent = 'Indicators:';
+            indicatorsInfo.appendChild(indicatorsLabel);
+            
+            const indicatorsList = this.createElement('div', 'params-list');
+            Object.entries(barConfig.indicators).forEach(([indicatorName, weight]) => {
+                const indicatorBadge = this.createElement('span', 'badge bg-secondary me-1 mb-1 param-badge');
+                indicatorBadge.textContent = `${indicatorName}: ${weight}`;
+                indicatorBadge.onclick = () => this.editBarIndicator(barName, indicatorName, weight, pathPrefix);
+                indicatorBadge.style.cursor = 'pointer';
+                indicatorBadge.title = 'Click to edit weight';
+                indicatorsList.appendChild(indicatorBadge);
+            });
+            indicatorsInfo.appendChild(indicatorsList);
+            compactForm.appendChild(indicatorsInfo);
+        }
+        
+        cardBody.appendChild(compactForm);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create GA hyperparameters card (compact single card version)
+     */
+    createGAHyperparametersCard(gaHyperparameters) {
+        const cardWrapper = this.createElement('div', 'col-xl-6 col-lg-6 col-md-12 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const title = this.createElement('div', 'fw-bold compact-title');
+        title.innerHTML = '<i class="fas fa-cogs"></i> GA Hyperparameters';
+        cardHeader.appendChild(title);
+        
+        // Body - compact grid
+        const compactForm = this.createElement('div', 'compact-form');
+        const formGrid = this.createElement('div', 'row');
+        
+        const hyperparams = [
+            { key: 'number_of_iterations', label: 'Iterations', default: 200 },
+            { key: 'population_size', label: 'Population', default: 200 },
+            { key: 'propagation_fraction', label: 'Propagation', default: 0.5, step: 0.1 },
+            { key: 'elite_size', label: 'Elite Size', default: 15 },
+            { key: 'chance_of_mutation', label: 'Mutation', default: 0.1, step: 0.01 },
+            { key: 'chance_of_crossover', label: 'Crossover', default: 0.1, step: 0.01 }
+        ];
+        
+        hyperparams.forEach(param => {
+            const col = this.createElement('div', 'col-md-6 col-12 mb-2');
+            
+            const fieldGroup = this.createElement('div');
+            const label = this.createElement('label', 'form-label small');
+            label.textContent = param.label;
+            
+            const input = this.createElement('input', 'form-control form-control-sm');
+            input.type = 'number';
+            input.name = `ga_hyperparameters.${param.key}`;
+            input.value = gaHyperparameters[param.key] ?? param.default;
+            if (param.step) input.step = param.step;
+            
+            fieldGroup.appendChild(label);
+            fieldGroup.appendChild(input);
+            col.appendChild(fieldGroup);
+            formGrid.appendChild(col);
+        });
+        
+        compactForm.appendChild(formGrid);
+        cardBody.appendChild(compactForm);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create add buttons card
+     */
+    createAddButtonsCard(isNestedStructure) {
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        
+        const card = this.createElement('div', 'card h-100 border-dashed');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body d-flex flex-column justify-content-center');
+        
+        // Header
+        const title = this.createElement('div', 'fw-bold compact-title');
+        title.innerHTML = '<i class="fas fa-plus"></i> Add Items';
+        cardHeader.appendChild(title);
+        
+        // Body with buttons
+        const buttonsContainer = this.createElement('div', 'd-flex flex-column gap-2');
+        
+        const buttons = [
+            { text: 'Indicator', icon: 'fa-chart-line', onclick: () => this.addIndicator() },
+            { text: 'Enter Long', icon: 'fa-arrow-up', onclick: () => this.addCondition('enter_long', isNestedStructure) },
+            { text: 'Exit Long', icon: 'fa-arrow-down', onclick: () => this.addCondition('exit_long', isNestedStructure) },
+            { text: 'Bar Config', icon: 'fa-bars', onclick: () => this.addBar(isNestedStructure) }
+        ];
+        
+        if (this.options.showGAFields) {
+            buttons.push({ text: 'Objective', icon: 'fa-target', onclick: () => this.addObjective() });
+        }
+        
+        buttons.forEach(btn => {
+            const button = this.createElement('button', 'btn btn-outline-primary btn-sm');
+            button.type = 'button';
+            button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
+            button.onclick = btn.onclick;
+            buttonsContainer.appendChild(button);
+        });
+        
+        cardBody.appendChild(buttonsContainer);
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        
+        return cardWrapper;
     }
 
     /**
@@ -155,7 +577,8 @@ class ConfigFormBuilder {
     createConditionsSubsection(conditionType, label, conditions, pathPrefix = 'monitor.') {
         const subsection = this.createSubsection(label, conditionType);
         
-        const conditionsContainer = this.createElement('div', 'conditions-container');
+        // Create responsive grid container for compact condition cards
+        const conditionsContainer = this.createElement('div', 'conditions-container row');
         subsection.appendChild(conditionsContainer);
         
         conditions.forEach((condition, index) => {
@@ -163,47 +586,78 @@ class ConfigFormBuilder {
         });
         
         // Add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
         const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
         addBtn.type = 'button';
         addBtn.innerHTML = `<i class="fas fa-plus"></i> Add ${label.slice(0, -1)}`;
         addBtn.onclick = () => this.addCondition(conditionType, pathPrefix);
-        subsection.appendChild(addBtn);
+        addBtnContainer.appendChild(addBtn);
+        conditionsContainer.appendChild(addBtnContainer);
         
         return subsection;
     }
 
     /**
-     * Create individual condition item
+     * Create individual condition item (compact card)
      */
     createConditionItem(conditionType, condition, index) {
-        const item = this.createElement('div', 'condition-item card mb-2');
-        const cardBody = this.createElement('div', 'card-body');
+        // Create responsive card wrapper for compact layout
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
         
-        const row = this.createElement('div', 'row align-items-center');
+        const item = this.createElement('div', 'condition-item card h-100');
+        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
         
-        // Name field
-        const nameCol = this.createElement('div', 'col-md-5');
-        nameCol.appendChild(this.createTextField(`monitor.${conditionType}.${index}.name`, 'Name', condition.name));
-        row.appendChild(nameCol);
+        // Compact header with condition info
+        const titleContainer = this.createElement('div', 'd-flex flex-column');
+        const mainTitle = this.createElement('div', 'fw-bold text-truncate compact-title');
+        mainTitle.textContent = condition.name || 'Condition';
+        mainTitle.title = `${condition.name} - Threshold: ${condition.threshold}`;
         
-        // Threshold field
-        const thresholdCol = this.createElement('div', 'col-md-5');
-        thresholdCol.appendChild(this.createNumberField(`monitor.${conditionType}.${index}.threshold`, 'Threshold', condition.threshold, '0.001'));
-        row.appendChild(thresholdCol);
+        const subtitle = this.createElement('small', 'text-muted text-truncate');
+        subtitle.textContent = `Threshold: ${condition.threshold}`;
         
-        // Remove button
-        const btnCol = this.createElement('div', 'col-md-2');
-        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-sm');
+        titleContainer.appendChild(mainTitle);
+        titleContainer.appendChild(subtitle);
+        cardHeader.appendChild(titleContainer);
+        
+        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-xs');
         removeBtn.type = 'button';
-        removeBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        removeBtn.innerHTML = '<i class="fas fa-trash fa-xs"></i>';
         removeBtn.onclick = () => this.removeCondition(conditionType, index);
-        btnCol.appendChild(removeBtn);
-        row.appendChild(btnCol);
+        cardHeader.appendChild(removeBtn);
         
-        cardBody.appendChild(row);
+        // Compact body with essential fields
+        const compactForm = this.createElement('div', 'compact-form');
+        
+        // Name field (compact)
+        const nameField = this.createElement('div', 'mb-2');
+        const nameInput = this.createElement('input', 'form-control form-control-sm');
+        nameInput.type = 'text';
+        nameInput.name = `monitor.${conditionType}.${index}.name`;
+        nameInput.value = condition.name || '';
+        nameInput.placeholder = 'Condition Name';
+        nameField.appendChild(nameInput);
+        compactForm.appendChild(nameField);
+        
+        // Threshold field (compact)
+        const thresholdField = this.createElement('div', 'mb-2');
+        const thresholdInput = this.createElement('input', 'form-control form-control-sm');
+        thresholdInput.type = 'number';
+        thresholdInput.name = `monitor.${conditionType}.${index}.threshold`;
+        thresholdInput.value = condition.threshold || 0;
+        thresholdInput.step = '0.001';
+        thresholdInput.placeholder = 'Threshold';
+        thresholdField.appendChild(thresholdInput);
+        compactForm.appendChild(thresholdField);
+        
+        cardBody.appendChild(compactForm);
+        
+        item.appendChild(cardHeader);
         item.appendChild(cardBody);
+        cardWrapper.appendChild(item);
         
-        return item;
+        return cardWrapper;
     }
 
     /**
@@ -212,7 +666,8 @@ class ConfigFormBuilder {
     createBarsSubsection(bars, pathPrefix = 'monitor.') {
         const subsection = this.createSubsection('Bars Configuration', 'bars');
         
-        const barsContainer = this.createElement('div', 'bars-container');
+        // Create responsive grid container for compact bar cards
+        const barsContainer = this.createElement('div', 'bars-container row');
         subsection.appendChild(barsContainer);
         
         Object.entries(bars).forEach(([barName, barConfig]) => {
@@ -220,11 +675,13 @@ class ConfigFormBuilder {
         });
         
         // Add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
         const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
         addBtn.type = 'button';
         addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Bar';
         addBtn.onclick = () => this.addBar(pathPrefix);
-        subsection.appendChild(addBtn);
+        addBtnContainer.appendChild(addBtn);
+        barsContainer.appendChild(addBtnContainer);
         
         return subsection;
     }
@@ -233,66 +690,93 @@ class ConfigFormBuilder {
      * Create individual bar item
      */
     createBarItem(barName, barConfig, pathPrefix = 'monitor.') {
-        const item = this.createElement('div', 'bar-item card mb-3');
-        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center');
-        const cardBody = this.createElement('div', 'card-body');
+        // Create responsive card wrapper for compact layout
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
         
-        // Header with bar name and remove button
-        const title = this.createElement('h6', 'mb-0');
-        title.textContent = barName;
-        cardHeader.appendChild(title);
+        const item = this.createElement('div', 'bar-item card h-100');
+        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
         
-        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-sm');
+        // Compact header with bar info
+        const titleContainer = this.createElement('div', 'd-flex flex-column');
+        const mainTitle = this.createElement('div', 'fw-bold text-truncate compact-title');
+        mainTitle.textContent = barName;
+        mainTitle.title = `${barName} (${barConfig.type})`;
+        
+        const subtitle = this.createElement('small', 'text-muted text-truncate');
+        subtitle.textContent = barConfig.type || 'bull';
+        
+        titleContainer.appendChild(mainTitle);
+        titleContainer.appendChild(subtitle);
+        cardHeader.appendChild(titleContainer);
+        
+        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-xs');
         removeBtn.type = 'button';
-        removeBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        removeBtn.innerHTML = '<i class="fas fa-trash fa-xs"></i>';
         removeBtn.onclick = () => this.removeBar(barName, pathPrefix);
         cardHeader.appendChild(removeBtn);
         
-        // Bar configuration fields
-        const row = this.createElement('div', 'row');
+        // Compact body with essential fields
+        const compactForm = this.createElement('div', 'compact-form');
         
-        const typeCol = this.createElement('div', 'col-md-6');
-        typeCol.appendChild(this.createSelectField(`${pathPrefix}bars.${barName}.type`, 'Type', barConfig.type, ['bull', 'bear']));
-        row.appendChild(typeCol);
+        // Type field (compact)
+        const typeField = this.createElement('div', 'mb-2');
+        const typeSelect = this.createElement('select', 'form-select form-select-sm');
+        typeSelect.name = `${pathPrefix}bars.${barName}.type`;
+        ['bull', 'bear'].forEach(type => {
+            const option = this.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            if (type === barConfig.type) option.selected = true;
+            typeSelect.appendChild(option);
+        });
+        typeField.appendChild(typeSelect);
+        compactForm.appendChild(typeField);
         
-        const descCol = this.createElement('div', 'col-md-6');
-        descCol.appendChild(this.createTextField(`${pathPrefix}bars.${barName}.description`, 'Description', barConfig.description));
-        row.appendChild(descCol);
+        // Description field (compact)
+        const descField = this.createElement('div', 'mb-2');
+        const descInput = this.createElement('input', 'form-control form-control-sm');
+        descInput.type = 'text';
+        descInput.name = `${pathPrefix}bars.${barName}.description`;
+        descInput.value = barConfig.description || '';
+        descInput.placeholder = 'Description';
+        descField.appendChild(descInput);
+        compactForm.appendChild(descField);
         
-        cardBody.appendChild(row);
-        
-        // Indicators subsection
-        const indicatorsSection = this.createElement('div', 'mt-3');
-        const indicatorsHeader = this.createElement('div', 'd-flex justify-content-between align-items-center mb-2');
-        
-        const indicatorsLabel = this.createElement('label', 'form-label fw-bold mb-0');
-        indicatorsLabel.textContent = 'Indicators & Weights';
-        indicatorsHeader.appendChild(indicatorsLabel);
-        
-        const addIndicatorBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
-        addIndicatorBtn.type = 'button';
-        addIndicatorBtn.innerHTML = '<i class="fas fa-plus"></i> Add Indicator';
-        addIndicatorBtn.onclick = () => this.addIndicatorToBar(barName, pathPrefix);
-        indicatorsHeader.appendChild(addIndicatorBtn);
-        
-        indicatorsSection.appendChild(indicatorsHeader);
-        
-        const indicatorsContainer = this.createElement('div', 'indicators-container');
-        indicatorsContainer.id = `bar-${barName}-indicators`;
-        
-        if (barConfig.indicators) {
-            Object.entries(barConfig.indicators).forEach(([indicatorName, weight]) => {
-                indicatorsContainer.appendChild(this.createBarIndicatorItem(barName, indicatorName, weight, pathPrefix));
+        // Compact indicators summary
+        if (barConfig.indicators && Object.keys(barConfig.indicators).length > 0) {
+            const indicatorsInfo = this.createElement('div', 'compact-params');
+            const indicatorsLabel = this.createElement('small', 'text-muted fw-bold');
+            indicatorsLabel.textContent = 'Indicators:';
+            indicatorsInfo.appendChild(indicatorsLabel);
+            
+            const indicatorsList = this.createElement('div', 'params-list');
+            Object.entries(barConfig.indicators).forEach(([name, weight]) => {
+                const indicatorBadge = this.createElement('span', 'badge bg-secondary me-1 mb-1 param-badge');
+                indicatorBadge.textContent = `${name}: ${weight}`;
+                indicatorBadge.onclick = () => this.editBarIndicator(barName, name, weight, pathPrefix);
+                indicatorBadge.style.cursor = 'pointer';
+                indicatorBadge.title = 'Click to edit';
+                indicatorsList.appendChild(indicatorBadge);
             });
+            indicatorsInfo.appendChild(indicatorsList);
+            compactForm.appendChild(indicatorsInfo);
         }
         
-        indicatorsSection.appendChild(indicatorsContainer);
-        cardBody.appendChild(indicatorsSection);
+        // Add indicator button
+        const addIndicatorBtn = this.createElement('button', 'btn btn-outline-primary btn-xs w-100 mt-2');
+        addIndicatorBtn.type = 'button';
+        addIndicatorBtn.innerHTML = '<i class="fas fa-plus fa-xs"></i> Add Indicator';
+        addIndicatorBtn.onclick = () => this.addIndicatorToBar(barName, pathPrefix);
+        compactForm.appendChild(addIndicatorBtn);
+        
+        cardBody.appendChild(compactForm);
         
         item.appendChild(cardHeader);
         item.appendChild(cardBody);
+        cardWrapper.appendChild(item);
         
-        return item;
+        return cardWrapper;
     }
 
     /**
@@ -327,7 +811,8 @@ class ConfigFormBuilder {
         const section = this.createSection('Indicators Configuration', 'indicators');
         const body = section.querySelector('.card-body');
         
-        const indicatorsContainer = this.createElement('div', 'indicators-container');
+        // Create responsive grid container for compact cards
+        const indicatorsContainer = this.createElement('div', 'indicators-container row');
         body.appendChild(indicatorsContainer);
         
         indicators.forEach((indicator, index) => {
@@ -335,11 +820,13 @@ class ConfigFormBuilder {
         });
         
         // Add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
         const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
         addBtn.type = 'button';
         addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Indicator';
         addBtn.onclick = () => this.addIndicator();
-        body.appendChild(addBtn);
+        addBtnContainer.appendChild(addBtn);
+        indicatorsContainer.appendChild(addBtnContainer);
         
         return section;
     }
@@ -348,63 +835,132 @@ class ConfigFormBuilder {
      * Create individual indicator item
      */
     createIndicatorItem(indicator, index) {
-        const item = this.createElement('div', 'indicator-item card mb-3');
-        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center');
-        const cardBody = this.createElement('div', 'card-body');
+        // Create responsive card wrapper for compact layout
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
         
-        // Header
-        const title = this.createElement('h6', 'mb-0');
-        title.textContent = `${indicator.name} (${indicator.function})`;
-        cardHeader.appendChild(title);
+        const item = this.createElement('div', 'indicator-item card h-100');
+        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
         
-        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-sm');
+        // Compact header with title and remove button
+        const titleContainer = this.createElement('div', 'd-flex flex-column');
+        const mainTitle = this.createElement('div', 'fw-bold text-truncate compact-title');
+        mainTitle.textContent = indicator.name || 'Indicator';
+        mainTitle.title = `${indicator.name} (${indicator.function})`;
+        
+        const subtitle = this.createElement('small', 'text-muted text-truncate');
+        subtitle.textContent = indicator.function || 'Function';
+        
+        titleContainer.appendChild(mainTitle);
+        titleContainer.appendChild(subtitle);
+        cardHeader.appendChild(titleContainer);
+        
+        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-xs');
         removeBtn.type = 'button';
-        removeBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        removeBtn.innerHTML = '<i class="fas fa-trash fa-xs"></i>';
         removeBtn.onclick = () => this.removeIndicator(index);
         cardHeader.appendChild(removeBtn);
         
-        // Basic fields
-        const row1 = this.createElement('div', 'row');
-        const nameCol = this.createElement('div', 'col-md-4');
-        nameCol.appendChild(this.createTextField(`indicators.${index}.name`, 'Name', indicator.name));
-        row1.appendChild(nameCol);
+        // Compact body with essential fields only
+        const compactForm = this.createElement('div', 'compact-form');
         
-        const functionCol = this.createElement('div', 'col-md-4');
+        // Name field (compact)
+        const nameField = this.createElement('div', 'mb-2');
+        const nameInput = this.createElement('input', 'form-control form-control-sm');
+        nameInput.type = 'text';
+        nameInput.name = `indicators.${index}.name`;
+        nameInput.value = indicator.name || '';
+        nameInput.placeholder = 'Indicator Name';
+        nameField.appendChild(nameInput);
+        compactForm.appendChild(nameField);
+        
+        // Function field (compact)
+        const functionField = this.createElement('div', 'mb-2');
+        const functionSelect = this.createElement('select', 'form-select form-select-sm');
+        functionSelect.name = `indicators.${index}.function`;
         const functionTypes = window.IndicatorParameterUtils ? 
             window.IndicatorParameterUtils.getIndicatorTypes() : 
             this.options.indicatorTypes;
-        const functionField = this.createSelectField(`indicators.${index}.function`, 'Function', indicator.function, functionTypes);
+        functionTypes.forEach(type => {
+            const option = this.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            if (type === indicator.function) option.selected = true;
+            functionSelect.appendChild(option);
+        });
         
-        // Add change handler to regenerate parameters when function changes
-        const functionSelect = functionField.querySelector('select');
+        // Add change handler
         functionSelect.addEventListener('change', (e) => {
             this.onIndicatorFunctionChange(index, e.target.value);
         });
+        functionField.appendChild(functionSelect);
+        compactForm.appendChild(functionField);
         
-        functionCol.appendChild(functionField);
-        row1.appendChild(functionCol);
-        
-        const aggConfigCol = this.createElement('div', 'col-md-4');
-        const aggConfigOptions = window.IndicatorParameterUtils ? 
+        // Agg Config field (compact)
+        const aggField = this.createElement('div', 'mb-2');
+        const aggSelect = this.createElement('select', 'form-select form-select-sm');
+        aggSelect.name = `indicators.${index}.agg_config`;
+        const aggOptions = window.IndicatorParameterUtils ? 
             window.IndicatorParameterUtils.getAggConfigs() : 
             ['1m-normal', '5m-normal', '15m-normal', '30m-normal', '1h-normal', '4h-normal', '1d-normal'];
-        aggConfigCol.appendChild(this.createSelectField(`indicators.${index}.agg_config`, 'Agg Config', indicator.agg_config, aggConfigOptions));
-        row1.appendChild(aggConfigCol);
+        aggOptions.forEach(option => {
+            const opt = this.createElement('option');
+            opt.value = option;
+            opt.textContent = option;
+            if (option === indicator.agg_config) opt.selected = true;
+            aggSelect.appendChild(opt);
+        });
+        aggField.appendChild(aggSelect);
+        compactForm.appendChild(aggField);
         
-        cardBody.appendChild(row1);
-        
-        // Parameters subsection
-        cardBody.appendChild(this.createParametersSubsection(indicator.parameters, index));
-        
-        // Ranges subsection (only for GA optimizer)
-        if (this.options.showGAFields && indicator.ranges) {
-            cardBody.appendChild(this.createRangesSubsection(indicator.ranges, index));
+        // Compact parameters summary
+        if (indicator.parameters && Object.keys(indicator.parameters).length > 0) {
+            const paramsInfo = this.createElement('div', 'compact-params');
+            const paramsLabel = this.createElement('small', 'text-muted fw-bold');
+            paramsLabel.textContent = 'Parameters:';
+            paramsInfo.appendChild(paramsLabel);
+            
+            const paramsList = this.createElement('div', 'params-list');
+            Object.entries(indicator.parameters).forEach(([key, value]) => {
+                const paramBadge = this.createElement('span', 'badge bg-secondary me-1 mb-1 param-badge');
+                paramBadge.textContent = `${key}: ${value}`;
+                paramBadge.onclick = () => this.editParameter(index, key, value);
+                paramBadge.style.cursor = 'pointer';
+                paramBadge.title = 'Click to edit';
+                paramsList.appendChild(paramBadge);
+            });
+            paramsInfo.appendChild(paramsList);
+            compactForm.appendChild(paramsInfo);
         }
+        
+        // Compact ranges summary (GA optimization)
+        if (this.options.showGAFields && indicator.ranges && Object.keys(indicator.ranges).length > 0) {
+            const rangesInfo = this.createElement('div', 'compact-params');
+            const rangesLabel = this.createElement('small', 'text-muted fw-bold');
+            rangesLabel.textContent = 'Ranges:';
+            rangesInfo.appendChild(rangesLabel);
+            
+            const rangesList = this.createElement('div', 'params-list');
+            Object.entries(indicator.ranges).forEach(([key, range]) => {
+                if (range.t === 'skip') return;
+                const rangeBadge = this.createElement('span', 'badge bg-info me-1 mb-1 param-badge');
+                rangeBadge.textContent = `${key}: [${range.r[0]}, ${range.r[1]}] (${range.t})`;
+                rangeBadge.onclick = () => this.editRange(index, key, range);
+                rangeBadge.style.cursor = 'pointer';
+                rangeBadge.title = 'Click to edit range';
+                rangesList.appendChild(rangeBadge);
+            });
+            rangesInfo.appendChild(rangesList);
+            compactForm.appendChild(rangesInfo);
+        }
+        
+        cardBody.appendChild(compactForm);
         
         item.appendChild(cardHeader);
         item.appendChild(cardBody);
+        cardWrapper.appendChild(item);
         
-        return item;
+        return cardWrapper;
     }
 
     /**
@@ -878,7 +1434,7 @@ class ConfigFormBuilder {
     }
 
     regenerateConditionsSection(conditionType) {
-        const container = this.container.querySelector(`#${conditionType} .conditions-container`);
+        const container = this.container.querySelector(`#${conditionType} .conditions-container.row`);
         if (!container) return;
         
         container.innerHTML = '';
@@ -887,6 +1443,15 @@ class ConfigFormBuilder {
         conditions.forEach((condition, index) => {
             container.appendChild(this.createConditionItem(conditionType, condition, index));
         });
+        
+        // Re-add the add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
+        const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
+        addBtn.type = 'button';
+        addBtn.innerHTML = `<i class="fas fa-plus"></i> Add Condition`;
+        addBtn.onclick = () => this.addCondition(conditionType, 'monitor.');
+        addBtnContainer.appendChild(addBtn);
+        container.appendChild(addBtnContainer);
     }
 
     addBar(pathPrefix = 'monitor.') {
@@ -934,7 +1499,7 @@ class ConfigFormBuilder {
     }
 
     regenerateBarsSection(pathPrefix = 'monitor.') {
-        const container = this.container.querySelector('#bars .bars-container');
+        const container = this.container.querySelector('#bars .bars-container.row');
         if (!container) return;
         
         container.innerHTML = '';
@@ -946,6 +1511,15 @@ class ConfigFormBuilder {
         Object.entries(bars).forEach(([barName, barConfig]) => {
             container.appendChild(this.createBarItem(barName, barConfig, pathPrefix));
         });
+        
+        // Re-add the add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
+        const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
+        addBtn.type = 'button';
+        addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Bar';
+        addBtn.onclick = () => this.addBar(pathPrefix);
+        addBtnContainer.appendChild(addBtn);
+        container.appendChild(addBtnContainer);
     }
 
     addIndicatorToBar(barName, pathPrefix = 'monitor.') {
@@ -1025,7 +1599,7 @@ class ConfigFormBuilder {
     }
 
     regenerateIndicatorsSection() {
-        const container = this.container.querySelector('#indicators .indicators-container');
+        const container = this.container.querySelector('#indicators .indicators-container.row');
         if (!container) return;
         
         container.innerHTML = '';
@@ -1034,6 +1608,15 @@ class ConfigFormBuilder {
         indicators.forEach((indicator, index) => {
             container.appendChild(this.createIndicatorItem(indicator, index));
         });
+        
+        // Re-add the add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
+        const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
+        addBtn.type = 'button';
+        addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Indicator';
+        addBtn.onclick = () => this.addIndicator();
+        addBtnContainer.appendChild(addBtn);
+        container.appendChild(addBtnContainer);
     }
 
     /**
@@ -1067,27 +1650,27 @@ class ConfigFormBuilder {
     }
 
     /**
-     * Create objectives section for GA configuration
+     * Create objectives section for GA optimization
      */
-    createObjectivesSection(objectives) {
+    createObjectivesSection(objectives = []) {
         const section = this.createSection('Optimization Objectives', 'objectives');
-        const body = section.querySelector('.card-body');
         
-        const objectivesContainer = this.createElement('div', 'objectives-container');
-        body.appendChild(objectivesContainer);
+        // Create responsive grid container for objectives
+        const objectivesContainer = this.createElement('div', 'objectives-container row');
+        section.appendChild(objectivesContainer);
         
-        // Add objectives
         objectives.forEach((objective, index) => {
-            const objectiveItem = this.createObjectiveItem(objective, index);
-            objectivesContainer.appendChild(objectiveItem);
+            objectivesContainer.appendChild(this.createObjectiveItem(objective, index));
         });
         
-        // Add objective button
-        const addButton = this.createElement('button', 'btn btn-outline-primary btn-sm');
-        addButton.textContent = '+ Add Objective';
-        addButton.type = 'button';
-        addButton.onclick = () => this.addObjective();
-        body.appendChild(addButton);
+        // Add button
+        const addBtnContainer = this.createElement('div', 'col-12 mb-3');
+        const addBtn = this.createElement('button', 'btn btn-outline-primary btn-sm');
+        addBtn.type = 'button';
+        addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Objective';
+        addBtn.onclick = () => this.addObjective();
+        addBtnContainer.appendChild(addBtn);
+        objectivesContainer.appendChild(addBtnContainer);
         
         return section;
     }
@@ -1096,135 +1679,170 @@ class ConfigFormBuilder {
      * Create individual objective item
      */
     createObjectiveItem(objective, index) {
-        const item = this.createElement('div', 'card mb-2');
+        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
         
-        const cardBody = this.createElement('div', 'card-body');
+        const item = this.createElement('div', 'objective-item card h-100');
+        const cardHeader = this.createElement('div', 'card-header d-flex justify-content-between align-items-center compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
         
-        // Objective type selection
-        const objectiveField = this.createElement('div', 'row mb-2');
-        const col1 = this.createElement('div', 'col-md-6');
-        const label1 = this.createElement('label', 'form-label');
-        label1.textContent = 'Objective';
-        const select = this.createElement('select', 'form-select');
-        select.name = `objectives.${index}.objective`;
+        // Compact header
+        const titleContainer = this.createElement('div', 'd-flex flex-column');
+        const mainTitle = this.createElement('div', 'fw-bold text-truncate compact-title');
+        mainTitle.textContent = objective.objective || 'Objective';
         
-        const objectiveTypes = ['MaximizeProfit', 'MinimizeDrawdown', 'MaximizeSharpeRatio', 'MaximizeWinRate'];
+        const subtitle = this.createElement('small', 'text-muted text-truncate');
+        subtitle.textContent = `Weight: ${objective.weight || 1.0}`;
+        
+        titleContainer.appendChild(mainTitle);
+        titleContainer.appendChild(subtitle);
+        cardHeader.appendChild(titleContainer);
+        
+        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-xs');
+        removeBtn.type = 'button';
+        removeBtn.innerHTML = '<i class="fas fa-trash fa-xs"></i>';
+        removeBtn.onclick = () => this.removeObjective(index);
+        cardHeader.appendChild(removeBtn);
+        
+        // Compact body with essential fields
+        const compactForm = this.createElement('div', 'compact-form');
+        
+        // Objective type field
+        const objectiveField = this.createElement('div', 'mb-2');
+        const objectiveSelect = this.createElement('select', 'form-select form-select-sm');
+        objectiveSelect.name = `objectives.${index}.objective`;
+        
+        const objectiveTypes = ['MaximizeProfit', 'MinimizeLosingTrades', 'MinimizeLoss', 'MaximizeWinRate'];
         objectiveTypes.forEach(type => {
             const option = this.createElement('option');
             option.value = type;
             option.textContent = type;
-            option.selected = objective.objective === type;
-            select.appendChild(option);
+            if (type === objective.objective) option.selected = true;
+            objectiveSelect.appendChild(option);
         });
         
-        select.onchange = (e) => {
-            this.formData.objectives[index].objective = e.target.value;
-        };
-        
-        col1.appendChild(label1);
-        col1.appendChild(select);
-        objectiveField.appendChild(col1);
+        objectiveField.appendChild(objectiveSelect);
+        compactForm.appendChild(objectiveField);
         
         // Weight field
-        const col2 = this.createElement('div', 'col-md-4');
-        const weightField = this.createNumberField(`objectives.${index}.weight`, 'Weight', objective.weight, '0.1');
-        col2.appendChild(weightField);
-        objectiveField.appendChild(col2);
+        const weightField = this.createElement('div', 'mb-2');
+        const weightInput = this.createElement('input', 'form-control form-control-sm');
+        weightInput.type = 'number';
+        weightInput.name = `objectives.${index}.weight`;
+        weightInput.value = objective.weight || 1.0;
+        weightInput.step = '0.1';
+        weightInput.min = '0.1';
+        weightInput.placeholder = 'Weight';
+        weightField.appendChild(weightInput);
+        compactForm.appendChild(weightField);
         
-        // Remove button
-        const col3 = this.createElement('div', 'col-md-2 d-flex align-items-end');
-        const removeBtn = this.createElement('button', 'btn btn-outline-danger btn-sm');
-        removeBtn.textContent = 'Remove';
-        removeBtn.type = 'button';
-        removeBtn.onclick = () => this.removeObjective(index);
-        col3.appendChild(removeBtn);
-        objectiveField.appendChild(col3);
+        cardBody.appendChild(compactForm);
         
-        cardBody.appendChild(objectiveField);
-        
-        // Parameters (if any)
-        if (objective.parameters) {
-            const paramsLabel = this.createElement('label', 'form-label');
-            paramsLabel.textContent = 'Parameters (JSON)';
-            const paramsTextarea = this.createElement('textarea', 'form-control');
-            paramsTextarea.rows = 2;
-            paramsTextarea.value = JSON.stringify(objective.parameters, null, 2);
-            paramsTextarea.onchange = (e) => {
-                try {
-                    this.formData.objectives[index].parameters = JSON.parse(e.target.value);
-                } catch (err) {
-                    console.error('Invalid JSON in parameters:', err);
-                }
-            };
-            cardBody.appendChild(paramsLabel);
-            cardBody.appendChild(paramsTextarea);
-        }
-        
+        item.appendChild(cardHeader);
         item.appendChild(cardBody);
-        return item;
+        cardWrapper.appendChild(item);
+        
+        return cardWrapper;
+    }
+
+    /**
+     * Create GA hyperparameters section
+     */
+    createGAHyperparametersSection(gaHyperparameters = {}) {
+        const section = this.createSection('GA Hyperparameters', 'ga_hyperparameters');
+        
+        // Create single card for all hyperparameters
+        const cardWrapper = this.createElement('div', 'col-12 mb-3');
+        const card = this.createElement('div', 'card');
+        const cardHeader = this.createElement('div', 'card-header compact-card-header');
+        const cardBody = this.createElement('div', 'card-body compact-card-body');
+        
+        // Header
+        const headerTitle = this.createElement('h6', 'mb-0');
+        headerTitle.innerHTML = '<i class="fas fa-cogs"></i> Genetic Algorithm Parameters';
+        cardHeader.appendChild(headerTitle);
+        
+        // Create form fields in a grid
+        const formGrid = this.createElement('div', 'row');
+        
+        const hyperparams = [
+            { key: 'number_of_iterations', label: 'Iterations', type: 'number', min: 1, default: 200 },
+            { key: 'population_size', label: 'Population Size', type: 'number', min: 10, default: 200 },
+            { key: 'propagation_fraction', label: 'Propagation Fraction', type: 'number', min: 0.1, max: 1.0, step: 0.1, default: 0.5 },
+            { key: 'elite_size', label: 'Elite Size', type: 'number', min: 1, default: 15 },
+            { key: 'chance_of_mutation', label: 'Mutation Chance', type: 'number', min: 0.0, max: 1.0, step: 0.01, default: 0.1 },
+            { key: 'chance_of_crossover', label: 'Crossover Chance', type: 'number', min: 0.0, max: 1.0, step: 0.01, default: 0.1 }
+        ];
+        
+        hyperparams.forEach(param => {
+            const col = this.createElement('div', 'col-md-6 col-lg-4 mb-3');
+            
+            const fieldGroup = this.createElement('div', 'form-group');
+            const label = this.createElement('label', 'form-label small fw-bold');
+            label.textContent = param.label;
+            label.setAttribute('for', param.key);
+            
+            const input = this.createElement('input', 'form-control form-control-sm');
+            input.type = param.type;
+            input.name = `ga_hyperparameters.${param.key}`;
+            input.id = param.key;
+            input.value = gaHyperparameters[param.key] ?? param.default;
+            
+            if (param.min !== undefined) input.min = param.min;
+            if (param.max !== undefined) input.max = param.max;
+            if (param.step !== undefined) input.step = param.step;
+            
+            fieldGroup.appendChild(label);
+            fieldGroup.appendChild(input);
+            col.appendChild(fieldGroup);
+            formGrid.appendChild(col);
+        });
+        
+        cardBody.appendChild(formGrid);
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        cardWrapper.appendChild(card);
+        section.appendChild(cardWrapper);
+        
+        return section;
     }
 
     /**
      * Add new objective
      */
     addObjective() {
+        if (!this.formData.objectives) this.formData.objectives = [];
+        
         const newObjective = {
             objective: 'MaximizeProfit',
-            weight: 1.0,
-            parameters: {}
+            weight: 1.0
         };
         
         this.formData.objectives.push(newObjective);
         
         // Regenerate objectives section
-        const container = this.container.querySelector('#objectives .objectives-container');
-        const objectiveItem = this.createObjectiveItem(newObjective, this.formData.objectives.length - 1);
-        container.appendChild(objectiveItem);
+        this.regenerateObjectivesSection();
     }
 
     /**
      * Remove objective
      */
     removeObjective(index) {
-        this.formData.objectives.splice(index, 1);
-        
-        // Regenerate objectives section
-        const section = this.container.querySelector('#objectives');
-        const newSection = this.createObjectivesSection(this.formData.objectives);
-        section.parentNode.replaceChild(newSection, section);
+        if (this.formData.objectives && this.formData.objectives.length > index) {
+            this.formData.objectives.splice(index, 1);
+            this.regenerateObjectivesSection();
+        }
     }
 
     /**
-     * Create GA hyperparameters section
+     * Regenerate objectives section
      */
-    createGAHyperparametersSection(gaHyperparameters) {
-        const section = this.createSection('Genetic Algorithm Parameters', 'ga-hyperparameters');
-        const body = section.querySelector('.card-body');
-        
-        const fields = [
-            { key: 'number_of_iterations', label: 'Number of Iterations', type: 'number', step: '1', min: '10' },
-            { key: 'population_size', label: 'Population Size', type: 'number', step: '1', min: '20' },
-            { key: 'propagation_fraction', label: 'Propagation Fraction', type: 'number', step: '0.01', min: '0.1', max: '0.9' },
-            { key: 'elite_size', label: 'Elite Size', type: 'number', step: '1', min: '1' },
-            { key: 'chance_of_mutation', label: 'Chance of Mutation', type: 'number', step: '0.01', min: '0.01', max: '1.0' },
-            { key: 'selection_algorithm', label: 'Selection Algorithm', type: 'select', options: ['tournament', 'roulette', 'rank'] }
-        ];
-        
-        fields.forEach(field => {
-            if (field.type === 'select') {
-                const selectField = this.createSelectField(`ga_hyperparameters.${field.key}`, field.label, gaHyperparameters[field.key], field.options);
-                const selectElement = selectField.querySelector('select');
-                selectElement.addEventListener('change', (e) => this.updateFormData(e.target));
-                body.appendChild(selectField);
-            } else {
-                const numberField = this.createNumberField(`ga_hyperparameters.${field.key}`, field.label, gaHyperparameters[field.key], field.step);
-                if (field.min) numberField.querySelector('input').min = field.min;
-                if (field.max) numberField.querySelector('input').max = field.max;
-                body.appendChild(numberField);
-            }
-        });
-        
-        return section;
+    regenerateObjectivesSection() {
+        const objectivesSection = this.container.querySelector('#objectives');
+        if (objectivesSection && this.formData.objectives) {
+            const newSection = this.createObjectivesSection(this.formData.objectives);
+            objectivesSection.replaceWith(newSection);
+            this.attachEventHandlers();
+        }
     }
 
     /**
@@ -1244,6 +1862,192 @@ class ConfigFormBuilder {
     resetForm() {
         // Reset form to original state
         window.location.reload();
+    }
+
+    /**
+     * Edit parameter in a compact way
+     */
+    editParameter(indicatorIndex, paramKey, currentValue) {
+        const newValue = prompt(`Edit ${paramKey}:`, currentValue);
+        if (newValue !== null && newValue !== currentValue) {
+            // Update form data
+            if (!this.formData.indicators[indicatorIndex].parameters) {
+                this.formData.indicators[indicatorIndex].parameters = {};
+            }
+            this.formData.indicators[indicatorIndex].parameters[paramKey] = newValue;
+            
+            // Regenerate the indicator card
+            this.regenerateIndicatorCard(indicatorIndex);
+        }
+    }
+
+    /**
+     * Edit range for GA optimization
+     */
+    editRange(indicatorIndex, rangeKey, currentRange) {
+        const minValue = prompt(`Edit ${rangeKey} minimum value:`, currentRange.r[0]);
+        if (minValue === null) return;
+        
+        const maxValue = prompt(`Edit ${rangeKey} maximum value:`, currentRange.r[1]);
+        if (maxValue === null) return;
+        
+        const rangeType = prompt(`Edit ${rangeKey} type (int/float):`, currentRange.t);
+        if (rangeType === null) return;
+        
+        // Update form data
+        if (!this.formData.indicators[indicatorIndex].ranges) {
+            this.formData.indicators[indicatorIndex].ranges = {};
+        }
+        
+        // Parse values based on type
+        const min = rangeType === 'int' ? parseInt(minValue) : parseFloat(minValue);
+        const max = rangeType === 'int' ? parseInt(maxValue) : parseFloat(maxValue);
+        
+        if (!isNaN(min) && !isNaN(max) && min < max) {
+            this.formData.indicators[indicatorIndex].ranges[rangeKey] = {
+                t: rangeType,
+                r: [min, max]
+            };
+            
+            // Regenerate the indicator card
+            this.regenerateIndicatorCard(indicatorIndex);
+        } else {
+            alert('Invalid range values. Min must be less than max and both must be numbers.');
+        }
+    }
+
+    /**
+     * Edit bar indicator weight
+     */
+    editBarIndicator(barName, indicatorName, currentWeight, pathPrefix = 'monitor.') {
+        const newWeight = prompt(`Edit weight for ${indicatorName}:`, currentWeight);
+        if (newWeight !== null && newWeight !== currentWeight) {
+            const weightValue = parseFloat(newWeight) || 0;
+            
+            // Update form data
+            if (pathPrefix === 'monitor.') {
+                if (!this.formData.monitor) this.formData.monitor = {};
+                if (!this.formData.monitor.bars) this.formData.monitor.bars = {};
+                if (!this.formData.monitor.bars[barName]) this.formData.monitor.bars[barName] = {};
+                if (!this.formData.monitor.bars[barName].indicators) this.formData.monitor.bars[barName].indicators = {};
+                this.formData.monitor.bars[barName].indicators[indicatorName] = weightValue;
+            } else {
+                if (!this.formData.bars) this.formData.bars = {};
+                if (!this.formData.bars[barName]) this.formData.bars[barName] = {};
+                if (!this.formData.bars[barName].indicators) this.formData.bars[barName].indicators = {};
+                this.formData.bars[barName].indicators[indicatorName] = weightValue;
+            }
+            
+            // Regenerate bars section
+            this.regenerateBarsSection(pathPrefix);
+        }
+    }
+    
+    /**
+     * Regenerate a single indicator card
+     */
+    regenerateIndicatorCard(index) {
+        const container = this.container.querySelector('.indicators-container.row');
+        if (!container) return;
+        
+        // Find and replace the specific card
+        const cards = container.querySelectorAll('[class*="col-xl-3"]');
+        if (cards[index]) {
+            const newCard = this.createIndicatorItem(this.formData.indicators[index], index);
+            cards[index].replaceWith(newCard);
+        }
+    }
+
+    /**
+     * Add condition
+     */
+    addCondition(conditionType, isNestedStructure) {
+        const pathPrefix = isNestedStructure ? 'monitor.' : '';
+        const conditionsPath = isNestedStructure ? 
+            (this.formData.monitor = this.formData.monitor || {})[conditionType] = this.formData.monitor[conditionType] || [] :
+            (this.formData[conditionType] = this.formData[conditionType] || []);
+        
+        const newCondition = {
+            name: `${conditionType}_condition`,
+            threshold: 0
+        };
+        
+        if (isNestedStructure) {
+            this.formData.monitor[conditionType].push(newCondition);
+        } else {
+            this.formData[conditionType].push(newCondition);
+        }
+        
+        // Regenerate form
+        this.regenerateForm();
+    }
+
+    /**
+     * Remove condition
+     */
+    removeCondition(conditionType, index, isNestedStructure) {
+        if (isNestedStructure) {
+            if (this.formData.monitor && this.formData.monitor[conditionType]) {
+                this.formData.monitor[conditionType].splice(index, 1);
+            }
+        } else {
+            if (this.formData[conditionType]) {
+                this.formData[conditionType].splice(index, 1);
+            }
+        }
+        
+        // Regenerate form
+        this.regenerateForm();
+    }
+
+    /**
+     * Add bar
+     */
+    addBar(isNestedStructure) {
+        const barName = prompt('Enter bar name:', 'new_bar');
+        if (!barName) return;
+        
+        const newBar = {
+            type: 'bull',
+            indicators: {}
+        };
+        
+        if (isNestedStructure) {
+            if (!this.formData.monitor) this.formData.monitor = {};
+            if (!this.formData.monitor.bars) this.formData.monitor.bars = {};
+            this.formData.monitor.bars[barName] = newBar;
+        } else {
+            if (!this.formData.bars) this.formData.bars = {};
+            this.formData.bars[barName] = newBar;
+        }
+        
+        // Regenerate form
+        this.regenerateForm();
+    }
+
+    /**
+     * Remove bar
+     */
+    removeBar(barName, isNestedStructure) {
+        if (isNestedStructure) {
+            if (this.formData.monitor && this.formData.monitor.bars) {
+                delete this.formData.monitor.bars[barName];
+            }
+        } else {
+            if (this.formData.bars) {
+                delete this.formData.bars[barName];
+            }
+        }
+        
+        // Regenerate form
+        this.regenerateForm();
+    }
+
+    /**
+     * Regenerate entire form
+     */
+    regenerateForm() {
+        this.generateForm(this.formData);
     }
 
     /**
