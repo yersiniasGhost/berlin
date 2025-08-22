@@ -76,6 +76,15 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
         with open(ga_config_path) as f:
             config_data = json.load(f)
 
+        # Load data configuration to verify ticker
+        with open(data_config_path) as f:
+            data_config = json.load(f)
+        
+        current_ticker = data_config.get('ticker', 'UNKNOWN')
+        logger.info(f"🎯 Loading optimization for ticker: {current_ticker}")
+        logger.info(f"   Data config path: {data_config_path}")
+        logger.info(f"   Date range: {data_config.get('start_date')} to {data_config.get('end_date')}")
+
         test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
         optimization_state['test_name'] = test_name
 
@@ -405,12 +414,20 @@ def load_raw_candle_data(data_config_path: str, io):
         start_date = data_config['start_date']
         end_date = data_config['end_date']
 
-        logger.info(f"   Ticker: {ticker}")
+        logger.info(f"📈 Chart data generation for ticker: {ticker}")
         logger.info(f"   Date Range: {start_date} to {end_date}")
+        logger.info(f"   Data config path: {data_config_path}")
 
         # Use the SAME data source as trade execution to ensure consistency
         # Access the tick_history directly from the backtest_streamer
         backtest_streamer = io.fitness_calculator.backtest_streamer
+        
+        # Debug: Check what ticker is actually loaded in the streamer
+        actual_ticker = getattr(backtest_streamer, 'ticker', 'UNKNOWN')
+        logger.info(f"🔍 Backtest streamer ticker: {actual_ticker}")
+        if actual_ticker != ticker:
+            logger.warning(f"⚠️  TICKER MISMATCH! Config: {ticker}, Streamer: {actual_ticker}")
+        
         tick_history = backtest_streamer.tick_history
 
         # Format candlestick data for Highcharts in the original format [timestamp, open, high, low, close]
@@ -629,11 +646,13 @@ def handle_start_optimization(data):
         emit('optimization_error', {'error': 'Config paths not provided'})
         return
 
-    # Reset state
+    # Reset state and clear cached instances
     optimization_state['running'] = True
     optimization_state['paused'] = False
     optimization_state['current_generation'] = 0
     optimization_state['best_individuals_log'] = []
+    optimization_state['ga_instance'] = None  # Clear cached GA instance
+    optimization_state['io_instance'] = None  # Clear cached IO instance
 
     # Start optimization thread
     optimization_state['thread'] = threading.Thread(

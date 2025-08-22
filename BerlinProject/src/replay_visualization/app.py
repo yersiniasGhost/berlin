@@ -211,6 +211,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         logger.info(f"📋 Running backtest for: {test_name}")
         logger.info(f"📊 Data: {data_config['ticker']} from {data_config['start_date']} to {data_config['end_date']}")
+        logger.info(f"   Data config path: {data_config_path}")
 
         # Create monitor configuration object directly
         from models.monitor_configuration import MonitorConfiguration
@@ -383,6 +384,11 @@ def run_visualization():
 
         with open(data_config_path) as f:
             data_config = json.load(f)
+
+        # Debug: Log what ticker is being returned
+        actual_ticker = data_config.get('ticker', 'UNKNOWN')
+        logger.info(f"🎯 Replay visualization returning ticker: {actual_ticker}")
+        logger.info(f"   Data config path: {data_config_path}")
 
         return jsonify({
             'success': True,

@@ -61,9 +61,16 @@ class BacktestDataStreamer:
         self.ticker = data_config['ticker']
         self.start_date = data_config['start_date']
         self.end_date = data_config['end_date']
+        
+        logger.info(f"🔄 BacktestDataStreamer initializing with ticker: {self.ticker}")
+        logger.info(f"   Date range: {self.start_date} to {self.end_date}")
 
         # Create unified trade executor from monitor config
         self.trade_executor = TradeExecutorUnified(self.monitor_config)
+
+        # Clear any existing aggregators to force fresh data load
+        self.aggregators.clear()
+        self.tick_history.clear()
 
         # Load all historical data once
         self.load_historical_data()

@@ -473,6 +473,37 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Trade Distribution Histograms Section -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-chart-bar me-2"></i>Trade Performance Distribution</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h7 class="text-success"><i class="fas fa-arrow-up me-1"></i>Winning Trades Distribution</h7>
+                                <div id="winningTradesHistogram" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                        <i class="fas fa-chart-bar me-2"></i>Waiting for trade data...
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h7 class="text-danger"><i class="fas fa-arrow-down me-1"></i>Losing Trades Distribution</h7>
+                                <div id="losingTradesHistogram" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                        <i class="fas fa-chart-bar me-2"></i>Waiting for trade data...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Distribution shows the frequency of trades in different percentage gain/loss ranges. X-axis: Percentage ranges, Y-axis: Number of trades.
+                            </small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1190,6 +1221,134 @@
             parallelCoordsChart = Highcharts.chart('parallelCoordsChart', chartConfig);
         }
 
+        function createTradeDistributionHistograms(tradeData) {
+            if (!tradeData || tradeData.length === 0) {
+                // Clear histograms if no data
+                document.getElementById('winningTradesHistogram').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-bar me-2"></i>No trade data available
+                    </div>
+                `;
+                document.getElementById('losingTradesHistogram').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-bar me-2"></i>No trade data available
+                    </div>
+                `;
+                return;
+            }
+
+            // Separate winning and losing trades
+            const winningTrades = tradeData.filter(trade => trade.trade_pnl > 0).map(trade => trade.trade_pnl);
+            const losingTrades = tradeData.filter(trade => trade.trade_pnl < 0).map(trade => trade.trade_pnl);
+
+            // Create histograms
+            createHistogram('winningTradesHistogram', winningTrades, 'Winning Trades Distribution', '#28a745', 'Percentage Gain (%)', 'positive');
+            createHistogram('losingTradesHistogram', losingTrades, 'Losing Trades Distribution', '#dc3545', 'Percentage Loss (%)', 'negative');
+        }
+
+        function createHistogram(containerId, data, title, color, xAxisTitle, type) {
+            if (!data || data.length === 0) {
+                document.getElementById(containerId).innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-bar me-2"></i>No ${type} trades yet
+                    </div>
+                `;
+                return;
+            }
+
+            // Calculate bin size and range
+            const minVal = Math.min(...data);
+            const maxVal = Math.max(...data);
+            const range = maxVal - minVal;
+            
+            // Use appropriate bin size based on data range
+            let binSize;
+            if (range <= 5) binSize = 0.25;
+            else if (range <= 10) binSize = 0.5;
+            else if (range <= 20) binSize = 1.0;
+            else binSize = 2.0;
+
+            // Create bins
+            const binStart = Math.floor(minVal / binSize) * binSize;
+            const binEnd = Math.ceil(maxVal / binSize) * binSize;
+            const bins = [];
+            
+            for (let i = binStart; i <= binEnd; i += binSize) {
+                bins.push({
+                    start: parseFloat(i.toFixed(2)),
+                    end: parseFloat((i + binSize).toFixed(2)),
+                    count: 0,
+                    label: `${i.toFixed(1)}% to ${(i + binSize).toFixed(1)}%`
+                });
+            }
+
+            // Count trades in each bin
+            data.forEach(value => {
+                const binIndex = Math.floor((value - binStart) / binSize);
+                if (binIndex >= 0 && binIndex < bins.length) {
+                    bins[binIndex].count++;
+                }
+            });
+
+            // Prepare chart data
+            const categories = bins.map(bin => `${bin.start.toFixed(1)}% to ${bin.end.toFixed(1)}%`);
+            const seriesData = bins.map(bin => bin.count);
+
+            const chartConfig = {
+                chart: {
+                    type: 'column',
+                    backgroundColor: 'white'
+                },
+                title: {
+                    text: title,
+                    style: { fontSize: '14px', fontWeight: 'bold' }
+                },
+                xAxis: {
+                    categories: categories,
+                    title: { text: xAxisTitle },
+                    labels: {
+                        rotation: -45,
+                        style: { fontSize: '10px' }
+                    }
+                },
+                yAxis: {
+                    title: { text: 'Number of Trades' },
+                    min: 0,
+                    allowDecimals: false
+                },
+                tooltip: {
+                    formatter: function() {
+                        return `<b>${this.x}</b><br/>Number of trades: <b>${this.y}</b>`;
+                    }
+                },
+                legend: { enabled: false },
+                credits: { enabled: false },
+                plotOptions: {
+                    column: {
+                        borderWidth: 1,
+                        borderColor: '#ffffff',
+                        dataLabels: {
+                            enabled: true,
+                            style: { fontSize: '10px' }
+                        }
+                    }
+                },
+                series: [{
+                    name: 'Trades',
+                    data: seriesData,
+                    color: color
+                }]
+            };
+
+            // Destroy existing chart if it exists
+            if (charts[containerId]) {
+                charts[containerId].destroy();
+            }
+
+            // Create new chart
+            charts[containerId] = Highcharts.chart(containerId, chartConfig);
+        }
+
         function updateMetricsTable(generation, chartData) {
             const tableBody = document.getElementById('metricsTableBody');
 
@@ -1256,6 +1415,9 @@
             `).join('');
 
             tableBody.innerHTML = tableRows;
+
+            // Update trade distribution histograms
+            createTradeDistributionHistograms(completedTrades);
 
             const tableContainer = document.querySelector('.table-container');
             tableContainer.scrollTop = tableContainer.scrollHeight;

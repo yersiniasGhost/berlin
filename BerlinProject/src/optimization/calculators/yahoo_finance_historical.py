@@ -56,7 +56,13 @@ class YahooFinanceHistorical:
     def process_historical_data(self, ticker: str, start_date: str, end_date: str,
                                 monitor_config: MonitorConfiguration) -> bool:
 
-        print(f"Processing historical data for {ticker}")
+        print(f"🔄 YahooFinanceHistorical processing data for ticker: {ticker}")
+        print(f"   Date range: {start_date} to {end_date}")
+        
+        # Clear any existing data to ensure fresh load
+        self.aggregators.clear()
+        self.ticker = ticker
+        self.total_ticks_processed = 0
 
         raw_ticks = self._load_raw_ticks(ticker, start_date, end_date)
         if not raw_ticks:

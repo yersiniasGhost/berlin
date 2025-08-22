@@ -202,7 +202,7 @@ class ConfigFormBuilder {
      * Create trade executor card
      */
     createTradeExecutorCard(tradeExecutor, isNestedStructure) {
-        const cardWrapper = this.createElement('div', 'col-xl-3 col-lg-4 col-md-6 col-12 mb-3');
+        const cardWrapper = this.createElement('div', 'col-xl-6 col-lg-6 col-md-12 col-12 mb-3'); // Wider card for more fields
         
         const card = this.createElement('div', 'card h-100');
         const cardHeader = this.createElement('div', 'card-header compact-card-header');
@@ -213,45 +213,58 @@ class ConfigFormBuilder {
         title.innerHTML = '<i class="fas fa-exchange-alt"></i> Trade Executor';
         cardHeader.appendChild(title);
         
-        // Body - compact fields
+        // Body - grid layout for proper trade executor fields
         const pathPrefix = isNestedStructure ? 'monitor.' : '';
         const compactForm = this.createElement('div', 'compact-form');
+        const formGrid = this.createElement('div', 'row');
         
-        // Type field
-        const typeField = this.createElement('div', 'mb-2');
-        const typeSelect = this.createElement('select', 'form-select form-select-sm');
-        typeSelect.name = pathPrefix + 'trade_executor.type';
-        ['PaperTradeExecutor', 'LiveTradeExecutor', 'BacktestExecutor'].forEach(type => {
-            const option = this.createElement('option');
-            option.value = type;
-            option.textContent = type;
-            if (type === tradeExecutor.type) option.selected = true;
-            typeSelect.appendChild(option);
+        // Define trade executor fields based on your schema
+        const fields = [
+            { key: 'default_position_size', label: 'Position Size', type: 'number', step: '0.01', default: 100.0 },
+            { key: 'stop_loss_pct', label: 'Stop Loss %', type: 'number', step: '0.001', default: 0.02 },
+            { key: 'take_profit_pct', label: 'Take Profit %', type: 'number', step: '0.001', default: 0.04 },
+            { key: 'trailing_stop_distance_pct', label: 'Trail Distance %', type: 'number', step: '0.001', default: 0.02 },
+            { key: 'trailing_stop_activation_pct', label: 'Trail Activation %', type: 'number', step: '0.001', default: 0.005 },
+            { key: 'ignore_bear_signals', label: 'Ignore Bear Signals', type: 'checkbox', default: false },
+            { key: 'trailing_stop_loss', label: 'Trailing Stop Loss', type: 'checkbox', default: true }
+        ];
+        
+        fields.forEach(field => {
+            const col = this.createElement('div', 'col-md-6 col-12 mb-2');
+            const fieldGroup = this.createElement('div');
+            
+            const label = this.createElement('label', 'form-label small fw-bold');
+            label.textContent = field.label;
+            fieldGroup.appendChild(label);
+            
+            if (field.type === 'checkbox') {
+                const checkboxWrapper = this.createElement('div', 'form-check');
+                const input = this.createElement('input', 'form-check-input');
+                input.type = 'checkbox';
+                input.name = `${pathPrefix}trade_executor.${field.key}`;
+                input.checked = tradeExecutor[field.key] !== undefined ? tradeExecutor[field.key] : field.default;
+                
+                const checkLabel = this.createElement('label', 'form-check-label small');
+                checkLabel.textContent = field.label;
+                
+                checkboxWrapper.appendChild(input);
+                checkboxWrapper.appendChild(checkLabel);
+                fieldGroup.appendChild(checkboxWrapper);
+            } else {
+                const input = this.createElement('input', 'form-control form-control-sm');
+                input.type = field.type;
+                input.name = `${pathPrefix}trade_executor.${field.key}`;
+                input.value = tradeExecutor[field.key] !== undefined ? tradeExecutor[field.key] : field.default;
+                if (field.step) input.step = field.step;
+                input.placeholder = field.label;
+                fieldGroup.appendChild(input);
+            }
+            
+            col.appendChild(fieldGroup);
+            formGrid.appendChild(col);
         });
-        typeField.appendChild(typeSelect);
-        compactForm.appendChild(typeField);
         
-        // Account value field
-        const accountField = this.createElement('div', 'mb-2');
-        const accountInput = this.createElement('input', 'form-control form-control-sm');
-        accountInput.type = 'number';
-        accountInput.name = pathPrefix + 'trade_executor.account_value';
-        accountInput.value = tradeExecutor.account_value || 10000;
-        accountInput.placeholder = 'Account Value';
-        accountField.appendChild(accountInput);
-        compactForm.appendChild(accountField);
-        
-        // Risk percentage field
-        const riskField = this.createElement('div', 'mb-2');
-        const riskInput = this.createElement('input', 'form-control form-control-sm');
-        riskInput.type = 'number';
-        riskInput.name = pathPrefix + 'trade_executor.risk_percentage';
-        riskInput.value = tradeExecutor.risk_percentage || 1;
-        riskInput.step = '0.1';
-        riskInput.placeholder = 'Risk %';
-        riskField.appendChild(riskInput);
-        compactForm.appendChild(riskField);
-        
+        compactForm.appendChild(formGrid);
         cardBody.appendChild(compactForm);
         
         card.appendChild(cardHeader);
