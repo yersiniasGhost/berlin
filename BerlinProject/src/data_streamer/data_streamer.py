@@ -139,6 +139,25 @@ class DataStreamer:
             'bar_scores': self.bar_scores
         }
 
+    def get_portfolio_metrics(self) -> Dict:
+        """Get current portfolio performance metrics"""
+        # Get the latest price from the most recent tick or candle data
+        current_price = None
+        for agg_key, aggregator in self.aggregators.items():
+            if aggregator.get_current_candle():
+                current_price = aggregator.get_current_candle().close
+                break
+        
+        if current_price is None:
+            # Fallback: try to get from history
+            for agg_key, aggregator in self.aggregators.items():
+                history = aggregator.get_history()
+                if history:
+                    current_price = history[-1].close
+                    break
+        
+        return self.trade_executor.portfolio.get_performance_metrics(current_price)
+
     def enable_debug_mode(self):
         """Enable debug mode for trade executor"""
         self.trade_executor.enable_debug_mode()

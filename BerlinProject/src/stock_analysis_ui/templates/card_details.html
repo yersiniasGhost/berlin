@@ -726,8 +726,8 @@
                 // Update indicators and bars
                 updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
 
-                // Update candlestick chart with new tick data
-                updateCandlestickChart(data);
+                // Update current candle high/low with live price (for real-time feedback)
+                updateLivePriceOnChart(data);
 
                 // Update trade history from portfolio data - check both possible locations
                 if (data.portfolio && data.portfolio.trade_history) {
@@ -843,12 +843,24 @@
 
                 const data = await response.json();
 
-                if (data.success && data.candlestick_data) {
-                    candlestickData = data.candlestick_data;
+                if (data.success) {
+                    candlestickData = data.candlestick_data || [];
                     console.log(`Loaded ${candlestickData.length} candles for ${timeframe}`);
+                    
+                    // Log debug information
+                    if (data.debug) {
+                        console.log('Candlestick Data Debug:', data.debug);
+                        console.log(`Data source: ${data.debug.data_source}`);
+                        console.log(`Message: ${data.debug.message}`);
+                        console.log(`Initial candles: ${data.debug.initial_candles}`);
+                        console.log(`Current price: $${data.debug.current_price}`);
+                    }
+                    
+                    // Initialize chart even if empty - candles will be added dynamically
                     initializeCandlestickChart();
                 } else {
-                    console.log('No candlestick data available, using mock data');
+                    console.log('Failed to load candlestick endpoint, using mock data');
+                    console.log('Response data:', data);
                     generateMockCandlestickData();
                 }
             } catch (error) {
@@ -1021,7 +1033,7 @@
             console.log(`Candlestick chart initialized with ${candlestickData.length} candles`);
         }
 
-        function updateCandlestickChart(data) {
+        function updateLivePriceOnChart(data) {
             if (!candlestickChart || !data.ohlc || !data.timestamp) {
                 return;
             }
@@ -1029,12 +1041,11 @@
             try {
                 const timestamp = new Date(data.timestamp).getTime();
                 const [open, high, low, close] = data.ohlc;
-                const newCandle = [timestamp, open, high, low, close];
 
                 const series = candlestickChart.series[0];
                 const existingData = series.data;
 
-                // Check if this is an update to the last candle or a new candle
+                // Only update if we have existing candles
                 if (existingData.length > 0) {
                     const lastCandle = existingData[existingData.length - 1];
                     const lastCandleTime = lastCandle.x;
@@ -1042,23 +1053,26 @@
                     // Get the timeframe in milliseconds for comparison
                     const timeframeMs = getTimeframeInMs(currentTimeframe);
 
-                    // If timestamps are within the same timeframe period, update the last candle
+                    // If timestamps are within the same timeframe period, update the current candle
                     if (Math.floor(timestamp / timeframeMs) === Math.floor(lastCandleTime / timeframeMs)) {
-                        lastCandle.update([timestamp, open, high, low, close], true);
-                        return;
+                        // Update the current incomplete candle with live data
+                        const currentCandle = lastCandle.options;
+                        const updatedHigh = Math.max(currentCandle.high, close);
+                        const updatedLow = Math.min(currentCandle.low, close);
+                        
+                        lastCandle.update([
+                            lastCandleTime, // Keep original candle time
+                            currentCandle.open, // Keep original open
+                            updatedHigh, // Update high if current price is higher
+                            updatedLow,  // Update low if current price is lower
+                            close // Update close to current price
+                        ], true);
                     }
-                }
-
-                // Add new candle
-                series.addPoint(newCandle, true, false);
-
-                // Keep only last 200 candles for performance
-                if (series.data.length > 200) {
-                    series.removePoint(0, false);
+                    // If it's a new timeframe period, wait for completed candle event
                 }
 
             } catch (error) {
-                console.error('Error updating candlestick chart:', error);
+                console.error('Error updating live price on chart:', error);
             }
         }
 

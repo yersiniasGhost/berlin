@@ -107,12 +107,30 @@ class CandleAggregator(ABC):
             return self._prepopulate_processed(historical_data)
 
     def _prepopulate_normal(self, historical_data: List[TickData]) -> int:
-        """Prepopulate with direct historical data"""
-        if len(historical_data) > 1:
-            self.history = historical_data[:-1]
-        if historical_data:
-            self.current_candle = historical_data[-1]
-        return len(historical_data)
+        """Prepopulate with direct historical data - filtered to recent data only"""
+        if not historical_data:
+            return 0
+            
+        # FILTER: Only keep candles from last 4 hours to avoid stale data
+        from datetime import datetime, timedelta
+        cutoff_time = datetime.now() - timedelta(hours=4)
+        
+        recent_data = [candle for candle in historical_data 
+                      if candle.timestamp.replace(tzinfo=None) >= cutoff_time]
+        
+        # If no recent data, fall back to last 50 candles for some context
+        if not recent_data and len(historical_data) > 50:
+            recent_data = historical_data[-50:]
+        elif not recent_data:
+            recent_data = historical_data
+            
+        # Use the filtered recent data
+        if len(recent_data) > 1:
+            self.history = recent_data[:-1]
+        if recent_data:
+            self.current_candle = recent_data[-1]
+            
+        return len(recent_data)
 
     def _prepopulate_processed(self, historical_data: List[TickData]) -> int:
         """Prepopulate by processing through aggregator"""

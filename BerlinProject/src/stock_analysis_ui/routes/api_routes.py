@@ -393,45 +393,54 @@ def get_candlestick_data(card_id: str):
 
         aggregator_key = timeframe_mapping.get(timeframe, '1m-normal')
 
-        # Get candle data from the data streamer's aggregators
-        all_candle_data = data_streamer._get_all_candle_data()
-
+        # CREATE SINGLE CURRENT CANDLE from live data if available
         candlestick_data = []
-
-        if aggregator_key in all_candle_data:
-            candles = all_candle_data[aggregator_key]
-
-            # Convert to Highcharts format: [timestamp, open, high, low, close]
-            for candle in candles:
-                timestamp = int(candle.timestamp.timestamp() * 1000)  # Convert to milliseconds
-                candlestick_data.append([
-                    timestamp,
-                    float(candle.open),
-                    float(candle.high),
-                    float(candle.low),
-                    float(candle.close)
-                ])
+        
+        # Try to get the current price from the combination's latest data
+        current_price = None
+        if card_id in app_service.combinations:
+            try:
+                combination = app_service.combinations[card_id]
+                if 'data_streamer' in combination:
+                    data_streamer = combination['data_streamer']
+                    # Try to get current price from aggregator if available
+                    all_candle_data = data_streamer._get_all_candle_data()
+                    if aggregator_key in all_candle_data and all_candle_data[aggregator_key]:
+                        latest_candle = all_candle_data[aggregator_key][-1]
+                        current_price = float(latest_candle.close)
+            except Exception as e:
+                logger.warning(f"Could not get current price: {e}")
+        
+        # If we have a current price, create an initial current candle
+        if current_price:
+            from datetime import datetime
+            now = datetime.now()
+            # Create timestamp for current minute
+            current_minute = now.replace(second=0, microsecond=0)
+            timestamp_ms = int(current_minute.timestamp() * 1000)
+            
+            # Create initial candle with current price as OHLC (will be updated by live data)
+            initial_candle = [
+                timestamp_ms,
+                current_price,  # open
+                current_price,  # high
+                current_price,  # low
+                current_price   # close
+            ]
+            candlestick_data = [initial_candle]
+            
+            logger.info(f"Created initial current candle for {card_id} at ${current_price}")
         else:
-            # Try to find any aggregator with the timeframe
-            for key, candles in all_candle_data.items():
-                if key.startswith(timeframe):
-                    for candle in candles:
-                        timestamp = int(candle.timestamp.timestamp() * 1000)
-                        candlestick_data.append([
-                            timestamp,
-                            float(candle.open),
-                            float(candle.high),
-                            float(candle.low),
-                            float(candle.close)
-                        ])
-                    break
+            logger.info(f"No current price available for {card_id}, starting with empty chart")
 
-        # Sort by timestamp to ensure correct order
-        candlestick_data.sort(key=lambda x: x[0])
-
-        # Limit to last 200 candles for performance
-        if len(candlestick_data) > 200:
-            candlestick_data = candlestick_data[-200:]
+        # Simple debug info
+        from datetime import datetime
+        debug_info = {
+            'initial_candles': len(candlestick_data),
+            'current_price': current_price,
+            'data_source': 'current_minute_only',
+            'message': 'Starting with current minute candle, will build from live data'
+        }
 
         return jsonify({
             'success': True,
@@ -439,7 +448,8 @@ def get_candlestick_data(card_id: str):
             'symbol': symbol,
             'timeframe': timeframe,
             'total_candles': len(candlestick_data),
-            'aggregator_key': aggregator_key
+            'aggregator_key': aggregator_key,
+            'debug': debug_info
         })
 
     except Exception as e:
