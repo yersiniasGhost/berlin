@@ -27,23 +27,27 @@ class DataConfigForm {
         header.appendChild(title);
         form.appendChild(header);
         
-        // Create form fields
-        form.appendChild(this.createTickerField(dataConfig.ticker || ''));
-        form.appendChild(this.createDateRangeFields(dataConfig.start_date || '', dataConfig.end_date || ''));
-        
-        // Form actions
-        form.appendChild(this.createFormActions());
+        // Load available stocks first, then create form fields
+        this.loadAvailableStocks().then(stocks => {
+            // Create form fields with available stocks
+            form.appendChild(this.createTickerField(dataConfig.ticker || '', stocks));
+            form.appendChild(this.createDateRangeFields(dataConfig.start_date || '', dataConfig.end_date || '', stocks));
+            
+            // Form actions
+            form.appendChild(this.createFormActions());
+            
+            this.attachEventHandlers();
+        });
         
         this.container.appendChild(form);
-        this.attachEventHandlers();
         
         return form;
     }
 
     /**
-     * Create ticker field
+     * Create ticker field with dropdown of available stocks
      */
-    createTickerField(ticker) {
+    createTickerField(ticker, availableStocks = []) {
         const group = this.createElement('div', 'mb-3');
         
         const label = this.createElement('label', 'form-label fw-bold');
@@ -57,31 +61,95 @@ class DataConfigForm {
         prepend.innerHTML = '<i class="fas fa-dollar-sign"></i>';
         inputGroup.appendChild(prepend);
         
-        const input = this.createElement('input', 'form-control');
-        input.type = 'text';
-        input.name = 'ticker';
-        input.id = 'ticker';
-        input.value = ticker;
-        input.placeholder = 'e.g., NVDA, AAPL, TSLA';
-        input.required = true;
-        input.pattern = '[A-Z]{1,5}';
-        input.title = 'Enter a valid stock ticker symbol (1-5 uppercase letters)';
-        inputGroup.appendChild(input);
+        const select = this.createElement('select', 'form-select');
+        select.name = 'ticker';
+        select.id = 'ticker';
+        select.required = true;
         
+        // Add default option
+        const defaultOption = this.createElement('option', '');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a stock ticker...';
+        defaultOption.disabled = true;
+        select.appendChild(defaultOption);
+        
+        // Add available stocks from database (show only ticker names)
+        availableStocks.forEach(stock => {
+            const option = this.createElement('option', '');
+            option.value = stock.ticker;
+            option.textContent = stock.ticker;
+            option.setAttribute('data-min-date', stock.min_date || '');
+            option.setAttribute('data-max-date', stock.max_date || '');
+            option.setAttribute('data-points', stock.data_points || 0);
+            if (stock.ticker === ticker) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        // If no stocks available or selected ticker not in list, add current ticker as option
+        if (ticker && !availableStocks.find(s => s.ticker === ticker)) {
+            const customOption = this.createElement('option', '');
+            customOption.value = ticker;
+            customOption.textContent = `${ticker} (Custom)`;
+            customOption.selected = true;
+            select.appendChild(customOption);
+        }
+        
+        inputGroup.appendChild(select);
         group.appendChild(inputGroup);
+        
+        // Add dynamic date range display
+        const dateRangeInfo = this.createElement('div', 'alert alert-info mt-2');
+        dateRangeInfo.id = 'stock-date-range-info';
+        dateRangeInfo.style.display = 'none';
+        dateRangeInfo.innerHTML = '<i class="fas fa-calendar"></i> <strong>Available data range:</strong> <span id="date-range-text"></span>';
+        group.appendChild(dateRangeInfo);
+        
+        // Add ticker change event handler
+        select.addEventListener('change', (e) => {
+            const selectedOption = e.target.selectedOptions[0];
+            const dateRangeDiv = document.getElementById('stock-date-range-info');
+            const dateRangeText = document.getElementById('date-range-text');
+            
+            if (selectedOption && selectedOption.hasAttribute('data-min-date')) {
+                const minDate = selectedOption.getAttribute('data-min-date');
+                const maxDate = selectedOption.getAttribute('data-max-date');
+                const dataPoints = selectedOption.getAttribute('data-points');
+                
+                if (minDate && maxDate && minDate !== 'null' && maxDate !== 'null') {
+                    dateRangeText.textContent = `${minDate} to ${maxDate} (${dataPoints} months)`;
+                    dateRangeDiv.style.display = 'block';
+                } else {
+                    dateRangeDiv.style.display = 'none';
+                }
+            } else {
+                dateRangeDiv.style.display = 'none';
+            }
+        });
+        
+        // Trigger initial display if there's a selected option
+        if (select.value) {
+            select.dispatchEvent(new Event('change'));
+        }
+        
+        // Add info about data availability
+        const info = this.createElement('div', 'form-text');
+        info.innerHTML = '<i class="fas fa-info-circle"></i> Select from available stocks in database';
+        group.appendChild(info);
         
         // Add validation feedback
         const invalidFeedback = this.createElement('div', 'invalid-feedback');
-        invalidFeedback.textContent = 'Please enter a valid stock ticker symbol.';
+        invalidFeedback.textContent = 'Please select a stock ticker symbol.';
         group.appendChild(invalidFeedback);
         
         return group;
     }
 
     /**
-     * Create date range fields
+     * Create date range fields with dynamic constraints
      */
-    createDateRangeFields(startDate, endDate) {
+    createDateRangeFields(startDate, endDate, availableStocks = []) {
         const group = this.createElement('div', 'mb-3');
         
         const label = this.createElement('label', 'form-label fw-bold');
@@ -370,6 +438,40 @@ class DataConfigForm {
                     alert.remove();
                 }
             }, 3000);
+        }
+    }
+
+    /**
+     * Load available stocks from database
+     */
+    async loadAvailableStocks() {
+        try {
+            const response = await fetch('/api/available_stocks');
+            const result = await response.json();
+            
+            if (result.success) {
+                return result.stocks || [];
+            } else {
+                console.warn('Failed to load available stocks:', result.error);
+                return result.stocks || []; // Return fallback data if available
+            }
+        } catch (error) {
+            console.error('Error loading available stocks:', error);
+            // Return fallback data
+            return [
+                {
+                    ticker: 'NVDA',
+                    min_date: '2024-01-01',
+                    max_date: '2024-12-31',
+                    data_points: 252
+                },
+                {
+                    ticker: 'AAPL',
+                    min_date: '2024-01-01', 
+                    max_date: '2024-12-31',
+                    data_points: 252
+                }
+            ];
         }
     }
 

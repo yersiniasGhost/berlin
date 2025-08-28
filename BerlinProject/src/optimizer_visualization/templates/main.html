@@ -53,29 +53,24 @@
         .status-paused { background: #f0ad4e; color: #fff; }
         .status-error { background: #f8d7da; color: #721c24; }
 
-        .chart-container {
-            margin: 20px 0;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 10px;
-        }
 
         .collapsible-section {
             border: 1px solid #dee2e6;
             border-radius: 6px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             overflow: hidden;
         }
 
         .collapsible-header {
             background: #f8f9fa;
-            padding: 10px 15px;
+            padding: 8px 12px;
             cursor: pointer;
             border-bottom: 1px solid #dee2e6;
             user-select: none;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.9rem;
         }
 
         .collapsible-header:hover {
@@ -83,12 +78,60 @@
         }
 
         .collapsible-content {
-            padding: 15px;
+            padding: 10px;
             display: block;
         }
 
         .collapsible-content.collapsed {
             display: none;
+        }
+
+        /* Compact configuration form */
+        .config-actions {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .configuration-tabs {
+            margin-bottom: 1rem;
+        }
+
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem;
+            padding: 0.75rem;
+            background: #fff;
+        }
+
+        .action-buttons {
+            margin: 0.5rem 0;
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        /* Make form elements more compact */
+        .form-group {
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .form-label {
+            font-size: 0.825rem;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.775rem;
         }
 
         .collapse-icon {
@@ -99,25 +142,7 @@
             transform: rotate(180deg);
         }
 
-        .configuration-tabs {
-            margin-bottom: 2rem;
-        }
 
-        .tab-content {
-            border: 1px solid #dee2e6;
-            border-top: none;
-            border-radius: 0 0 0.375rem 0.375rem;
-            padding: 1.5rem;
-            background: #fff;
-        }
-
-        .optimization-progress {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
 
         .best-individuals-log {
             max-height: 200px;
@@ -174,19 +199,74 @@
             margin-bottom: 10px;
         }
 
-        .action-buttons {
-            margin: 1rem 0;
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .navbar-brand-custom {
+                font-size: 1.2rem;
+            }
+            
+            .logo-img {
+                height: 100px;
+            }
+            
+            .metrics-table {
+                font-size: 0.7rem;
+            }
+            
+            .chart-container {
+                height: 300px !important;
+            }
         }
 
-        .config-actions {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 0.375rem;
-            margin-bottom: 1rem;
+        @media (max-width: 576px) {
+            .navbar-brand-custom {
+                font-size: 1rem;
+            }
+            
+            .logo-img {
+                height: 80px;
+                margin-right: 8px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn-sm {
+                width: 100%;
+                margin-bottom: 0.25rem;
+            }
+            
+            .control-buttons {
+                flex-direction: column;
+            }
+            
+            .btn-optimization {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
         }
+
+        /* Enhanced chart styling */
+        .chart-container {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: white;
+        }
+
+        /* Improved optimization progress styling */
+        .optimization-progress {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
     </style>
 </head>
 <body>
@@ -389,6 +469,37 @@
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
                                 This chart shows the objective function values for elite individuals. Each line represents one elite solution across all objectives.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Trade Distribution Histograms Section -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-chart-bar me-2"></i>Trade Performance Distribution</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h7 class="text-success"><i class="fas fa-arrow-up me-1"></i>Winning Trades Distribution</h7>
+                                <div id="winningTradesHistogram" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                        <i class="fas fa-chart-bar me-2"></i>Waiting for trade data...
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h7 class="text-danger"><i class="fas fa-arrow-down me-1"></i>Losing Trades Distribution</h7>
+                                <div id="losingTradesHistogram" style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                                        <i class="fas fa-chart-bar me-2"></i>Waiting for trade data...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Distribution shows the frequency of trades in different percentage gain/loss ranges. X-axis: Percentage ranges, Y-axis: Number of trades.
                             </small>
                         </div>
                     </div>
@@ -1110,6 +1221,134 @@
             parallelCoordsChart = Highcharts.chart('parallelCoordsChart', chartConfig);
         }
 
+        function createTradeDistributionHistograms(tradeData) {
+            if (!tradeData || tradeData.length === 0) {
+                // Clear histograms if no data
+                document.getElementById('winningTradesHistogram').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-bar me-2"></i>No trade data available
+                    </div>
+                `;
+                document.getElementById('losingTradesHistogram').innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-bar me-2"></i>No trade data available
+                    </div>
+                `;
+                return;
+            }
+
+            // Separate winning and losing trades
+            const winningTrades = tradeData.filter(trade => trade.trade_pnl > 0).map(trade => trade.trade_pnl);
+            const losingTrades = tradeData.filter(trade => trade.trade_pnl < 0).map(trade => trade.trade_pnl);
+
+            // Create histograms
+            createHistogram('winningTradesHistogram', winningTrades, 'Winning Trades Distribution', '#28a745', 'Percentage Gain (%)', 'positive');
+            createHistogram('losingTradesHistogram', losingTrades, 'Losing Trades Distribution', '#dc3545', 'Percentage Loss (%)', 'negative');
+        }
+
+        function createHistogram(containerId, data, title, color, xAxisTitle, type) {
+            if (!data || data.length === 0) {
+                document.getElementById(containerId).innerHTML = `
+                    <div class="text-muted text-center d-flex align-items-center justify-content-center h-100">
+                        <i class="fas fa-chart-bar me-2"></i>No ${type} trades yet
+                    </div>
+                `;
+                return;
+            }
+
+            // Calculate bin size and range
+            const minVal = Math.min(...data);
+            const maxVal = Math.max(...data);
+            const range = maxVal - minVal;
+            
+            // Use appropriate bin size based on data range
+            let binSize;
+            if (range <= 5) binSize = 0.25;
+            else if (range <= 10) binSize = 0.5;
+            else if (range <= 20) binSize = 1.0;
+            else binSize = 2.0;
+
+            // Create bins
+            const binStart = Math.floor(minVal / binSize) * binSize;
+            const binEnd = Math.ceil(maxVal / binSize) * binSize;
+            const bins = [];
+            
+            for (let i = binStart; i <= binEnd; i += binSize) {
+                bins.push({
+                    start: parseFloat(i.toFixed(2)),
+                    end: parseFloat((i + binSize).toFixed(2)),
+                    count: 0,
+                    label: `${i.toFixed(1)}% to ${(i + binSize).toFixed(1)}%`
+                });
+            }
+
+            // Count trades in each bin
+            data.forEach(value => {
+                const binIndex = Math.floor((value - binStart) / binSize);
+                if (binIndex >= 0 && binIndex < bins.length) {
+                    bins[binIndex].count++;
+                }
+            });
+
+            // Prepare chart data
+            const categories = bins.map(bin => `${bin.start.toFixed(1)}% to ${bin.end.toFixed(1)}%`);
+            const seriesData = bins.map(bin => bin.count);
+
+            const chartConfig = {
+                chart: {
+                    type: 'column',
+                    backgroundColor: 'white'
+                },
+                title: {
+                    text: title,
+                    style: { fontSize: '14px', fontWeight: 'bold' }
+                },
+                xAxis: {
+                    categories: categories,
+                    title: { text: xAxisTitle },
+                    labels: {
+                        rotation: -45,
+                        style: { fontSize: '10px' }
+                    }
+                },
+                yAxis: {
+                    title: { text: 'Number of Trades' },
+                    min: 0,
+                    allowDecimals: false
+                },
+                tooltip: {
+                    formatter: function() {
+                        return `<b>${this.x}</b><br/>Number of trades: <b>${this.y}</b>`;
+                    }
+                },
+                legend: { enabled: false },
+                credits: { enabled: false },
+                plotOptions: {
+                    column: {
+                        borderWidth: 1,
+                        borderColor: '#ffffff',
+                        dataLabels: {
+                            enabled: true,
+                            style: { fontSize: '10px' }
+                        }
+                    }
+                },
+                series: [{
+                    name: 'Trades',
+                    data: seriesData,
+                    color: color
+                }]
+            };
+
+            // Destroy existing chart if it exists
+            if (charts[containerId]) {
+                charts[containerId].destroy();
+            }
+
+            // Create new chart
+            charts[containerId] = Highcharts.chart(containerId, chartConfig);
+        }
+
         function updateMetricsTable(generation, chartData) {
             const tableBody = document.getElementById('metricsTableBody');
 
@@ -1176,6 +1415,9 @@
             `).join('');
 
             tableBody.innerHTML = tableRows;
+
+            // Update trade distribution histograms
+            createTradeDistributionHistograms(completedTrades);
 
             const tableContainer = document.querySelector('.table-container');
             tableContainer.scrollTop = tableContainer.scrollHeight;

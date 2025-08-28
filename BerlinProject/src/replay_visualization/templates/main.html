@@ -51,19 +51,20 @@
         .collapsible-section {
             border: 1px solid #dee2e6;
             border-radius: 6px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             overflow: hidden;
         }
 
         .collapsible-header {
             background: #f8f9fa;
-            padding: 10px 15px;
+            padding: 8px 12px;
             cursor: pointer;
             border-bottom: 1px solid #dee2e6;
             user-select: none;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.9rem;
         }
 
         .collapsible-header:hover {
@@ -71,12 +72,60 @@
         }
 
         .collapsible-content {
-            padding: 15px;
+            padding: 10px;
             display: block;
         }
 
         .collapsible-content.collapsed {
             display: none;
+        }
+
+        /* Compact configuration form */
+        .config-actions {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .configuration-tabs {
+            margin-bottom: 1rem;
+        }
+
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem;
+            padding: 0.75rem;
+            background: #fff;
+        }
+
+        .action-buttons {
+            margin: 0.5rem 0;
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        /* Make form elements more compact */
+        .form-group {
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .form-label {
+            font-size: 0.825rem;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.775rem;
         }
 
         .collapse-icon {
@@ -164,6 +213,88 @@
 
         .positive { color: #28a745 !important; }
         .negative { color: #dc3545 !important; }
+
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .navbar-brand-custom {
+                font-size: 1.2rem;
+            }
+            
+            .logo-img {
+                height: 100px;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .chart-container {
+                height: 300px !important;
+            }
+            
+            #pnlChart.chart-container {
+                height: 250px !important;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .navbar-brand-custom {
+                font-size: 1rem;
+            }
+            
+            .logo-img {
+                height: 80px;
+                margin-right: 8px;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn-sm {
+                width: 100%;
+                margin-bottom: 0.25rem;
+            }
+        }
+
+        /* Enhanced chart styling */
+        .chart-container {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: white;
+        }
+
+        /* Improved metrics display */
+        .metrics-display {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .metric-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .metric-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
     </style>
 </head>
 <body>
@@ -350,17 +481,19 @@
 
                 <!-- Charts -->
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <h6><i class="fas fa-chart-line"></i> Price & Signals Chart</h6>
-                        <div id="priceChart" class="chart-container" style="height: 500px;">
+                        <div id="priceChart" class="chart-container" style="height: 400px;">
                             <div class="text-center text-muted d-flex align-items-center justify-content-center h-100">
                                 <i class="fas fa-chart-line me-2"></i>Price chart will appear here after running visualization
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                </div>
+                <div class="row">
+                    <div class="col-12">
                         <h6><i class="fas fa-coins"></i> P&L Evolution Chart</h6>
-                        <div id="pnlChart" class="chart-container" style="height: 500px;">
+                        <div id="pnlChart" class="chart-container" style="height: 300px;">
                             <div class="text-center text-muted d-flex align-items-center justify-content-center h-100">
                                 <i class="fas fa-coins me-2"></i>P&L chart will appear here after running visualization
                             </div>
@@ -900,13 +1033,31 @@
 
             const chartConfig = {
                 chart: { 
-                    height: 450,
-                    zoomType: 'x'
+                    height: 380,
+                    zoomType: 'x',
+                    events: {
+                        selection: function(event) {
+                            if (event.xAxis && charts.pnl) {
+                                // Sync zoom with P&L chart
+                                const extremes = event.xAxis[0];
+                                charts.pnl.xAxis[0].setExtremes(extremes.min, extremes.max, true, false);
+                            }
+                        }
+                    }
                 },
                 title: { text: 'Price Chart with Trading Signals' },
                 xAxis: { 
                     type: 'datetime',
-                    crosshair: true
+                    ordinal: true,  // Remove gaps between trading sessions
+                    crosshair: true,
+                    events: {
+                        setExtremes: function(e) {
+                            if (charts.pnl && e.trigger !== 'syncExtremes') {
+                                // Sync zoom with P&L chart
+                                charts.pnl.xAxis[0].setExtremes(e.min, e.max, true, false, {trigger: 'syncExtremes'});
+                            }
+                        }
+                    }
                 },
                 yAxis: { 
                     title: { text: 'Price' },
@@ -1001,9 +1152,33 @@
             ]);
 
             const chartConfig = {
-                chart: { type: 'line', height: 450 },
+                chart: { 
+                    type: 'line', 
+                    height: 280,
+                    zoomType: 'x',
+                    events: {
+                        selection: function(event) {
+                            if (event.xAxis && charts.price) {
+                                // Sync zoom with price chart
+                                const extremes = event.xAxis[0];
+                                charts.price.xAxis[0].setExtremes(extremes.min, extremes.max, true, false);
+                            }
+                        }
+                    }
+                },
                 title: { text: 'Cumulative P&L Evolution' },
-                xAxis: { type: 'datetime' },
+                xAxis: { 
+                    type: 'datetime',
+                    ordinal: true,  // Remove gaps between trading sessions
+                    events: {
+                        setExtremes: function(e) {
+                            if (charts.price && e.trigger !== 'syncExtremes') {
+                                // Sync zoom with price chart
+                                charts.price.xAxis[0].setExtremes(e.min, e.max, true, false, {trigger: 'syncExtremes'});
+                            }
+                        }
+                    }
+                },
                 yAxis: { 
                     title: { text: 'Cumulative P&L (%)' },
                     plotLines: [{

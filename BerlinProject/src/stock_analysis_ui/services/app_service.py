@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Any, Union
 
-from flask_socketio import SocketIO
+from socket import SocketIO
 
 from data_streamer.schwab_data_link import SchwabDataLink
 from data_streamer.cs_replay_data_link import CSReplayDataLink

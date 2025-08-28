@@ -117,7 +117,7 @@
 
         .header {
             background: #161b22;
-            padding: 1.5rem 2rem;
+            padding: 1rem 1.5rem;
             border-bottom: 1px solid #30363d;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         }
@@ -152,7 +152,7 @@
         .status-dot.disconnected { background: #da3633; }
 
         .controls {
-            padding: 2rem;
+            padding: 1rem;
             background: #0d1117;
             border-bottom: 1px solid #21262d;
             text-align: center;
@@ -323,16 +323,17 @@
 
         /* Cards Container */
         .cards-container {
-            padding: 2rem;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-            gap: 2rem;
-            max-width: 1400px;
+            padding: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            max-width: none;
             margin: 0 auto;
+            align-items: flex-start;
         }
 
         .loading {
-            grid-column: 1 / -1;
+            width: 100%;
             text-align: center;
             padding: 4rem 2rem;
             color: #7d8590;
@@ -346,9 +347,9 @@
         .trading-card {
             background: #161b22;
             border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
@@ -364,11 +365,119 @@
             box-shadow: 0 0 20px rgba(35, 134, 54, 0.3);
         }
 
+        /* Card Size Modes */
+        .trading-card.size-big {
+            width: 350px;
+            flex: 0 0 350px;
+        }
+
+        .trading-card.size-medium {
+            width: 280px;
+            flex: 0 0 280px;
+        }
+
+        .trading-card.size-small {
+            width: 220px;
+            flex: 0 0 220px;
+        }
+
+        /* Size Control Icons */
+        .size-controls {
+            display: flex;
+            gap: 0.25rem;
+            align-items: center;
+        }
+
+        .size-btn {
+            background: none;
+            border: 1px solid #30363d;
+            color: #7d8590;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .size-btn:hover {
+            background: #21262d;
+            color: #e6edf3;
+            border-color: #58a6ff;
+        }
+
+        .size-btn.active {
+            background: #1f6feb;
+            color: #ffffff;
+            border-color: #1f6feb;
+        }
+
+        /* Hide elements based on card size */
+        .trading-card.size-small .price-display {
+            display: none;
+        }
+
+        .trading-card.size-small .price-display.expanded {
+            display: block;
+        }
+
+        .trading-card.size-small .portfolio-section {
+            display: none;
+        }
+
+        .trading-card.size-small .portfolio-section.expanded {
+            display: block;
+        }
+
+        /* Collapsible sections for small cards */
+        .collapsible-header {
+            display: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #7d8590;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .trading-card.size-small .collapsible-header {
+            display: block;
+        }
+
+        .collapsible-header:hover {
+            background: #21262d;
+            color: #e6edf3;
+        }
+
+        .collapsible-header .toggle-icon {
+            float: right;
+            transition: transform 0.2s ease;
+        }
+
+        .collapsible-header.expanded .toggle-icon {
+            transform: rotate(180deg);
+        }
+
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
         }
 
         .card-title {
@@ -695,13 +804,20 @@
             }
 
             .cards-container {
-                grid-template-columns: 1fr;
-                padding: 1rem;
-                gap: 1rem;
+                flex-direction: column;
+                padding: 0.5rem;
+                gap: 0.5rem;
             }
 
             .trading-card {
-                padding: 1rem;
+                padding: 0.75rem;
+            }
+
+            .trading-card.size-big,
+            .trading-card.size-medium,
+            .trading-card.size-small {
+                width: 100% !important;
+                flex: 1 1 auto !important;
             }
 
             .modal {
@@ -756,6 +872,14 @@
                     </div>
                     <div class="status-item">
                         <span id="combinationsCount">0 Cards</span>
+                    </div>
+                    <div class="status-item">
+                        <span style="margin-right: 0.5rem; color: #7d8590;">Card Size:</span>
+                        <div class="size-controls" id="globalSizeControls">
+                            <button class="size-btn active" data-size="big" title="Large View">L</button>
+                            <button class="size-btn" data-size="medium" title="Medium View">M</button>
+                            <button class="size-btn" data-size="small" title="Small View">S</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -914,14 +1038,17 @@
             }
 
             const card = document.createElement('div');
-            card.className = 'trading-card';
+            card.className = 'trading-card size-big';
             card.id = cardId;
 
             // Make card clickable
             card.style.cursor = 'pointer';
             card.addEventListener('click', function(e) {
-                // Don't trigger on close button or portfolio toggle
-                if (!e.target.classList.contains('card-close') && !e.target.classList.contains('portfolio-toggle') && !e.target.closest('.portfolio-header')) {
+                // Don't trigger on close button, portfolio toggle, or collapsible headers
+                if (!e.target.classList.contains('card-close') && 
+                    !e.target.classList.contains('portfolio-toggle') && 
+                    !e.target.closest('.portfolio-header') &&
+                    !e.target.closest('.collapsible-header')) {
                     openCardDetails(cardId);
                 }
             });
@@ -940,16 +1067,123 @@
                     </div>
                     <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
                 </div>
+                <div class="collapsible-header" data-target="price-display">
+                    Price <span class="toggle-icon">⌄</span>
+                </div>
                 <div class="price-display">$0.00</div>
                 <div class="price-timestamp">Last updated: Never</div>
+                <div class="collapsible-header" data-target="portfolio-section">
+                    Portfolio <span class="toggle-icon">⌄</span>
+                </div>
                 <div class="portfolio-container"></div>
                 <div class="bars-container"></div>
                 <div class="indicators-summary">0 Active Indicators</div>
             `;
 
             container.appendChild(card);
+            
+            // Setup collapsible headers for small mode
+            setupCollapsibleHeaders(card, cardId);
+            
+            // Apply current global size
+            applyGlobalSize(card);
+            
             updateCardsCount();
             return card;
+        }
+
+        // Global size state
+        let globalCardSize = 'big';
+
+        // Setup collapsible headers for small cards
+        function setupCollapsibleHeaders(card, cardId) {
+            const headers = card.querySelectorAll('.collapsible-header');
+            
+            headers.forEach(header => {
+                header.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent card click
+                    toggleCollapsibleSection(card, cardId, this);
+                });
+            });
+        }
+
+        // Apply global size to a card
+        function applyGlobalSize(card) {
+            // Remove existing size classes
+            card.classList.remove('size-big', 'size-medium', 'size-small');
+            card.classList.add(`size-${globalCardSize}`);
+            
+            // Handle medium size - auto-minimize portfolio
+            if (globalCardSize === 'medium') {
+                const portfolioSection = card.querySelector('.portfolio-section');
+                if (portfolioSection) {
+                    const portfolioHeader = card.querySelector('.portfolio-header');
+                    if (portfolioHeader && !portfolioSection.classList.contains('collapsed')) {
+                        portfolioHeader.click(); // Auto-minimize portfolio
+                    }
+                }
+            }
+        }
+
+        // Set global card size for all cards
+        function setGlobalCardSize(size) {
+            globalCardSize = size;
+            
+            // Update global size button states
+            const globalButtons = document.querySelectorAll('#globalSizeControls .size-btn');
+            globalButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.size === size);
+            });
+            
+            // Apply to all existing cards
+            const allCards = document.querySelectorAll('.trading-card');
+            allCards.forEach(card => {
+                applyGlobalSize(card);
+            });
+            
+            // Save global preference
+            localStorage.setItem('global-card-size', size);
+        }
+
+        // Toggle collapsible sections in small mode with state preservation
+        function toggleCollapsibleSection(card, cardId, header) {
+            const target = header.dataset.target;
+            const targetElement = card.querySelector(`.${target}`);
+            const toggleIcon = header.querySelector('.toggle-icon');
+            
+            if (targetElement) {
+                targetElement.classList.toggle('expanded');
+                header.classList.toggle('expanded');
+                
+                // Update toggle icon
+                toggleIcon.textContent = header.classList.contains('expanded') ? '⌃' : '⌄';
+                
+                // Save expanded state
+                const isExpanded = targetElement.classList.contains('expanded');
+                localStorage.setItem(`${cardId}-${target}-expanded`, isExpanded);
+            }
+        }
+
+        // Restore expanded states for small mode elements
+        function restoreExpandedStates(card, cardId) {
+            if (globalCardSize !== 'small') return;
+            
+            const headers = card.querySelectorAll('.collapsible-header');
+            headers.forEach(header => {
+                const target = header.dataset.target;
+                const isExpanded = localStorage.getItem(`${cardId}-${target}-expanded`) === 'true';
+                
+                if (isExpanded) {
+                    const targetElement = card.querySelector(`.${target}`);
+                    const toggleIcon = header.querySelector('.toggle-icon');
+                    
+                    if (targetElement) {
+                        targetElement.classList.add('expanded');
+                        header.classList.add('expanded');
+                        toggleIcon.textContent = '⌃';
+                    }
+                }
+            });
         }
 
         // Function to open card details
@@ -976,6 +1210,12 @@
 
         function updateCardData(card, data) {
             console.log("UPDATE CARD DATA - Received data:", data);
+            
+            const cardId = card.id;
+
+            // Preserve expanded states before updating
+            const priceExpanded = card.querySelector('.price-display')?.classList.contains('expanded');
+            const portfolioExpanded = card.querySelector('.portfolio-section')?.classList.contains('expanded');
 
             // Update price with timestamp
             const priceDisplay = card.querySelector('.price-display');
@@ -984,6 +1224,7 @@
             if (priceDisplay && data.price !== undefined) {
                 const priceClass = data.price >= 0 ? '' : 'negative';
                 priceDisplay.className = `price-display ${priceClass}`;
+                if (priceExpanded) priceDisplay.classList.add('expanded');
                 priceDisplay.textContent = `${data.price.toFixed(2)}`;
             }
 
@@ -993,14 +1234,21 @@
                 timestampDisplay.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
             }
 
-            // Update portfolio section (MODIFIED TO PASS CARD ID)
+            // Update portfolio section
             const portfolioContainer = card.querySelector('.portfolio-container');
             if (portfolioContainer) {
-                const cardId = card.id;
                 portfolioContainer.innerHTML = renderPortfolioSection(data.portfolio, cardId);
 
                 // Restore collapsed state from localStorage
                 restorePortfolioState(cardId);
+                
+                // Preserve expanded state for small mode
+                if (portfolioExpanded) {
+                    const portfolioSection = card.querySelector('.portfolio-section');
+                    if (portfolioSection) {
+                        portfolioSection.classList.add('expanded');
+                    }
+                }
             }
 
             // Update bar scores
@@ -1016,6 +1264,9 @@
                 const count = Object.keys(data.indicators).length;
                 indicatorsSummary.textContent = `${count} Active Indicator${count !== 1 ? 's' : ''}`;
             }
+
+            // Restore expanded states for small mode elements
+            restoreExpandedStates(card, cardId);
 
             // Add updating animation
             card.classList.add('updating');
@@ -1218,6 +1469,7 @@
 
                         // Clean up localStorage
                         localStorage.removeItem(`portfolio-${cardId}`);
+                        localStorage.removeItem(`card-size-${cardId}`);
 
                         // Show loading message if no cards left
                         const container = document.getElementById('cardsContainer');
@@ -1361,8 +1613,28 @@
             }
         });
 
+        // Initialize global size controls
+        function initializeGlobalSizeControls() {
+            // Restore saved global size preference
+            const savedSize = localStorage.getItem('global-card-size') || 'big';
+            globalCardSize = savedSize;
+            
+            // Set up global size control buttons
+            const globalButtons = document.querySelectorAll('#globalSizeControls .size-btn');
+            globalButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.size === savedSize);
+                
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    setGlobalCardSize(this.dataset.size);
+                });
+            });
+        }
+
         // Event listeners that need to be set up after DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize global size controls
+            initializeGlobalSizeControls();
             // Add input listener for symbol field
             const symbolInput = document.getElementById('modalSymbolInput');
             if (symbolInput) {

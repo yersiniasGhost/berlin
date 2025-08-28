@@ -76,6 +76,15 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
         with open(ga_config_path) as f:
             config_data = json.load(f)
 
+        # Load data configuration to verify ticker
+        with open(data_config_path) as f:
+            data_config = json.load(f)
+        
+        current_ticker = data_config.get('ticker', 'UNKNOWN')
+        logger.info(f"🎯 Loading optimization for ticker: {current_ticker}")
+        logger.info(f"   Data config path: {data_config_path}")
+        logger.info(f"   Date range: {data_config.get('start_date')} to {data_config.get('end_date')}")
+
         test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
         optimization_state['test_name'] = test_name
 
@@ -405,12 +414,20 @@ def load_raw_candle_data(data_config_path: str, io):
         start_date = data_config['start_date']
         end_date = data_config['end_date']
 
-        logger.info(f"   Ticker: {ticker}")
+        logger.info(f"📈 Chart data generation for ticker: {ticker}")
         logger.info(f"   Date Range: {start_date} to {end_date}")
+        logger.info(f"   Data config path: {data_config_path}")
 
         # Use the SAME data source as trade execution to ensure consistency
         # Access the tick_history directly from the backtest_streamer
         backtest_streamer = io.fitness_calculator.backtest_streamer
+        
+        # Debug: Check what ticker is actually loaded in the streamer
+        actual_ticker = getattr(backtest_streamer, 'ticker', 'UNKNOWN')
+        logger.info(f"🔍 Backtest streamer ticker: {actual_ticker}")
+        if actual_ticker != ticker:
+            logger.warning(f"⚠️  TICKER MISMATCH! Config: {ticker}, Streamer: {actual_ticker}")
+        
         tick_history = backtest_streamer.tick_history
 
         # Format candlestick data for Highcharts in the original format [timestamp, open, high, low, close]
@@ -629,11 +646,13 @@ def handle_start_optimization(data):
         emit('optimization_error', {'error': 'Config paths not provided'})
         return
 
-    # Reset state
+    # Reset state and clear cached instances
     optimization_state['running'] = True
     optimization_state['paused'] = False
     optimization_state['current_generation'] = 0
     optimization_state['best_individuals_log'] = []
+    optimization_state['ga_instance'] = None  # Clear cached GA instance
+    optimization_state['io_instance'] = None  # Clear cached IO instance
 
     # Start optimization thread
     optimization_state['thread'] = threading.Thread(
@@ -1045,6 +1064,110 @@ def load_example_configs():
     except Exception as e:
         logger.error(f"Error loading example configs: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/available_stocks', methods=['GET'])
+def get_available_stocks():
+    """Get available stock tickers and their date ranges from MongoDB"""
+    try:
+        from mongo_tools.mongo import Mongo
+        
+        # Get MongoDB instance
+        mongo = Mongo()
+        db = mongo.database
+        
+        # Access the tick_history_polygon collection
+        collection = db['tick_history_polygon']
+        
+        # Get unique tickers and their date ranges
+        pipeline = [
+            {
+                '$group': {
+                    '_id': '$ticker',
+                    'min_year': {'$min': '$year'},
+                    'max_year': {'$max': '$year'},
+                    'min_month': {'$min': '$month'},
+                    'max_month': {'$max': '$month'},
+                    'count': {'$sum': 1}
+                }
+            },
+            {
+                '$sort': {'_id': 1}
+            }
+        ]
+        
+        results = list(collection.aggregate(pipeline))
+        
+        # Format results and get actual date ranges
+        stocks = []
+        for result in results:
+            ticker = result['_id']
+            
+            # For each ticker, get the actual min/max dates by querying the data
+            # Find the document with minimum year/month
+            min_doc = collection.find_one({
+                'ticker': ticker,
+                'year': result['min_year']
+            }, sort=[('year', 1), ('month', 1)])
+            
+            # Find the document with maximum year/month  
+            max_doc = collection.find_one({
+                'ticker': ticker,
+                'year': result['max_year']
+            }, sort=[('year', -1), ('month', -1)])
+            
+            min_date = None
+            max_date = None
+            
+            if min_doc and min_doc.get('data'):
+                # Get the earliest day from the minimum document
+                days = [int(day) for day in min_doc['data'].keys()]
+                if days:
+                    min_day = min(days)
+                    min_date = f"{min_doc['year']}-{min_doc['month']:02d}-{min_day:02d}"
+            
+            if max_doc and max_doc.get('data'):
+                # Get the latest day from the maximum document
+                days = [int(day) for day in max_doc['data'].keys()]
+                if days:
+                    max_day = max(days)
+                    max_date = f"{max_doc['year']}-{max_doc['month']:02d}-{max_day:02d}"
+            
+            stocks.append({
+                'ticker': ticker,
+                'min_date': min_date,
+                'max_date': max_date,
+                'data_points': result['count']
+            })
+        
+        logger.info(f"Found {len(stocks)} available stocks in database")
+        
+        return jsonify({
+            'success': True,
+            'stocks': stocks
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching available stocks: {e}")
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'stocks': [
+                # Fallback data in case database is not available
+                {
+                    'ticker': 'NVDA',
+                    'min_date': '2024-01-01',
+                    'max_date': '2024-12-31',
+                    'data_points': 252
+                },
+                {
+                    'ticker': 'AAPL',
+                    'min_date': '2024-01-01', 
+                    'max_date': '2024-12-31',
+                    'data_points': 252
+                }
+            ]
+        })
 
 
 if __name__ == '__main__':

@@ -33,7 +33,7 @@
 
 /* Subsection styling */
 .config-subsection {
-    padding: 1rem;
+    padding: 0.75rem;
     background-color: #f8f9fa;
     border-radius: 0.375rem;
     border-left: 4px solid #007bff;
@@ -41,15 +41,17 @@
 
 .config-subsection h6 {
     color: #007bff;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 /* Form field styling */
 .form-label {
-    font-weight: 500;
+    font-weight: 600;
     color: #495057;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
 }
 
 .form-control:focus,
@@ -61,14 +63,16 @@
 /* Dynamic item containers */
 .conditions-container,
 .bars-container,
-.indicators-container {
-    margin-bottom: 1rem;
+.indicators-container,
+.objectives-container {
+    margin-bottom: 0.75rem;
 }
 
 /* Individual item styling */
 .condition-item,
 .bar-item,
-.indicator-item {
+.indicator-item,
+.objective-item {
     border: 1px solid #dee2e6;
     transition: all 0.3s ease;
     position: relative;
@@ -76,7 +80,8 @@
 
 .condition-item:hover,
 .bar-item:hover,
-.indicator-item:hover {
+.indicator-item:hover,
+.objective-item:hover {
     border-color: #007bff;
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -85,38 +90,41 @@
 /* Card headers for items */
 .condition-item .card-header,
 .bar-item .card-header,
-.indicator-item .card-header {
+.indicator-item .card-header,
+.objective-item .card-header {
     background-color: #fff;
     border-bottom: 1px solid #dee2e6;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
 }
 
 .condition-item .card-header h6,
 .bar-item .card-header h6,
-.indicator-item .card-header h6 {
+.indicator-item .card-header h6,
+.objective-item .card-header h6 {
     color: #495057;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
+    margin-bottom: 0;
 }
 
 /* Parameters and ranges styling */
 .parameters-container,
 .ranges-container {
     background-color: #f8f9fa;
-    padding: 1rem;
+    padding: 0.75rem;
     border-radius: 0.375rem;
     margin-top: 0.5rem;
 }
 
 .parameters-container .row,
 .ranges-container .row {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
 }
 
 .parameters-container .form-control,
 .ranges-container .form-control,
 .ranges-container .form-select {
-    font-size: 0.9rem;
-    padding: 0.375rem 0.5rem;
+    font-size: 0.825rem;
+    padding: 0.25rem 0.5rem;
 }
 
 /* Button styling */
@@ -355,4 +363,103 @@
     margin: 0.5rem 0;
     height: 3rem;
     border-radius: 0.375rem;
+}
+
+/* Compact card styles */
+.compact-card-header {
+    padding: 0.5rem 0.75rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    min-height: auto;
+}
+
+.compact-card-body {
+    padding: 0.75rem;
+}
+
+.compact-title {
+    font-size: 0.875rem;
+    line-height: 1.2;
+    max-width: 150px;
+}
+
+.compact-form .form-control-sm,
+.compact-form .form-select-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    border-radius: 0.25rem;
+}
+
+.compact-params {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    border: 1px solid #e9ecef;
+}
+
+.param-badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.4rem;
+    transition: all 0.2s ease;
+}
+
+.param-badge:hover {
+    background-color: #495057 !important;
+    transform: scale(1.05);
+}
+
+.btn-xs {
+    padding: 0.125rem 0.25rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    border-radius: 0.2rem;
+}
+
+/* Compact card container spacing */
+.indicators-container.row {
+    margin-left: -0.375rem;
+    margin-right: -0.375rem;
+}
+
+.indicators-container.row > [class*="col-"] {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+}
+
+/* Responsive card sizing */
+@media (max-width: 1400px) {
+    .compact-title {
+        max-width: 120px;
+    }
+}
+
+@media (max-width: 992px) {
+    .compact-title {
+        max-width: 100px;
+    }
+}
+
+/* Make cards equal height */
+.indicator-item.card.h-100,
+.objective-item.card.h-100 {
+    display: flex;
+    flex-direction: column;
+}
+
+.indicator-item.card.h-100 .card-body,
+.objective-item.card.h-100 .card-body {
+    flex: 1;
+}
+
+/* Add buttons card styling */
+.card.border-dashed {
+    border-style: dashed !important;
+    border-color: #6c757d !important;
+    background-color: #f8f9fa;
+}
+
+.card.border-dashed:hover {
+    border-color: #007bff !important;
+    background-color: #e9ecef;
 }

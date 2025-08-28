@@ -211,6 +211,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         logger.info(f"📋 Running backtest for: {test_name}")
         logger.info(f"📊 Data: {data_config['ticker']} from {data_config['start_date']} to {data_config['end_date']}")
+        logger.info(f"   Data config path: {data_config_path}")
 
         # Create monitor configuration object directly
         from models.monitor_configuration import MonitorConfiguration
@@ -383,6 +384,11 @@ def run_visualization():
 
         with open(data_config_path) as f:
             data_config = json.load(f)
+
+        # Debug: Log what ticker is being returned
+        actual_ticker = data_config.get('ticker', 'UNKNOWN')
+        logger.info(f"🎯 Replay visualization returning ticker: {actual_ticker}")
+        logger.info(f"   Data config path: {data_config_path}")
 
         return jsonify({
             'success': True,
@@ -611,6 +617,110 @@ def load_example_configs():
     except Exception as e:
         logger.error(f"Error loading example configs: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/available_stocks', methods=['GET'])
+def get_available_stocks():
+    """Get available stock tickers and their date ranges from MongoDB"""
+    try:
+        from mongo_tools.mongo import Mongo
+        
+        # Get MongoDB instance
+        mongo = Mongo()
+        db = mongo.database
+        
+        # Access the tick_history_polygon collection
+        collection = db['tick_history_polygon']
+        
+        # Get unique tickers and their date ranges
+        pipeline = [
+            {
+                '$group': {
+                    '_id': '$ticker',
+                    'min_year': {'$min': '$year'},
+                    'max_year': {'$max': '$year'},
+                    'min_month': {'$min': '$month'},
+                    'max_month': {'$max': '$month'},
+                    'count': {'$sum': 1}
+                }
+            },
+            {
+                '$sort': {'_id': 1}
+            }
+        ]
+        
+        results = list(collection.aggregate(pipeline))
+        
+        # Format results and get actual date ranges
+        stocks = []
+        for result in results:
+            ticker = result['_id']
+            
+            # For each ticker, get the actual min/max dates by querying the data
+            # Find the document with minimum year/month
+            min_doc = collection.find_one({
+                'ticker': ticker,
+                'year': result['min_year']
+            }, sort=[('year', 1), ('month', 1)])
+            
+            # Find the document with maximum year/month  
+            max_doc = collection.find_one({
+                'ticker': ticker,
+                'year': result['max_year']
+            }, sort=[('year', -1), ('month', -1)])
+            
+            min_date = None
+            max_date = None
+            
+            if min_doc and min_doc.get('data'):
+                # Get the earliest day from the minimum document
+                days = [int(day) for day in min_doc['data'].keys()]
+                if days:
+                    min_day = min(days)
+                    min_date = f"{min_doc['year']}-{min_doc['month']:02d}-{min_day:02d}"
+            
+            if max_doc and max_doc.get('data'):
+                # Get the latest day from the maximum document
+                days = [int(day) for day in max_doc['data'].keys()]
+                if days:
+                    max_day = max(days)
+                    max_date = f"{max_doc['year']}-{max_doc['month']:02d}-{max_day:02d}"
+            
+            stocks.append({
+                'ticker': ticker,
+                'min_date': min_date,
+                'max_date': max_date,
+                'data_points': result['count']
+            })
+        
+        logger.info(f"Found {len(stocks)} available stocks in database")
+        
+        return jsonify({
+            'success': True,
+            'stocks': stocks
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching available stocks: {e}")
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'stocks': [
+                # Fallback data in case database is not available
+                {
+                    'ticker': 'NVDA',
+                    'min_date': '2024-01-01',
+                    'max_date': '2024-12-31',
+                    'data_points': 252
+                },
+                {
+                    'ticker': 'AAPL',
+                    'min_date': '2024-01-01', 
+                    'max_date': '2024-12-31',
+                    'data_points': 252
+                }
+            ]
+        })
 
 
 if __name__ == '__main__':

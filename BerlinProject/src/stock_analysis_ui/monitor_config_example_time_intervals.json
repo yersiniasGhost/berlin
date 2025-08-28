@@ -7,6 +7,15 @@
     "description": "A test monitor using SMA and MACD for example.",
     "threshold": 0.8,
     "bear_threshold": 0.8,
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.04,
+      "trailing_stop_distance_pct": 0.02,
+      "trailing_stop_activation_pct": 0.005,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true
+    },
     "bars": {
       "bull_momentum": {
         "type": "bull",

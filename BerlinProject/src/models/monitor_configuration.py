@@ -200,6 +200,12 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
         if 'bars' in monitor_data:
             config_dict['bars'] = monitor_data['bars']
 
+        # REQUIRED: Add trade_executor configuration
+        if 'trade_executor' in monitor_data:
+            config_dict['trade_executor'] = monitor_data['trade_executor']
+        else:
+            raise ValueError("trade_executor configuration is required - please add trade_executor section to your JSON config")
+
         # Create MonitorConfiguration and let Pydantic handle defaults
         monitor_config = MonitorConfiguration(**config_dict)
 

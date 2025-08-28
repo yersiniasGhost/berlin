@@ -124,6 +124,37 @@ class IndicatorProcessor:
             if aggregator.get_current_candle():
                 all_candles.append(aggregator.get_current_candle())
 
+            # BREAKPOINT: Print data being used for indicator calculations
+            print(f"\n🔍 INDICATOR CALCULATION BREAKPOINT")
+            print(f"Indicator: {indicator_def.name}")
+            print(f"Aggregator Key: {agg_key}")
+            print(f"Total Candles Available: {len(all_candles)}")
+            
+            if all_candles:
+                first_candle = all_candles[0]
+                last_candle = all_candles[-1]
+                print(f"First Candle: {first_candle.timestamp} - ${first_candle.close:.2f}")
+                print(f"Last Candle:  {last_candle.timestamp} - ${last_candle.close:.2f}")
+                
+                # Show data freshness
+                from datetime import datetime
+                now = datetime.now()
+                first_age = now - first_candle.timestamp.replace(tzinfo=None)
+                last_age = now - last_candle.timestamp.replace(tzinfo=None)
+                print(f"First Candle Age: {first_age}")
+                print(f"Last Candle Age:  {last_age}")
+                
+                # Show some recent candle timestamps
+                recent_count = min(5, len(all_candles))
+                print(f"Most Recent {recent_count} Candle Timestamps:")
+                for i, candle in enumerate(all_candles[-recent_count:]):
+                    age = now - candle.timestamp.replace(tzinfo=None)
+                    print(f"  [{i+1}] {candle.timestamp} (age: {age}) - ${candle.close:.2f}")
+            else:
+                print("No candles available for calculation!")
+            
+            print("=" * 60)
+
             # Determine if we should calculate (on PIP or when candle completes)
             calc_on_pip = indicator_def.calc_on_pip or self.first_pass
             should_calculate = calc_on_pip or aggregator.completed_candle
