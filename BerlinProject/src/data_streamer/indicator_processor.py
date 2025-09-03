@@ -241,7 +241,46 @@ class IndicatorProcessor:
         metric = (1.0 - lookback_ratio) * np.sign(trigger_value)
         return metric
 
+
     def _calculate_single_indicator(self,
+                                    tick_history: List[TickData],
+                                    indicator_def) -> np.ndarray:
+        try:
+            if len(tick_history) < 10:  # Need minimum data
+                return np.array([0.0])
+
+            # Calculate based on function type
+            result = None
+
+            if indicator_def.function == 'sma_crossover':
+                result = sma_crossover(tick_history, indicator_def.parameters)
+            elif indicator_def.function == 'macd_histogram_crossover':
+                result = macd_histogram_crossover(tick_history, indicator_def.parameters)
+            elif indicator_def.function == 'bol_bands_lower_band_bounce':
+                result = bol_bands_lower_band_bounce(tick_history, indicator_def.parameters)
+            elif indicator_def.function == 'support_level':
+                result = support_level(tick_history, indicator_def.parameters)
+            elif indicator_def.function == 'resistance_level':
+                result = resistance_level(tick_history, indicator_def.parameters)
+            else:
+                logger.warning(f"Unknown indicator function: {indicator_def.function}")
+                result = np.array([0.0])
+
+            # Ensure we return a valid numpy array
+            if result is not None and hasattr(result, '__len__') and len(result) > 0:
+                if not isinstance(result, np.ndarray):
+                    result = np.array(result)
+            else:
+                result = np.array([0.0])
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error calculating indicator '{indicator_def.function}': {e}")
+            return np.array([0.0])
+
+
+    def _calculate_single_indicator_orig(self,
                                     tick_history: List[TickData],
                                     indicator_def) -> np.ndarray:
         """
