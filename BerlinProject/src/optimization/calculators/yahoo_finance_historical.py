@@ -43,21 +43,20 @@ class YahooFinanceHistorical:
             # Handle "float: 186.952392578125" format
             if value.startswith("float: "):
                 parsed_value = float(value[7:])  # Remove "float: " prefix
-                print(f"DEBUG: Parsed '{value}' -> {parsed_value}")
+                # Debug: Parsed string value
                 return parsed_value
             # Handle direct string numbers
             parsed_value = float(value)
-            print(f"DEBUG: Parsed string '{value}' -> {parsed_value}")
+            # Debug: Parsed string value
             return parsed_value
 
-        print(f"DEBUG: Default fallback for value: {value} (type: {type(value)})")
+        # Debug: Default fallback for value
         return 0.0  # Default fallback
 
     def process_historical_data(self, ticker: str, start_date: str, end_date: str,
                                 monitor_config: MonitorConfiguration) -> bool:
 
-        print(f"🔄 YahooFinanceHistorical processing data for ticker: {ticker}")
-        print(f"   Date range: {start_date} to {end_date}")
+        # Processing data for ticker and date range
         
         # Clear any existing data to ensure fresh load
         self.aggregators.clear()
@@ -90,10 +89,10 @@ class YahooFinanceHistorical:
             documents = list(self.collection.find(query).sort([('year', 1), ('month', 1)]))
 
             if not documents:
-                print(f"❌ No data found for {ticker}")
+                # No data found for ticker
                 return []
 
-            print(f"Found {len(documents)} MongoDB documents")
+            # Found MongoDB documents
             raw_ticks = []
 
             for doc in documents:
@@ -115,13 +114,7 @@ class YahooFinanceHistorical:
                         dt = datetime(year, month, day, hours, minutes, seconds)
 
                         if start.date() <= dt.date() <= end.date():
-                            # DEBUG: Print first few raw OHLC values
-                            if len(raw_ticks) < 3:
-                                print(f"DEBUG: Raw OHLC from MongoDB:")
-                                print(f"  open: {ohlc['open']} (type: {type(ohlc['open'])})")
-                                print(f"  high: {ohlc['high']} (type: {type(ohlc['high'])})")
-                                print(f"  low: {ohlc['low']} (type: {type(ohlc['low'])})")
-                                print(f"  close: {ohlc['close']} (type: {type(ohlc['close'])})")
+                            # Debug: Skip raw OHLC logging for performance
 
                             # Parse OHLC values using the helper method
                             parsed_open = self._parse_float_value(ohlc['open'])
@@ -129,15 +122,7 @@ class YahooFinanceHistorical:
                             parsed_low = self._parse_float_value(ohlc['low'])
                             parsed_close = self._parse_float_value(ohlc['close'])
 
-                            # DEBUG: Print first few parsed values
-                            if len(raw_ticks) < 3:
-                                print(f"DEBUG: Parsed OHLC:")
-                                print(f"  open: {parsed_open}")
-                                print(f"  high: {parsed_high}")
-                                print(f"  low: {parsed_low}")
-                                print(f"  close: {parsed_close}")
-                                print(f"  timestamp: {dt}")
-                                print("---")
+                            # Debug: Skip parsed OHLC logging for performance
 
                             tick = TickData(
                                 symbol=ticker,
@@ -154,18 +139,14 @@ class YahooFinanceHistorical:
             # Sort chronologically
             raw_ticks.sort(key=lambda x: x.timestamp)
 
-            print(f"Loaded {len(raw_ticks):,} raw ticks")
+            # Loaded raw ticks
 
-            # DEBUG: Print first few final tick objects
-            if raw_ticks:
-                print("DEBUG: First 3 final TickData objects:")
-                for i, tick in enumerate(raw_ticks[:3]):
-                    print(f"  {i + 1}. {tick.timestamp}: O={tick.open}, H={tick.high}, L={tick.low}, C={tick.close}")
+            # Debug: Skip final tick object logging for performance
 
             return raw_ticks
 
         except Exception as e:
-            print(f"Error loading data: {e}")
+            # Error loading data
             import traceback
             traceback.print_exc()
             return []
@@ -189,17 +170,18 @@ class YahooFinanceHistorical:
             # Store with the full key for lookup purposes
             self.aggregators[agg_key] = aggregator
 
-        print(f"Created {len(self.aggregators)} aggregators: {aggregator_configs}")
+        # Created aggregators
 
         # DEBUG: Print what timeframes are being used
         for agg_key, aggregator in self.aggregators.items():
-            print(f"  {agg_key} -> timeframe: {aggregator.timeframe}")
+            # Aggregator timeframe info
+            pass
 
     def _process_all_ticks(self, raw_ticks: List[TickData]):
         """
         Process all ticks through all aggregators
         """
-        print(f"Processing {len(raw_ticks):,} ticks through aggregators...")
+        # Processing ticks through aggregators
 
         self.total_ticks_processed = 0
 
@@ -210,13 +192,13 @@ class YahooFinanceHistorical:
 
             self.total_ticks_processed += 1
 
-        print(f"Finished processing {self.total_ticks_processed:,} ticks")
+        # Finished processing ticks
 
     def _report_results(self):
         """
         Report final candle counts
         """
-        print(f"\nAGGREGATOR RESULTS:")
+        # AGGREGATOR RESULTS
 
         for timeframe, aggregator in self.aggregators.items():
             history = aggregator.get_history()
@@ -224,19 +206,14 @@ class YahooFinanceHistorical:
 
             total_candles = len(history) + (1 if current else 0)
 
-            print(
-                f"  {timeframe}: {len(history)} completed + {1 if current else 0} current = {total_candles} total candles")
+            # Aggregator results summary
 
             if history:
                 first_candle = history[0]
                 last_candle = history[-1] if history else current
-                print(f"    Range: {first_candle.timestamp} to {last_candle.timestamp}")
+                # Candle range info
 
-                # DEBUG: Show first few aggregated candles
-                print(f"    First 3 candles:")
-                for i, candle in enumerate(history[:3]):
-                    print(
-                        f"      {i + 1}. {candle.timestamp}: O={candle.open}, H={candle.high}, L={candle.low}, C={candle.close}")
+                # Skip candle details for performance
 
     def get_aggregator(self, timeframe: str) -> Optional[CandleAggregator]:
         """

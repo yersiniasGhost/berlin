@@ -25,17 +25,19 @@ class IndicatorProcessorHistoricalNew:
         # logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
 
     def calculate_indicators(self, aggregators: Dict[str, CandleAggregator]) -> Tuple[
-        Dict[str, List[float]],  # indicator_history
-        Dict[str, List[float]],  # raw_indicator_history
-        Dict[str, List[float]]   # bar_score_history
+        Dict[str, List[float]],  # indicator_history (time-decayed)
+        Dict[str, List[float]],  # raw_indicator_history (trigger values)
+        Dict[str, List[float]],  # bar_score_history
+        Dict[str, List[float]]   # component_history (MACD components, SMA values, etc.)
     ]:
         """
         Calculate indicators for entire historical timeline using batch operations
 
         Returns:
-            - indicator_history: {indicator_name: [value_at_tick_0, value_at_tick_1, ...]}
-            - raw_indicator_history: {indicator_name: [raw_value_at_tick_0, raw_value_at_tick_1, ...]}
+            - indicator_history: {indicator_name: [time_decayed_value_at_tick_0, ...]}
+            - raw_indicator_history: {indicator_name: [trigger_value_at_tick_0, ...]}  
             - bar_score_history: {bar_name: [score_at_tick_0, score_at_tick_1, ...]}
+            - component_history: {component_name: [component_value_at_tick_0, ...]}  # NEW
         """
         # logger.info("Starting batch historical indicator calculation...")
 
@@ -50,6 +52,7 @@ class IndicatorProcessorHistoricalNew:
         # Process each indicator
         raw_indicator_history = {}
         indicator_history = {}
+        component_history = {}  # NEW: Store component data (MACD, SMA values, etc.)
 
         for indicator_def in self.config.indicators:
             # Get the correct aggregator key for this indicator
@@ -61,9 +64,14 @@ class IndicatorProcessorHistoricalNew:
 
             candles = all_candle_data[aggregator_key]
 
-            # Calculate raw indicator values for entire history
+            # Calculate raw indicator values (triggers) for entire history
             raw_values = self._calculate_indicator_batch(candles, indicator_def)
             raw_indicator_history[indicator_def.name] = raw_values
+
+            # Calculate component values (MACD components, SMA values, etc.)
+            component_data = self._calculate_component_data(candles, indicator_def)
+            for comp_name, comp_values in component_data.items():
+                component_history[comp_name] = comp_values
 
             # Apply lookback scoring using vectorized operations
             lookback = indicator_def.parameters.get('lookback', 10)
@@ -76,7 +84,7 @@ class IndicatorProcessorHistoricalNew:
         bar_score_history = self._calculate_bar_scores_batch(indicator_history, max_length)
 
         # logger.info(f"Completed batch indicator calculation")
-        return indicator_history, raw_indicator_history, bar_score_history
+        return indicator_history, raw_indicator_history, bar_score_history, component_history
 
     def _extract_all_candle_data(self, aggregators: Dict[str, CandleAggregator]) -> Dict[str, List[TickData]]:
         """Extract candle data from all aggregators"""
@@ -154,6 +162,47 @@ class IndicatorProcessorHistoricalNew:
         except Exception as e:
             logger.error(f"Error calculating {indicator_def.function}: {e}")
             return [0.0] * len(tick_history)
+
+    def _calculate_component_data(self, tick_history: List[TickData], indicator_def) -> Dict[str, List[float]]:
+        """
+        Calculate component data (MACD components, SMA values, etc.) for charting
+        Similar to indicator_visualization approach
+        """
+        component_data = {}
+        
+        try:
+            if len(tick_history) < 10:
+                return component_data
+
+            if indicator_def.function == 'macd_histogram_crossover':
+                # Calculate MACD components
+                fast = indicator_def.parameters.get('fast', 12)
+                slow = indicator_def.parameters.get('slow', 26)
+                signal = indicator_def.parameters.get('signal', 9)
+                
+                from features.indicators import macd_calculation
+                macd, signal_line, histogram = macd_calculation(tick_history, fast, slow, signal)
+                
+                # Store components with indicator name prefix
+                component_data[f"{indicator_def.name}_macd"] = macd.tolist()
+                component_data[f"{indicator_def.name}_signal"] = signal_line.tolist()
+                component_data[f"{indicator_def.name}_histogram"] = histogram.tolist()
+                
+            elif indicator_def.function == 'sma_crossover':
+                # Calculate SMA components
+                period = indicator_def.parameters.get('period', 20)
+                
+                from features.indicators import sma_indicator
+                sma_values = sma_indicator(tick_history, period)
+                
+                component_data[f"{indicator_def.name}_sma"] = sma_values.tolist()
+                
+            # Add more indicator types as needed
+            
+        except Exception as e:
+            logger.error(f"Error calculating component data for {indicator_def.function}: {e}")
+            
+        return component_data
 
     def _apply_lookback_vectorized(self, raw_values: List[float], lookback: int) -> List[float]:
         """

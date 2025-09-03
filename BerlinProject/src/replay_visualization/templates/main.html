@@ -16,6 +16,10 @@
 
     <!-- Shared form components -->
     <link rel="stylesheet" href="/static/css/config-form-builder.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/compact-monitor-form.css') }}">
+    
+    <!-- Indicator Chart Component -->
+    <script src="/static/js/indicator-chart-component.js"></script>
 
     <style>
         .navbar-custom {
@@ -349,28 +353,12 @@
                                 <i class="fas fa-chart-area"></i> Monitor Configuration
                             </button>
                         </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="data-config-tab" data-bs-toggle="tab" data-bs-target="#data-config" type="button" role="tab">
-                                <i class="fas fa-chart-line"></i> Data Configuration
-                            </button>
-                        </li>
                     </ul>
                     
                     <div class="tab-content" id="configTabContent">
                         <!-- Monitor Configuration Form -->
                         <div class="tab-pane fade show active" id="monitor-config" role="tabpanel">
-                            <div class="action-buttons">
-                                <button id="saveMonitorConfigBtn" class="btn btn-success btn-sm" disabled>
-                                    <i class="fas fa-save"></i> Save Monitor Config
-                                </button>
-                                <button id="downloadMonitorConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
-                                    <i class="fas fa-download"></i> Download Monitor Config
-                                </button>
-                                <button id="validateMonitorConfigBtn" class="btn btn-outline-info btn-sm" disabled>
-                                    <i class="fas fa-check-circle"></i> Validate Monitor Config
-                                </button>
-                            </div>
-                            <div id="monitorConfigFormContainer">
+                            <div id="compactMonitorFormContainer">
                                 <div class="text-center text-muted py-5">
                                     <i class="fas fa-upload fa-3x mb-3"></i>
                                     <p>Load a monitor configuration file or click "Load Example" to get started</p>
@@ -378,26 +366,6 @@
                             </div>
                         </div>
 
-                        <!-- Data Configuration Form -->
-                        <div class="tab-pane fade" id="data-config" role="tabpanel">
-                            <div class="action-buttons">
-                                <button id="saveDataConfigBtn" class="btn btn-success btn-sm" disabled>
-                                    <i class="fas fa-save"></i> Save Data Config
-                                </button>
-                                <button id="downloadDataConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
-                                    <i class="fas fa-download"></i> Download Data Config
-                                </button>
-                                <button id="validateDataConfigBtn" class="btn btn-outline-info btn-sm" disabled>
-                                    <i class="fas fa-check-circle"></i> Validate Data Config
-                                </button>
-                            </div>
-                            <div id="dataConfigFormContainer">
-                                <div class="text-center text-muted py-5">
-                                    <i class="fas fa-chart-line fa-3x mb-3"></i>
-                                    <p>Load a data configuration file or click "Load Example" to get started</p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -479,13 +447,13 @@
                     </div>
                 </div>
 
-                <!-- Charts -->
+                <!-- Enhanced Indicator Charts -->
                 <div class="row">
                     <div class="col-12">
-                        <h6><i class="fas fa-chart-line"></i> Price & Signals Chart</h6>
-                        <div id="priceChart" class="chart-container" style="height: 400px;">
-                            <div class="text-center text-muted d-flex align-items-center justify-content-center h-100">
-                                <i class="fas fa-chart-line me-2"></i>Price chart will appear here after running visualization
+                        <h6><i class="fas fa-chart-line"></i> Interactive Price & Indicator Charts</h6>
+                        <div id="indicatorChartsContainer">
+                            <div class="text-center text-muted d-flex align-items-center justify-content-center" style="height: 200px;">
+                                <i class="fas fa-chart-line me-2"></i>Load configuration and run visualization to see interactive charts
                             </div>
                         </div>
                     </div>
@@ -538,6 +506,7 @@
     <script src="/static/js/indicator-parameter-definitions.js"></script>
     <script src="/static/js/config-form-builder.js"></script>
     <script src="/static/js/data-config-form.js"></script>
+    <script src="{{ url_for('static', filename='js/compact-monitor-form.js') }}"></script>
 
     <script>
         // Global variables
@@ -545,12 +514,53 @@
         let charts = {};
 
         // Form builders
-        let monitorFormBuilder = null;
-        let dataFormBuilder = null;
+        let compactMonitorForm = null;
 
         // Configuration data
         let currentMonitorConfig = null;
         let currentDataConfig = null;
+        
+        // Indicator Chart Component
+        let indicatorChartComponent = null;
+        
+        // Chart synchronization function
+        function syncAllCharts(min, max, sourceChart) {
+            // Check for valid min/max values
+            if (!min || !max || isNaN(min) || isNaN(max)) {
+                console.warn('Invalid min/max values for chart sync:', min, max, 'from:', sourceChart);
+                return;
+            }
+            
+            console.log(`Syncing all charts from ${sourceChart} to range:`, new Date(min), new Date(max));
+            
+            try {
+                // Sync price chart
+                if (charts.price && sourceChart !== 'price') {
+                    charts.price.xAxis[0].setExtremes(min, max, true, false, {trigger: 'syncExtremes'});
+                }
+                
+                // Sync P&L chart
+                if (charts.pnl && sourceChart !== 'pnl') {
+                    charts.pnl.xAxis[0].setExtremes(min, max, true, false, {trigger: 'syncExtremes'});
+                }
+                
+                // Sync indicator charts
+                if (indicatorChartComponent && indicatorChartComponent.charts) {
+                    Object.keys(indicatorChartComponent.charts).forEach(chartKey => {
+                        const chart = indicatorChartComponent.charts[chartKey];
+                        if (chart && chart.xAxis && chart.xAxis[0] && sourceChart !== chartKey) {
+                            try {
+                                chart.xAxis[0].setExtremes(min, max, true, false, {trigger: 'syncExtremes'});
+                            } catch (e) {
+                                console.log(`Could not sync chart ${chartKey}:`, e.message);
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error syncing charts:', e);
+            }
+        }
 
         // Collapsible section toggle function
         function toggleCollapse(sectionId) {
@@ -579,14 +589,7 @@
             document.getElementById('loadExampleBtn').addEventListener('click', loadExampleConfigurations);
             document.getElementById('runVisualizationBtn').addEventListener('click', runVisualization);
 
-            // Config action handlers
-            document.getElementById('saveMonitorConfigBtn').addEventListener('click', () => saveConfiguration('monitor_config'));
-            document.getElementById('downloadMonitorConfigBtn').addEventListener('click', () => downloadConfiguration('monitor_config'));
-            document.getElementById('validateMonitorConfigBtn').addEventListener('click', () => validateConfiguration('monitor_config'));
-            
-            document.getElementById('saveDataConfigBtn').addEventListener('click', () => saveConfiguration('data_config'));
-            document.getElementById('downloadDataConfigBtn').addEventListener('click', () => downloadConfiguration('data_config'));
-            document.getElementById('validateDataConfigBtn').addEventListener('click', () => validateConfiguration('data_config'));
+            // Config action handlers - all config buttons are now handled by the compact form
         });
 
         // File upload handler
@@ -689,16 +692,24 @@
 
         // Generate dynamic forms
         function generateForms() {
-            // For replay visualization, we always use the full structure (including nested monitor)
-            // but tell the form builder not to show GA fields
-            monitorFormBuilder = new ConfigFormBuilder('monitorConfigFormContainer', {
-                showGAFields: false  // This is the key difference from optimizer visualization
+            // Use compact monitor form with data config enabled
+            compactMonitorForm = new CompactMonitorForm('compactMonitorFormContainer', {
+                showDataConfig: true
             });
-            monitorFormBuilder.generateForm(currentMonitorConfig);
-
-            // Generate data configuration form
-            dataFormBuilder = new DataConfigForm('dataConfigFormContainer');
-            dataFormBuilder.generateForm(currentDataConfig);
+            
+            // Extract monitor config from the nested structure if needed
+            let monitorConfig = currentMonitorConfig;
+            if (currentMonitorConfig && currentMonitorConfig.monitor) {
+                monitorConfig = currentMonitorConfig.monitor;
+                if (currentMonitorConfig.indicators) {
+                    monitorConfig.indicators = currentMonitorConfig.indicators;
+                }
+            }
+            
+            compactMonitorForm.generateForm(monitorConfig, currentDataConfig);
+            
+            // Initialize indicator chart component
+            initializeIndicatorChartComponent();
 
             // Set up form change handlers
             setupFormChangeHandlers();
@@ -708,26 +719,51 @@
 
             console.log('Forms generated successfully');
         }
+        
+        // Initialize indicator chart component
+        function initializeIndicatorChartComponent() {
+            if (indicatorChartComponent) {
+                indicatorChartComponent.destroy();
+            }
+            
+            indicatorChartComponent = new IndicatorChartComponent('indicatorChartsContainer', {
+                showTriggerGraphs: true,
+                chartHeight: 400,
+                indicatorHeight: 250,
+                triggerHeight: 150
+            });
+            
+            // Load indicators from current monitor configuration
+            if (currentMonitorConfig) {
+                indicatorChartComponent.loadIndicators(currentMonitorConfig);
+            }
+        }
 
         // Set up form change handlers
         function setupFormChangeHandlers() {
-            // Listen for configuration changes
-            document.getElementById('monitorConfigFormContainer').addEventListener('configSave', (event) => {
-                currentMonitorConfig = event.detail;
-                console.log('Monitor Config updated:', currentMonitorConfig);
+            // Listen for configuration changes from compact monitor form
+            document.getElementById('compactMonitorFormContainer').addEventListener('monitorConfigSave', (event) => {
+                const data = event.detail;
+                if (data.monitorConfig) {
+                    currentMonitorConfig = data.monitorConfig;
+                    console.log('Monitor Config updated:', currentMonitorConfig);
+                }
+                if (data.dataConfig) {
+                    currentDataConfig = data.dataConfig;
+                    console.log('Data Config updated:', currentDataConfig);
+                }
+                
+                // Update indicator chart component if indicators changed
+                if (indicatorChartComponent && data.monitorConfig) {
+                    indicatorChartComponent.loadIndicators(data.monitorConfig);
+                }
             });
 
-            document.getElementById('dataConfigFormContainer').addEventListener('dataConfigSave', (event) => {
-                currentDataConfig = event.detail;
-                console.log('Data Config updated:', currentDataConfig);
-            });
         }
 
         // Enable action buttons
         function enableActionButtons() {
-            ['saveMonitorConfigBtn', 'downloadMonitorConfigBtn', 'validateMonitorConfigBtn',
-             'saveDataConfigBtn', 'downloadDataConfigBtn', 'validateDataConfigBtn',
-             'runVisualizationBtn'].forEach(id => {
+            ['runVisualizationBtn'].forEach(id => {
                 document.getElementById(id).disabled = false;
             });
         }
@@ -741,8 +777,8 @@
         // Save configuration
         async function saveConfiguration(configType) {
             const configData = configType === 'monitor_config' ? 
-                (monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig) :
-                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+                (compactMonitorForm ? compactMonitorForm.getFormData().monitorConfig : currentMonitorConfig) :
+                (compactMonitorForm ? compactMonitorForm.getFormData().dataConfig : currentDataConfig);
 
             if (!configData) {
                 alert('No configuration data to save');
@@ -776,8 +812,8 @@
         // Download configuration
         async function downloadConfiguration(configType) {
             const configData = configType === 'monitor_config' ? 
-                (monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig) :
-                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+                (compactMonitorForm ? compactMonitorForm.getFormData().monitorConfig : currentMonitorConfig) :
+                (compactMonitorForm ? compactMonitorForm.getFormData().dataConfig : currentDataConfig);
 
             if (!configData) {
                 alert('No configuration data to download');
@@ -815,8 +851,8 @@
         // Validate configuration
         async function validateConfiguration(configType) {
             let configData = configType === 'monitor_config' ? 
-                (monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig) :
-                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+                (compactMonitorForm ? compactMonitorForm.getFormData().monitorConfig : currentMonitorConfig) :
+                (compactMonitorForm ? compactMonitorForm.getFormData().dataConfig : currentDataConfig);
 
             if (!configData) {
                 alert('No configuration data to validate');
@@ -861,8 +897,9 @@
 
         // Run visualization
         async function runVisualization() {
-            const monitorConfig = monitorFormBuilder ? monitorFormBuilder.getFormData() : currentMonitorConfig;
-            const dataConfig = dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig;
+            const monitorConfig = compactMonitorForm ? compactMonitorForm.getFormData().monitorConfig : currentMonitorConfig;
+            const dataConfig = compactMonitorForm ? compactMonitorForm.getFormData().dataConfig : 
+                              (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
 
             if (!monitorConfig || !dataConfig) {
                 alert('Please configure both monitor and data settings before running visualization.');
@@ -913,12 +950,31 @@
                 const vizResult = await vizResponse.json();
 
                 if (vizResult.success) {
-                    displayResults(vizResult.chart_data, vizResult.monitor_config, vizResult.data_config);
-                    updateStatus('Visualization Complete', 'ready');
+                    // First call gives us the configuration and summary
+                    updateStatus('Loading chart data...', 'loading');
                     
-                    // Show results panel
-                    document.getElementById('resultsPanel').style.display = 'block';
-                    document.getElementById('visualizationResults').style.display = 'block';
+                    // Make second call to get full chart data
+                    const chartResponse = await fetch('/api/get_chart_data', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            monitor_config_path: monitorUploadResult.filepath,
+                            data_config_path: dataUploadResult.filepath
+                        })
+                    });
+
+                    const chartResult = await chartResponse.json();
+                    
+                    if (chartResult.success) {
+                        displayResults(chartResult.chart_data, vizResult.monitor_config, vizResult.data_config);
+                        updateStatus('Visualization Complete', 'ready');
+                        
+                        // Show results panel
+                        document.getElementById('resultsPanel').style.display = 'block';
+                        document.getElementById('visualizationResults').style.display = 'block';
+                    } else {
+                        throw new Error(chartResult.error);
+                    }
                 } else {
                     throw new Error(vizResult.error);
                 }
@@ -936,19 +992,145 @@
             document.getElementById('strategyName').textContent = monitorConfig.name || 'Unknown';
             document.getElementById('strategyDescription').textContent = monitorConfig.description || 'No description';
             document.getElementById('dataTicker').textContent = dataConfig.ticker || 'Unknown';
-            document.getElementById('dateRange').textContent = `${dataConfig.start_date} to ${dataConfig.end_date}`;
+            const dateRangeElement = document.getElementById('dateRange');
+            if (dateRangeElement) {
+                dateRangeElement.textContent = `${dataConfig.start_date || 'Unknown'} to ${dataConfig.end_date || 'Unknown'}`;
+            }
             document.getElementById('totalIndicators').textContent = (monitorConfig.indicators || []).length;
             document.getElementById('entryConditions').textContent = (monitorConfig.enter_long || []).length;
 
             // Calculate and display metrics
             calculateAndDisplayMetrics(chartData);
 
-            // Generate charts
-            createPriceChart(chartData);
+            console.log('=== BEFORE INDICATOR CHART COMPONENT UPDATE ===');
+            console.log('indicatorChartComponent exists:', !!indicatorChartComponent);
+            console.log('chartData keys:', Object.keys(chartData));
+
+            // Update indicator chart component with component data (MACD/SMA values)
+            if (indicatorChartComponent) {
+                console.log('=== CHART DATA DEBUG ===');
+                console.log('Available chartData keys:', Object.keys(chartData));
+                console.log('component_data available:', !!chartData.component_data);
+                console.log('component_data keys:', Object.keys(chartData.component_data || {}));
+                console.log('Sample component_data:', chartData.component_data);
+                
+                // Use component_data for indicator charts (MACD signal/histogram, SMA lines)
+                const indicatorChartData = {
+                    candlestick_data: chartData.candlestick_data,
+                    // Component data contains the actual MACD/SMA values for charts
+                    component_data: chartData.component_data || {}
+                };
+                console.log('Passing to indicator chart component:', {
+                    candlestick_data_length: indicatorChartData.candlestick_data?.length || 0,
+                    component_data_keys: Object.keys(indicatorChartData.component_data)
+                });
+                
+                console.log('About to call setChartData...');
+                try {
+                    indicatorChartComponent.setChartData(indicatorChartData);
+                    console.log('setChartData completed successfully');
+                } catch (error) {
+                    console.error('ERROR in setChartData:', error);
+                }
+                
+                // Convert indicator_history to 0-1 trigger data for trigger charts
+                const triggerData = convertIndicatorHistoryToTriggerData(chartData, monitorConfig);
+                indicatorChartComponent.updateIndicatorData(chartData.current_indicators || {}, triggerData);
+            }
+
+            // Generate P&L chart (keep existing)
             createPnLChart(chartData);
 
             // Populate trade history table
             populateTradeHistory(chartData);
+        }
+        
+        // Convert indicator history to proper 0-1 trigger data with detailed debugging
+        function convertIndicatorHistoryToTriggerData(chartData, monitorConfig) {
+            const triggerData = {};
+            
+            console.log('=== TRIGGER DATA CONVERSION DEBUG ===');
+            console.log('Available chart data keys:', Object.keys(chartData));
+            console.log('Bar scores history available:', !!chartData.bar_scores_history);
+            console.log('Bar scores history length:', chartData.bar_scores_history?.length || 0);
+            console.log('Indicator history available:', !!chartData.indicator_history);
+            console.log('Raw indicator history available:', !!chartData.raw_indicator_history);
+            console.log('Current indicators available:', !!chartData.current_indicators);
+            console.log('Monitor indicators:', monitorConfig.indicators?.map(i => i.name));
+            
+            if (chartData.bar_scores_history && chartData.bar_scores_history.length > 0) {
+                console.log('Sample bar score entry:', chartData.bar_scores_history[0]);
+                console.log('Available bar score keys:', Object.keys(chartData.bar_scores_history[0].scores || {}));
+            }
+            
+            if (chartData.raw_indicator_history && chartData.raw_indicator_history.length > 0) {
+                console.log('Sample raw indicator entry:', chartData.raw_indicator_history[0]);
+                console.log('Available raw indicator keys:', Object.keys(chartData.raw_indicator_history[0] || {}));
+            }
+            
+            if (chartData.indicator_history && chartData.indicator_history.length > 0) {
+                console.log('Sample indicator history entry:', chartData.indicator_history[0]);
+                console.log('Available indicator history keys:', Object.keys(chartData.indicator_history[0] || {}));
+            }
+            
+            if (monitorConfig.indicators) {
+                // Try to use raw_indicator_history first, then fall back to indicator_history
+                const indicatorSource = chartData.raw_indicator_history || chartData.indicator_history;
+                
+                if (indicatorSource && indicatorSource.length > 0) {
+                    console.log('Using indicator source with', indicatorSource.length, 'entries');
+                    
+                    monitorConfig.indicators.forEach(indicator => {
+                        const indicatorName = indicator.name;
+                        const triggerPoints = [];
+                        
+                        console.log(`Processing indicator: ${indicatorName}`);
+                        
+                        // Check available keys in the indicator source
+                        const sampleEntry = indicatorSource[0];
+                        const availableKeys = Object.keys(sampleEntry || {});
+                        console.log(`Available indicator keys: ${availableKeys.join(', ')}`);
+                        console.log(`Looking for: ${indicatorName}`);
+                        
+                        indicatorSource.forEach((indicatorPoint, index) => {
+                            const timestamp = new Date(indicatorPoint.timestamp).getTime();
+                            
+                            if (index < 3) {
+                                console.log(`Indicator point ${index}:`, {
+                                    timestamp: indicatorPoint.timestamp,
+                                    indicatorValue: indicatorPoint[indicatorName],
+                                    allKeys: Object.keys(indicatorPoint)
+                                });
+                            }
+                            
+                            // Use the time-decayed indicator values directly (not 0-1 conversion)
+                            let triggerValue = 0;
+                            if (indicatorPoint[indicatorName] !== undefined) {
+                                // For indicator_history, this should already be time-decayed values
+                                triggerValue = indicatorPoint[indicatorName];
+                                
+                                if (index < 3) {
+                                    console.log(`Time-decayed value: ${triggerValue}`);
+                                }
+                            }
+                            
+                            triggerPoints.push([timestamp, triggerValue]);
+                        });
+                        
+                        const triggerCount = triggerPoints.filter(p => p[1] === 1).length;
+                        triggerData[indicatorName] = triggerPoints;
+                        console.log(`${indicatorName}: ${triggerCount} triggers out of ${triggerPoints.length} points`);
+                        console.log(`Sample trigger data:`, triggerPoints.slice(0, 10));
+                    });
+                } else {
+                    console.warn('No raw indicator history or indicator history available');
+                }
+            } else {
+                console.warn('No indicators configured');
+            }
+            
+            console.log('=== END TRIGGER DATA CONVERSION ===');
+            return triggerData;
         }
 
         // Calculate and display performance metrics
@@ -1010,26 +1192,61 @@
 
             console.log('Candlestick data sample:', priceData.slice(0, 3));
 
-            // Prepare signal data
-            console.log('Trade history sample:', (chartData.trade_history || []).slice(0, 3));
+            // Prepare trade entry/exit triangles with enhanced debugging
+            console.log('=== TRADE TRIANGLE DEBUG ===');
+            console.log('Trade history exists:', !!chartData.trade_history);
+            console.log('Trade history length:', chartData.trade_history ? chartData.trade_history.length : 0);
+            console.log('Trade history sample:', (chartData.trade_history || []).slice(0, 5));
+            console.log('Full trade history structure:');
+            (chartData.trade_history || []).forEach((trade, i) => {
+                console.log(`Trade ${i}:`, {
+                    timestamp: trade.timestamp,
+                    type: trade.type,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                    reason: trade.reason
+                });
+            });
             
+            // Filter for entry trades (buy)
             const buySignals = (chartData.trade_history || [])
-                .filter(trade => trade.type && trade.type.toLowerCase().includes('buy'))
-                .map(trade => ({
-                    x: new Date(trade.timestamp).getTime(),
-                    y: trade.price || trade.entry_price || 0,
-                    marker: { fillColor: 'green', symbol: 'triangle' }
-                }));
+                .filter(trade => {
+                    const isEntry = trade.type === 'buy';
+                    console.log(`Trade type "${trade.type}" === "buy"?`, isEntry, trade);
+                    return isEntry;
+                })
+                .map(trade => {
+                    const signal = {
+                        x: new Date(trade.timestamp).getTime(),
+                        y: trade.price,
+                        marker: { fillColor: 'green', symbol: 'triangle' }
+                    };
+                    console.log('Creating buy signal:', signal);
+                    return signal;
+                });
 
+            // Filter for exit trades (sell)
             const sellSignals = (chartData.trade_history || [])
-                .filter(trade => trade.type && trade.type.toLowerCase().includes('sell'))
-                .map(trade => ({
-                    x: new Date(trade.timestamp).getTime(),
-                    y: trade.price || trade.exit_price || 0,
-                    marker: { fillColor: 'red', symbol: 'triangle-down' }
-                }));
+                .filter(trade => {
+                    const isExit = trade.type === 'sell';
+                    console.log(`Trade type "${trade.type}" === "sell"?`, isExit, trade);
+                    return isExit;
+                })
+                .map(trade => {
+                    const signal = {
+                        x: new Date(trade.timestamp).getTime(),
+                        y: trade.price,
+                        marker: { fillColor: 'red', symbol: 'triangle-down' }
+                    };
+                    console.log('Creating sell signal:', signal);
+                    return signal;
+                });
 
-            console.log('Buy signals:', buySignals.length, 'Sell signals:', sellSignals.length);
+            console.log('FINAL: Buy signals found:', buySignals.length);
+            console.log('FINAL: Buy signals data:', buySignals);
+            console.log('FINAL: Sell signals found:', sellSignals.length);
+            console.log('FINAL: Sell signals data:', sellSignals);
+            console.log('=== END TRADE TRIANGLE DEBUG ===');
 
             const chartConfig = {
                 chart: { 
@@ -1037,10 +1254,10 @@
                     zoomType: 'x',
                     events: {
                         selection: function(event) {
-                            if (event.xAxis && charts.pnl) {
-                                // Sync zoom with P&L chart
+                            if (event.xAxis) {
+                                // Sync zoom with all other charts
                                 const extremes = event.xAxis[0];
-                                charts.pnl.xAxis[0].setExtremes(extremes.min, extremes.max, true, false);
+                                syncAllCharts(extremes.min, extremes.max, 'price');
                             }
                         }
                     }
@@ -1052,9 +1269,9 @@
                     crosshair: true,
                     events: {
                         setExtremes: function(e) {
-                            if (charts.pnl && e.trigger !== 'syncExtremes') {
-                                // Sync zoom with P&L chart
-                                charts.pnl.xAxis[0].setExtremes(e.min, e.max, true, false, {trigger: 'syncExtremes'});
+                            if (e.trigger !== 'syncExtremes') {
+                                // Sync zoom with all other charts
+                                syncAllCharts(e.min, e.max, 'price');
                             }
                         }
                     }
@@ -1083,33 +1300,57 @@
                         upLineColor: '#28a745'   // green outline for up candles
                     },
                     {
-                        name: 'Buy Signals',
+                        name: 'Entry Trades',
                         data: buySignals,
                         type: 'scatter',
                         color: '#28a745',
                         marker: { 
                             symbol: 'triangle',
-                            radius: 6,
-                            lineWidth: 2,
-                            lineColor: '#ffffff'
+                            radius: 10,
+                            lineWidth: 3,
+                            lineColor: '#ffffff',
+                            fillColor: '#28a745'
                         },
                         tooltip: {
-                            pointFormat: '<b>Buy Signal</b><br/>Price: ${point.y:.2f}'
+                            pointFormat: '<b>Trade Entry</b><br/>Price: ${point.y:.2f}'
+                        },
+                        enableMouseTracking: true,
+                        stickyTracking: false,
+                        states: {
+                            hover: {
+                                enabled: true,
+                                marker: {
+                                    radius: 12,
+                                    lineWidth: 4
+                                }
+                            }
                         }
                     },
                     {
-                        name: 'Sell Signals',
+                        name: 'Exit Trades',
                         data: sellSignals,
                         type: 'scatter',
                         color: '#dc3545',
                         marker: { 
                             symbol: 'triangle-down',
-                            radius: 6,
-                            lineWidth: 2,
-                            lineColor: '#ffffff'
+                            radius: 10,
+                            lineWidth: 3,
+                            lineColor: '#ffffff',
+                            fillColor: '#dc3545'
                         },
                         tooltip: {
-                            pointFormat: '<b>Sell Signal</b><br/>Price: ${point.y:.2f}'
+                            pointFormat: '<b>Trade Exit</b><br/>Price: ${point.y:.2f}'
+                        },
+                        enableMouseTracking: true,
+                        stickyTracking: false,
+                        states: {
+                            hover: {
+                                enabled: true,
+                                marker: {
+                                    radius: 12,
+                                    lineWidth: 4
+                                }
+                            }
                         }
                     }
                 ],
@@ -1137,19 +1378,82 @@
             charts.price = Highcharts.chart(container, chartConfig);
         }
 
-        // Create P&L evolution chart
+        // Create P&L evolution chart - Simple version matching exact requirements
         function createPnLChart(chartData) {
             const container = document.getElementById('pnlChart');
 
-            if (!chartData.pnl_history || chartData.pnl_history.length === 0) {
-                container.innerHTML = '<div class="alert alert-warning">No P&L data available</div>';
+            if (!chartData.trade_history || chartData.trade_history.length === 0) {
+                container.innerHTML = '<div class="alert alert-warning">No trade data available for P&L chart</div>';
                 return;
             }
 
-            const pnlData = chartData.pnl_history.map(trade => [
-                new Date(trade.timestamp).getTime(),
-                trade.cumulative_pnl
-            ]);
+            // Get exact timeframe from candlestick data
+            let minTime = null;
+            let maxTime = null;
+            if (chartData.candlestick_data && chartData.candlestick_data.length > 0) {
+                minTime = chartData.candlestick_data[0][0];
+                maxTime = chartData.candlestick_data[chartData.candlestick_data.length - 1][0];
+            }
+
+            console.log('P&L Chart timeframe:', new Date(minTime), 'to', new Date(maxTime));
+
+            // Build P&L data from trade history - only exit trades affect P&L
+            const pnlData = [];
+            let cumulativePnL = 0.0;
+            
+            // Start at 0% at the beginning of timeframe
+            if (minTime) {
+                pnlData.push([minTime, 0]);
+            }
+            
+            // Process trades to build cumulative P&L
+            // Entry trades don't affect P&L, only exits do
+            const exitTrades = chartData.trade_history.filter(trade => trade.type === 'sell');
+            console.log('Exit trades found:', exitTrades.length, exitTrades);
+            
+            // For simplicity, let's use pnl_history if available, otherwise calculate from trade pairs
+            if (chartData.pnl_history && chartData.pnl_history.length > 0) {
+                chartData.pnl_history.forEach((pnlPoint, index) => {
+                    const timestamp = new Date(pnlPoint.timestamp).getTime();
+                    const cumPnL = pnlPoint.cumulative_pnl || 0;
+                    
+                    // Add point just before this trade at previous P&L level
+                    if (index === 0 && timestamp > minTime) {
+                        pnlData.push([timestamp - 60000, 0]); // 1 minute before first exit
+                    } else if (index > 0) {
+                        const prevPnL = chartData.pnl_history[index - 1].cumulative_pnl || 0;
+                        pnlData.push([timestamp - 60000, prevPnL]); // 1 minute before this exit
+                    }
+                    
+                    // Add the actual trade exit point
+                    pnlData.push([timestamp, cumPnL]);
+                    cumulativePnL = cumPnL;
+                    
+                    console.log(`P&L: ${new Date(timestamp).toISOString()} = ${cumPnL}%`);
+                });
+            } else {
+                console.warn('No pnl_history found, P&L chart will show flat at 0%');
+            }
+            
+            // Extend to end of timeframe with final P&L value
+            if (maxTime && pnlData.length > 0) {
+                const lastTimestamp = pnlData[pnlData.length - 1][0];
+                if (maxTime > lastTimestamp) {
+                    pnlData.push([maxTime, cumulativePnL]);
+                }
+            }
+
+            // Generate 4-hour tick marks
+            const fourHourTicks = [];
+            if (minTime && maxTime) {
+                const fourHoursMs = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
+                for (let time = minTime; time <= maxTime; time += fourHoursMs) {
+                    fourHourTicks.push(time);
+                }
+            }
+
+            console.log('Final P&L data:', pnlData);
+            console.log('4-hour ticks:', fourHourTicks.map(t => new Date(t).toISOString()));
 
             const chartConfig = {
                 chart: { 
@@ -1158,10 +1462,9 @@
                     zoomType: 'x',
                     events: {
                         selection: function(event) {
-                            if (event.xAxis && charts.price) {
-                                // Sync zoom with price chart
+                            if (event.xAxis) {
                                 const extremes = event.xAxis[0];
-                                charts.price.xAxis[0].setExtremes(extremes.min, extremes.max, true, false);
+                                syncAllCharts(extremes.min, extremes.max, 'pnl');
                             }
                         }
                     }
@@ -1169,12 +1472,13 @@
                 title: { text: 'Cumulative P&L Evolution' },
                 xAxis: { 
                     type: 'datetime',
-                    ordinal: true,  // Remove gaps between trading sessions
+                    min: minTime,
+                    max: maxTime,
+                    tickPositions: fourHourTicks, // Show ticks every 4 hours
                     events: {
                         setExtremes: function(e) {
-                            if (charts.price && e.trigger !== 'syncExtremes') {
-                                // Sync zoom with price chart
-                                charts.price.xAxis[0].setExtremes(e.min, e.max, true, false, {trigger: 'syncExtremes'});
+                            if (e.trigger !== 'syncExtremes') {
+                                syncAllCharts(e.min, e.max, 'pnl');
                             }
                         }
                     }
@@ -1192,19 +1496,35 @@
                     name: 'Cumulative P&L',
                     data: pnlData,
                     color: '#007bff',
-                    lineWidth: 2
+                    lineWidth: 2,
+                    step: 'left' // Create step-like appearance for P&L changes
                 }],
                 tooltip: {
                     pointFormat: '<b>{series.name}:</b> {point.y:.2f}%<br/>',
                     shared: true,
                     crosshairs: true
-                }
+                },
+                credits: { enabled: false }
             };
 
             if (charts.pnl) {
                 charts.pnl.destroy();
             }
             charts.pnl = Highcharts.chart(container, chartConfig);
+            
+            // Sync initial extremes with price chart if it exists
+            if (charts.price && minTime && maxTime) {
+                setTimeout(() => {
+                    try {
+                        const priceExtremes = charts.price.xAxis[0].getExtremes();
+                        if (priceExtremes.min !== minTime || priceExtremes.max !== maxTime) {
+                            charts.pnl.xAxis[0].setExtremes(priceExtremes.min, priceExtremes.max, true, false);
+                        }
+                    } catch (e) {
+                        console.log('Chart sync timing issue, will sync on user interaction');
+                    }
+                }, 100);
+            }
         }
 
         // Populate trade history table

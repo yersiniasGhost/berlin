@@ -12,8 +12,7 @@ sys.path.insert(0, os.path.join(current_dir, '..'))
 from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
-from features.indicators import macd_calculation, sma_indicator
-import talib
+from data_streamer.indicator_processor import IndicatorProcessor
 import numpy as np
 
 # Configure logging
@@ -28,7 +27,7 @@ class SimpleIndicatorVisualizer:
         self.yahoo_finance = YahooFinanceHistorical()
 
     def load_and_process_data(self, ticker: str, start_date: str, end_date: str, indicator_configs: list):
-        """Load data exactly like optimizer_visualization does"""
+        """Load data and process ENTIRELY using IndicatorProcessor"""
         logger.info(f"Loading data for {ticker} from {start_date} to {end_date}")
 
         # Create indicator definitions from configs
@@ -64,34 +63,99 @@ class SimpleIndicatorVisualizer:
         success = self.yahoo_finance.process_historical_data(ticker, start_date, end_date, monitor_config)
 
         if not success:
-            return None, None, None
+            return None, None, None, None
 
         # Get aggregators (same as optimizer)
         aggregators = self.yahoo_finance.aggregators
 
-        # Get the main aggregator key (usually "1m-normal")
+        # Get the main aggregator key for timestamps
         main_key = None
         for key in aggregators.keys():
             if "1m" in key:
                 main_key = key
                 break
-
         if not main_key:
             main_key = list(aggregators.keys())[0]
 
-        # Get candles from aggregator history
+        # Get candles from aggregator history for timestamps
         candles = aggregators[main_key].history
 
-        # Calculate RAW indicator values directly (not processed triggers)
-        raw_indicator_values = self.calculate_raw_indicator_values(candles, indicator_configs)
+        # Calculate ALL indicator data using IndicatorProcessor 
+        indicator_data = self.process_indicators_through_time(aggregators, monitor_config, candles)
 
         logger.info(f"Loaded {len(candles)} candles from {main_key}")
-        logger.info(f"Calculated raw indicators: {list(raw_indicator_values.keys())}")
+        logger.info(f"Processed indicators through time: {list(indicator_data.keys())}")
 
-        return candles, raw_indicator_values, monitor_config
+        return candles, indicator_data, monitor_config
+
+    def process_indicators_through_time(self, aggregators, monitor_config, candles):
+        """Process indicators using BOTH raw calculations AND IndicatorProcessor"""
+        logger.info("Processing indicators through IndicatorProcessor...")
+        
+        # Step 1: Get raw trigger history using direct calculation (fast and complete)
+        raw_data = self.calculate_raw_indicator_values(candles, [
+            {
+                'name': ind.name,
+                'type': ind.type,
+                'function': ind.function, 
+                'parameters': ind.parameters
+            } for ind in monitor_config.indicators
+        ])
+        
+        # Step 2: Get current time-decayed values from IndicatorProcessor
+        indicator_processor = IndicatorProcessor(monitor_config)
+        
+        for agg in aggregators.values():
+            agg.completed_candle = True
+        
+        indicators, raw_indicators, bar_scores = indicator_processor.calculate_indicators_new(aggregators)
+        
+        # Step 3: Calculate time-decayed history using the raw trigger data
+        time_decayed_histories = {}
+        
+        for indicator_def in monitor_config.indicators:
+            indicator_name = indicator_def.name
+            triggers_key = f"{indicator_name}_triggers"
+            
+            if triggers_key in raw_data:
+                triggers = raw_data[triggers_key]
+                lookback = indicator_def.parameters.get('lookback', 10)
+                
+                # Calculate decayed values for the entire trigger history
+                decayed_values = []
+                for i in range(len(triggers)):
+                    # Get trigger history up to this point
+                    window = triggers[:i+1]
+                    if len(window) > 0:
+                        import numpy as np
+                        decay_value = indicator_processor.calculate_time_based_metric(np.array(window), lookback)
+                        decayed_values.append(decay_value)
+                    else:
+                        decayed_values.append(0.0)
+                
+                time_decayed_histories[f"{indicator_name}_decayed"] = decayed_values
+        
+        # Step 4: Return component values (MACD, SMA lines) + decayed values, but NO raw triggers
+        component_data = {}
+        for key, value in raw_data.items():
+            # Include component values (MACD, SMA, signal, histogram) but exclude triggers
+            if not key.endswith('_triggers'):
+                component_data[key] = value
+        
+        result = {
+            **component_data,  # MACD, SMA component values (lines/histograms)
+            **time_decayed_histories,  # Time-decayed trigger values
+            'current_raw_indicators': raw_indicators,
+            'current_time_decayed_indicators': indicators,
+            'current_bar_scores': bar_scores
+        }
+        
+        logger.info(f"Generated data for: {list(result.keys())}")
+        
+        return result
 
     def calculate_raw_indicator_values(self, candles, indicator_configs):
-        """Calculate the actual raw indicator values AND trigger signals"""
+        """Calculate the actual raw indicator values AND trigger signals - ORIGINAL WORKING VERSION"""
         raw_values = {}
 
         # Convert candles to TickData list for indicator functions
@@ -122,10 +186,10 @@ class SimpleIndicatorVisualizer:
                 slow = parameters.get('slow', 26)
                 signal = parameters.get('signal', 9)
 
+                from features.indicators import macd_calculation, macd_histogram_crossover
                 macd, signal_line, histogram = macd_calculation(tick_data_list, fast, slow, signal)
 
                 # Get trigger signals (0s and 1s)
-                from features.indicators import macd_histogram_crossover
                 trigger_signals = macd_histogram_crossover(tick_data_list, parameters)
 
                 # Store each component separately
@@ -134,16 +198,15 @@ class SimpleIndicatorVisualizer:
                 raw_values[f"{name}_histogram"] = histogram.tolist()
                 raw_values[f"{name}_triggers"] = trigger_signals.tolist()
 
-                logger.info(
-                    f"MACD raw values calculated: MACD len={len(macd)}, Signal len={len(signal_line)}, Histogram len={len(histogram)}")
+                logger.info(f"MACD raw values calculated: MACD len={len(macd)}, Signal len={len(signal_line)}, Histogram len={len(histogram)}")
                 logger.info(f"Trigger count: {sum(trigger_signals)} out of {len(trigger_signals)} total points")
 
             elif function == 'sma_crossover':
                 period = parameters.get('period', 20)
+                from features.indicators import sma_indicator, sma_crossover
                 sma_values = sma_indicator(tick_data_list, period)
 
                 # Get trigger signals (0s and 1s)
-                from features.indicators import sma_crossover
                 trigger_signals = sma_crossover(tick_data_list, parameters)
 
                 raw_values[f"{name}_sma"] = sma_values.tolist()
@@ -151,8 +214,6 @@ class SimpleIndicatorVisualizer:
 
                 logger.info(f"SMA raw values calculated: len={len(sma_values)}")
                 logger.info(f"SMA trigger count: {sum(trigger_signals)} out of {len(trigger_signals)} total points")
-
-            # Add more indicator types as needed
 
         return raw_values
 
@@ -181,8 +242,8 @@ def visualize_indicators():
         if not indicator_configs:
             return jsonify({"error": "No indicators specified"}), 400
 
-        # Load data using the same method as optimizer_visualization
-        candles, raw_indicators, monitor_config = visualizer.load_and_process_data(
+        # Load data using IndicatorProcessor
+        candles, indicator_data, monitor_config = visualizer.load_and_process_data(
             ticker, start_date, end_date, indicator_configs
         )
 
@@ -201,16 +262,26 @@ def visualize_indicators():
                 candle.close
             ])
 
-        # Format indicator data for Highcharts
+        # Format all indicator data for Highcharts
         indicators_data = {}
-        for indicator_name, values in raw_indicators.items():
+        
+        # Process all data from IndicatorProcessor (raw, decayed, etc.)
+        for indicator_name, values in indicator_data.items():
+            # Skip current single-value indicators (handle separately)
+            if indicator_name.startswith('current_'):
+                continue
+                
+            # Ensure values is a list
+            if not isinstance(values, list):
+                continue
+            
             # Create timestamp-value pairs for each indicator
             indicator_series = []
             for i, value in enumerate(values):
                 if i < len(candles) and value is not None:
                     timestamp = int(candles[i].timestamp.timestamp() * 1000)
                     # Convert NaN to None for JSON serialization
-                    if np.isnan(value) or str(value) == 'nan':
+                    if isinstance(value, float) and (np.isnan(value) or str(value) == 'nan'):
                         clean_value = None
                     else:
                         clean_value = float(value)
@@ -223,12 +294,34 @@ def visualize_indicators():
                 "name": indicator_name
             }
 
+        # Format current single-value indicators  
+        current_indicators = {}
+        if 'current_time_decayed_indicators' in indicator_data:
+            for indicator_name, value in indicator_data['current_time_decayed_indicators'].items():
+                if value is not None and not np.isnan(value):
+                    current_indicators[f"{indicator_name}_current"] = {
+                        "data": [[int(candles[-1].timestamp.timestamp() * 1000), float(value)]],
+                        "name": f"{indicator_name} (Current Time Decayed)"
+                    }
+
+        # Format current bar scores
+        bar_scores_formatted = {}
+        if 'current_bar_scores' in indicator_data:
+            for bar_name, value in indicator_data['current_bar_scores'].items():
+                if value is not None and not np.isnan(value):
+                    bar_scores_formatted[bar_name] = {
+                        "data": [[int(candles[-1].timestamp.timestamp() * 1000), float(value)]],
+                        "name": f"{bar_name} (Bar Score)"
+                    }
+
         response = {
             "success": True,
             "ticker": ticker,
             "data": {
                 "candlestick": candlestick_data,
-                "indicators": indicators_data
+                "indicators": indicators_data,  # All historical indicator data
+                "current_indicators": current_indicators,  # Current time-decayed values
+                "bar_scores": bar_scores_formatted  # Current bar scores
             },
             "candle_count": len(candles),
             "date_range": f"{start_date} to {end_date}"

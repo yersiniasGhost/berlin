@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import logging
+import math
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify
@@ -22,6 +23,26 @@ logger = logging.getLogger('MonitorVisualizationApp')
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'monitor-viz-secret-key'
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+
+def sanitize_nan_values(obj):
+    """
+    Recursively sanitize NaN values in a data structure for JSON compatibility.
+    Converts NaN to None (null in JSON), and handles nested lists/dicts.
+    """
+    if isinstance(obj, dict):
+        return {key: sanitize_nan_values(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_nan_values(item) for item in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj):
+            return None
+        elif math.isinf(obj):
+            return None  # Convert infinity to null as well
+        else:
+            return obj
+    else:
+        return obj
 
 
 def load_raw_candle_data(data_config_path: str, io):
@@ -252,7 +273,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 
         indicator_processor = IndicatorProcessorHistoricalNew(monitor_obj)
-        indicator_history, raw_indicator_history, bar_score_history_dict = (
+        indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
             indicator_processor.calculate_indicators(backtest_streamer.aggregators)
         )
 
@@ -287,6 +308,44 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             'exit_long': monitor_config.get('exit_long', [])
         }
 
+        # Format component data for charts (MACD, SMA components)
+        component_data_formatted = {}
+        if component_history:
+            for comp_name, comp_values in component_history.items():
+                # Convert to Highcharts format with timestamps
+                comp_series = []
+                for i, value in enumerate(comp_values):
+                    if i < len(tick_history) and value is not None:
+                        timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
+                        comp_series.append([timestamp, float(value)])
+                
+                component_data_formatted[comp_name] = {
+                    'data': comp_series,
+                    'name': comp_name
+                }
+
+        # Format component data for the MACD chart (keep this for MACD/signal/histogram)
+        # indicator_data should NOT have the decayed values - leave it empty or minimal
+        indicator_data_formatted = {}
+
+        # Add indicator_history for the trigger signals chart (using time-decayed values)
+        indicator_history_formatted = []
+        if indicator_history and tick_history:
+            for i, tick in enumerate(tick_history):
+                timestamp = int(tick.timestamp.timestamp() * 1000)
+                indicator_values = {}
+                for ind_name, ind_values in indicator_history.items():
+                    if i < len(ind_values):
+                        value = ind_values[i] if ind_values[i] is not None else 0.0
+                        indicator_values[ind_name] = value
+                    else:
+                        indicator_values[ind_name] = 0.0
+                
+                indicator_history_formatted.append({
+                    'timestamp': timestamp,
+                    **indicator_values
+                })
+
         chart_data = {
             'ticker': data_config['ticker'],
             'candlestick_data': candlestick_data,
@@ -295,6 +354,9 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             'pnl_history': pnl_history,
             'bar_scores_history': bar_scores_history,
             'threshold_config': threshold_config,
+            'component_data': component_data_formatted,  # MACD/SMA component data (unchanged)
+            'indicator_data': indicator_data_formatted,  # Time-decayed indicator data (unchanged)
+            'indicator_history': indicator_history_formatted,  # For trigger signals chart ONLY
             'total_candles': len(candlestick_data),
             'total_trades': len(trade_history),
             'date_range': {
@@ -304,7 +366,12 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         }
 
         logger.info("✅ Successfully generated chart data")
-        return chart_data
+        
+        # Sanitize NaN values for JSON compatibility
+        sanitized_chart_data = sanitize_nan_values(chart_data)
+        logger.info("🧹 Sanitized NaN values for JSON compatibility")
+        
+        return sanitized_chart_data
 
     except Exception as e:
         logger.error(f"❌ Error running monitor backtest: {e}")
@@ -390,15 +457,59 @@ def run_visualization():
         logger.info(f"🎯 Replay visualization returning ticker: {actual_ticker}")
         logger.info(f"   Data config path: {data_config_path}")
 
+        # OPTIMIZATION: Don't include full chart data in configuration loading response
+        # The frontend should request chart data separately via websocket or streaming
+        chart_summary = {
+            'ticker': chart_data.get('ticker'),
+            'total_candles': chart_data.get('total_candles'),
+            'total_trades': chart_data.get('total_trades'),
+            'date_range': chart_data.get('date_range'),
+            'available_components': list(chart_data.get('component_data', {}).keys()),
+            'available_indicators': list(chart_data.get('indicator_data', {}).keys())
+        }
+
         return jsonify({
             'success': True,
-            'chart_data': chart_data,
+            'chart_summary': chart_summary,  # Send summary instead of full data
             'monitor_config': monitor_config,
             'data_config': data_config
         })
 
     except Exception as e:
         logger.error(f"Error running visualization: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/get_chart_data', methods=['POST'])
+def get_chart_data():
+    """Get the full chart data for visualization"""
+    try:
+        data = request.get_json()
+        monitor_config_path = data.get('monitor_config_path')
+        data_config_path = data.get('data_config_path')
+
+        if not monitor_config_path or not data_config_path:
+            return jsonify({'success': False, 'error': 'Both config files are required'})
+
+        # Validate files exist
+        if not Path(monitor_config_path).exists():
+            return jsonify({'success': False, 'error': f'Monitor config file not found: {monitor_config_path}'})
+
+        if not Path(data_config_path).exists():
+            return jsonify({'success': False, 'error': f'Data config file not found: {data_config_path}'})
+
+        # Run the backtest and get full chart data
+        chart_data = run_monitor_backtest(monitor_config_path, data_config_path)
+
+        logger.info(f"🎯 Returning full chart data with {chart_data.get('total_candles', 0)} candles")
+
+        return jsonify({
+            'success': True,
+            'chart_data': chart_data
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting chart data: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 

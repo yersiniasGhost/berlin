@@ -117,14 +117,14 @@ class DataConfigForm {
                 const maxDate = selectedOption.getAttribute('data-max-date');
                 const dataPoints = selectedOption.getAttribute('data-points');
                 
-                if (minDate && maxDate && minDate !== 'null' && maxDate !== 'null') {
+                if (minDate && maxDate && minDate !== 'null' && maxDate !== 'null' && dateRangeText) {
                     dateRangeText.textContent = `${minDate} to ${maxDate} (${dataPoints} months)`;
-                    dateRangeDiv.style.display = 'block';
+                    if (dateRangeDiv) dateRangeDiv.style.display = 'block';
                 } else {
-                    dateRangeDiv.style.display = 'none';
+                    if (dateRangeDiv) dateRangeDiv.style.display = 'none';
                 }
             } else {
-                dateRangeDiv.style.display = 'none';
+                if (dateRangeDiv) dateRangeDiv.style.display = 'none';
             }
         });
         

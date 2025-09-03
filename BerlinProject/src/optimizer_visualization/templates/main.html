@@ -20,6 +20,7 @@
 
     <!-- Shared form components -->
     <link rel="stylesheet" href="/static/css/config-form-builder.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/compact-monitor-form.css') }}">
 
     <style>
         .navbar-custom {
@@ -52,6 +53,17 @@
         .status-running { background: #d1ecf1; color: #0c5460; }
         .status-paused { background: #f0ad4e; color: #fff; }
         .status-error { background: #f8d7da; color: #721c24; }
+
+        .configuration-header {
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .configuration-header h5 {
+            margin: 0;
+            color: #495057;
+        }
 
 
         .collapsible-section {
@@ -306,71 +318,32 @@
                             <button id="loadFilesBtn" class="btn btn-primary">
                                 <i class="fas fa-upload"></i> Load Files
                             </button>
-                            <button id="loadExampleBtn" class="btn btn-outline-secondary ms-2">
-                                <i class="fas fa-star"></i> Load Example
-                            </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Configuration Tabs -->
                 <div class="configuration-tabs">
-                    <ul class="nav nav-tabs" id="configTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="ga-config-tab" data-bs-toggle="tab" data-bs-target="#ga-config" type="button" role="tab">
-                                <i class="fas fa-robot"></i> GA Configuration
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="data-config-tab" data-bs-toggle="tab" data-bs-target="#data-config" type="button" role="tab">
-                                <i class="fas fa-chart-line"></i> Data Configuration
-                            </button>
-                        </li>
-                    </ul>
+                    <!-- Single Configuration Section -->
+                    <div class="configuration-header">
+                        <h5><i class="fas fa-robot"></i> GA Configuration</h5>
+                    </div>
                     
-                    <div class="tab-content" id="configTabContent">
-                        <!-- GA Configuration Form -->
-                        <div class="tab-pane fade show active" id="ga-config" role="tabpanel">
-                            <div class="action-buttons">
-                                <button id="saveGAConfigBtn" class="btn btn-success btn-sm" disabled>
-                                    <i class="fas fa-save"></i> Save GA Config
-                                </button>
-                                <button id="downloadGAConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
-                                    <i class="fas fa-download"></i> Download GA Config
-                                </button>
-                                <button id="validateGAConfigBtn" class="btn btn-outline-info btn-sm" disabled>
-                                    <i class="fas fa-check-circle"></i> Validate GA Config
-                                </button>
-                            </div>
-                            <div id="gaConfigFormContainer">
-                                <div class="text-center text-muted py-5">
-                                    <i class="fas fa-upload fa-3x mb-3"></i>
-                                    <p>Load a GA configuration file or click "Load Example" to get started</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Data Configuration Form -->
-                        <div class="tab-pane fade" id="data-config" role="tabpanel">
-                            <div class="action-buttons">
-                                <button id="saveDataConfigBtn" class="btn btn-success btn-sm" disabled>
-                                    <i class="fas fa-save"></i> Save Data Config
-                                </button>
-                                <button id="downloadDataConfigBtn" class="btn btn-outline-primary btn-sm" disabled>
-                                    <i class="fas fa-download"></i> Download Data Config
-                                </button>
-                                <button id="validateDataConfigBtn" class="btn btn-outline-info btn-sm" disabled>
-                                    <i class="fas fa-check-circle"></i> Validate Data Config
-                                </button>
-                            </div>
-                            <div id="dataConfigFormContainer">
-                                <div class="text-center text-muted py-5">
-                                    <i class="fas fa-chart-line fa-3x mb-3"></i>
-                                    <p>Load a data configuration file or click "Load Example" to get started</p>
-                                </div>
+                    <!-- Single Configuration Form -->
+                    <div class="configuration-form">
+                        <div id="compactGAFormContainer">
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-upload fa-3x mb-3"></i>
+                                <p>Load a GA configuration file to get started</p>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Configuration Status -->
+                <div id="configStatus" class="alert alert-info" style="display: none;">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="configStatusMessage"></span>
                 </div>
 
                 <!-- Start Optimization Button -->
@@ -515,6 +488,7 @@
     <script src="/static/js/indicator-parameter-definitions.js"></script>
     <script src="/static/js/config-form-builder.js"></script>
     <script src="/static/js/data-config-form.js"></script>
+    <script src="{{ url_for('static', filename='js/compact-monitor-form.js') }}"></script>
 
     <script>
         // Initialize Socket.IO
@@ -530,8 +504,7 @@
         let currentTimestamp = '';
 
         // Form builders
-        let gaFormBuilder = null;
-        let dataFormBuilder = null;
+        let compactGAForm = null;
 
         // Configuration data
         let currentGAConfig = null;
@@ -561,17 +534,9 @@
             
             // Button handlers
             document.getElementById('loadFilesBtn').addEventListener('click', loadConfigurationFiles);
-            document.getElementById('loadExampleBtn').addEventListener('click', loadExampleConfigurations);
             document.getElementById('startOptimizationBtn').addEventListener('click', startOptimization);
 
-            // Config action handlers
-            document.getElementById('saveGAConfigBtn').addEventListener('click', () => saveConfiguration('ga_config'));
-            document.getElementById('downloadGAConfigBtn').addEventListener('click', () => downloadConfiguration('ga_config'));
-            document.getElementById('validateGAConfigBtn').addEventListener('click', () => validateConfiguration('ga_config'));
-            
-            document.getElementById('saveDataConfigBtn').addEventListener('click', () => saveConfiguration('data_config'));
-            document.getElementById('downloadDataConfigBtn').addEventListener('click', () => downloadConfiguration('data_config'));
-            document.getElementById('validateDataConfigBtn').addEventListener('click', () => validateConfiguration('data_config'));
+            // Config action handlers - All config buttons are now handled by the compact form
 
             // Control button handlers
             document.getElementById('pauseBtn').addEventListener('click', () => socket.emit('pause_optimization'));
@@ -656,41 +621,29 @@
             }
         }
 
-        // Load example configurations
-        async function loadExampleConfigurations() {
-            try {
-                updateStatus('Loading examples...', 'loading');
-
-                const response = await fetch('/api/load_example_configs');
-                const result = await response.json();
-
-                if (result.success) {
-                    currentGAConfig = result.examples.ga_config;
-                    currentDataConfig = result.examples.data_config;
-                    
-                    generateForms();
-                    updateStatus('Ready', 'ready');
-                } else {
-                    throw new Error(result.error);
-                }
-            } catch (error) {
-                console.error('Example loading error:', error);
-                updateStatus('Error', 'error');
-                alert(`Failed to load examples: ${error.message}`);
-            }
-        }
-
         // Generate dynamic forms
         function generateForms() {
-            // Generate GA configuration form
-            gaFormBuilder = new ConfigFormBuilder('gaConfigFormContainer', {
-                showGAFields: true
+            // Use compact GA form (GA configs contain monitor config)
+            compactGAForm = new CompactMonitorForm('compactGAFormContainer', {
+                showDataConfig: true,
+                showRanges: true,
+                showGAHyperparameters: true
             });
-            gaFormBuilder.generateForm(currentGAConfig);
-
-            // Generate data configuration form
-            dataFormBuilder = new DataConfigForm('dataConfigFormContainer');
-            dataFormBuilder.generateForm(currentDataConfig);
+            
+            // Pass the full GA config to the form so it can access objectives and ga_hyperparameters
+            let fullConfig = currentGAConfig;
+            if (currentGAConfig && currentGAConfig.monitor) {
+                // Ensure we have all parts in the right structure
+                fullConfig = {
+                    ...currentGAConfig,
+                    monitor: currentGAConfig.monitor,
+                    indicators: currentGAConfig.indicators || [],
+                    objectives: currentGAConfig.objectives || [],
+                    ga_hyperparameters: currentGAConfig.ga_hyperparameters || {}
+                };
+            }
+            
+            compactGAForm.generateForm(fullConfig, currentDataConfig);
 
             // Set up form change handlers
             setupFormChangeHandlers();
@@ -703,25 +656,58 @@
 
         // Set up form change handlers
         function setupFormChangeHandlers() {
-            // Listen for configuration changes
-            document.getElementById('gaConfigFormContainer').addEventListener('configSave', (event) => {
-                currentGAConfig = event.detail;
-                console.log('GA Config updated:', currentGAConfig);
+            // Listen for configuration changes from compact GA form
+            document.getElementById('compactGAFormContainer').addEventListener('monitorConfigSave', (event) => {
+                const data = event.detail;
+                if (data.monitorConfig) {
+                    currentGAConfig = data.monitorConfig;
+                    console.log('GA Config updated:', currentGAConfig);
+                }
+                if (data.dataConfig) {
+                    const oldDataConfig = currentDataConfig;
+                    currentDataConfig = data.dataConfig;
+                    console.log('Data Config updated:', currentDataConfig);
+                    
+                    // Show confirmation message for data config changes
+                    showConfigConfirmation(oldDataConfig, currentDataConfig);
+                }
             });
-
-            document.getElementById('dataConfigFormContainer').addEventListener('dataConfigSave', (event) => {
-                currentDataConfig = event.detail;
-                console.log('Data Config updated:', currentDataConfig);
-            });
+        }
+        
+        // Show confirmation when data config changes
+        function showConfigConfirmation(oldConfig, newConfig) {
+            let changes = [];
+            
+            if (!oldConfig) {
+                changes.push(`Using ticker: ${newConfig.ticker}`);
+                changes.push(`Date range: ${newConfig.start_date} to ${newConfig.end_date}`);
+            } else {
+                if (oldConfig.ticker !== newConfig.ticker) {
+                    changes.push(`Ticker changed from ${oldConfig.ticker} to ${newConfig.ticker}`);
+                }
+                if (oldConfig.start_date !== newConfig.start_date || oldConfig.end_date !== newConfig.end_date) {
+                    changes.push(`Date range changed to ${newConfig.start_date} to ${newConfig.end_date}`);
+                }
+            }
+            
+            if (changes.length > 0) {
+                const configStatus = document.getElementById('configStatus');
+                const configStatusMessage = document.getElementById('configStatusMessage');
+                
+                configStatusMessage.innerHTML = `<strong>Data Configuration Updated:</strong><br>${changes.join('<br>')}`;
+                configStatus.className = 'alert alert-success';
+                configStatus.style.display = 'block';
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    configStatus.style.display = 'none';
+                }, 5000);
+            }
         }
 
         // Enable action buttons
         function enableActionButtons() {
-            ['saveGAConfigBtn', 'downloadGAConfigBtn', 'validateGAConfigBtn',
-             'saveDataConfigBtn', 'downloadDataConfigBtn', 'validateDataConfigBtn',
-             'startOptimizationBtn'].forEach(id => {
-                document.getElementById(id).disabled = false;
-            });
+            document.getElementById('startOptimizationBtn').disabled = false;
         }
 
         // Update load button state
@@ -732,9 +718,10 @@
 
         // Save configuration
         async function saveConfiguration(configType) {
+            const formData = compactGAForm ? compactGAForm.getFormData() : null;
             const configData = configType === 'ga_config' ? 
-                (gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig) :
-                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+                (formData ? formData.monitorConfig : currentGAConfig) :
+                (formData ? formData.dataConfig : currentDataConfig);
 
             if (!configData) {
                 alert('No configuration data to save');
@@ -767,9 +754,10 @@
 
         // Download configuration
         async function downloadConfiguration(configType) {
+            const formData = compactGAForm ? compactGAForm.getFormData() : null;
             const configData = configType === 'ga_config' ? 
-                (gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig) :
-                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+                (formData ? formData.monitorConfig : currentGAConfig) :
+                (formData ? formData.dataConfig : currentDataConfig);
 
             if (!configData) {
                 alert('No configuration data to download');
@@ -806,9 +794,10 @@
 
         // Validate configuration
         async function validateConfiguration(configType) {
+            const formData = compactGAForm ? compactGAForm.getFormData() : null;
             const configData = configType === 'ga_config' ? 
-                (gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig) :
-                (dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig);
+                (formData ? formData.monitorConfig : currentGAConfig) :
+                (formData ? formData.dataConfig : currentDataConfig);
 
             if (!configData) {
                 alert('No configuration data to validate');
@@ -844,8 +833,17 @@
 
         // Start optimization
         async function startOptimization() {
-            const gaConfig = gaFormBuilder ? gaFormBuilder.getFormData() : currentGAConfig;
-            const dataConfig = dataFormBuilder ? dataFormBuilder.getFormData() : currentDataConfig;
+            const formData = compactGAForm ? compactGAForm.getFormData() : null;
+            const gaConfig = formData ? formData.monitorConfig : currentGAConfig;
+            const dataConfig = formData ? formData.dataConfig : currentDataConfig;
+
+            // Debug logging
+            console.log('Starting optimization with:');
+            console.log('GA Config:', gaConfig);
+            console.log('Data Config:', dataConfig);
+            if (dataConfig) {
+                console.log(`Using ticker: ${dataConfig.ticker}, dates: ${dataConfig.start_date} to ${dataConfig.end_date}`);
+            }
 
             if (!gaConfig || !dataConfig) {
                 alert('Please configure both GA and data settings before starting optimization.');

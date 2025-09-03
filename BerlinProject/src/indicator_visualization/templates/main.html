@@ -45,7 +45,7 @@
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center py-3">
                     <h1><i class="fas fa-chart-line me-2"></i>Indicator Visualizer</h1>
-                    <span class="badge bg-info">Raw Indicator Values</span>
+                    <span class="badge bg-success">IndicatorProcessor Data</span>
                 </div>
             </div>
         </div>
@@ -112,15 +112,30 @@
                         <div id="candlestickChart" style="height: 400px;"></div>
                     </div>
 
-                    <!-- Indicator Charts -->
-                    <div id="indicatorCharts"></div>
+                    <!-- Original Working Indicators -->
+                    <div class="chart-container">
+                        <h5>Raw Indicators (MACD, SMA Values & Triggers)</h5>
+                        <div id="indicatorCharts"></div>
+                    </div>
+                    
+                    <!-- Time-Decayed Indicator Charts -->
+                    <div class="chart-container">
+                        <h5>Time-Decayed Indicators (Processed Values)</h5>
+                        <div id="timeDecayedCharts"></div>
+                    </div>
+                    
+                    <!-- Bar Scores -->
+                    <div class="chart-container">
+                        <h5>Bar Scores (Weighted Combinations)</h5>
+                        <div id="barScoreCharts"></div>
+                    </div>
                 </div>
 
                 <!-- Welcome Message -->
                 <div id="welcomeMessage" class="text-center mt-5">
                     <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                    <h4 class="text-muted">Visualize Raw Indicator Values</h4>
-                    <p class="text-muted">Use the GA indicator format to see raw MACD, SMA, and other values.</p>
+                    <h4 class="text-muted">Visualize IndicatorProcessor Values</h4>
+                    <p class="text-muted">View raw indicators, time-decayed values, and bar scores from the IndicatorProcessor.</p>
                 </div>
             </div>
         </div>
@@ -244,7 +259,7 @@
             });
         }
 
-        // Create indicator charts
+        // Create indicator charts (ORIGINAL WORKING VERSION)
         function createIndicatorCharts(indicators) {
             const container = document.getElementById('indicatorCharts');
             container.innerHTML = '';
@@ -267,15 +282,15 @@
                     }
                 } else if (indicatorName.includes('_sma')) {
                     // Handle SMA indicators
-                    createSimpleIndicatorChart(indicatorName, indicator);
+                    createSMAIndicatorChart(indicatorName, indicator);
                 } else {
                     // Handle other indicators
-                    createSimpleIndicatorChart(indicatorName, indicator);
+                    createSMAIndicatorChart(indicatorName, indicator);
                 }
             });
         }
 
-        // Create MACD grouped chart (combines MACD, signal, and histogram)
+        // Create MACD grouped chart (ORIGINAL WORKING VERSION)
         function createMACDGroupedChart(baseName, allIndicators) {
             // Create container div for this MACD group
             const chartDiv = document.createElement('div');
@@ -360,11 +375,9 @@
                 title: {
                     text: `${baseName} - MACD Components with Triggers`
                 },
-
                 rangeSelector: {
                     enabled: false
                 },
-
                 yAxis: [{
                     title: {
                         text: 'MACD / Signal'
@@ -377,7 +390,6 @@
                     top: '65%',
                     height: '35%'
                 }],
-
                 xAxis: {
                     events: {
                         afterSetExtremes: function(e) {
@@ -385,7 +397,6 @@
                         }
                     }
                 },
-
                 plotOptions: {
                     line: {
                         dataGrouping: { enabled: false }
@@ -397,13 +408,12 @@
                         dataGrouping: { enabled: false }
                     }
                 },
-
                 series: series
             });
         }
 
-        // Create simple indicator chart (like SMA)
-        function createSimpleIndicatorChart(indicatorName, indicator) {
+        // Create SMA indicator chart (ORIGINAL WORKING VERSION)
+        function createSMAIndicatorChart(indicatorName, indicator) {
             // Create container div for this indicator
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-container';
@@ -459,17 +469,14 @@
                 title: {
                     text: indicator.name + (triggerData ? ' with Triggers' : '')
                 },
-
                 rangeSelector: {
                     enabled: false
                 },
-
                 yAxis: {
                     title: {
                         text: 'Value'
                     }
                 },
-
                 xAxis: {
                     events: {
                         afterSetExtremes: function(e) {
@@ -477,7 +484,6 @@
                         }
                     }
                 },
-
                 plotOptions: {
                     line: {
                         dataGrouping: { enabled: false }
@@ -486,8 +492,77 @@
                         dataGrouping: { enabled: false }
                     }
                 },
-
                 series: series
+            });
+        }
+
+        // Create simple indicator chart
+        function createSimpleIndicatorChart(chartKey, indicator, container) {
+            // Create container div for this indicator
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'mt-2';
+            chartDiv.innerHTML = `
+                <h6>${indicator.name}</h6>
+                <div id="${chartKey}" style="height: 200px;"></div>
+            `;
+            container.appendChild(chartDiv);
+
+            // Determine color
+            let color = '#45B7D1'; // Blue
+            if (chartKey.includes('decayed')) {
+                color = '#ffc107'; // Yellow/amber for decayed
+            } else if (chartKey.includes('bar_score')) {
+                color = '#17a2b8'; // Teal for bar scores
+            } else if (chartKey.includes('raw')) {
+                color = '#28a745'; // Green for raw
+            }
+
+            charts[chartKey] = Highcharts.stockChart(chartKey, {
+                title: {
+                    text: indicator.name,
+                    style: { fontSize: '12px' }
+                },
+
+                rangeSelector: {
+                    enabled: false
+                },
+
+                yAxis: {
+                    title: {
+                        text: 'Value'
+                    },
+                    plotLines: [{
+                        value: 0,
+                        color: '#666',
+                        dashStyle: 'shortdash',
+                        width: 1
+                    }]
+                },
+
+                xAxis: {
+                    events: {
+                        afterSetExtremes: function(e) {
+                            syncAllCharts(e, chartKey);
+                        }
+                    }
+                },
+
+                plotOptions: {
+                    line: {
+                        dataGrouping: { enabled: false },
+                        lineWidth: 2
+                    }
+                },
+
+                series: [{
+                    name: indicator.name,
+                    data: indicator.data,
+                    color: color,
+                    lineWidth: 2,
+                    tooltip: {
+                        pointFormat: '<b>{series.name}:</b> {point.y:.4f}'
+                    }
+                }]
             });
         }
 
@@ -509,6 +584,28 @@
                         console.warn(`Error syncing chart ${chartKey}:`, error);
                     }
                 }
+            });
+        }
+
+        // Create time-decayed indicator charts
+        function createTimeDecayedCharts(timeDecayedIndicators) {
+            const container = document.getElementById('timeDecayedCharts');
+            container.innerHTML = '';
+
+            Object.keys(timeDecayedIndicators).forEach(indicatorName => {
+                const indicator = timeDecayedIndicators[indicatorName];
+                createSimpleIndicatorChart(`decayed_${indicatorName}`, indicator, container);
+            });
+        }
+
+        // Create bar score charts
+        function createBarScoreCharts(barScores) {
+            const container = document.getElementById('barScoreCharts');
+            container.innerHTML = '';
+
+            Object.keys(barScores).forEach(barName => {
+                const barScore = barScores[barName];
+                createSimpleIndicatorChart(`bar_score_${barName}`, barScore, container);
             });
         }
 
@@ -562,10 +659,22 @@
                     throw new Error(result.error || 'Unknown error occurred');
                 }
 
-                // Create charts
+                // Create charts: Original working triggers + IndicatorProcessor data
                 window.lastIndicatorData = result.data.indicators; // Store for trigger access
                 createCandlestickChart(result.data, result.ticker);
+                
+                // Original working indicator charts (MACD, SMA with triggers)
                 createIndicatorCharts(result.data.indicators);
+                
+                // NEW: Time-decayed charts (from IndicatorProcessor.indicators)
+                if (result.data.time_decayed_indicators) {
+                    createTimeDecayedCharts(result.data.time_decayed_indicators);
+                }
+                
+                // NEW: Bar score charts (from IndicatorProcessor bar_scores)
+                if (result.data.bar_scores) {
+                    createBarScoreCharts(result.data.bar_scores);
+                }
 
                 // Show charts and hide welcome message
                 document.getElementById('chartsContainer').style.display = 'block';
