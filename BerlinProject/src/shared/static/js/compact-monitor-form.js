@@ -278,6 +278,11 @@ class CompactMonitorForm {
                             <input type="number" class="form-control form-control-sm" name="elite_size" placeholder="12">
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label">Elites to Save</label>
+                            <input type="number" class="form-control form-control-sm" name="elites_to_save" placeholder="5" min="1" max="20">
+                            <div class="form-text">Number of elite monitors to save as JSON files</div>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Propagation Fraction</label>
                             <input type="number" class="form-control form-control-sm" name="propagation_fraction" step="0.01" placeholder="0.4">
                         </div>
@@ -897,6 +902,7 @@ class CompactMonitorForm {
         setField('number_of_iterations', params.number_of_iterations);
         setField('population_size', params.population_size);
         setField('elite_size', params.elite_size);
+        setField('elites_to_save', params.elites_to_save);
         setField('propagation_fraction', params.propagation_fraction);
         setField('chance_of_mutation', params.chance_of_mutation);
         setField('chance_of_crossover', params.chance_of_crossover);
@@ -1216,6 +1222,7 @@ class CompactMonitorForm {
                 number_of_iterations: parseInt(getValue('number_of_iterations')) || undefined,
                 population_size: parseInt(getValue('population_size')) || undefined,
                 elite_size: parseInt(getValue('elite_size')) || undefined,
+                elites_to_save: parseInt(getValue('elites_to_save')) || 5,
                 propagation_fraction: parseFloat(getValue('propagation_fraction')) || undefined,
                 chance_of_mutation: parseFloat(getValue('chance_of_mutation')) || undefined,
                 chance_of_crossover: parseFloat(getValue('chance_of_crossover')) || undefined

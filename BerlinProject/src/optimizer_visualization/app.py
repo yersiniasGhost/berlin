@@ -87,6 +87,7 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
 
         test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
         optimization_state['test_name'] = test_name
+        optimization_state['ga_config_path'] = ga_config_path
 
         # Create optimizer config
         io = MlfOptimizerConfig.from_json(config_data, data_config_path)
@@ -141,6 +142,7 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
             elite_objectives=[e.fitness_values for e in elites]
             optimization_state['current_generation'] = current_gen
             optimization_state['last_best_individual'] = best_individual
+            optimization_state['elites'] = elites
 
             # Log best individual for this generation
             objectives = [o.name for o in io.fitness_calculator.objectives]
@@ -194,6 +196,7 @@ def run_genetic_algorithm_threaded(ga_config_path: str, data_config_path: str):
                 results_info = save_optimization_results(
                     optimization_state['best_individuals_log'],
                     optimization_state['last_best_individual'],
+                    optimization_state.get('elites', []),
                     ga_config_path,
                     test_name,
                     optimization_state.get('timestamp')  # Pass stored timestamp
@@ -452,7 +455,7 @@ def load_raw_candle_data(data_config_path: str, io):
         raise
 
 
-def save_optimization_results(best_individuals_log, best_individual, ga_config_path, test_name, timestamp=None):
+def save_optimization_results(best_individuals_log, best_individual, elites, ga_config_path, test_name, timestamp=None):
     """Save optimization results to CSV and JSON files"""
     logger.info("💾 Saving optimization results...")
 
@@ -470,91 +473,93 @@ def save_optimization_results(best_individuals_log, best_individual, ga_config_p
     }
 
     try:
-        # 1. Save best monitor configuration as JSON
-        if best_individual and hasattr(best_individual, 'monitor_configuration'):
-            best_monitor_file = results_dir / f"{timestamp}_{test_name}_best_monitor.json"
-
-            # Convert monitor configuration to the exact format you want
-            monitor_config = best_individual.monitor_configuration
-
-            # Extract COMPLETE trade executor config with ALL fields
-            trade_executor = {}
-            if hasattr(monitor_config, 'trade_executor'):
-                te = monitor_config.trade_executor
-                trade_executor = {
-                    'default_position_size': getattr(te, 'default_position_size', 100.0),
-                    'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
-                    'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
-                    'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
-                    'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
-                    'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
-                    'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
-                }
-            else:
-                # Use complete defaults if no trade executor in monitor
-                trade_executor = {
-                    'default_position_size': 100.0,
-                    'stop_loss_pct': 0.01,
-                    'take_profit_pct': 0.02,
-                    'ignore_bear_signals': False,
-                    'trailing_stop_loss': False,
-                    'trailing_stop_distance_pct': 0.01,
-                    'trailing_stop_activation_pct': 0.005
-                }
-
-            # Convert indicators to proper dict format (no ranges)
-            indicators_list = []
-            raw_indicators = getattr(monitor_config, 'indicators', [])
-
-            for indicator in raw_indicators:
-                if hasattr(indicator, '__dict__'):
-                    # Convert indicator object to dict
-                    indicator_dict = {
-                        'name': getattr(indicator, 'name', ''),
-                        'type': getattr(indicator, 'type', 'Indicator'),
-                        'function': getattr(indicator, 'function', ''),
-                        'agg_config': getattr(indicator, 'agg_config', '1m-normal'),
-                        'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
-                        'parameters': getattr(indicator, 'parameters', {})
-                    }
-                elif isinstance(indicator, dict):
-                    # Already a dict, just clean it up (remove ranges if present)
-                    indicator_dict = {
-                        'name': indicator.get('name', ''),
-                        'type': indicator.get('type', 'Indicator'),
-                        'function': indicator.get('function', ''),
-                        'agg_config': indicator.get('agg_config', '1m-normal'),
-                        'calc_on_pip': indicator.get('calc_on_pip', False),
-                        'parameters': indicator.get('parameters', {})
+        # Save top elite monitors
+        # Load GA config to get elites_to_save parameter
+        elites_to_save = 5  # Default value
+        try:
+            with open(ga_config_path) as f:
+                ga_config = json.load(f)
+                elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+        except Exception as e:
+            logger.warning(f"Could not read elites_to_save from GA config: {e}")
+        
+        if elites and len(elites) >= 1 and elites_to_save >= 1:  # Save elites if any exist and requested
+            # Limit the number of elites to save
+            elites_to_process = elites[:elites_to_save]
+            logger.info(f"💫 Saving top {len(elites_to_process)} elite monitors (out of {len(elites)} total)...")
+            
+            for i, elite in enumerate(elites_to_process):
+                if not hasattr(elite, 'individual') or not hasattr(elite.individual, 'monitor_configuration'):
+                    logger.warning(f"Elite #{i+1} missing individual.monitor_configuration, skipping")
+                    continue
+                    
+                elite_file = results_dir / f"{timestamp}_{test_name}_elite_{i+1}.json"
+                logger.info(f"Processing elite #{i+1}, saving to: {elite_file}")
+                elite_config = elite.individual.monitor_configuration
+                
+                # Extract trade executor config for elite
+                elite_trade_executor = {}
+                if hasattr(elite_config, 'trade_executor'):
+                    te = elite_config.trade_executor
+                    elite_trade_executor = {
+                        'default_position_size': getattr(te, 'default_position_size', 100.0),
+                        'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
+                        'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
+                        'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
+                        'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
+                        'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
+                        'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
                     }
                 else:
-                    # Skip malformed indicators
+                    elite_trade_executor = {
+                        'default_position_size': 100.0,
+                        'stop_loss_pct': 0.01,
+                        'take_profit_pct': 0.02,
+                        'ignore_bear_signals': False,
+                        'trailing_stop_loss': False,
+                        'trailing_stop_distance_pct': 0.01,
+                        'trailing_stop_activation_pct': 0.005
+                    }
+                
+                # Convert elite indicators to proper dict format
+                elite_indicators_list = []
+                if hasattr(elite_config, 'indicators') and elite_config.indicators:
+                    for indicator in elite_config.indicators:
+                        indicator_dict = {
+                            'name': indicator.name,
+                            'type': indicator.type,
+                            'function': indicator.function,
+                            'agg_config': indicator.agg_config,
+                            'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
+                            'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}
+                        }
+                        elite_indicators_list.append(indicator_dict)
+                
+                # Create elite monitor dict (same format as best monitor)
+                elite_dict = {
+                    'monitor': {
+                        'name': getattr(elite_config, 'name', f"Elite {i+1}"),
+                        'description': getattr(elite_config, 'description', f"Elite monitor #{i+1}"),
+                        'trade_executor': elite_trade_executor,
+                        'enter_long': getattr(elite_config, 'enter_long', []),
+                        'exit_long': getattr(elite_config, 'exit_long', []),
+                        'bars': getattr(elite_config, 'bars', {}),
+                    },
+                    'indicators': elite_indicators_list
+                }
+                
+                # Save elite monitor
+                try:
+                    with open(elite_file, 'w') as f:
+                        json.dump(elite_dict, f, indent=2)
+                    
+                    results_info['files_created'].append(str(elite_file))
+                    logger.info(f"✅ Saved elite #{i+1} config: {elite_file}")
+                except Exception as save_error:
+                    logger.error(f"❌ Failed to save elite #{i+1}: {save_error}")
                     continue
-
-                indicators_list.append(indicator_dict)
-
-            # Build the complete monitor dict in your format with FULL trade executor
-            monitor_dict = {
-                'test_name': test_name,
-                'monitor': {
-                    '_id': '65f2d5555555555555555555',  # Placeholder ID
-                    'user_id': '65f2d6666666666666666666',  # Placeholder user ID
-                    'name': getattr(monitor_config, 'name', test_name),
-                    'description': f'Optimized configuration from GA run {timestamp}',
-                    'trade_executor': trade_executor,  # Now includes ALL fields
-                    'enter_long': getattr(monitor_config, 'enter_long', []),
-                    'exit_long': getattr(monitor_config, 'exit_long', []),
-                    'bars': getattr(monitor_config, 'bars', {}),
-                },
-                'indicators': indicators_list
-            }
-
-            # Save without default=str to avoid string conversion
-            with open(best_monitor_file, 'w') as f:
-                json.dump(monitor_dict, f, indent=2)
-
-            results_info['files_created'].append(str(best_monitor_file))
-            logger.info(f"✅ Saved best monitor config: {best_monitor_file}")
+            
+            logger.info(f"💫 Successfully saved {len(elites_to_process)} elite monitors")
 
         # 2. Save objectives evolution CSV
         if best_individuals_log:
@@ -706,6 +711,55 @@ def handle_stop_optimization():
         'total_generations': optimization_state['total_generations']
     })
     logger.info("Optimization stopped by user")
+
+
+@socketio.on('save_current_best')
+def handle_save_current_best():
+    """Save the current best results without stopping the optimization"""
+    global optimization_state
+    
+    logger.info("📁 Saving current best results...")
+    
+    # Check if we have current results to save
+    if not optimization_state.get('last_best_individual') or not optimization_state.get('best_individuals_log'):
+        emit('save_current_error', {
+            'error': 'No optimization results available to save yet'
+        })
+        return
+    
+    try:
+        # Generate timestamp for this save
+        save_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        
+        # Get the current GA config path and test name
+        ga_config_path = optimization_state.get('ga_config_path', 'unknown_config.json')
+        test_name = optimization_state.get('test_name', 'unknown_test')
+        
+        # Save current results with timestamp indicating it's a partial save
+        test_name_with_partial = f"{test_name}_partial_gen_{optimization_state.get('current_generation', 0)}"
+        
+        results_info = save_optimization_results(
+            optimization_state['best_individuals_log'],
+            optimization_state['last_best_individual'],
+            optimization_state.get('elites', []),
+            ga_config_path,
+            test_name_with_partial,
+            save_timestamp
+        )
+        
+        emit('save_current_success', {
+            'generation': optimization_state.get('current_generation', 0),
+            'total_generations': optimization_state.get('total_generations', 0),
+            'results_info': results_info
+        })
+        
+        logger.info(f"✅ Successfully saved current best results at generation {optimization_state.get('current_generation', 0)}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving current best: {e}")
+        emit('save_current_error', {
+            'error': str(e)
+        })
 
 
 # Keep your existing REST endpoints for file uploads and config loading
