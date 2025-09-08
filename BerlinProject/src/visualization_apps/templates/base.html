@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Visualization Apps{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Highcharts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
+    
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link {
+            color: #ecf0f1;
+            padding: 15px 20px;
+            border-radius: 0;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar .nav-link:hover {
+            background-color: rgba(255,255,255,0.1);
+            color: #fff;
+            border-left-color: #3498db;
+        }
+        
+        .sidebar .nav-link.active {
+            background-color: rgba(52, 152, 219, 0.2);
+            color: #fff;
+            border-left-color: #3498db;
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            width: 20px;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .logo-section {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .logo-section h4 {
+            color: #ecf0f1;
+            margin: 10px 0;
+            font-weight: 300;
+        }
+        
+        .logo-img {
+            max-width: 60px;
+            height: auto;
+        }
+        
+        /* Flash messages */
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 400px;
+        }
+
+        /* Form label horizontal layout */
+        .row.g-2 > div,
+        .row.g-3 > div {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            min-width: 120px;
+            margin-bottom: 0;
+            text-align: right;
+            flex-shrink: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .form-control,
+        .form-select {
+            flex: 1;
+        }
+
+        /* Form check styling for horizontal layout */
+        .form-check {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-check .form-check-label {
+            margin-bottom: 0;
+            min-width: auto;
+            text-align: left;
+        }
+
+        /* Half-width charts and config editors as per requirements */
+        .chart-container {
+            max-width: 50% !important;
+            margin: 0 auto 1rem auto;
+        }
+        
+        .config-editor-container {
+            max-width: 50% !important;
+        }
+        
+        /* Chart sizing for half-width requirement */
+        .col-md-6 .card .card-body > div[id$="Chart"] {
+            height: 400px;
+        }
+        
+        /* Performance metrics styling */
+        .performance-metrics {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .metric-card {
+            text-align: center;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            background: white;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+        
+        .metric-value.positive {
+            color: #28a745;
+        }
+        
+        .metric-value.negative {
+            color: #dc3545;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        
+        /* Individual indicator sub-panels */
+        .indicator-panel {
+            margin-bottom: 0.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+        }
+        
+        .indicator-panel .card-header {
+            padding: 0.75rem 1rem;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .indicator-panel .card-header:hover {
+            background: #dee2e6;
+        }
+        
+        .indicator-panel .card-body {
+            padding: 1rem;
+            display: none; /* Start collapsed */
+        }
+        
+        .indicator-panel .card-body.show {
+            display: block;
+        }
+        
+        .indicator-panel .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        .indicator-panel .toggle-icon.expanded {
+            transform: rotate(90deg);
+        }
+        
+        /* Performance metrics table styling */
+        .performance-table {
+            font-size: 0.875rem;
+        }
+        
+        .performance-table th {
+            background: #f8f9fa;
+            border-top: none;
+            font-weight: 600;
+        }
+        
+        .performance-table .text-success {
+            color: #28a745 !important;
+        }
+        
+        .performance-table .text-danger {
+            color: #dc3545 !important;
+        }
+        
+        /* Trade distribution bar chart container */
+        .trade-distribution-container {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* Red/Green candlestick chart theme override */
+        .highcharts-color-0 {
+            fill: #28a745 !important;
+            stroke: #28a745 !important;
+        }
+        
+        .highcharts-color-1 {  
+            fill: #dc3545 !important;
+            stroke: #dc3545 !important;
+        }
+        
+        /* Force candlestick colors */
+        .highcharts-candlestick-series .highcharts-point.highcharts-point-up {
+            fill: #28a745 !important;
+            stroke: #28a745 !important;
+        }
+        
+        .highcharts-candlestick-series .highcharts-point:not(.highcharts-point-up) {
+            fill: #dc3545 !important;
+            stroke: #dc3545 !important;
+        }
+
+        /* Optimizer charts styling - clean and consistent */
+        #chartsSection .card {
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #chartsSection .card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        #chartsSection .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Make charts use more screen width */
+        #chartsSection .row {
+            margin-left: -15px;
+            margin-right: -15px;
+        }
+
+        #chartsSection .col-12,
+        #chartsSection .col-lg-6,
+        #chartsSection .col-auto {
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+
+        /* Fixed width cards for objective and parallel coordinates */
+        #chartsSection .card[style*="width: 900px"] {
+            min-width: 900px;
+            max-width: 900px;
+        }
+
+        /* Ensure the rows can accommodate both 900px cards */
+        #chartsSection .row:first-child,
+        #chartsSection .row:nth-child(2) {
+            overflow-x: auto;
+            flex-wrap: nowrap;
+        }
+
+        #chartsSection .row:first-child .col-auto,
+        #chartsSection .row:nth-child(2) .col-auto {
+            flex: 0 0 auto;
+        }
+
+        /* Responsive behavior for halfscreen/smaller windows */
+        @media (max-width: 1800px) {
+            /* Scale down the 900px cards to half width for halfscreen mode */
+            #chartsSection .card[style*="width: 900px"] {
+                width: 450px !important;
+                min-width: 450px !important;
+                max-width: 450px !important;
+            }
+            
+            /* Adjust chart heights for smaller cards */
+            #chartsSection .card[style*="width: 900px"] #objectiveChart,
+            #chartsSection .card[style*="width: 900px"] #parallelCoordsChart,
+            #chartsSection .card[style*="width: 900px"] #bestStrategyChart {
+                height: 300px !important;
+            }
+            
+            /* Adjust table max-height for smaller cards */
+            #chartsSection .card[style*="width: 900px"] .table-responsive {
+                max-height: 300px !important;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            /* Further scale down for tablet/mobile */
+            #chartsSection .card[style*="width: 900px"] {
+                width: 100% !important;
+                min-width: auto !important;
+                max-width: none !important;
+                margin-bottom: 1rem;
+            }
+            
+            /* Stack side-by-side cards vertically on smaller screens */
+            #chartsSection .row:first-child,
+            #chartsSection .row:nth-child(2) {
+                flex-wrap: wrap !important;
+                overflow-x: visible;
+            }
+            
+            #chartsSection .row:first-child .col-auto,
+            #chartsSection .row:nth-child(2) .col-auto {
+                flex: 1 0 100%;
+                max-width: 100%;
+            }
+        }
+
+        /* Responsive - stack on mobile */
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: -250px;
+            }
+            
+            .sidebar.show {
+                margin-left: 0;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .row.g-2 > div,
+            .row.g-3 > div {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.25rem;
+            }
+            
+            .form-label {
+                text-align: left;
+                min-width: auto;
+            }
+            
+            .chart-container, .config-editor-container {
+                max-width: 100% !important;
+            }
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="logo-section">
+            <img src="{{ url_for('static', filename='mlf_logo.png') }}" alt="Logo" class="logo-img">
+            <h4>Visualization Suite</h4>
+        </div>
+        
+        <ul class="nav nav-pills flex-column">
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
+                    <i class="fas fa-home"></i>Home
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'replay.replay_main' %}active{% endif %}" href="{{ url_for('replay.replay_main') }}">
+                    <i class="fas fa-play-circle"></i>Replay Visualization
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'optimizer.optimizer_main' %}active{% endif %}" href="{{ url_for('optimizer.optimizer_main') }}">
+                    <i class="fas fa-dna"></i>Optimizer Visualization
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'indicator.indicator_main' %}active{% endif %}" href="{{ url_for('indicator.indicator_main') }}">
+                    <i class="fas fa-chart-line"></i>Indicator Visualization
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Flash Messages -->
+        <div class="alert-container" id="alertContainer"></div>
+        
+        <!-- Development Updates Alert -->
+        <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+            <h6 class="alert-heading mb-2"><i class="fas fa-info-circle me-2"></i>Development Updates</h6>
+            <ul class="mb-2 small">
+                <li>Bar scores graphs are under construction</li>
+                <li>Add Indicator Button for Editor config under construction</li>
+                <li>Indicator Visualization tab under construction</li>
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        
+        {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Global alert function
+        window.showAlert = function(message, type = 'info') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertId = 'alert-' + Date.now();
+            
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" id="${alertId}" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            alertContainer.insertAdjacentHTML('beforeend', alertHtml);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const alertElement = document.getElementById(alertId);
+                if (alertElement) {
+                    const alert = new bootstrap.Alert(alertElement);
+                    alert.close();
+                }
+            }, 5000);
+        };
+        
+        // Mobile sidebar toggle
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('show');
+        }
+        
+        // Individual indicator panel toggle
+        window.toggleIndicatorPanel = function(panelId) {
+            const panel = document.getElementById(panelId);
+            const cardBody = panel.querySelector('.card-body');
+            const toggleIcon = panel.querySelector('.toggle-icon');
+            
+            if (cardBody.classList.contains('show')) {
+                cardBody.classList.remove('show');
+                toggleIcon.classList.remove('expanded');
+            } else {
+                cardBody.classList.add('show');
+                toggleIcon.classList.add('expanded');
+            }
+        };
+        
+        // Create individual indicator sub-panels
+        window.createIndicatorSubPanels = function(containerId, indicators) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            container.innerHTML = ''; // Clear existing content
+            
+            indicators.forEach((indicator, index) => {
+                const panelId = `indicator-panel-${index}`;
+                const indicatorName = indicator.name || indicator.display_name || `Indicator ${index + 1}`;
+                
+                const panelHtml = `
+                    <div class="indicator-panel" id="${panelId}">
+                        <div class="card-header" onclick="toggleIndicatorPanel('${panelId}')">
+                            <span>${indicatorName}</span>
+                            <i class="fas fa-chevron-right toggle-icon"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3" id="${panelId}-content">
+                                <!-- Indicator-specific content will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.insertAdjacentHTML('beforeend', panelHtml);
+            });
+        };
+        
+        // Performance metrics helper
+        window.updatePerformanceMetrics = function(metrics) {
+            const metricsContainer = document.getElementById('performanceMetrics');
+            if (!metricsContainer) return;
+            
+            const {
+                totalTrades = 0,
+                winningTrades = 0,
+                losingTrades = 0,
+                winRate = 0,
+                totalPnL = 0,
+                avgWin = 0,
+                avgLoss = 0
+            } = metrics;
+            
+            const metricsHtml = `
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="metric-card">
+                            <div class="metric-value">${totalTrades}</div>
+                            <div class="metric-label">Total Trades</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="metric-card">
+                            <div class="metric-value ${winRate >= 50 ? 'positive' : 'negative'}">${winRate.toFixed(1)}%</div>
+                            <div class="metric-label">Win Rate</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="metric-card">
+                            <div class="metric-value ${totalPnL >= 0 ? 'positive' : 'negative'}">${totalPnL.toFixed(2)}%</div>
+                            <div class="metric-label">Total P&L</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="metric-card">
+                            <div class="metric-value positive">${avgWin.toFixed(2)}%</div>
+                            <div class="metric-label">Avg Win</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="metric-card">
+                            <div class="metric-value negative">${Math.abs(avgLoss).toFixed(2)}%</div>
+                            <div class="metric-label">Avg Loss</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="metric-card">
+                            <div class="metric-value">${profitFactor.toFixed(2)}</div>
+                            <div class="metric-label">Profit Factor</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value text-success">${winningTrades}</div>
+                            <div class="metric-label">Winning Trades</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value text-danger">${losingTrades}</div>
+                            <div class="metric-label">Losing Trades</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value negative">${maxDrawdown.toFixed(2)}%</div>
+                            <div class="metric-label">Max Drawdown</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            metricsContainer.innerHTML = metricsHtml;
+        };
+        
+        // Highcharts theme for red/green candlesticks
+        window.applyCandlestickTheme = function(chartOptions) {
+            chartOptions.plotOptions = chartOptions.plotOptions || {};
+            chartOptions.plotOptions.candlestick = {
+                upColor: '#28a745',
+                color: '#dc3545',
+                upLineColor: '#28a745',
+                lineColor: '#dc3545'
+            };
+            return chartOptions;
+        };
+        
+        // Global configuration management
+        window.currentConfigs = {};
+        
+        // Listen for configuration ready events
+        document.addEventListener('configsReady', async function(e) {
+            console.log('🔧 configsReady event triggered');
+            console.log('🔧 Config files uploaded:', e.detail);
+            
+            try {
+                // Load configuration files
+                const response = await fetch(`${window.location.pathname}/api/load_configs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(e.detail)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    window.currentConfigs = {
+                        ga_config: result.ga_config,
+                        data_config: result.data_config
+                    };
+                    console.log('🔧 Configurations loaded successfully');
+                    console.log('🔧 window.currentConfigs:', window.currentConfigs);
+                    showAlert('Configurations loaded successfully', 'success');
+                    
+                    // Trigger a custom event that the specific page can listen to
+                    const configsLoadedEvent = new CustomEvent('configurationsLoaded', {
+                        detail: window.currentConfigs
+                    });
+                    console.log('🔧 Dispatching configurationsLoaded event');
+                    document.dispatchEvent(configsLoadedEvent);
+                } else {
+                    throw new Error(result.error || 'Failed to load configurations');
+                }
+                
+            } catch (error) {
+                showAlert(`Failed to load configurations: ${error.message}`, 'danger');
+            }
+        });
+        
+        // Listen for example configurations loaded
+        document.addEventListener('examplesLoaded', function(e) {
+            window.currentConfigs = e.detail;
+            console.log('Example configurations loaded:', window.currentConfigs);
+            
+            // Trigger the same event
+            const configsLoadedEvent = new CustomEvent('configurationsLoaded', {
+                detail: window.currentConfigs
+            });
+            document.dispatchEvent(configsLoadedEvent);
+        });
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
