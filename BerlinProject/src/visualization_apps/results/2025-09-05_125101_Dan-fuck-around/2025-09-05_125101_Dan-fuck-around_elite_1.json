@@ -1,0 +1,158 @@
+{
+  "monitor": {
+    "name": "Unified Trading Strategy",
+    "description": "Example strategy using unified trade executor with configurable parameters",
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.04,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.01,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "enter_long": [
+      {
+        "name": "macd_bull_strong",
+        "threshold": 0.8756582389386259
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "macd_bear_strong",
+        "threshold": 0.7738647846201058
+      }
+    ],
+    "bars": {
+      "macd_bear_strong": {
+        "description": "Strong bearish signal for exits",
+        "indicators": {
+          "macd5m-bear": 96,
+          "sma5m-bear": 57
+        },
+        "type": "bear"
+      },
+      "macd_bull_strong": {
+        "description": "needs macd and sma both triggered",
+        "indicators": {
+          "macd15m": 6,
+          "macd5m": 8,
+          "sma15m": 2,
+          "sma5m": 71
+        },
+        "type": "bull"
+      }
+    }
+  },
+  "indicators": [
+    {
+      "name": "macd15m",
+      "display_name": "macd15m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "15m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "fast": 16,
+        "histogram_threshold": 0.0746,
+        "lookback": 7,
+        "signal": 14,
+        "slow": 22,
+        "trend": "bullish"
+      },
+      "enabled": true,
+      "new_system": true
+    },
+    {
+      "name": "macd5m",
+      "display_name": "macd5m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "fast": 15,
+        "histogram_threshold": 0.0077,
+        "lookback": 19,
+        "signal": 12,
+        "slow": 12,
+        "trend": "bullish"
+      },
+      "enabled": true,
+      "new_system": true
+    },
+    {
+      "name": "sma15m",
+      "display_name": "sma15m",
+      "type": "Indicator",
+      "function": "sma_crossover",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "crossover_value": 0.0131,
+        "lookback": 14,
+        "period": 10,
+        "trend": "bullish"
+      },
+      "enabled": true,
+      "new_system": true
+    },
+    {
+      "name": "sma5m",
+      "display_name": "sma5m",
+      "type": "Indicator",
+      "function": "sma_crossover",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "crossover_value": 0.0074,
+        "lookback": 14,
+        "period": 16,
+        "trend": "bullish"
+      },
+      "enabled": true,
+      "new_system": true
+    },
+    {
+      "name": "sma5m-bear",
+      "display_name": "sma5m-bear",
+      "type": "Indicator",
+      "function": "sma_crossover",
+      "agg_config": "15m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "crossover_value": 0.0035,
+        "lookback": 20,
+        "period": 16,
+        "trend": "bearish"
+      },
+      "enabled": true,
+      "new_system": true
+    },
+    {
+      "name": "macd5m-bear",
+      "display_name": "macd5m-bear",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "fast": 8,
+        "histogram_threshold": 0.0074,
+        "lookback": 19,
+        "signal": 14,
+        "slow": 30,
+        "trend": "bearish"
+      },
+      "enabled": true,
+      "new_system": true
+    }
+  ],
+  "system_version": "new_indicator_system_v1.0",
+  "fitness_values": [
+    0.9763615068044537,
+    1.274521728632457,
+    1.0275862068965518,
+    3.6641877877221485
+  ]
+}

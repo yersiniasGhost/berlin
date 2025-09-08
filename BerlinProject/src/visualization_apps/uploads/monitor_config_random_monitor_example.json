@@ -1,0 +1,108 @@
+{
+  "test_name": "MACD-enter-exit",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "user_id": "65f2d6666666666666666666",
+    "name": "Selective MACD Strategy",
+    "description": "Optimized configuration from GA run 2025-08-16_120719",
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.05,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.02,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "enter_long": [
+      {
+        "name": "macd_bull_strong",
+        "threshold": 0.6510199293729403
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "macd_bear_strong",
+        "threshold": 0.7337425160473176
+      }
+    ],
+    "bars": {
+      "macd_bull_strong": {
+        "type": "bull",
+        "description": "needs macd and sma both triggered",
+        "indicators": {
+          "macd1m": 74,
+          "macd5m": 99,
+          "sma1m": 3.0
+        }
+      },
+      "macd_bear_strong": {
+        "type": "bear",
+        "description": "Strong bearish signal for exits",
+        "indicators": {
+          "macdbear5m": 3.0
+        }
+      }
+    }
+  },
+  "indicators": [
+    {
+      "name": "macd1m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "slow": 27,
+        "fast": 10,
+        "signal": 8,
+        "histogram_threshold": 0.02887695378942665,
+        "lookback": 10,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "macd5m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "slow": 29,
+        "fast": 18,
+        "signal": 12,
+        "histogram_threshold": 0.0829,
+        "lookback": 18,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "sma1m",
+      "type": "Indicator",
+      "function": "sma_crossover",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "period": 40,
+        "crossover_value": 0.01465,
+        "lookback": 10,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "macdbear5m",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "15m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "slow": 34,
+        "fast": 7,
+        "signal": 11,
+        "histogram_threshold": 0.0115,
+        "lookback": 20,
+        "trend": "bearish"
+      }
+    }
+  ]
+}
