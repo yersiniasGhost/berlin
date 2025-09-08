@@ -1,0 +1,885 @@
+{% extends "base.html" %}
+
+{% block title %}Optimizer Visualization{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-dna me-2"></i>Optimizer Visualization
+            </h2>
+        </div>
+    </div>
+    
+    <!-- Configuration Section -->
+    <div class="row">
+        <div class="col-12">
+            {% set file_types = [
+                {'key': 'ga_config', 'title': 'GA Configuration', 'description': 'Upload your genetic algorithm configuration JSON file'},
+                {'key': 'data_config', 'title': 'Data Configuration', 'description': 'Upload your data configuration JSON file'}
+            ] %}
+            {% include 'components/file_upload.html' %}
+        </div>
+    </div>
+    
+    <!-- Configuration Editor -->
+    <div class="row">
+        <div class="col-12">
+            {% set config_tabs = [
+                {'key': 'ga_config', 'title': 'GA Config', 'icon': 'fas fa-dna'},
+                {'key': 'data_config', 'title': 'Data Config', 'icon': 'fas fa-database'}
+            ] %}
+            {% include 'components/config_editor.html' %}
+        </div>
+    </div>
+    
+    <!-- Control Panel -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <button type="button" class="btn btn-success btn-lg me-3" id="startOptimizerBtn" disabled>
+                                <i class="fas fa-play me-2"></i>Start Optimization
+                            </button>
+                            <button type="button" class="btn btn-warning btn-lg me-3" id="pauseOptimizerBtn" disabled>
+                                <i class="fas fa-pause me-2"></i>Pause
+                            </button>
+                            <button type="button" class="btn btn-danger btn-lg" id="stopOptimizerBtn" disabled>
+                                <i class="fas fa-stop me-2"></i>Stop
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="progress mb-2" style="height: 25px;">
+                                <div class="progress-bar" id="optimizationProgress" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                    <span id="progressText">Ready</span>
+                                </div>
+                            </div>
+                            <small class="text-muted" id="optimizationStatus">Generation: 0 / 0</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Charts Section - Modular 2x3 Grid -->
+    <div class="row" id="chartsSection" style="display: none;">
+        <!-- Chart Grid Container -->
+        <div class="col-12">
+            <!-- Fixed Layout: Objective Evolution, Generation Performance Metrics, Candlestick Chart, Winning/Losing Trades -->
+            
+            <!-- 1. Objective Evolution and Parallel Coordinates - Side by Side with Fixed Widths -->
+            <div class="row mb-4">
+                <div class="col-auto">
+                    <div class="card" style="width: 900px;">
+                        <div class="card-header">
+                            <h6 class="mb-0">Objective Evolution</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="objectiveChart" style="height: 400px; width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="card" style="width: 900px;">
+                        <div class="card-header">
+                            <h6 class="mb-0">Elite Population - Parallel Coordinates</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="parallelCoordsChart" style="height: 400px; width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 2. Generation Performance Metrics and Candlestick Chart - Side by Side with Fixed Widths -->
+            <div class="row mb-4">
+                <div class="col-auto">
+                    <div class="card" style="width: 900px;">
+                        <div class="card-header">
+                            <h6 class="mb-0">Generation Performance Metrics</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-striped table-sm">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th>Gen</th>
+                                            <th>Total Trades</th>
+                                            <th>Winning</th>
+                                            <th>Losing</th>
+                                            <th>Total P&L (%)</th>
+                                            <th>Avg Win (%)</th>
+                                            <th>Avg Loss (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="metricsTable">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">No performance data yet</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="card" style="width: 900px;">
+                        <div class="card-header">
+                            <h6 class="mb-0">Current Best Strategy</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="bestStrategyChart" style="height: 400px; width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 5. Winning and Losing Trades Distribution - Side by Side -->
+            <div class="row mb-4">
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="mb-0 text-success">Winning Trades Distribution</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="winningTradesChart" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="mb-0 text-danger">Losing Trades Distribution</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="losingTradesChart" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const startOptimizerBtn = document.getElementById('startOptimizerBtn');
+    const pauseOptimizerBtn = document.getElementById('pauseOptimizerBtn');
+    const stopOptimizerBtn = document.getElementById('stopOptimizerBtn');
+    const chartsSection = document.getElementById('chartsSection');
+    const elitesSection = document.getElementById('elitesSection');
+    
+    let charts = {};
+    let optimizationRunning = false;
+    let pollInterval = null;
+    let addedGenerations = new Set(); // Track which generations have been added to the table
+    
+    // Initialize WebSocket connection
+    function initializeWebSocket() {
+        window.socket = io();
+        
+        window.socket.on('optimization_started', function(data) {
+            showAlert('Optimization started successfully!', 'success');
+            console.log('Optimization started:', data);
+        });
+        
+        window.socket.on('generation_complete', function(data) {
+            console.log('Generation complete:', data.generation);
+            updateProgressBar(data);
+            updateCharts(data.optimizer_charts || data.chart_data || {});
+        });
+        
+        window.socket.on('optimization_complete', function(data) {
+            showAlert('Optimization completed!', 'success');
+            optimizationRunning = false;
+            resetButtons();
+            stopPolling();
+        });
+        
+        window.socket.on('optimization_error', function(data) {
+            showAlert(`Optimization error: ${data.error}`, 'danger');
+            resetButtons();
+        });
+        
+        window.socket.on('optimization_paused', function(data) {
+            showAlert('Optimization paused', 'info');
+        });
+        
+        window.socket.on('optimization_resumed', function(data) {
+            showAlert('Optimization resumed', 'info');
+        });
+        
+        window.socket.on('optimization_stopped', function(data) {
+            showAlert('Optimization stopped', 'warning');
+            resetButtons();
+            stopPolling();
+        });
+    }
+    
+    // Initialize WebSocket on page load
+    initializeWebSocket();
+    
+    // Listen for config changes to enable/disable start button
+    document.addEventListener('configurationsLoaded', function(e) {
+        console.log('🔧 configurationsLoaded event triggered');
+        console.log('🔧 Event detail:', e.detail);
+        console.log('🔧 window.currentConfigs:', window.currentConfigs);
+        console.log('🔧 Button element:', startOptimizerBtn);
+        console.log('🔧 Button disabled before:', startOptimizerBtn.disabled);
+        
+        startOptimizerBtn.disabled = false;
+        console.log('🔧 Button disabled after:', startOptimizerBtn.disabled);
+        console.log('🔧 Button classes:', startOptimizerBtn.className);
+    });
+    
+    // Add debug logging for page load
+    console.log('🔧 Optimizer page JavaScript loaded');
+    console.log('🔧 Start button element:', startOptimizerBtn);
+    console.log('🔧 Start button initially disabled:', startOptimizerBtn.disabled);
+    
+    // Start optimization
+    startOptimizerBtn.addEventListener('click', async function() {
+        if (!window.currentConfigs || !window.currentConfigs.ga_config || !window.currentConfigs.data_config) {
+            showAlert('Please load both GA and data configurations first', 'warning');
+            return;
+        }
+        
+        try {
+            this.disabled = true;
+            pauseOptimizerBtn.disabled = false;
+            stopOptimizerBtn.disabled = false;
+            
+            const response = await fetch('/optimizer/api/start_optimization', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ga_config: window.currentConfigs.ga_config,
+                    data_config: window.currentConfigs.data_config
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                optimizationRunning = true;
+                showAlert('Configurations prepared, starting optimization...', 'info');
+                
+                // Now trigger the WebSocket to actually start the optimization
+                if (window.socket) {
+                    window.socket.emit('start_optimization', {
+                        ga_config_path: result.ga_config_path,
+                        data_config_path: result.data_config_path
+                    });
+                } else {
+                    // Initialize socket if not already done
+                    initializeWebSocket();
+                    setTimeout(() => {
+                        window.socket.emit('start_optimization', {
+                            ga_config_path: result.ga_config_path,
+                            data_config_path: result.data_config_path
+                        });
+                    }, 100);
+                }
+                
+                startPolling();
+                showCharts();
+            } else {
+                throw new Error(result.error || 'Failed to start optimization');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to start optimization: ${error.message}`, 'danger');
+            resetButtons();
+        }
+    });
+    
+    // Pause optimization
+    pauseOptimizerBtn.addEventListener('click', async function() {
+        try {
+            const response = await fetch('/optimizer/api/pause_optimization', {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                optimizationRunning = false;
+                this.disabled = true;
+                startOptimizerBtn.disabled = false;
+                showAlert('Optimization paused', 'info');
+                stopPolling();
+            } else {
+                throw new Error(result.error || 'Failed to pause optimization');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to pause optimization: ${error.message}`, 'danger');
+        }
+    });
+    
+    // Stop optimization
+    stopOptimizerBtn.addEventListener('click', async function() {
+        try {
+            const response = await fetch('/optimizer/api/stop_optimization', {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert('Optimization stopped', 'warning');
+                resetButtons();
+                stopPolling();
+            } else {
+                throw new Error(result.error || 'Failed to stop optimization');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to stop optimization: ${error.message}`, 'danger');
+        }
+    });
+    
+    function resetButtons() {
+        startOptimizerBtn.disabled = false;
+        pauseOptimizerBtn.disabled = true;
+        stopOptimizerBtn.disabled = true;
+        optimizationRunning = false;
+        
+        // Clear the generations tracking set for next optimization
+        addedGenerations.clear();
+        
+        // Clear the performance metrics table
+        const tableBody = document.getElementById('metricsTable');
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No performance data yet</td></tr>';
+        }
+    }
+    
+    function showCharts() {
+        chartsSection.style.display = 'block';
+        initializeCharts();
+    }
+    
+    function initializeCharts() {
+        // Initialize empty charts
+        charts.objective = Highcharts.chart('objectiveChart', {
+            chart: { type: 'line' },
+            title: { text: 'Objective Evolution' },
+            xAxis: { title: { text: 'Generation' } },
+            yAxis: { title: { text: 'Objective Value' } },
+            series: [], // Will be dynamically populated
+            credits: { enabled: false },
+            legend: { enabled: true }
+        });
+        
+        // Initialize parallel coordinates chart (like old app)
+        charts.parallelCoords = Highcharts.chart('parallelCoordsChart', {
+            chart: {
+                type: 'line',
+                parallelCoordinates: true,
+                parallelAxes: {
+                    lineWidth: 2,
+                    gridlinesWidth: 1
+                }
+            },
+            title: { text: 'Elite Population Analysis' },
+            plotOptions: {
+                series: {
+                    animation: { duration: 500 },
+                    lineWidth: 2.5,
+                    opacity: 0.75,
+                    marker: { enabled: false }
+                }
+            },
+            legend: { enabled: false },
+            credits: { enabled: false }
+        });
+        
+        // Initialize winning trades distribution chart
+        charts.winningTrades = Highcharts.chart('winningTradesChart', {
+            chart: { type: 'column' },
+            title: { text: 'Winning Trades Distribution' },
+            xAxis: { 
+                title: { text: 'Percentage Gain (%)' },
+                categories: []
+            },
+            yAxis: { 
+                title: { text: 'Number of Trades' },
+                min: 0 
+            },
+            series: [{
+                name: 'Winning Trades',
+                data: [],
+                color: '#28a745'
+            }],
+            credits: { enabled: false }
+        });
+
+        // Initialize losing trades distribution chart
+        charts.losingTrades = Highcharts.chart('losingTradesChart', {
+            chart: { type: 'column' },
+            title: { text: 'Losing Trades Distribution' },
+            xAxis: { 
+                title: { text: 'Percentage Loss (%)' },
+                categories: []
+            },
+            yAxis: { 
+                title: { text: 'Number of Trades' },
+                min: 0 
+            },
+            series: [{
+                name: 'Losing Trades',
+                data: [],
+                color: '#dc3545'
+            }],
+            credits: { enabled: false }
+        });
+        
+        charts.bestStrategy = Highcharts.chart('bestStrategyChart', {
+            chart: { type: 'candlestick' },
+            title: { text: 'Best Strategy Performance' },
+            xAxis: { 
+                type: 'datetime',
+                ordinal: true, // Use ordinal axis to remove all gaps
+                breaks: [] // Clear any default breaks
+            },
+            yAxis: { title: { text: 'Price' } },
+            plotOptions: {
+                candlestick: {
+                    upColor: '#28a745',
+                    color: '#dc3545',
+                    upLineColor: '#28a745',
+                    lineColor: '#dc3545'
+                }
+            },
+            series: [{
+                name: 'Price',
+                data: [],
+                type: 'candlestick'
+            }],
+            credits: { enabled: false }
+        });
+    }
+    
+    function startPolling() {
+        pollInterval = setInterval(updateProgress, 2000); // Poll every 2 seconds
+    }
+    
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+    
+    async function updateProgress() {
+        try {
+            const response = await fetch('/optimizer/api/get_progress');
+            const data = await response.json();
+            
+            if (data.success) {
+                updateProgressBar(data.progress);
+                updateCharts(data.charts);
+                updateElitesTable(data.elites);
+                
+                if (data.progress.completed) {
+                    showAlert('Optimization completed!', 'success');
+                    resetButtons();
+                    stopPolling();
+                }
+            }
+            
+        } catch (error) {
+            console.error('Failed to update progress:', error);
+        }
+    }
+    
+    function updateProgressBar(progress) {
+        const progressBar = document.getElementById('optimizationProgress');
+        const progressText = document.getElementById('progressText');
+        const statusText = document.getElementById('optimizationStatus');
+        
+        const percentage = Math.round((progress.current_generation / progress.total_generations) * 100);
+        
+        progressBar.style.width = `${percentage}%`;
+        progressBar.setAttribute('aria-valuenow', percentage);
+        progressText.textContent = `${percentage}%`;
+        statusText.textContent = `Generation: ${progress.current_generation} / ${progress.total_generations}`;
+    }
+    
+    function updateCharts(chartData) {
+        console.log('Updating charts with data:', chartData);
+        
+        // 1. Update Objective Evolution Chart - Multiple objectives as separate lines
+        if (chartData.objective_evolution && charts.objective) {
+            console.log('Updating objective evolution with:', chartData.objective_evolution);
+            
+            // Colors for different objectives
+            const objectiveColors = {
+                'MaximizeProfit': '#28a745',
+                'MinimizeLoss': '#dc3545',
+                'MaximizeNetPnL': '#007bff',
+                'MaximizeWinRate': '#ffc107',
+                'MinimizeDrawdown': '#6f42c1'
+            };
+            
+            // Clear existing series
+            while(charts.objective.series.length > 0) {
+                charts.objective.series[0].remove(false);
+            }
+            
+            // Add series for each objective
+            Object.keys(chartData.objective_evolution).forEach((objectiveName, index) => {
+                const data = chartData.objective_evolution[objectiveName];
+                const color = objectiveColors[objectiveName] || Highcharts.getOptions().colors[index];
+                
+                charts.objective.addSeries({
+                    name: objectiveName,
+                    data: data,
+                    color: color,
+                    lineWidth: 2
+                }, false);
+            });
+            
+            charts.objective.redraw();
+        }
+        
+        // 2. Update Parallel Coordinates Chart (like old app)
+        if (chartData.elite_population_data && chartData.objective_names && charts.parallelCoords) {
+            console.log('Updating parallel coordinates with:', chartData.elite_population_data);
+            
+            const eliteData = chartData.elite_population_data;
+            const objectiveNames = chartData.objective_names;
+            
+            if (eliteData.length > 0 && objectiveNames.length > 0) {
+                // Destroy and recreate chart with proper configuration (like old app)
+                if (charts.parallelCoords) {
+                    charts.parallelCoords.destroy();
+                }
+                
+                const colors = Highcharts.getOptions().colors;
+                const colorCount = colors.length;
+
+                // Normalize data for single y-axis display
+                const normalizedData = [];
+                const originalData = [];
+                const objectiveRanges = [];
+                
+                // Calculate ranges for each objective
+                objectiveNames.forEach((objName, objIndex) => {
+                    const values = eliteData.map(elite => elite[objIndex]);
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    objectiveRanges.push({ min, max, range: max - min || 1 });
+                });
+                
+                // Normalize each elite's data to [0,1] range
+                eliteData.forEach((elite, eliteIndex) => {
+                    const normalizedElite = elite.map((value, objIndex) => {
+                        const { min, range } = objectiveRanges[objIndex];
+                        return range > 0 ? (value - min) / range : 0.5;
+                    });
+                    normalizedData.push(normalizedElite);
+                    originalData.push(elite);
+                });
+
+                const chartConfig = {
+                    chart: {
+                        type: 'line',
+                        parallelCoordinates: true,
+                        parallelAxes: {
+                            lineWidth: 2,
+                            gridlinesWidth: 1
+                        }
+                    },
+                    title: {
+                        text: `Elite Population Analysis (${eliteData.length} Individuals)`,
+                        style: { fontSize: '14px', fontWeight: 'bold' }
+                    },
+                    plotOptions: {
+                        series: {
+                            animation: { duration: 500 },
+                            lineWidth: 2.5,
+                            opacity: 0.75,
+                            states: {
+                                hover: { lineWidth: 4, opacity: 1 }
+                            },
+                            marker: {
+                                enabled: false,
+                                states: {
+                                    hover: { enabled: true, radius: 4 }
+                                }
+                            }
+                        }
+                    },
+                    tooltip: {
+                        formatter: function() {
+                            let tooltipText = '<b>Elite Individual #' + (this.series.index + 1) + '</b><br/>';
+                            const individualData = originalData[this.series.index];
+                            objectiveNames.forEach(function(objName, i) {
+                                tooltipText += objName + ': ' + Highcharts.numberFormat(individualData[i], 4) + '<br/>';
+                            });
+                            return tooltipText;
+                        }
+                    },
+                    legend: { enabled: false },
+                    credits: { enabled: false },
+                    xAxis: {
+                        categories: objectiveNames,
+                        lineWidth: 0,
+                        labels: {
+                            style: { fontWeight: 'bold', fontSize: '11px' },
+                            rotation: -45
+                        }
+                    },
+                    yAxis: {
+                        min: 0,
+                        max: 1,
+                        title: { text: 'Normalized Values' },
+                        labels: {
+                            format: '{value:.1f}'
+                        },
+                        gridLineWidth: 1
+                    },
+                    series: normalizedData.map((elite, index) => ({
+                        name: `Elite ${index + 1}`,
+                        data: elite,
+                        color: colors[index % colorCount],
+                        lineWidth: index === 0 ? 3 : 2.5,
+                        opacity: index === 0 ? 0.9 : 0.75
+                    }))
+                };
+
+                charts.parallelCoords = Highcharts.chart('parallelCoordsChart', chartConfig);
+            }
+        }
+        
+        // 3. Update Winning Trades Distribution Chart
+        if (chartData.winning_trades_distribution && charts.winningTrades) {
+            const categories = chartData.winning_trades_distribution.map(item => item[0]);
+            const data = chartData.winning_trades_distribution.map(item => item[1]);
+            
+            charts.winningTrades.update({
+                xAxis: { categories: categories }
+            }, false);
+            charts.winningTrades.series[0].setData(data, true);
+        }
+        
+        // 4. Update Losing Trades Distribution Chart  
+        if (chartData.losing_trades_distribution && charts.losingTrades) {
+            const categories = chartData.losing_trades_distribution.map(item => item[0]);
+            const data = chartData.losing_trades_distribution.map(item => item[1]);
+            
+            charts.losingTrades.update({
+                xAxis: { categories: categories }
+            }, false);
+            charts.losingTrades.series[0].setData(data, true);
+        }
+        
+        // 4. Update Best Strategy Chart
+        if (chartData.best_strategy && charts.bestStrategy) {
+            // Update with candlestick data and trade triggers
+            const candlestickData = chartData.best_strategy.candlestick_data || [];
+            const triggers = chartData.best_strategy.triggers || [];
+            const trades = chartData.best_strategy.trades || [];
+            
+            charts.bestStrategy.series[0].setData(candlestickData, false);
+            
+            // Remove old signal series if they exist (we're replacing triangles with background bands)
+            while (charts.bestStrategy.series.length > 1) {
+                charts.bestStrategy.series[charts.bestStrategy.series.length - 1].remove(false);
+            }
+            
+            // Clear existing plot bands
+            if (charts.bestStrategy.xAxis[0].plotLinesAndBands) {
+                charts.bestStrategy.xAxis[0].plotLinesAndBands.slice().forEach(band => {
+                    if (band.options.className && band.options.className.includes('trade-band')) {
+                        band.destroy();
+                    }
+                });
+            }
+            
+            // Add background shading bands for complete trades
+            if (trades && trades.length > 0) {
+                trades.forEach((trade, index) => {
+                    if (trade.entry_time && trade.exit_time) {
+                        const isProfit = trade.pnl > 0;
+                        const bandColor = isProfit ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)'; // Green or red with transparency
+                        
+                        charts.bestStrategy.xAxis[0].addPlotBand({
+                            from: new Date(trade.entry_time).getTime(),
+                            to: new Date(trade.exit_time).getTime(),
+                            color: bandColor,
+                            className: `trade-band trade-${index}`,
+                            id: `trade-band-${index}`,
+                            zIndex: 0, // Behind the candlesticks
+                            label: {
+                                text: `${isProfit ? '+' : ''}${trade.pnl.toFixed(2)}%`,
+                                align: 'center',
+                                style: {
+                                    color: isProfit ? '#28a745' : '#dc3545',
+                                    fontWeight: 'bold',
+                                    fontSize: '10px'
+                                }
+                            }
+                        });
+                    }
+                });
+            } else if (triggers && triggers.length > 0) {
+                // Fallback: If no complete trades, try to pair buy/sell signals
+                const buySignals = triggers.filter(t => t.type === 'buy').sort((a, b) => a.timestamp - b.timestamp);
+                const sellSignals = triggers.filter(t => t.type === 'sell').sort((a, b) => a.timestamp - b.timestamp);
+                
+                // Pair buy and sell signals to create trade bands
+                let buyIndex = 0, sellIndex = 0;
+                let tradeCount = 0;
+                
+                while (buyIndex < buySignals.length && sellIndex < sellSignals.length) {
+                    const buySignal = buySignals[buyIndex];
+                    const sellSignal = sellSignals[sellIndex];
+                    
+                    if (buySignal.timestamp < sellSignal.timestamp) {
+                        // Found a valid trade pair
+                        const estimatedPnl = ((sellSignal.price - buySignal.price) / buySignal.price) * 100;
+                        const isProfit = estimatedPnl > 0;
+                        const bandColor = isProfit ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)';
+                        
+                        charts.bestStrategy.xAxis[0].addPlotBand({
+                            from: buySignal.timestamp,
+                            to: sellSignal.timestamp,
+                            color: bandColor,
+                            className: `trade-band trade-${tradeCount}`,
+                            id: `trade-band-${tradeCount}`,
+                            zIndex: 0,
+                            label: {
+                                text: `${isProfit ? '+' : ''}${estimatedPnl.toFixed(2)}%`,
+                                align: 'center',
+                                style: {
+                                    color: isProfit ? '#28a745' : '#dc3545',
+                                    fontWeight: 'bold',
+                                    fontSize: '10px'
+                                }
+                            }
+                        });
+                        
+                        buyIndex++;
+                        sellIndex++;
+                        tradeCount++;
+                    } else {
+                        sellIndex++;
+                    }
+                }
+            }
+            
+            charts.bestStrategy.redraw();
+        }
+        
+        // 5. Update Performance Metrics Table
+        if (chartData.performance_metrics) {
+            updatePerformanceMetricsTable(chartData.performance_metrics);
+        }
+    }
+    
+    function updatePerformanceMetricsTable(metricsData) {
+        const tableBody = document.getElementById('metricsTable');
+        
+        if (!metricsData || metricsData.length === 0) {
+            return; // Don't clear existing data, just don't add new data
+        }
+        
+        // Clear the "No performance data yet" message if it exists
+        if (tableBody.innerHTML.includes('No performance data yet')) {
+            tableBody.innerHTML = '';
+        }
+        
+        // Only add new generations that haven't been added before
+        metricsData.forEach(metric => {
+            const generation = metric.generation;
+            
+            if (!addedGenerations.has(generation)) {
+                addedGenerations.add(generation);
+                
+                const pnlClass = metric.total_pnl >= 0 ? 'text-success' : 'text-danger';
+                
+                const newRow = `
+                    <tr id="generation-${generation}">
+                        <td><strong>${generation}</strong></td>
+                        <td>${metric.total_trades}</td>
+                        <td class="text-success">${metric.winning_trades}</td>
+                        <td class="text-danger">${metric.losing_trades}</td>
+                        <td class="${pnlClass}">${metric.total_pnl.toFixed(2)}%</td>
+                        <td class="text-success">${metric.avg_win.toFixed(2)}%</td>
+                        <td class="text-danger">${metric.avg_loss.toFixed(2)}%</td>
+                    </tr>
+                `;
+                
+                tableBody.insertAdjacentHTML('beforeend', newRow);
+                
+                // Scroll to bottom to show latest generation
+                const tableContainer = tableBody.closest('.table-responsive');
+                if (tableContainer) {
+                    tableContainer.scrollTop = tableContainer.scrollHeight;
+                }
+            }
+        });
+    }
+    
+    // Initialize charts when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // No layout management needed for fixed layout
+        console.log('Optimizer visualization page loaded with fixed layout');
+    });
+    
+    // Global functions for elite actions
+    window.viewElite = async function(index) {
+        try {
+            const response = await fetch(`/optimizer/api/get_elite/${index}`);
+            const result = await response.json();
+            
+            if (result.success) {
+                // Open elite in replay visualization
+                window.open(`/replay?elite=${encodeURIComponent(JSON.stringify(result.elite))}`, '_blank');
+            } else {
+                showAlert('Failed to load elite solution', 'danger');
+            }
+        } catch (error) {
+            showAlert(`Failed to view elite: ${error.message}`, 'danger');
+        }
+    };
+    
+    window.exportElite = async function(index) {
+        try {
+            const response = await fetch(`/optimizer/api/export_elite/${index}`);
+            const result = await response.json();
+            
+            if (result.success) {
+                // Trigger download
+                const blob = new Blob([JSON.stringify(result.config, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `elite_${index + 1}_config.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+                
+                showAlert('Elite configuration exported successfully', 'success');
+            } else {
+                showAlert('Failed to export elite solution', 'danger');
+            }
+        } catch (error) {
+            showAlert(`Failed to export elite: ${error.message}`, 'danger');
+        }
+    };
+});
+</script>
+{% endblock %}

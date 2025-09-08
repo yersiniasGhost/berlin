@@ -1,0 +1,564 @@
+{% extends "base.html" %}
+
+{% block title %}Indicator Visualization{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-chart-line me-2"></i>Indicator Visualization
+            </h2>
+        </div>
+    </div>
+    
+    <!-- Configuration Panel -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Configuration</h6>
+                </div>
+                <div class="card-body">
+                    <form id="indicatorForm">
+                        <div class="mb-3">
+                            <label class="form-label">Data Source</label>
+                            <select class="form-select" id="dataSource">
+                                <option value="upload">Upload Data File</option>
+                                <option value="yahoo">Yahoo Finance</option>
+                                <option value="example">Example Data</option>
+                            </select>
+                        </div>
+                        
+                        <div id="uploadSection">
+                            <div class="mb-3">
+                                <label class="form-label">Data Configuration File</label>
+                                <input type="file" class="form-control" id="dataConfigFile" accept=".json">
+                            </div>
+                        </div>
+                        
+                        <div id="yahooSection" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Ticker Symbol</label>
+                                <input type="text" class="form-control" id="tickerSymbol" placeholder="e.g., AAPL">
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Start Date</label>
+                                        <input type="date" class="form-control" id="startDate">
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">End Date</label>
+                                        <input type="date" class="form-control" id="endDate">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Indicators to Calculate</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="macdIndicator" checked>
+                                <label class="form-check-label" for="macdIndicator">MACD</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="smaIndicator" checked>
+                                <label class="form-check-label" for="smaIndicator">SMA</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="emaIndicator">
+                                <label class="form-check-label" for="emaIndicator">EMA</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="rsiIndicator">
+                                <label class="form-check-label" for="rsiIndicator">RSI</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bollinger">
+                                <label class="form-check-label" for="bollinger">Bollinger Bands</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Trigger Detection</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showTriggers" checked>
+                                <label class="form-check-label" for="showTriggers">Show Trigger Events</label>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary" id="calculateIndicators">
+                                <i class="fas fa-calculator me-2"></i>Calculate Indicators
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="loadExampleData">
+                                <i class="fas fa-star me-2"></i>Load Example
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Indicator Parameters -->
+            <div class="card mt-3" id="parametersCard" style="display: none;">
+                <div class="card-header">
+                    <h6 class="mb-0">Indicator Parameters</h6>
+                </div>
+                <div class="card-body">
+                    <div id="indicatorParameters">
+                        <!-- Dynamic parameter inputs will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Column -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Indicator Charts</h6>
+                </div>
+                <div class="card-body">
+                    <div id="chartsContainer">
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-chart-line fa-3x mb-3"></i>
+                            <p>Configure and calculate indicators to see charts</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Main candlestick chart -->
+                    <div id="candlestickChart" style="height: 400px; margin-bottom: 20px; display: none;"></div>
+                    
+                    <!-- Indicator charts container -->
+                    <div id="indicatorChartsContainer" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Trigger Events Table -->
+    <div class="row" id="triggersSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Detected Trigger Events</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Indicator</th>
+                                    <th>Trigger Type</th>
+                                    <th>Value</th>
+                                    <th>Price</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="triggersTable">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No trigger events detected</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dataSource = document.getElementById('dataSource');
+    const uploadSection = document.getElementById('uploadSection');
+    const yahooSection = document.getElementById('yahooSection');
+    const calculateBtn = document.getElementById('calculateIndicators');
+    const loadExampleBtn = document.getElementById('loadExampleData');
+    const parametersCard = document.getElementById('parametersCard');
+    const chartsContainer = document.getElementById('chartsContainer');
+    const triggersSection = document.getElementById('triggersSection');
+    
+    let charts = {};
+    let currentData = null;
+    
+    // Data source selection
+    dataSource.addEventListener('change', function() {
+        if (this.value === 'upload') {
+            uploadSection.style.display = 'block';
+            yahooSection.style.display = 'none';
+        } else if (this.value === 'yahoo') {
+            uploadSection.style.display = 'none';
+            yahooSection.style.display = 'block';
+        } else {
+            uploadSection.style.display = 'none';
+            yahooSection.style.display = 'none';
+        }
+    });
+    
+    // Calculate indicators
+    calculateBtn.addEventListener('click', async function() {
+        const formData = gatherFormData();
+        
+        if (!validateFormData(formData)) {
+            return;
+        }
+        
+        try {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Calculating...';
+            
+            const response = await fetch('/indicator/api/calculate_indicators', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                currentData = result.data;
+                displayResults(result.data);
+                showAlert('Indicators calculated successfully', 'success');
+            } else {
+                throw new Error(result.error || 'Calculation failed');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to calculate indicators: ${error.message}`, 'danger');
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-calculator me-2"></i>Calculate Indicators';
+        }
+    });
+    
+    // Load example data
+    loadExampleBtn.addEventListener('click', async function() {
+        try {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+            
+            const response = await fetch('/indicator/api/load_example');
+            const result = await response.json();
+            
+            if (result.success) {
+                currentData = result.data;
+                displayResults(result.data);
+                showAlert('Example data loaded successfully', 'success');
+            } else {
+                throw new Error(result.error || 'Failed to load example');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to load example: ${error.message}`, 'danger');
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-star me-2"></i>Load Example';
+        }
+    });
+    
+    function gatherFormData() {
+        const dataSourceValue = dataSource.value;
+        const selectedIndicators = [];
+        
+        // Gather selected indicators
+        if (document.getElementById('macdIndicator').checked) selectedIndicators.push('macd');
+        if (document.getElementById('smaIndicator').checked) selectedIndicators.push('sma');
+        if (document.getElementById('emaIndicator').checked) selectedIndicators.push('ema');
+        if (document.getElementById('rsiIndicator').checked) selectedIndicators.push('rsi');
+        if (document.getElementById('bollinger').checked) selectedIndicators.push('bollinger');
+        
+        const formData = {
+            data_source: dataSourceValue,
+            indicators: selectedIndicators,
+            show_triggers: document.getElementById('showTriggers').checked
+        };
+        
+        if (dataSourceValue === 'yahoo') {
+            formData.ticker = document.getElementById('tickerSymbol').value;
+            formData.start_date = document.getElementById('startDate').value;
+            formData.end_date = document.getElementById('endDate').value;
+        } else if (dataSourceValue === 'upload') {
+            // Handle file upload
+            const fileInput = document.getElementById('dataConfigFile');
+            if (fileInput.files.length > 0) {
+                formData.data_file = fileInput.files[0];
+            }
+        }
+        
+        return formData;
+    }
+    
+    function validateFormData(formData) {
+        if (formData.indicators.length === 0) {
+            showAlert('Please select at least one indicator to calculate', 'warning');
+            return false;
+        }
+        
+        if (formData.data_source === 'yahoo') {
+            if (!formData.ticker) {
+                showAlert('Please enter a ticker symbol', 'warning');
+                return false;
+            }
+            if (!formData.start_date || !formData.end_date) {
+                showAlert('Please select start and end dates', 'warning');
+                return false;
+            }
+        } else if (formData.data_source === 'upload') {
+            if (!formData.data_file) {
+                showAlert('Please select a data configuration file', 'warning');
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    function displayResults(data) {
+        // Hide placeholder and show charts
+        chartsContainer.querySelector('.text-center').style.display = 'none';
+        document.getElementById('candlestickChart').style.display = 'block';
+        document.getElementById('indicatorChartsContainer').style.display = 'block';
+        
+        // Create main price chart
+        createCandlestickChart(data.price_data);
+        
+        // Create indicator charts
+        createIndicatorCharts(data.indicators);
+        
+        // Show trigger events if enabled
+        if (data.triggers && data.triggers.length > 0) {
+            displayTriggerEvents(data.triggers);
+            triggersSection.style.display = 'block';
+        }
+        
+        // Show parameters card
+        parametersCard.style.display = 'block';
+        displayIndicatorParameters(data.indicators);
+    }
+    
+    function createCandlestickChart(priceData) {
+        const chartConfig = {
+            chart: {
+                height: 400,
+                zoomType: 'x'
+            },
+            title: { text: 'Price Chart' },
+            xAxis: { type: 'datetime' },
+            yAxis: { title: { text: 'Price' } },
+            series: [{
+                name: 'Price',
+                data: priceData,
+                type: 'candlestick',
+                color: '#dc3545',
+                upColor: '#28a745'
+            }],
+            credits: { enabled: false }
+        };
+        
+        if (charts.candlestick) {
+            charts.candlestick.destroy();
+        }
+        charts.candlestick = Highcharts.chart('candlestickChart', chartConfig);
+    }
+    
+    function createIndicatorCharts(indicators) {
+        const container = document.getElementById('indicatorChartsContainer');
+        container.innerHTML = '';
+        
+        Object.entries(indicators).forEach(([indicatorName, indicatorData]) => {
+            const chartDiv = document.createElement('div');
+            chartDiv.id = `${indicatorName}Chart`;
+            chartDiv.style.height = '300px';
+            chartDiv.style.marginBottom = '20px';
+            
+            // Add title
+            const titleDiv = document.createElement('div');
+            titleDiv.innerHTML = `<h6>${indicatorName.toUpperCase()}</h6>`;
+            container.appendChild(titleDiv);
+            container.appendChild(chartDiv);
+            
+            // Create chart based on indicator type
+            if (indicatorName === 'macd') {
+                createMACDChart(chartDiv.id, indicatorData);
+            } else if (indicatorName === 'sma' || indicatorName === 'ema') {
+                createMovingAverageChart(chartDiv.id, indicatorData, indicatorName.toUpperCase());
+            } else if (indicatorName === 'rsi') {
+                createRSIChart(chartDiv.id, indicatorData);
+            } else if (indicatorName === 'bollinger') {
+                createBollingerChart(chartDiv.id, indicatorData);
+            } else {
+                createGenericChart(chartDiv.id, indicatorData, indicatorName.toUpperCase());
+            }
+        });
+    }
+    
+    function createMACDChart(containerId, data) {
+        charts[containerId] = Highcharts.chart(containerId, {
+            chart: { height: 300 },
+            title: { text: null },
+            xAxis: { type: 'datetime' },
+            yAxis: [{
+                title: { text: 'MACD' },
+                height: '60%'
+            }, {
+                title: { text: 'Histogram' },
+                top: '65%',
+                height: '35%'
+            }],
+            series: [{
+                name: 'MACD',
+                data: data.macd || [],
+                yAxis: 0,
+                color: '#007bff'
+            }, {
+                name: 'Signal',
+                data: data.signal || [],
+                yAxis: 0,
+                color: '#dc3545'
+            }, {
+                name: 'Histogram',
+                data: data.histogram || [],
+                type: 'column',
+                yAxis: 1,
+                color: '#28a745'
+            }],
+            credits: { enabled: false }
+        });
+    }
+    
+    function createMovingAverageChart(containerId, data, title) {
+        charts[containerId] = Highcharts.chart(containerId, {
+            chart: { height: 300 },
+            title: { text: null },
+            xAxis: { type: 'datetime' },
+            yAxis: { title: { text: 'Value' } },
+            series: [{
+                name: title,
+                data: data,
+                color: '#007bff'
+            }],
+            credits: { enabled: false }
+        });
+    }
+    
+    function createRSIChart(containerId, data) {
+        charts[containerId] = Highcharts.chart(containerId, {
+            chart: { height: 300 },
+            title: { text: null },
+            xAxis: { type: 'datetime' },
+            yAxis: { 
+                title: { text: 'RSI' },
+                min: 0,
+                max: 100,
+                plotLines: [
+                    { value: 70, color: '#dc3545', width: 1, dashStyle: 'dash' },
+                    { value: 30, color: '#28a745', width: 1, dashStyle: 'dash' }
+                ]
+            },
+            series: [{
+                name: 'RSI',
+                data: data,
+                color: '#007bff'
+            }],
+            credits: { enabled: false }
+        });
+    }
+    
+    function createBollingerChart(containerId, data) {
+        charts[containerId] = Highcharts.chart(containerId, {
+            chart: { height: 300 },
+            title: { text: null },
+            xAxis: { type: 'datetime' },
+            yAxis: { title: { text: 'Value' } },
+            series: [{
+                name: 'Upper Band',
+                data: data.upper || [],
+                color: '#dc3545'
+            }, {
+                name: 'Middle Band',
+                data: data.middle || [],
+                color: '#007bff'
+            }, {
+                name: 'Lower Band',
+                data: data.lower || [],
+                color: '#28a745'
+            }],
+            credits: { enabled: false }
+        });
+    }
+    
+    function createGenericChart(containerId, data, title) {
+        charts[containerId] = Highcharts.chart(containerId, {
+            chart: { height: 300 },
+            title: { text: null },
+            xAxis: { type: 'datetime' },
+            yAxis: { title: { text: 'Value' } },
+            series: [{
+                name: title,
+                data: data,
+                color: '#007bff'
+            }],
+            credits: { enabled: false }
+        });
+    }
+    
+    function displayIndicatorParameters(indicators) {
+        const container = document.getElementById('indicatorParameters');
+        let html = '';
+        
+        Object.entries(indicators).forEach(([name, data]) => {
+            if (data.parameters) {
+                html += `
+                    <div class="mb-3">
+                        <h6>${name.toUpperCase()} Parameters</h6>
+                        <ul class="list-unstyled">
+                `;
+                
+                Object.entries(data.parameters).forEach(([param, value]) => {
+                    html += `<li><strong>${param}:</strong> ${value}</li>`;
+                });
+                
+                html += `</ul></div>`;
+            }
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function displayTriggerEvents(triggers) {
+        const tableBody = document.getElementById('triggersTable');
+        
+        if (!triggers || triggers.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No trigger events detected</td></tr>';
+            return;
+        }
+        
+        const rows = triggers.map(trigger => {
+            const triggerTypeClass = trigger.type === 'bullish' ? 'text-success' : 'text-danger';
+            
+            return `
+                <tr>
+                    <td>${new Date(trigger.timestamp).toLocaleDateString()}</td>
+                    <td>${trigger.indicator}</td>
+                    <td><span class="${triggerTypeClass}">${trigger.type}</span></td>
+                    <td>${trigger.value.toFixed(4)}</td>
+                    <td>$${trigger.price.toFixed(2)}</td>
+                    <td>${trigger.description || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        tableBody.innerHTML = rows;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,677 @@
+{% extends "base.html" %}
+
+{% block title %}Replay Visualization{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-play-circle me-2"></i>Replay Visualization
+            </h2>
+        </div>
+    </div>
+    
+    <!-- Configuration Section -->
+    <div class="row">
+        <div class="col-12">
+            {% set file_types = [
+                {'key': 'monitor_config', 'title': 'Monitor Configuration', 'description': 'Upload your monitor configuration JSON file'},
+                {'key': 'data_config', 'title': 'Data Configuration', 'description': 'Upload your data configuration JSON file'}
+            ] %}
+            {% include 'components/file_upload.html' %}
+        </div>
+    </div>
+    
+    <!-- Configuration Editor -->
+    <div class="row">
+        <div class="col-12">
+            {% set config_tabs = [
+                {'key': 'monitor_config', 'title': 'Monitor Config', 'icon': 'fas fa-cogs'},
+                {'key': 'data_config', 'title': 'Data Config', 'icon': 'fas fa-database'}
+            ] %}
+            {% include 'components/config_editor.html' %}
+        </div>
+    </div>
+    
+    <!-- Run Button -->
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <button type="button" class="btn btn-success btn-lg" id="runReplayBtn" disabled>
+                <i class="fas fa-play me-2"></i>Run Replay Visualization
+            </button>
+        </div>
+    </div>
+    
+    <!-- Results Section -->
+    <div class="row" id="resultsSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-area me-2"></i>Visualization Results
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Strategy Overview -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6>Strategy Overview</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <strong>Strategy:</strong> <span id="strategyName">-</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Symbol:</strong> <span id="dataTicker">-</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Date Range:</strong> <span id="dateRange">-</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Total Trades:</strong> <span id="totalTrades">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Performance Metrics -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6>Performance Metrics</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 border rounded">
+                                        <div class="h5 mb-0" id="winRate">-</div>
+                                        <small class="text-muted">Win Rate</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 border rounded">
+                                        <div class="h5 mb-0" id="totalPnL">-</div>
+                                        <small class="text-muted">Total P&L</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 border rounded">
+                                        <div class="h5 mb-0" id="avgWin">-</div>
+                                        <small class="text-muted">Avg Win</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 border rounded">
+                                        <div class="h5 mb-0" id="avgLoss">-</div>
+                                        <small class="text-muted">Avg Loss</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charts -->
+                    <div class="row">
+                        <div class="col-12">
+                            <!-- Stacked Charts Container with shared x-axis -->
+                            <div id="stackedChartsContainer">
+                                <!-- Chart Container -->
+                                <div id="candlestickChart" style="height: 400px; margin-bottom: 2px;"></div>
+                                
+                                <!-- P&L Chart -->
+                                <div id="pnlChart" style="height: 200px; margin-bottom: 2px;"></div>
+                                
+                                <!-- Individual Bar Scores Charts -->
+                                <div id="barScoresContainer"></div>
+                                
+                                <!-- Component Charts (MACD, SMA, etc.) -->
+                                <div id="componentChartsContainer"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Trade History -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h6>Trade History</h6>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Price</th>
+                                            <th>Size</th>
+                                            <th>P&L</th>
+                                            <th>Cumulative P&L</th>
+                                            <th>Signal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tradeHistoryTable">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">No trades to display</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const runReplayBtn = document.getElementById('runReplayBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    
+    let charts = {};
+    
+    // Listen for config changes to enable/disable run button
+    document.addEventListener('configsReady', function() {
+        runReplayBtn.disabled = false;
+    });
+    
+    document.addEventListener('examplesLoaded', function() {
+        runReplayBtn.disabled = false;
+    });
+    
+    // Run replay visualization
+    runReplayBtn.addEventListener('click', async function() {
+        if (!window.currentConfigs || !window.currentConfigs.monitor_config || !window.currentConfigs.data_config) {
+            showAlert('Please load both monitor and data configurations first', 'warning');
+            return;
+        }
+        
+        try {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Running Replay...';
+            
+            const response = await fetch('/replay/api/run_visualization', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    monitor_config: window.currentConfigs.monitor_config,
+                    data_config: window.currentConfigs.data_config
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                displayResults(result.data);
+                resultsSection.style.display = 'block';
+                showAlert('Replay visualization completed successfully', 'success');
+            } else {
+                throw new Error(result.error || 'Visualization failed');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to run replay: ${error.message}`, 'danger');
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-play me-2"></i>Run Replay Visualization';
+        }
+    });
+    
+    function displayResults(data) {
+        // Update strategy overview
+        document.getElementById('strategyName').textContent = data.monitor_config?.name || 'Unknown';
+        document.getElementById('dataTicker').textContent = data.data_config?.ticker || 'Unknown';
+        document.getElementById('dateRange').textContent = `${data.data_config?.start_date || 'Unknown'} to ${data.data_config?.end_date || 'Unknown'}`;
+        document.getElementById('totalTrades').textContent = data.trades?.length || 0;
+        
+        // Calculate and display metrics
+        if (data.trades && data.trades.length > 0) {
+            calculateMetrics(data.trades);
+        }
+        
+        // Create charts
+        if (data.candlestick_data) {
+            createCandlestickChart(data.candlestick_data, data.trades);
+        }
+        
+        if (data.pnl_data && data.trades && data.candlestick_data) {
+            createPnLChart(data.pnl_data, data.trades, data.candlestick_data);
+        }
+        
+        // Create bar scores charts
+        if (data.bar_scores_history && data.threshold_config) {
+            createBarScoresCharts(data.bar_scores_history, data.threshold_config);
+        }
+        
+        // Populate trade history
+        populateTradeHistory(data.trades);
+    }
+    
+    function calculateMetrics(trades) {
+        const totalTrades = trades.length;
+        let winningTrades = 0;
+        let losingTrades = 0;
+        let totalWinPnL = 0;
+        let totalLossPnL = 0;
+        let cumulativePnL = 0;
+        
+        trades.forEach(trade => {
+            if (trade.pnl > 0) {
+                winningTrades++;
+                totalWinPnL += trade.pnl;
+            } else if (trade.pnl < 0) {
+                losingTrades++;
+                totalLossPnL += Math.abs(trade.pnl);
+            }
+            
+            cumulativePnL += trade.pnl;
+        });
+        
+        const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+        const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
+        const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+        
+        // Update UI
+        document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
+        document.getElementById('totalPnL').textContent = `${cumulativePnL.toFixed(2)}%`;
+        document.getElementById('avgWin').textContent = `${avgWin.toFixed(2)}%`;
+        document.getElementById('avgLoss').textContent = `${avgLoss.toFixed(2)}%`;
+        
+        // Color coding
+        const totalPnLElement = document.getElementById('totalPnL');
+        totalPnLElement.className = `h5 mb-0 ${cumulativePnL >= 0 ? 'text-success' : 'text-danger'}`;
+    }
+    
+    function createCandlestickChart(candlestickData, trades) {
+        // Prepare trade bands instead of triangular markers
+        const chartConfig = {
+            chart: { 
+                height: 500,
+                zoomType: 'x'
+            },
+            title: { text: 'Price Chart with Trade Background Shading' },
+            xAxis: { 
+                type: 'datetime',
+                ordinal: true, // Keep ordinal to remove gaps in candlestick chart
+                breaks: [], // Clear any default breaks
+                crosshair: true,
+                labels: {
+                    enabled: false // Hide x-axis labels for stacked charts
+                },
+                lineWidth: 0,
+                tickWidth: 0,
+                plotBands: [] // Will be populated with trade bands
+            },
+            yAxis: { 
+                title: { text: 'Price' },
+                crosshair: true
+            },
+            series: [
+                {
+                    name: 'Price',
+                    data: candlestickData,
+                    type: 'candlestick',
+                    color: '#dc3545',
+                    upColor: '#28a745'
+                }
+            ],
+            credits: { enabled: false }
+        };
+        
+        if (charts.candlestick) {
+            charts.candlestick.destroy();
+        }
+        charts.candlestick = Highcharts.chart('candlestickChart', chartConfig);
+        
+        // Clear any existing plot bands before adding new ones
+        if (charts.candlestick.xAxis[0].plotLinesAndBands) {
+            charts.candlestick.xAxis[0].plotLinesAndBands.slice().forEach(band => {
+                if (band.options.className && band.options.className.includes('trade-band')) {
+                    band.destroy();
+                }
+            });
+        }
+
+        // Add background shading bands for trades
+        if (trades && trades.length > 0) {
+            // Group trades by pairs (buy followed by sell)
+            const buyTrades = trades.filter(t => t.type === 'buy').sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const sellTrades = trades.filter(t => t.type === 'sell').sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            // Create trade pairs and add background bands
+            let buyIndex = 0, sellIndex = 0;
+            let tradeCount = 0;
+            
+            while (buyIndex < buyTrades.length && sellIndex < sellTrades.length) {
+                const buyTrade = buyTrades[buyIndex];
+                const sellTrade = sellTrades[sellIndex];
+                
+                if (new Date(buyTrade.timestamp) < new Date(sellTrade.timestamp)) {
+                    // Calculate P&L for this trade pair
+                    const entryPrice = buyTrade.price;
+                    const exitPrice = sellTrade.price;
+                    const pnl = ((exitPrice - entryPrice) / entryPrice) * 100;
+                    const isProfit = pnl > 0;
+                    
+                    // Use the actual P&L from trade data if available
+                    const actualPnl = sellTrade.pnl || pnl;
+                    const isActualProfit = actualPnl > 0;
+                    
+                    const bandColor = isActualProfit ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)';
+                    
+                    charts.candlestick.xAxis[0].addPlotBand({
+                        from: new Date(buyTrade.timestamp).getTime(),
+                        to: new Date(sellTrade.timestamp).getTime(),
+                        color: bandColor,
+                        className: `trade-band trade-${tradeCount}`,
+                        id: `trade-band-${tradeCount}`,
+                        zIndex: 0, // Behind the candlesticks
+                        label: {
+                            text: `${isActualProfit ? '+' : ''}${actualPnl.toFixed(2)}%`,
+                            align: 'center',
+                            verticalAlign: 'middle',
+                            style: {
+                                color: isActualProfit ? '#28a745' : '#dc3545',
+                                fontWeight: 'bold',
+                                fontSize: '10px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                padding: '2px 4px',
+                                borderRadius: '3px'
+                            }
+                        }
+                    });
+                    
+                    buyIndex++;
+                    sellIndex++;
+                    tradeCount++;
+                } else {
+                    sellIndex++;
+                }
+            }
+        }
+        
+        // Enable synchronization for candlestick chart
+        enableChartSynchronization(charts.candlestick);
+    }
+    
+    function createPnLChart(pnlData, trades, candlestickData) {
+        // Build P&L data that starts at 0 and updates only on trade exits
+        let adjustedPnlData = [];
+        
+        // Get time range from candlestick data
+        const candlestickStart = candlestickData[0][0]; // First candlestick timestamp
+        const candlestickEnd = candlestickData[candlestickData.length - 1][0]; // Last candlestick timestamp
+        
+        // Start P&L at 0 from the very beginning of candlestick data
+        adjustedPnlData.push([candlestickStart, 0]);
+        
+        if (trades && trades.length > 0) {
+            // Filter and sort sell/exit trades only
+            const exitTrades = trades.filter(t => t.type === 'sell')
+                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            let cumulativePnL = 0;
+            
+            // Add P&L points only at exit trades
+            exitTrades.forEach(exitTrade => {
+                const exitTime = new Date(exitTrade.timestamp).getTime();
+                
+                // Only add if exit is within candlestick timeframe
+                if (exitTime >= candlestickStart && exitTime <= candlestickEnd) {
+                    cumulativePnL += (exitTrade.pnl || 0);
+                    adjustedPnlData.push([exitTime, cumulativePnL]);
+                }
+            });
+            
+            // Extend final P&L value to the end of the candlestick chart
+            if (adjustedPnlData.length > 1 && adjustedPnlData[adjustedPnlData.length - 1][0] < candlestickEnd) {
+                const finalPnL = adjustedPnlData[adjustedPnlData.length - 1][1];
+                adjustedPnlData.push([candlestickEnd, finalPnL]);
+                console.log(`📈 Extended P&L chart to end: ${new Date(candlestickEnd)} with final P&L: ${finalPnL.toFixed(2)}%`);
+            }
+        } else {
+            // If no trades, extend 0 P&L to the end
+            adjustedPnlData.push([candlestickEnd, 0]);
+        }
+        
+        console.log(`📈 P&L Chart data points: ${adjustedPnlData.length}, Range: ${new Date(candlestickStart)} to ${new Date(candlestickEnd)}`);
+        
+        const chartConfig = {
+            chart: { 
+                type: 'line',
+                height: 300
+            },
+            title: { text: 'Cumulative P&L Evolution' },
+            xAxis: { 
+                type: 'datetime',
+                ordinal: false, // Use actual timestamps, not ordinal spacing
+                breaks: [],
+                labels: {
+                    enabled: false // Hide x-axis labels for stacked charts
+                },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: { 
+                title: { text: 'Cumulative P&L (%)' },
+                plotLines: [{
+                    value: 0,
+                    color: '#999',
+                    width: 1,
+                    dashStyle: 'dash'
+                }]
+            },
+            series: [{
+                name: 'Cumulative P&L',
+                data: adjustedPnlData,
+                color: '#007bff',
+                lineWidth: 2,
+                step: 'right' // Step line to hold values until next exit
+            }],
+            credits: { enabled: false }
+        };
+        
+        if (charts.pnl) {
+            charts.pnl.destroy();
+        }
+        charts.pnl = Highcharts.chart('pnlChart', chartConfig);
+        
+        // Enable synchronization for P&L chart
+        enableChartSynchronization(charts.pnl);
+    }
+    
+    function createBarScoresCharts(barScoresHistory, thresholdConfig) {
+        const container = document.getElementById('barScoresContainer');
+        if (!container || !barScoresHistory || barScoresHistory.length === 0) return;
+        
+        // Get all unique indicator names from the bar scores history
+        const indicatorNames = new Set();
+        barScoresHistory.forEach(entry => {
+            if (entry.scores) {
+                Object.keys(entry.scores).forEach(name => indicatorNames.add(name));
+            }
+        });
+        
+        const indicators = Array.from(indicatorNames);
+        console.log('📊 Creating bar scores charts for indicators:', indicators);
+        
+        // Clear existing charts
+        container.innerHTML = '';
+        
+        // Create a chart for each indicator
+        indicators.forEach((indicatorName, index) => {
+            const isLastChart = index === indicators.length - 1;
+            
+            // Create div for this indicator's chart
+            const chartDiv = document.createElement('div');
+            chartDiv.id = `barScoreChart_${indicatorName}`;
+            chartDiv.style.height = '150px';
+            chartDiv.style.marginBottom = '2px';
+            container.appendChild(chartDiv);
+            
+            // Prepare data for this indicator
+            let indicatorData = barScoresHistory.map(entry => [
+                new Date(entry.timestamp).getTime(),
+                entry.scores[indicatorName] || 0
+            ]);
+            
+            // Ensure bar scores start from the same time as candlestick data
+            if (charts.candlestick && indicatorData.length > 0) {
+                const candlestickMinTime = charts.candlestick.xAxis[0].getExtremes().dataMin;
+                const indicatorMinTime = indicatorData[0][0];
+                
+                // If indicator starts later than candlestick, add a point at the start with 0
+                if (indicatorMinTime > candlestickMinTime) {
+                    indicatorData.unshift([candlestickMinTime, 0]);
+                    console.log(`📊 Adjusted ${indicatorName} start time from ${new Date(indicatorMinTime)} to ${new Date(candlestickMinTime)}`);
+                }
+            }
+            
+            // Get threshold for this indicator from both enter_long and exit_long configs
+            let threshold = null;
+            const allThresholds = [
+                ...(thresholdConfig.enter_long || []),
+                ...(thresholdConfig.exit_long || [])
+            ];
+            
+            const thresholdEntry = allThresholds.find(t => 
+                t.name === indicatorName || t.indicator === indicatorName
+            );
+            if (thresholdEntry && thresholdEntry.threshold !== undefined) {
+                threshold = thresholdEntry.threshold;
+            }
+            
+            // Create chart configuration
+            const chartConfig = {
+                chart: { 
+                    type: 'line',
+                    height: 150,
+                    zoomType: 'x',
+                    marginBottom: isLastChart ? 60 : 20 // More space for x-axis labels on last chart
+                },
+                title: { 
+                    text: `${indicatorName} Scores`,
+                    style: { fontSize: '12px' }
+                },
+                xAxis: { 
+                    type: 'datetime',
+                    ordinal: true, // Keep ordinal for consistency with candlestick chart
+                    breaks: [],
+                    crosshair: true,
+                    labels: {
+                        enabled: isLastChart // Only show x-axis labels on the last chart
+                    },
+                    lineWidth: isLastChart ? 1 : 0,
+                    tickWidth: isLastChart ? 1 : 0
+                },
+                yAxis: { 
+                    title: { text: 'Score' },
+                    plotLines: threshold !== null ? [{
+                        value: threshold,
+                        color: '#ff6b6b',
+                        width: 2,
+                        dashStyle: 'dash',
+                        label: {
+                            text: `Threshold: ${threshold}`,
+                            align: 'right',
+                            style: { color: '#ff6b6b' }
+                        }
+                    }] : []
+                },
+                series: [{
+                    name: indicatorName,
+                    data: indicatorData,
+                    color: '#007bff',
+                    lineWidth: 2
+                }],
+                credits: { enabled: false }
+            };
+            
+            // Create chart
+            const chart = Highcharts.chart(chartDiv.id, chartConfig);
+            charts[`barScore_${indicatorName}`] = chart;
+            
+            // Enable synchronization for this chart
+            enableChartSynchronization(chart);
+        });
+    }
+    
+    function enableChartSynchronization(chart) {
+        // Enhanced synchronization for stacked charts
+        chart.update({
+            chart: {
+                events: {
+                    selection: function(event) {
+                        if (event.xAxis) {
+                            const min = event.xAxis[0].min;
+                            const max = event.xAxis[0].max;
+                            syncAllCharts(min, max, chart);
+                        }
+                    }
+                }
+            },
+            xAxis: {
+                events: {
+                    afterSetExtremes: function(e) {
+                        // Only sync if this was a user action
+                        if (e.trigger === 'zoom' || e.trigger === 'pan' || e.trigger === 'selection') {
+                            syncAllCharts(e.min, e.max, chart);
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    function syncAllCharts(min, max, sourceChart) {
+        // Prevent infinite loops by temporarily disabling sync
+        if (window.syncInProgress) return;
+        window.syncInProgress = true;
+        
+        try {
+            Object.values(charts).forEach(chart => {
+                if (chart !== sourceChart && chart.xAxis && chart.xAxis[0]) {
+                    chart.xAxis[0].setExtremes(min, max, false);
+                    chart.redraw();
+                }
+            });
+        } finally {
+            // Re-enable sync after a short delay
+            setTimeout(() => {
+                window.syncInProgress = false;
+            }, 100);
+        }
+    }
+    
+    function populateTradeHistory(trades) {
+        const tableBody = document.getElementById('tradeHistoryTable');
+        
+        if (!trades || trades.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No trades to display</td></tr>';
+            return;
+        }
+        
+        let cumulativePnL = 0;
+        const rows = trades.map(trade => {
+            cumulativePnL += trade.pnl || 0;
+            const pnlClass = (trade.pnl || 0) > 0 ? 'text-success' : ((trade.pnl || 0) < 0 ? 'text-danger' : '');
+            const cumPnLClass = cumulativePnL >= 0 ? 'text-success' : 'text-danger';
+            
+            return `
+                <tr>
+                    <td>${new Date(trade.timestamp).toLocaleDateString()}</td>
+                    <td><span class="badge bg-${trade.type === 'buy' ? 'success' : 'danger'}">${trade.type}</span></td>
+                    <td>$${(trade.price || 0).toFixed(2)}</td>
+                    <td>${trade.size || 0}</td>
+                    <td class="${pnlClass}">${(trade.pnl || 0).toFixed(2)}%</td>
+                    <td class="${cumPnLClass}">${cumulativePnL.toFixed(2)}%</td>
+                    <td class="small">${trade.reason || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        tableBody.innerHTML = rows;
+    }
+});
+</script>
+{% endblock %}

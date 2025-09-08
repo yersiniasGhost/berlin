@@ -1,0 +1,172 @@
+<!-- Reusable File Upload Component -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-file-upload me-2"></i>Configuration Files
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for file_type in file_types %}
+            <div class="col-md-6">
+                <label for="{{ file_type.key }}" class="form-label">
+                    <i class="fas fa-file-code me-1"></i>{{ file_type.title }}
+                </label>
+                <input type="file" 
+                       class="form-control config-file-input" 
+                       id="{{ file_type.key }}" 
+                       data-config-type="{{ file_type.key }}"
+                       accept=".json">
+                <div class="form-text">{{ file_type.description }}</div>
+                <div class="file-status mt-2" id="{{ file_type.key }}-status"></div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-primary" id="loadConfigsBtn" disabled>
+                        <i class="fas fa-cogs me-1"></i>Load Configurations
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="loadExamplesBtn">
+                        <i class="fas fa-star me-1"></i>Load Examples
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.file-status {
+    font-size: 0.875rem;
+}
+
+.file-status.uploaded {
+    color: #28a745;
+}
+
+.file-status.error {
+    color: #dc3545;
+}
+
+.config-file-input:valid + .form-text + .file-status::before {
+    content: "✓ ";
+    color: #28a745;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const configFileInputs = document.querySelectorAll('.config-file-input');
+    const loadConfigsBtn = document.getElementById('loadConfigsBtn');
+    const loadExamplesBtn = document.getElementById('loadExamplesBtn');
+    
+    let uploadedFiles = {};
+    
+    // File upload handlers
+    configFileInputs.forEach(input => {
+        input.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            const configType = e.target.dataset.configType;
+            const statusDiv = document.getElementById(`${configType}-status`);
+            
+            if (!file) {
+                delete uploadedFiles[configType];
+                statusDiv.innerHTML = '';
+                updateLoadButtonState();
+                return;
+            }
+            
+            try {
+                statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Uploading...';
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('config_type', configType);
+                
+                const response = await fetch(`${window.location.pathname}/api/upload_file`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    uploadedFiles[configType] = result.filepath || result.file_path;
+                    statusDiv.innerHTML = '<i class="fas fa-check text-success me-1"></i>Uploaded successfully';
+                    statusDiv.className = 'file-status uploaded';
+                    console.log('Uploaded files:', uploadedFiles); // Debug log
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle text-danger me-1"></i>Upload failed: ${error.message}`;
+                statusDiv.className = 'file-status error';
+                delete uploadedFiles[configType];
+            }
+            
+            updateLoadButtonState();
+        });
+    });
+    
+    // Update load button state
+    function updateLoadButtonState() {
+        const requiredTypes = Array.from(configFileInputs).map(input => input.dataset.configType);
+        const hasAllFiles = requiredTypes.every(type => uploadedFiles[type]);
+        console.log('Required types:', requiredTypes);
+        console.log('Uploaded files:', uploadedFiles);
+        console.log('Has all files:', hasAllFiles);
+        loadConfigsBtn.disabled = !hasAllFiles;
+        
+        // Visual feedback
+        if (hasAllFiles) {
+            loadConfigsBtn.classList.remove('btn-secondary');
+            loadConfigsBtn.classList.add('btn-primary');
+        } else {
+            loadConfigsBtn.classList.remove('btn-primary');
+            loadConfigsBtn.classList.add('btn-secondary');
+        }
+    }
+    
+    // Load configurations handler
+    loadConfigsBtn.addEventListener('click', function() {
+        const configsReadyEvent = new CustomEvent('configsReady', {
+            detail: uploadedFiles
+        });
+        document.dispatchEvent(configsReadyEvent);
+    });
+    
+    // Load examples handler
+    loadExamplesBtn.addEventListener('click', async function() {
+        try {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+            
+            const response = await fetch(`${window.location.pathname}/api/load_examples`);
+            const result = await response.json();
+            
+            if (result.success) {
+                const examplesLoadedEvent = new CustomEvent('examplesLoaded', {
+                    detail: result.examples
+                });
+                document.dispatchEvent(examplesLoadedEvent);
+                showAlert('Example configurations loaded successfully', 'success');
+            } else {
+                throw new Error(result.error || 'Failed to load examples');
+            }
+            
+        } catch (error) {
+            showAlert(`Failed to load examples: ${error.message}`, 'danger');
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-star me-1"></i>Load Examples';
+        }
+    });
+    
+    // Make uploadedFiles accessible globally
+    window.getUploadedFiles = () => uploadedFiles;
+});
+</script>
