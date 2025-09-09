@@ -29,9 +29,6 @@
                     <button type="button" class="btn btn-primary" id="loadConfigsBtn" disabled>
                         <i class="fas fa-cogs me-1"></i>Load Configurations
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" id="loadExamplesBtn">
-                        <i class="fas fa-star me-1"></i>Load Examples
-                    </button>
                 </div>
             </div>
         </div>
@@ -61,7 +58,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     const configFileInputs = document.querySelectorAll('.config-file-input');
     const loadConfigsBtn = document.getElementById('loadConfigsBtn');
-    const loadExamplesBtn = document.getElementById('loadExamplesBtn');
     
     let uploadedFiles = {};
     
@@ -139,32 +135,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.dispatchEvent(configsReadyEvent);
     });
     
-    // Load examples handler
-    loadExamplesBtn.addEventListener('click', async function() {
-        try {
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
-            
-            const response = await fetch(`${window.location.pathname}/api/load_examples`);
-            const result = await response.json();
-            
-            if (result.success) {
-                const examplesLoadedEvent = new CustomEvent('examplesLoaded', {
-                    detail: result.examples
-                });
-                document.dispatchEvent(examplesLoadedEvent);
-                showAlert('Example configurations loaded successfully', 'success');
-            } else {
-                throw new Error(result.error || 'Failed to load examples');
-            }
-            
-        } catch (error) {
-            showAlert(`Failed to load examples: ${error.message}`, 'danger');
-        } finally {
-            this.disabled = false;
-            this.innerHTML = '<i class="fas fa-star me-1"></i>Load Examples';
-        }
-    });
     
     // Make uploadedFiles accessible globally
     window.getUploadedFiles = () => uploadedFiles;

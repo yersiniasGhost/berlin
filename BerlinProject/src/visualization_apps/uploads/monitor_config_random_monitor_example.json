@@ -40,7 +40,7 @@
         "type": "bear",
         "description": "Strong bearish signal for exits",
         "indicators": {
-          "macdbear5m": 3.0
+          "macdbear15m": 3.0
         }
       }
     }
@@ -90,7 +90,7 @@
       }
     },
     {
-      "name": "macdbear5m",
+      "name": "macdbear15m",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
       "agg_config": "15m-normal",

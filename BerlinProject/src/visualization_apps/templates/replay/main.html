@@ -107,9 +107,10 @@
                         </div>
                     </div>
                     
-                    <!-- Charts -->
+                    <!-- Charts and Trade History Side by Side -->
                     <div class="row">
-                        <div class="col-12">
+                        <!-- Charts Section (Left Half) -->
+                        <div class="col-lg-6">
                             <!-- Stacked Charts Container with shared x-axis -->
                             <div id="stackedChartsContainer">
                                 <!-- Chart Container -->
@@ -125,15 +126,13 @@
                                 <div id="componentChartsContainer"></div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Trade History -->
-                    <div class="row">
-                        <div class="col-12">
+                        
+                        <!-- Trade History Section (Right Half) -->
+                        <div class="col-lg-6">
                             <h6>Trade History</h6>
-                            <div class="table-responsive">
+                            <div class="table-responsive" style="max-height: 800px; overflow-y: auto;">
                                 <table class="table table-striped table-sm">
-                                    <thead>
+                                    <thead class="sticky-top bg-white">
                                         <tr>
                                             <th>Date</th>
                                             <th>Type</th>

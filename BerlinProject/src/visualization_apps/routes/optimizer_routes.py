@@ -705,34 +705,25 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         if optimization_state['running']:
             logger.info("⏱️  Optimization completed successfully with NEW indicator system")
 
-            # Save results to files
-            try:
-                results_info = save_optimization_results_with_new_indicators(
-                    optimization_state['best_individuals_log'],
-                    optimization_state['last_best_individual'],
-                    optimization_state.get('elites', []),
-                    ga_config_path,
-                    test_name,
-                    optimization_state.get('timestamp'),
-                    optimization_state.get('processed_indicators', [])
-                )
+            # Auto-saving disabled - user will manually save best elites via UI button
+            logger.info("✅ Optimization completed - elites available for manual saving via UI")
+            # try:
+            #     results_info = save_optimization_results_with_new_indicators(
+            #         optimization_state['best_individuals_log'],
+            #         optimization_state['last_best_individual'],
+            #         optimization_state.get('elites', []),
+            #         ga_config_path,
+            #         test_name,
+            #         optimization_state.get('timestamp'),
+            #         optimization_state.get('processed_indicators', [])
+            #     )
 
-                socketio.emit('optimization_complete', {
-                    'total_generations': optimization_state['current_generation'],
-                    'best_individuals_log': optimization_state['best_individuals_log'],
-                    'results_saved': results_info
-                })
-
-                logger.info(f"📁 Results saved to: {results_info['results_dir']}")
-
-            except Exception as save_error:
-                logger.error(f"❌ Error saving results: {save_error}")
-                socketio.emit('optimization_complete', {
-                    'total_generations': optimization_state['current_generation'],
-                    'best_individuals_log': optimization_state['best_individuals_log'],
-                    'results_saved': None,
-                    'save_error': str(save_error)
-                })
+            # Emit completion event without automatic saving
+            socketio.emit('optimization_complete', {
+                'total_generations': optimization_state['current_generation'],
+                'best_individuals_log': optimization_state['best_individuals_log'],
+                'manual_save_available': True
+            })
 
     except Exception as e:
         logger.error(f"❌ Error in threaded optimization: {e}")
@@ -1214,12 +1205,42 @@ def get_progress():
         elites_data = []
         if optimization_state.get('elites'):
             for i, elite in enumerate(optimization_state['elites'][:10]):  # Top 10 elites
+                # Try to get actual performance metrics from the elite individual
+                total_pnl = 0.0
+                win_rate = 0.0
+                total_trades = 0
+                max_drawdown = 0.0
+                
+                # Extract metrics from fitness_values or individual stats
+                if hasattr(elite, 'fitness_values') and elite.fitness_values is not None:
+                    if len(elite.fitness_values) > 0:
+                        total_pnl = float(elite.fitness_values[0])  # First objective usually total PnL
+                    if len(elite.fitness_values) > 1:
+                        win_rate = float(elite.fitness_values[1]) * 100  # Second objective might be win rate
+                
+                # Try to get more detailed stats if available
+                if hasattr(elite, 'individual') and hasattr(elite.individual, 'stats'):
+                    stats = elite.individual.stats
+                    total_pnl = getattr(stats, 'total_pnl', total_pnl)
+                    win_rate = getattr(stats, 'win_rate', win_rate)
+                    total_trades = getattr(stats, 'total_trades', 0)
+                    max_drawdown = getattr(stats, 'max_drawdown', 0.0)
+                
+                elif hasattr(elite, 'individual') and hasattr(elite.individual, 'portfolio'):
+                    # Try to calculate from portfolio if available
+                    portfolio = elite.individual.portfolio
+                    if hasattr(portfolio, 'trade_history') and portfolio.trade_history:
+                        total_trades = len(portfolio.trade_history)
+                        # Simple P&L calculation
+                        if hasattr(portfolio, 'total_pnl'):
+                            total_pnl = portfolio.total_pnl
+                
                 elite_data = {
-                    'fitness': float(elite.fitness_values[0]) if hasattr(elite, 'fitness_values') and len(elite.fitness_values) > 0 else 0.0,
-                    'total_trades': 0,  # TODO: Calculate from individual
-                    'win_rate': 0.5,    # TODO: Calculate from individual  
-                    'total_pnl': float(elite.fitness_values[0]) if hasattr(elite, 'fitness_values') and len(elite.fitness_values) > 0 else 0.0,
-                    'max_drawdown': 0.0 # TODO: Calculate from individual
+                    'fitness': total_pnl,
+                    'total_trades': total_trades,
+                    'win_rate': win_rate,
+                    'total_pnl': total_pnl,
+                    'max_drawdown': abs(max_drawdown)  # Ensure positive value for display
                 }
                 elites_data.append(elite_data)
         
@@ -1236,6 +1257,299 @@ def get_progress():
             'success': False,
             'error': str(e)
         })
+
+@optimizer_bp.route('/api/save_config', methods=['POST'])
+def save_config():
+    """Save configuration changes back to files"""
+    try:
+        data = request.get_json()
+        config_type = data.get('config_type')
+        config_data = data.get('config_data')
+        
+        if not config_type or not config_data:
+            return jsonify({'success': False, 'error': 'Missing config_type or config_data'})
+        
+        # Create saved_configs directory if it doesn't exist
+        saved_configs_dir = Path('saved_configs')
+        saved_configs_dir.mkdir(exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{config_type}.json"
+        filepath = saved_configs_dir / filename
+        
+        # Save the config
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+        
+        logger.info(f"Saved {config_type} configuration to {filepath}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Configuration saved successfully to {filename}',
+            'filepath': str(filepath.absolute()),
+            'filename': filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Error saving config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@optimizer_bp.route('/api/export_best_elite')
+def export_best_elite():
+    """Export the best performing elite as a JSON configuration"""
+    try:
+        # Use stored elites from optimization state
+        elites = optimization_state.get('elites', [])
+        
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+        
+        # Get the best elite (first in list, should be sorted by fitness)
+        best_elite = elites[0]
+        
+        # Convert elite individual to configuration format with proper serialization
+        elite_config = None
+        
+        def serialize_object(obj):
+            """Convert objects to JSON-serializable format"""
+            if hasattr(obj, '__dict__'):
+                # Convert object to dict, handling nested objects
+                result = {}
+                for key, value in obj.__dict__.items():
+                    if hasattr(value, '__dict__'):
+                        result[key] = serialize_object(value)
+                    elif isinstance(value, list):
+                        result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
+                    elif isinstance(value, dict):
+                        result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
+                    else:
+                        result[key] = value
+                return result
+            else:
+                return obj
+        
+        # Try different methods to get the configuration
+        if hasattr(best_elite, 'individual') and hasattr(best_elite.individual, 'monitor_configuration'):
+            # Best case: elite has the full monitor configuration
+            monitor_config = best_elite.individual.monitor_configuration
+            elite_config = {
+                'test_name': f'Best_Elite_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                'monitor': {
+                    'name': getattr(monitor_config, 'name', 'Best Elite Strategy'),
+                    'description': f'Best performing elite from optimization run',
+                    'bars': serialize_object(getattr(monitor_config, 'bars', {})),
+                    'enter_long': serialize_object(getattr(monitor_config, 'enter_long', [])),
+                    'exit_long': serialize_object(getattr(monitor_config, 'exit_long', [])),
+                    'trade_executor': serialize_object(getattr(monitor_config, 'trade_executor', {}))
+                },
+                'indicators': serialize_object(getattr(monitor_config, 'indicators', []))
+            }
+        elif hasattr(best_elite, 'individual') and hasattr(best_elite.individual, 'genotype'):
+            # Fallback: use genotype data
+            genotype = best_elite.individual.genotype
+            elite_config = {
+                'test_name': f'Best_Elite_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                'monitor': genotype if isinstance(genotype, dict) else {},
+                'indicators': []
+            }
+        else:
+            # Last resort: create a basic config with fitness info
+            elite_config = {
+                'test_name': f'Best_Elite_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                'monitor': {
+                    'name': 'Best Elite Strategy',
+                    'description': 'Elite solution from genetic algorithm optimization'
+                },
+                'indicators': [],
+                'elite_fitness': best_elite.fitness_values.tolist() if hasattr(best_elite, 'fitness_values') else []
+            }
+            
+        # Add performance stats if available
+        if hasattr(best_elite, 'fitness_values'):
+            elite_config['performance_stats'] = {
+                'fitness_values': best_elite.fitness_values.tolist() if hasattr(best_elite.fitness_values, 'tolist') else list(best_elite.fitness_values)
+            }
+        
+        logger.info(f"Exporting best elite configuration: {elite_config.get('test_name', 'Unknown')}")
+        
+        return jsonify({
+            'success': True,
+            'config': elite_config,
+            'message': 'Best elite configuration exported successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error exporting best elite: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@optimizer_bp.route('/api/export_elites')
+def export_elites():
+    """Export multiple elite configurations based on GA hyperparameters"""
+    try:
+        # Use stored elites from optimization state
+        elites = optimization_state.get('elites', [])
+        
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+        
+        # Get number of elites to save from GA hyperparameters, default to 5
+        elites_to_save = 5
+        try:
+            if optimization_state.get('ga_instance') and hasattr(optimization_state['ga_instance'], 'elitist_size'):
+                elites_to_save = optimization_state['ga_instance'].elitist_size
+            else:
+                # Try to get from current configs
+                if window and hasattr(window, 'currentConfigs') and window.currentConfigs.get('ga_config'):
+                    ga_config = window.currentConfigs['ga_config']
+                    elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elite_size', 5)
+        except:
+            pass  # Use default
+        
+        # Limit to available elites
+        elites_to_export = min(elites_to_save, len(elites))
+        
+        def serialize_object(obj):
+            """Convert objects to JSON-serializable format"""
+            if hasattr(obj, '__dict__'):
+                result = {}
+                for key, value in obj.__dict__.items():
+                    if hasattr(value, '__dict__'):
+                        result[key] = serialize_object(value)
+                    elif isinstance(value, list):
+                        result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
+                    elif isinstance(value, dict):
+                        result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
+                    else:
+                        result[key] = value
+                return result
+            else:
+                return obj
+        
+        elite_configs = []
+        
+        for i in range(elites_to_export):
+            elite = elites[i]
+            
+            # Convert elite individual to configuration format
+            if hasattr(elite, 'individual') and hasattr(elite.individual, 'monitor_configuration'):
+                monitor_config = elite.individual.monitor_configuration
+                elite_config = {
+                    'test_name': f'Elite_{i + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                    'monitor': {
+                        'name': getattr(monitor_config, 'name', f'Elite #{i + 1} Strategy'),
+                        'description': f'Elite #{i + 1} from optimization run',
+                        'bars': serialize_object(getattr(monitor_config, 'bars', {})),
+                        'enter_long': serialize_object(getattr(monitor_config, 'enter_long', [])),
+                        'exit_long': serialize_object(getattr(monitor_config, 'exit_long', [])),
+                        'trade_executor': serialize_object(getattr(monitor_config, 'trade_executor', {}))
+                    },
+                    'indicators': serialize_object(getattr(monitor_config, 'indicators', []))
+                }
+            elif hasattr(elite, 'individual') and hasattr(elite.individual, 'genotype'):
+                genotype = elite.individual.genotype
+                elite_config = {
+                    'test_name': f'Elite_{i + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                    'monitor': serialize_object(genotype) if isinstance(genotype, dict) else {},
+                    'indicators': []
+                }
+            else:
+                # Last resort
+                elite_config = {
+                    'test_name': f'Elite_{i + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                    'monitor': {
+                        'name': f'Elite #{i + 1} Strategy',
+                        'description': f'Elite #{i + 1} solution from genetic algorithm optimization'
+                    },
+                    'indicators': [],
+                    'elite_fitness': elite.fitness_values.tolist() if hasattr(elite, 'fitness_values') else []
+                }
+            
+            # Add performance stats if available
+            if hasattr(elite, 'fitness_values'):
+                elite_config['performance_stats'] = {
+                    'fitness_values': elite.fitness_values.tolist() if hasattr(elite.fitness_values, 'tolist') else list(elite.fitness_values)
+                }
+            
+            elite_configs.append(elite_config)
+        
+        logger.info(f"Exporting {len(elite_configs)} elite configurations")
+        
+        return jsonify({
+            'success': True,
+            'elites': elite_configs,
+            'count': len(elite_configs),
+            'message': f'{len(elite_configs)} elite configurations exported successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error exporting elites: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+@optimizer_bp.route('/api/get_elite/<int:index>')
+def get_elite(index):
+    """Get a specific elite by index"""
+    try:
+        elites = optimization_state.get('elites', [])
+        
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+        
+        if index >= len(elites):
+            return jsonify({'success': False, 'error': 'Elite index out of range'})
+        
+        elite = elites[index]
+        
+        # Convert to format suitable for replay visualization
+        elite_data = {
+            'index': index,
+            'fitness': getattr(elite, 'fitness', 0),
+            'config': elite.to_config() if hasattr(elite, 'to_config') else elite.genotype if hasattr(elite, 'genotype') else {}
+        }
+        
+        return jsonify({
+            'success': True,
+            'elite': elite_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting elite {index}: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@optimizer_bp.route('/api/export_elite/<int:index>')
+def export_elite(index):
+    """Export a specific elite configuration"""
+    try:
+        elites = optimization_state.get('elites', [])
+        
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+        
+        if index >= len(elites):
+            return jsonify({'success': False, 'error': 'Elite index out of range'})
+        
+        elite = elites[index]
+        
+        # Convert to configuration format
+        if hasattr(elite, 'to_config'):
+            elite_config = elite.to_config()
+        else:
+            elite_config = {
+                'test_name': f'Elite_{index + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                'monitor': elite.genotype if hasattr(elite, 'genotype') else {},
+                'elite_fitness': getattr(elite, 'fitness', 0)
+            }
+        
+        return jsonify({
+            'success': True,
+            'config': elite_config
+        })
+        
+    except Exception as e:
+        logger.error(f"Error exporting elite {index}: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 # The WebSocket handlers will need to be registered in the main app.py file
 # since they need access to the socketio instance

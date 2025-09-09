@@ -47,8 +47,11 @@
                             <button type="button" class="btn btn-warning btn-lg me-3" id="pauseOptimizerBtn" disabled>
                                 <i class="fas fa-pause me-2"></i>Pause
                             </button>
-                            <button type="button" class="btn btn-danger btn-lg" id="stopOptimizerBtn" disabled>
+                            <button type="button" class="btn btn-danger btn-lg me-3" id="stopOptimizerBtn" disabled>
                                 <i class="fas fa-stop me-2"></i>Stop
+                            </button>
+                            <button type="button" class="btn btn-primary btn-lg" id="saveElitesBtn" disabled style="display: none;">
+                                <i class="fas fa-trophy me-2"></i>Save Elite Configurations
                             </button>
                         </div>
                         <div class="col-md-4">
@@ -163,6 +166,7 @@
             </div>
         </div>
     </div>
+    
 
 </div>
 {% endblock %}
@@ -175,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const pauseOptimizerBtn = document.getElementById('pauseOptimizerBtn');
     const stopOptimizerBtn = document.getElementById('stopOptimizerBtn');
     const chartsSection = document.getElementById('chartsSection');
-    const elitesSection = document.getElementById('elitesSection');
+    const saveElitesBtn = document.getElementById('saveElitesBtn');
     
     let charts = {};
     let optimizationRunning = false;
@@ -256,6 +260,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.disabled = true;
             pauseOptimizerBtn.disabled = false;
             stopOptimizerBtn.disabled = false;
+            hideElitesButton(); // Hide save button when starting new optimization
             
             const response = await fetch('/optimizer/api/start_optimization', {
                 method: 'POST',
@@ -316,6 +321,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 optimizationRunning = false;
                 this.disabled = true;
                 startOptimizerBtn.disabled = false;
+                
+                // Show save button when paused (user might want to save current elites)
+                saveElitesBtn.style.display = 'inline-block';
+                saveElitesBtn.disabled = false;
+                
                 showAlert('Optimization paused', 'info');
                 stopPolling();
             } else {
@@ -490,10 +500,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 updateProgressBar(data.progress);
                 updateCharts(data.charts);
-                updateElitesTable(data.elites);
+                
+                // Show save button if we have elites
+                if (data.elites && data.elites.length > 0) {
+                    saveElitesBtn.style.display = 'inline-block';
+                    saveElitesBtn.disabled = false;
+                }
                 
                 if (data.progress.completed) {
                     showAlert('Optimization completed!', 'success');
+                    // Show completion popup for saving elites
+                    showCompletionSavePopup();
                     resetButtons();
                     stopPolling();
                 }
@@ -840,46 +857,118 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Optimizer visualization page loaded with fixed layout');
     });
     
-    // Global functions for elite actions
-    window.viewElite = async function(index) {
-        try {
-            const response = await fetch(`/optimizer/api/get_elite/${index}`);
-            const result = await response.json();
-            
-            if (result.success) {
-                // Open elite in replay visualization
-                window.open(`/replay?elite=${encodeURIComponent(JSON.stringify(result.elite))}`, '_blank');
-            } else {
-                showAlert('Failed to load elite solution', 'danger');
-            }
-        } catch (error) {
-            showAlert(`Failed to view elite: ${error.message}`, 'danger');
-        }
-    };
     
-    window.exportElite = async function(index) {
+    // Show completion popup for saving elites
+    function showCompletionSavePopup() {
+        if (confirm('🏆 Optimization completed!\n\nWould you like to save the elite configurations?')) {
+            saveElites();
+        }
+    }
+    
+    // Save Elites function
+    async function saveElites() {
+        const saveBtn = document.getElementById('saveElitesBtn');
+        const originalText = saveBtn.innerHTML;
+        
         try {
-            const response = await fetch(`/optimizer/api/export_elite/${index}`);
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+            
+            // Get elite configurations (will save the number specified in GA hyperparameters)
+            const response = await fetch('/optimizer/api/export_elites');
             const result = await response.json();
             
             if (result.success) {
-                // Trigger download
-                const blob = new Blob([JSON.stringify(result.config, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `elite_${index + 1}_config.json`;
-                link.click();
-                URL.revokeObjectURL(url);
+                const eliteConfigs = result.elites || [result.config]; // Handle both single and multiple elites
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
                 
-                showAlert('Elite configuration exported successfully', 'success');
+                // Save each elite configuration
+                for (let i = 0; i < eliteConfigs.length; i++) {
+                    const config = eliteConfigs[i];
+                    const jsonString = JSON.stringify(config, null, 2);
+                    const defaultName = `elite_${i + 1}_${timestamp}`;
+                    
+                    // Try to use File System Access API for modern browsers
+                    if ('showSaveFilePicker' in window) {
+                        try {
+                            const fileHandle = await window.showSaveFilePicker({
+                                suggestedName: `${defaultName}.json`,
+                                types: [
+                                    {
+                                        description: 'JSON files',
+                                        accept: {
+                                            'application/json': ['.json']
+                                        }
+                                    }
+                                ]
+                            });
+                            
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(jsonString);
+                            await writable.close();
+                            
+                        } catch (error) {
+                            if (error.name === 'AbortError') {
+                                break; // User cancelled, stop saving more files
+                            }
+                            console.warn('File System Access API failed:', error);
+                            // Fall through to fallback for this file
+                            const filename = prompt(`Enter filename for Elite #${i + 1} (without .json):`, defaultName);
+                            if (filename) {
+                                const blob = new Blob([jsonString], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = `${filename}.json`;
+                                link.click();
+                                URL.revokeObjectURL(url);
+                            }
+                        }
+                    } else {
+                        // Fallback for browsers without File System Access API
+                        const filename = prompt(`Enter filename for Elite #${i + 1} (without .json):`, defaultName);
+                        if (filename) {
+                            const blob = new Blob([jsonString], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `${filename}.json`;
+                            link.click();
+                            URL.revokeObjectURL(url);
+                        }
+                    }
+                }
+                
+                showAlert(`🏆 ${eliteConfigs.length} elite configuration(s) saved successfully!`, 'success');
             } else {
-                showAlert('Failed to export elite solution', 'danger');
+                showAlert(`Failed to get elite configurations: ${result.error || 'Unknown error'}`, 'danger');
             }
+            
         } catch (error) {
-            showAlert(`Failed to export elite: ${error.message}`, 'danger');
+            showAlert(`Failed to save best elite: ${error.message}`, 'danger');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
         }
-    };
+    }
+    
+    // Add click listener for save button
+    saveElitesBtn.addEventListener('click', saveElites);
+    
+    // Reset buttons state
+    function resetButtons() {
+        startOptimizerBtn.disabled = false;
+        pauseOptimizerBtn.disabled = true;
+        stopOptimizerBtn.disabled = true;
+        optimizationRunning = false;
+        // Keep save button visible if it was shown (user might still want to save)
+    }
+    
+    // Hide save button when starting new optimization
+    function hideElitesButton() {
+        saveElitesBtn.style.display = 'none';
+        saveElitesBtn.disabled = true;
+    }
 });
 </script>
 {% endblock %}

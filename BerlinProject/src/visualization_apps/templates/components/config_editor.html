@@ -8,11 +8,11 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" id="validateConfigBtn">
                 <i class="fas fa-check-circle me-1"></i>Validate
             </button>
-            <button type="button" class="btn btn-success btn-sm" id="saveChangesBtn">
+            <button type="button" class="btn btn-success btn-sm" id="saveChangesBtn" disabled>
                 <i class="fas fa-check me-1"></i>Save Changes
             </button>
             <button type="button" class="btn btn-outline-primary btn-sm" id="saveAsJsonBtn">
-                <i class="fas fa-download me-1"></i>Save as New JSON
+                <i class="fas fa-save me-1"></i>Save As...
             </button>
         </div>
     </div>
@@ -153,15 +153,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function createFormField(label, name, value, type = 'text', options = {}) {
         const fieldId = `${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const {placeholder = '', min, max, step, choices, description} = options;
+        const {placeholder = '', min, max, step, choices, description, readonly = false} = options;
         
         let inputHtml = '';
+        const readonlyAttr = readonly ? 'readonly style="font-size: 0.875rem; background-color: #f8f9fa;"' : 'style="font-size: 0.875rem;"';
         
         switch (type) {
             case 'number':
                 inputHtml = `<input type="number" class="form-control form-control-sm" id="${fieldId}" name="${name}" 
                     value="${value || 0}" ${min ? `min="${min}"` : ''} ${max ? `max="${max}"` : ''} 
-                    ${step ? `step="${step}"` : ''} placeholder="${placeholder}" style="font-size: 0.875rem;">`;
+                    ${step ? `step="${step}"` : ''} placeholder="${placeholder}" ${readonlyAttr}>`;
                 break;
             case 'select':
                 const optionsHtml = choices.map(choice => 
@@ -169,21 +170,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${choice.label || choice}
                     </option>`
                 ).join('');
-                inputHtml = `<select class="form-select form-select-sm" id="${fieldId}" name="${name}" style="font-size: 0.875rem;">${optionsHtml}</select>`;
+                inputHtml = `<select class="form-select form-select-sm" id="${fieldId}" name="${name}" ${readonly ? 'disabled' : ''} style="font-size: 0.875rem;">${optionsHtml}</select>`;
                 break;
             case 'checkbox':
                 inputHtml = `<div class="form-check">
                     <input type="checkbox" class="form-check-input" id="${fieldId}" name="${name}" 
-                        ${value ? 'checked' : ''}>
+                        ${value ? 'checked' : ''} ${readonly ? 'disabled' : ''}>
                     <label class="form-check-label" for="${fieldId}" style="font-size: 0.875rem;">${label}</label>
                 </div>`;
                 return `<div class="col-md-6 mb-2">${inputHtml}</div>`;
             case 'textarea':
-                inputHtml = `<textarea class="form-control form-control-sm" id="${fieldId}" name="${name}" rows="2" placeholder="${placeholder}" style="font-size: 0.875rem;">${value || ''}</textarea>`;
+                inputHtml = `<textarea class="form-control form-control-sm" id="${fieldId}" name="${name}" rows="2" placeholder="${placeholder}" ${readonlyAttr}>${value || ''}</textarea>`;
                 break;
             default:
                 inputHtml = `<input type="text" class="form-control form-control-sm" id="${fieldId}" name="${name}" 
-                    value="${value || ''}" placeholder="${placeholder}" style="font-size: 0.875rem;">`;
+                    value="${value || ''}" placeholder="${placeholder}" ${readonlyAttr}>`;
         }
         
         return `
@@ -297,18 +298,97 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                 // Special handling for bars section - don't create sub-panels for "indicators"
                 if (sectionType === 'bars' && key === 'indicators') {
-                    // Just show indicator weights directly
+                    // Just show indicator weights directly with add button
                     fieldsHtml += `<div class="col-12 mb-2"><h6 class="fw-bold mb-1">Indicator Weights</h6>`;
                     Object.keys(value).forEach(indicatorKey => {
                         const indicatorValue = value[indicatorKey];
-                        fieldsHtml += createFormField(
-                            indicatorKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                            `${fieldPath}.${indicatorKey}`,
-                            indicatorValue,
-                            'number'
-                        );
+                        fieldsHtml += `
+                            <div class="row align-items-center mb-1">
+                                <div class="col-8">
+                                    ${createFormField(
+                                        indicatorKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                                        `${fieldPath}.${indicatorKey}`,
+                                        indicatorValue,
+                                        'number'
+                                    ).replace('<div class="col-md-6 mb-2">', '').replace('</div>', '')}
+                                </div>
+                                <div class="col-4">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeIndicatorFromBar('${fieldPath}', '${indicatorKey}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
                     });
-                    fieldsHtml += `</div>`;
+                    fieldsHtml += `
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addIndicatorToBar('${fieldPath}')">
+                            <i class="fas fa-plus me-1"></i>Add Indicator to Bar
+                        </button>
+                    </div>`;
+                } else if (key === 'ranges') {
+                    // Special handling for ranges - create collapsible panels like parameters
+                    const rangesPanelId = `ranges_${basePath.replace(/\./g, '_')}_${Date.now()}`;
+                    const rangesCollapseId = `collapse_${rangesPanelId}`;
+                    
+                    let rangesContent = '';
+                    Object.keys(value).forEach(rangeKey => {
+                        const rangeValue = value[rangeKey];
+                        if (rangeValue && rangeValue.r && Array.isArray(rangeValue.r)) {
+                            const rangeSubPanelId = `range_${rangeKey}_${Date.now()}`;
+                            const rangeSubCollapseId = `collapse_${rangeSubPanelId}`;
+                            
+                            rangesContent += `
+                                <div class="card mb-1">
+                                    <div class="card-header py-1">
+                                        <button class="btn btn-link text-decoration-none w-100 text-start p-0" type="button" 
+                                            data-bs-toggle="collapse" data-bs-target="#${rangeSubCollapseId}">
+                                            <i class="fas fa-chevron-down me-2"></i><small>${rangeKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</small>
+                                        </button>
+                                    </div>
+                                    <div class="collapse" id="${rangeSubCollapseId}">
+                                        <div class="card-body py-2">
+                                            <div class="row g-2">
+                                                <div class="col-md-4 mb-2">
+                                                    <label class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">Minimum Value</label>
+                                                    <input type="number" class="form-control form-control-sm" name="${fieldPath}.${rangeKey}.r[0]" value="${rangeValue.r[0]}" style="font-size: 0.875rem;" step="${rangeValue.t === 'float' ? '0.001' : '1'}">
+                                                </div>
+                                                <div class="col-md-4 mb-2">
+                                                    <label class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">Maximum Value</label>
+                                                    <input type="number" class="form-control form-control-sm" name="${fieldPath}.${rangeKey}.r[1]" value="${rangeValue.r[1]}" style="font-size: 0.875rem;" step="${rangeValue.t === 'float' ? '0.001' : '1'}">
+                                                </div>
+                                                <div class="col-md-4 mb-2">
+                                                    <label class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">Data Type</label>
+                                                    <select class="form-select form-select-sm" name="${fieldPath}.${rangeKey}.t" style="font-size: 0.875rem;">
+                                                        <option value="int" ${rangeValue.t === 'int' ? 'selected' : ''}>Integer</option>
+                                                        <option value="float" ${rangeValue.t === 'float' ? 'selected' : ''}>Float</option>
+                                                        <option value="skip" ${rangeValue.t === 'skip' ? 'selected' : ''}>Skip (No Optimization)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                    
+                    fieldsHtml += `
+                        <div class="col-12 mb-2">
+                            <div class="card border-secondary">
+                                <div class="card-header py-1">
+                                    <button class="btn btn-link text-decoration-none w-100 text-start p-0" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#${rangesCollapseId}">
+                                        <i class="fas fa-chevron-down me-2"></i><small class="fw-bold">Optimization Ranges</small>
+                                    </button>
+                                </div>
+                                <div class="collapse" id="${rangesCollapseId}">
+                                    <div class="card-body py-2">
+                                        ${rangesContent}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 } else {
                     // Complex nested object - create a sub-panel
                     const subPanelId = `${basePath.replace(/\./g, '_')}_${key}_${Date.now()}`;
@@ -354,14 +434,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 fieldsHtml += `</div>`;
             } else {
-                // Simple field
-                const fieldType = typeof value === 'number' ? 'number' :
-                                 typeof value === 'boolean' ? 'checkbox' : 'text';
+                // Simple field - handle special cases for dropdowns
+                let fieldType = typeof value === 'number' ? 'number' :
+                               typeof value === 'boolean' ? 'checkbox' : 'text';
+                let fieldOptions = {};
+                
+                // Special handling for specific parameters
+                if (key === 'trend') {
+                    fieldType = 'select';
+                    fieldOptions.choices = [
+                        {value: 'bullish', label: 'Bullish'},
+                        {value: 'bearish', label: 'Bearish'}
+                    ];
+                } else if (key === 'function') {
+                    fieldType = 'select';
+                    fieldOptions.choices = [
+                        {value: 'macd_histogram_crossover', label: 'MACD Histogram Crossover'},
+                        {value: 'sma_crossover', label: 'SMA Crossover'},
+                        {value: 'ema_crossover', label: 'EMA Crossover'},
+                        {value: 'rsi_crossover', label: 'RSI Crossover'}
+                    ];
+                } else if (key === 'agg_config') {
+                    fieldType = 'select';
+                    fieldOptions.choices = [
+                        {value: '1m-normal', label: '1 Minute - Normal Candles'},
+                        {value: '1m-heiken-ashi', label: '1 Minute - Heiken Ashi'},
+                        {value: '5m-normal', label: '5 Minutes - Normal Candles'},
+                        {value: '5m-heiken-ashi', label: '5 Minutes - Heiken Ashi'},
+                        {value: '15m-normal', label: '15 Minutes - Normal Candles'},
+                        {value: '15m-heiken-ashi', label: '15 Minutes - Heiken Ashi'},
+                        {value: '1h-normal', label: '1 Hour - Normal Candles'},
+                        {value: '1h-heiken-ashi', label: '1 Hour - Heiken Ashi'}
+                    ];
+                } else if (key === 'type' && (value === 'bull' || value === 'bear' || value === 'Indicator')) {
+                    if (value === 'bull' || value === 'bear') {
+                        fieldType = 'select';
+                        fieldOptions.choices = [
+                            {value: 'bull', label: 'Bull (Bullish)'},
+                            {value: 'bear', label: 'Bear (Bearish)'}
+                        ];
+                    } else if (value === 'Indicator') {
+                        // Keep as readonly text for Indicator type
+                        fieldOptions.readonly = true;
+                    }
+                }
+                
                 fieldsHtml += createFormField(
                     key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                     fieldPath,
                     value,
-                    fieldType
+                    fieldType,
+                    fieldOptions
                 );
             }
         });
@@ -447,6 +570,17 @@ document.addEventListener('DOMContentLoaded', function() {
             fieldsHtml = createDeepObjectFields(sectionData, sectionKey, 0, sectionType);
         }
         
+        // Add "Add Bar" button for bars sections
+        if (sectionKey.includes('bars')) {
+            fieldsHtml += `
+                <div class="col-12 mt-3">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addBar('${sectionKey}')">
+                        <i class="fas fa-plus me-1"></i>Add New Bar
+                    </button>
+                </div>
+            `;
+        }
+        
         return `
             <div class="card mb-2">
                 <div class="card-header py-2">
@@ -459,6 +593,67 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="card-body py-2">
                         <div class="row g-2">
                             ${fieldsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Special bars panel with add new bar functionality
+    function createBarsPanel(bars, sectionKey) {
+        const panelId = `${sectionKey}_panel_${Date.now()}`;
+        const collapseId = `collapse_${panelId}`;
+        
+        let barsHtml = '';
+        
+        if (typeof bars === 'object' && bars !== null) {
+            Object.keys(bars).forEach((barName, index) => {
+                const bar = bars[barName];
+                const barPanelId = `bar_${index}_${Date.now()}`;
+                const barCollapseId = `collapse_${barPanelId}`;
+                
+                // Use deep object parsing for all bar fields
+                const barFieldsHtml = createDeepObjectFields(bar, `${sectionKey}.${barName}`, 0, 'bars');
+                
+                barsHtml += `
+                    <div class="card mb-1">
+                        <div class="card-header py-1 d-flex justify-content-between align-items-center">
+                            <button class="btn btn-link text-decoration-none text-start p-0 flex-grow-1" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#${barCollapseId}">
+                                <i class="fas fa-chevron-down me-2"></i><small>${barName}</small>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBar('${sectionKey}', '${barName}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="collapse" id="${barCollapseId}">
+                            <div class="card-body py-2">
+                                <div class="row g-2">
+                                    ${barFieldsHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        return `
+            <div class="card mb-2">
+                <div class="card-header py-2">
+                    <button class="btn btn-link text-decoration-none w-100 text-start p-0" type="button" 
+                        data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                        <i class="fas fa-chevron-down me-2"></i><strong>Bars</strong>
+                    </button>
+                </div>
+                <div class="collapse" id="${collapseId}">
+                    <div class="card-body py-2">
+                        ${barsHtml}
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addBar('${sectionKey}')">
+                                <i class="fas fa-plus me-1"></i>Add New Bar
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -513,7 +708,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="collapse" id="${collapseId}">
                     <div class="card-body py-2">
                         ${indicatorsHtml}
-                        <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addIndicator()">
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addIndicator('indicators')">
                             <i class="fas fa-plus me-1"></i>Add Indicator
                         </button>
                     </div>
@@ -617,7 +812,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Handle direct top-level sections
+        // Handle direct top-level sections  
         ['enter_long', 'exit_long', 'bars', 'trade_executor'].forEach(sectionKey => {
             if (config[sectionKey]) {
                 html += createSectionPanel(
@@ -730,27 +925,219 @@ document.addEventListener('DOMContentLoaded', function() {
         );
     }
     
-    // Global functions for onclick handlers
-    window.addIndicator = function() {
-        const activeTabPane = document.querySelector('.tab-pane.show.active');
-        const indicatorsContainer = activeTabPane.querySelector('#indicatorsContainer');
-        if (indicatorsContainer) {
-            const newIndex = indicatorsContainer.children.length;
-            const newIndicator = {
-                name: `indicator_${newIndex + 1}`,
-                function: '',
-                type: 'trigger',
-                parameters: {}
-            };
-            
-            indicatorsContainer.insertAdjacentHTML('beforeend', generateIndicatorForm(newIndicator, newIndex));
-            
-            // Update the config from form
-            const configSection = activeTabPane.querySelector('.config-section');
-            const configType = configSection.dataset.configType;
-            updateConfigFromForm(configType, null);
+    // Function parameter templates for different indicator types
+    const indicatorParameterTemplates = {
+        'macd_histogram_crossover': {
+            parameters: {
+                slow: 26,
+                fast: 12,
+                signal: 9,
+                histogram_threshold: 0.02,
+                lookback: 10,
+                trend: 'bullish'
+            },
+            ranges: {
+                slow: { r: [20, 35], t: 'int' },
+                fast: { r: [7, 18], t: 'int' },
+                signal: { r: [6, 15], t: 'int' },
+                histogram_threshold: { r: [0.005, 0.12], t: 'float' },
+                lookback: { r: [5, 20], t: 'int' }
+            }
+        },
+        'sma_crossover': {
+            parameters: {
+                period: 20,
+                crossover_value: 0.01,
+                lookback: 10,
+                trend: 'bullish'
+            },
+            ranges: {
+                period: { r: [10, 50], t: 'int' },
+                crossover_value: { r: [0.005, 0.05], t: 'float' },
+                lookback: { r: [5, 20], t: 'int' }
+            }
+        },
+        'ema_crossover': {
+            parameters: {
+                period: 20,
+                crossover_value: 0.01,
+                lookback: 10,
+                trend: 'bullish'
+            },
+            ranges: {
+                period: { r: [10, 50], t: 'int' },
+                crossover_value: { r: [0.005, 0.05], t: 'float' },
+                lookback: { r: [5, 20], t: 'int' }
+            }
+        },
+        'rsi_crossover': {
+            parameters: {
+                period: 14,
+                oversold_threshold: 30,
+                overbought_threshold: 70,
+                lookback: 5,
+                trend: 'bullish'
+            },
+            ranges: {
+                period: { r: [10, 21], t: 'int' },
+                oversold_threshold: { r: [20, 35], t: 'int' },
+                overbought_threshold: { r: [65, 80], t: 'int' },
+                lookback: { r: [3, 10], t: 'int' }
+            }
         }
     };
+
+    // Global functions for onclick handlers
+    window.addIndicator = function(sectionKey = 'indicators') {
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        const configSection = activeTabPane.querySelector('.config-section');
+        const configType = configSection.dataset.configType;
+        
+        // Check if we're adding to the main indicators section
+        if (sectionKey === 'indicators') {
+            // Create a modal dialog with dropdown for function type selection
+            showIndicatorTypeModal((functionType) => {
+                if (!functionType || !indicatorParameterTemplates[functionType]) {
+                    showAlert('Please select a valid function type', 'danger');
+                    return;
+                }
+
+                // Find the indicators panel
+                const indicatorsPanel = activeTabPane.querySelector('[data-bs-target*="indicators"]');
+                if (!indicatorsPanel) {
+                    showAlert('Could not find indicators panel', 'danger');
+                    return;
+                }
+                
+                const cardBody = indicatorsPanel.closest('.card').querySelector('.card-body');
+                const addButton = cardBody.querySelector('button[onclick*="addIndicator"]');
+                
+                // Count existing indicators
+                const existingIndicators = cardBody.querySelectorAll('.card.mb-1').length;
+                
+                // Create indicator name based on function type
+                const baseName = functionType.replace('_crossover', '').replace('_histogram', '');
+                const indicatorName = `${baseName}_${existingIndicators + 1}`;
+                
+                const template = indicatorParameterTemplates[functionType];
+                
+                // Create indicator object - include ranges for GA configs
+                const newIndicator = {
+                    name: indicatorName,
+                    type: 'Indicator',
+                    function: functionType,
+                    agg_config: '1m-normal',
+                    calc_on_pip: false,
+                    parameters: template.parameters
+                };
+                
+                // Add ranges for GA config types
+                if (configType === 'ga_config' && template.ranges) {
+                    newIndicator.ranges = template.ranges;
+                }
+                
+                // Create the new indicator HTML
+                const subPanelId = `indicator_${existingIndicators}_${Date.now()}`;
+                const subCollapseId = `collapse_${subPanelId}`;
+                
+                const indicatorFieldsHtml = createDeepObjectFields(newIndicator, `indicators[${existingIndicators}]`);
+                
+                const newIndicatorHtml = `
+                    <div class="card mb-1">
+                        <div class="card-header py-1">
+                            <button class="btn btn-link text-decoration-none w-100 text-start p-0" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#${subCollapseId}">
+                                <i class="fas fa-chevron-down me-2"></i><small>${indicatorName}</small>
+                            </button>
+                        </div>
+                        <div class="collapse" id="${subCollapseId}">
+                            <div class="card-body py-2">
+                                <div class="row g-2">
+                                    ${indicatorFieldsHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Add at the very bottom, just before the Add button
+                if (addButton) {
+                    addButton.insertAdjacentHTML('beforebegin', newIndicatorHtml);
+                } else {
+                    // Fallback - add at end of card body
+                    cardBody.insertAdjacentHTML('beforeend', newIndicatorHtml);
+                }
+                
+                // Update the config
+                updateConfigFromForm(configType, null);
+                showAlert(`New ${functionType} indicator "${indicatorName}" added successfully`, 'success');
+            });
+        }
+    };
+
+    // Function to show indicator type selection modal
+    function showIndicatorTypeModal(callback) {
+        const modalId = 'indicatorTypeModal';
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById(modalId);
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Select Indicator Function Type</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="functionTypeSelect" class="form-label">Function Type</label>
+                                <select class="form-select" id="functionTypeSelect">
+                                    <option value="">Choose a function type...</option>
+                                    <option value="macd_histogram_crossover">MACD Histogram Crossover</option>
+                                    <option value="sma_crossover">SMA Crossover</option>
+                                    <option value="ema_crossover">EMA Crossover</option>
+                                    <option value="rsi_crossover">RSI Crossover</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirmAddIndicator">Add Indicator</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modal = new bootstrap.Modal(document.getElementById(modalId));
+        const confirmButton = document.getElementById('confirmAddIndicator');
+        const selectElement = document.getElementById('functionTypeSelect');
+        
+        confirmButton.addEventListener('click', function() {
+            const selectedType = selectElement.value;
+            modal.hide();
+            
+            // Clean up modal after hiding
+            setTimeout(() => {
+                document.getElementById(modalId).remove();
+            }, 300);
+            
+            if (selectedType) {
+                callback(selectedType);
+            } else {
+                showAlert('Please select a function type', 'warning');
+            }
+        });
+        
+        modal.show();
+    }
     
     window.removeIndicator = function(index) {
         const indicatorElement = document.querySelector(`.border[data-index="${index}"]`);
@@ -886,6 +1273,328 @@ document.addEventListener('DOMContentLoaded', function() {
         const configSection = activeTabPane.querySelector('.config-section');
         const configType = configSection.dataset.configType;
         updateConfigFromForm(configType, null);
+    };
+    
+    // Bar management functions
+    window.addBar = function(sectionKey) {
+        const barName = prompt('Enter bar name (you can create unlimited bars):\nExamples: "macd_bull_strong", "rsi_bear_weak", "custom_signal_1"');
+        if (!barName) return;
+        
+        const barType = prompt('Enter bar type:\n- bull (for bullish signals → appears in Enter Long)\n- bear (for bearish signals → appears in Exit Long)');
+        if (!barType || !['bull', 'bear'].includes(barType)) {
+            showAlert('Bar type must be either "bull" or "bear"', 'danger');
+            return;
+        }
+        
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        const configSection = activeTabPane.querySelector('.config-section');
+        const configType = configSection.dataset.configType;
+        
+        // Find the bars panel
+        const barsPanel = activeTabPane.querySelector('[data-bs-target*="bars"]');
+        if (!barsPanel) {
+            showAlert('Could not find bars panel', 'danger');
+            return;
+        }
+        
+        const cardBody = barsPanel.closest('.card').querySelector('.card-body');
+        const addButton = cardBody.querySelector('button[onclick*="addBar"]');
+        
+        // Create new bar object
+        const newBar = {
+            type: barType,
+            description: `New ${barType} bar`,
+            indicators: {}
+        };
+        
+        // Generate HTML for the new bar
+        const barFieldsHtml = createDeepObjectFields(newBar, `${sectionKey}.${barName}`, 0, 'bars');
+        const barPanelId = `bar_new_${Date.now()}`;
+        const barCollapseId = `collapse_${barPanelId}`;
+        
+        const newBarHtml = `
+            <div class="card mb-1">
+                <div class="card-header py-1 d-flex justify-content-between align-items-center">
+                    <button class="btn btn-link text-decoration-none text-start p-0 flex-grow-1" type="button" 
+                        data-bs-toggle="collapse" data-bs-target="#${barCollapseId}">
+                        <i class="fas fa-chevron-down me-2"></i><small>${barName}</small>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBar('${sectionKey}', '${barName}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="collapse" id="${barCollapseId}">
+                    <div class="card-body py-2">
+                        <div class="row g-2">
+                            ${barFieldsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add the new bar at the bottom, right before the Add button
+        if (addButton) {
+            addButton.insertAdjacentHTML('beforebegin', newBarHtml);
+        } else {
+            // Fallback if button not found - add to end of card body
+            cardBody.insertAdjacentHTML('beforeend', newBarHtml);
+        }
+        
+        // Add to enter_long or exit_long sections
+        addBarToThreshold(barName, barType, configType);
+        
+        // Update config
+        updateConfigFromForm(configType, null);
+        showAlert(`New ${barType} bar "${barName}" added successfully`, 'success');
+    };
+    
+    window.removeBar = function(sectionKey, barName) {
+        if (!confirm(`Are you sure you want to remove bar "${barName}"?`)) return;
+        
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        const configSection = activeTabPane.querySelector('.config-section');
+        const configType = configSection.dataset.configType;
+        
+        // Find and remove the bar element
+        const barHeaders = activeTabPane.querySelectorAll('.card-header small');
+        for (let header of barHeaders) {
+            if (header.textContent.trim() === barName) {
+                header.closest('.card').remove();
+                break;
+            }
+        }
+        
+        // Also remove the threshold entry from enter_long/exit_long section
+        const thresholdEntry = activeTabPane.querySelector(`[data-bar-name="${barName}"]`);
+        if (thresholdEntry) {
+            thresholdEntry.remove();
+        }
+        
+        // Update config
+        updateConfigFromForm(configType, null);
+        showAlert(`Bar "${barName}" and its threshold entry removed successfully`, 'success');
+    };
+    
+    window.addIndicatorToBar = function(indicatorsPath) {
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        const configSection = activeTabPane.querySelector('.config-section');
+        const configType = configSection.dataset.configType;
+        
+        // Get available indicators from the indicators panel
+        const availableIndicators = getAvailableIndicators(activeTabPane);
+        
+        if (availableIndicators.length === 0) {
+            showAlert('No indicators available. Please add indicators first in the Indicators section.', 'warning');
+            return;
+        }
+        
+        // Show modal with dropdown of available indicators
+        showAddIndicatorToBarModal(availableIndicators, (indicatorName, weight) => {
+            if (!indicatorName || !weight || isNaN(weight)) {
+                showAlert('Please select an indicator and enter a valid weight', 'danger');
+                return;
+            }
+            
+            // Find the indicators section for this bar
+            const allCards = activeTabPane.querySelectorAll('.card');
+            for (let card of allCards) {
+                const weightSection = card.querySelector('[onclick*="addIndicatorToBar"]');
+                if (weightSection && weightSection.getAttribute('onclick').includes(indicatorsPath)) {
+                    // Found the right bar, add the new indicator
+                    const newIndicatorHtml = `
+                        <div class="row align-items-center mb-1">
+                            <div class="col-8">
+                                <label for="indicator_${Date.now()}" class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">${indicatorName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</label>
+                                <input type="number" class="form-control form-control-sm" name="${indicatorsPath}.${indicatorName}" value="${weight}" style="font-size: 0.875rem;">
+                            </div>
+                            <div class="col-4">
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeIndicatorFromBar('${indicatorsPath}', '${indicatorName}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    weightSection.insertAdjacentHTML('beforebegin', newIndicatorHtml);
+                    break;
+                }
+            }
+            
+            // Update config
+            updateConfigFromForm(configType, null);
+            showAlert(`Indicator "${indicatorName}" added to bar with weight ${weight}`, 'success');
+        });
+    };
+
+    // Function to get available indicators from the indicators panel
+    function getAvailableIndicators(activeTabPane) {
+        const indicators = [];
+        
+        // Look for indicator name inputs in the indicators section
+        const indicatorNameInputs = activeTabPane.querySelectorAll('input[name*="indicators["][name*="].name"]');
+        indicatorNameInputs.forEach(input => {
+            if (input.value && input.value.trim()) {
+                indicators.push(input.value.trim());
+            }
+        });
+        
+        return indicators;
+    }
+
+    // Function to show add indicator to bar modal
+    function showAddIndicatorToBarModal(availableIndicators, callback) {
+        const modalId = 'addIndicatorToBarModal';
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById(modalId);
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Create options for the dropdown
+        const indicatorOptions = availableIndicators.map(indicator => 
+            `<option value="${indicator}">${indicator}</option>`
+        ).join('');
+        
+        const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Add Indicator to Bar</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="indicatorSelect" class="form-label">Select Indicator</label>
+                                <select class="form-select" id="indicatorSelect">
+                                    <option value="">Choose an indicator...</option>
+                                    ${indicatorOptions}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="weightInput" class="form-label">Weight</label>
+                                <input type="number" class="form-control" id="weightInput" placeholder="Enter weight (e.g., 1.0)" step="0.1" value="1.0">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirmAddIndicatorToBar">Add to Bar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modal = new bootstrap.Modal(document.getElementById(modalId));
+        const confirmButton = document.getElementById('confirmAddIndicatorToBar');
+        const indicatorSelect = document.getElementById('indicatorSelect');
+        const weightInput = document.getElementById('weightInput');
+        
+        confirmButton.addEventListener('click', function() {
+            const selectedIndicator = indicatorSelect.value;
+            const weight = weightInput.value;
+            modal.hide();
+            
+            // Clean up modal after hiding
+            setTimeout(() => {
+                document.getElementById(modalId).remove();
+            }, 300);
+            
+            if (selectedIndicator && weight) {
+                callback(selectedIndicator, weight);
+            } else {
+                showAlert('Please select an indicator and enter a weight', 'warning');
+            }
+        });
+        
+        modal.show();
+    }
+    
+    window.removeIndicatorFromBar = function(indicatorsPath, indicatorName) {
+        if (!confirm(`Remove indicator "${indicatorName}" from this bar?`)) return;
+        
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        const configSection = activeTabPane.querySelector('.config-section');
+        const configType = configSection.dataset.configType;
+        
+        // Find and remove the indicator row
+        const inputs = activeTabPane.querySelectorAll(`input[name="${indicatorsPath}.${indicatorName}"]`);
+        for (let input of inputs) {
+            input.closest('.row').remove();
+        }
+        
+        // Update config
+        updateConfigFromForm(configType, null);
+        showAlert(`Indicator "${indicatorName}" removed from bar`, 'success');
+    };
+    
+    function addBarToThreshold(barName, barType, configType) {
+        // Add bar to appropriate enter_long or exit_long section
+        const sectionName = barType === 'bull' ? 'enter_long' : 'exit_long';
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        
+        // Try to find the section panel (look for both direct sections and monitor nested sections)
+        const sectionPanels = activeTabPane.querySelectorAll('.card-header button');
+        let targetCardBody = null;
+        
+        for (let button of sectionPanels) {
+            const buttonText = button.textContent.trim().toLowerCase();
+            if (buttonText.includes(sectionName.replace('_', ' ')) || 
+                buttonText.includes(barType === 'bull' ? 'enter long' : 'exit long')) {
+                targetCardBody = button.closest('.card').querySelector('.card-body');
+                break;
+            }
+        }
+        
+        if (targetCardBody) {
+            // Count existing threshold entries to get the correct array index
+            const existingEntries = targetCardBody.querySelectorAll('.row.g-2.mb-2.p-2.border.rounded').length;
+            
+            // Create threshold entry form with correct array index
+            const thresholdHtml = `
+                <div class="row g-2 mb-2 p-2 border rounded" data-bar-name="${barName}">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">Name</label>
+                        <input type="text" class="form-control form-control-sm" name="${sectionName}[${existingEntries}].name" value="${barName}" readonly style="font-size: 0.875rem; background-color: #f8f9fa;">
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">Threshold</label>
+                        <input type="number" class="form-control form-control-sm" name="${sectionName}[${existingEntries}].threshold" value="0.5" step="0.01" style="font-size: 0.875rem;">
+                    </div>
+                    <div class="col-12">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeThresholdEntry('${barName}')">
+                            <i class="fas fa-trash"></i> Remove Threshold
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            targetCardBody.insertAdjacentHTML('beforeend', thresholdHtml);
+            console.log(`Added ${barType} bar "${barName}" to ${sectionName} section`);
+        } else {
+            console.warn(`Could not find ${sectionName} section to add bar "${barName}"`);
+        }
+    }
+    
+    // Function to remove threshold entry when bar is deleted
+    window.removeThresholdEntry = function(barName) {
+        const activeTabPane = document.querySelector('.tab-pane.show.active');
+        const configSection = activeTabPane.querySelector('.config-section');
+        const configType = configSection.dataset.configType;
+        
+        // Find and remove the threshold entry
+        const thresholdEntry = activeTabPane.querySelector(`[data-bar-name="${barName}"]`);
+        if (thresholdEntry) {
+            thresholdEntry.remove();
+        }
+        
+        // Update config
+        updateConfigFromForm(configType, null);
+        showAlert(`Threshold entry for "${barName}" removed`, 'info');
     };
     
     function attachFormHandlers(container, configType) {
@@ -1058,9 +1767,74 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Save as JSON button
+    // Change tracking system
+    let hasUnsavedChanges = false;
+    let originalConfigs = {};
+    
+    // Track unsaved changes
+    function markAsChanged(inputElement) {
+        hasUnsavedChanges = true;
+        saveChangesBtn.disabled = false;
+        saveChangesBtn.classList.remove('btn-outline-success');
+        saveChangesBtn.classList.add('btn-success');
+        
+        // Find the closest panel header and add flag there
+        if (inputElement) {
+            const panelCard = inputElement.closest('.card');
+            if (panelCard) {
+                const panelHeader = panelCard.querySelector('.card-header button');
+                if (panelHeader && !panelHeader.querySelector('.changed-flag')) {
+                    panelHeader.innerHTML += ' <span class="changed-flag badge bg-warning text-dark ms-1">●</span>';
+                }
+            }
+        }
+    }
+    
+    function markAsSaved() {
+        hasUnsavedChanges = false;
+        saveChangesBtn.disabled = true;
+        saveChangesBtn.classList.remove('btn-success');
+        saveChangesBtn.classList.add('btn-outline-success');
+        
+        // Remove all changed flags
+        document.querySelectorAll('.changed-flag').forEach(flag => flag.remove());
+    }
+    
+    // Add change listeners to all form inputs
+    function addChangeListeners() {
+        const configContainer = document.querySelector('#configTabContent');
+        if (configContainer) {
+            // Use event delegation to handle dynamically added inputs
+            configContainer.addEventListener('input', function(e) {
+                if (e.target.matches('input, select, textarea')) {
+                    markAsChanged(e.target);
+                }
+            });
+            
+            configContainer.addEventListener('change', function(e) {
+                if (e.target.matches('input[type="checkbox"], select')) {
+                    markAsChanged(e.target);
+                }
+            });
+        }
+    }
+    
+    // Store original configs when loaded
+    function storeOriginalConfig(configType, config) {
+        originalConfigs[configType] = JSON.parse(JSON.stringify(config));
+    }
+    
+    // Check for unsaved changes before navigation
+    function checkUnsavedChanges() {
+        if (hasUnsavedChanges) {
+            return confirm('You have unsaved changes. Do you want to continue without saving?');
+        }
+        return true;
+    }
+    
+    // Save as JSON with File System Access API or fallback
     if (saveAsJsonBtn) {
-        saveAsJsonBtn.addEventListener('click', function() {
+        saveAsJsonBtn.addEventListener('click', async function() {
             const activeTabPane = document.querySelector('.tab-pane.show.active');
             const configType = activeTabPane.querySelector('.config-section').dataset.configType;
             
@@ -1071,20 +1845,131 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const configData = window.currentConfigs[configType];
             const jsonString = JSON.stringify(configData, null, 2);
-            const blob = new Blob([jsonString], { type: 'application/json' });
+            const defaultName = `${configType}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
             
+            // Try to use File System Access API for modern browsers
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const fileHandle = await window.showSaveFilePicker({
+                        suggestedName: defaultName,
+                        types: [
+                            {
+                                description: 'JSON files',
+                                accept: {
+                                    'application/json': ['.json']
+                                }
+                            }
+                        ]
+                    });
+                    
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(jsonString);
+                    await writable.close();
+                    
+                    showAlert(`Configuration saved successfully!`, 'success');
+                    return;
+                } catch (error) {
+                    // User cancelled or error occurred, fall through to fallback
+                    if (error.name !== 'AbortError') {
+                        console.warn('File System Access API failed:', error);
+                    }
+                }
+            }
+            
+            // Fallback for browsers without File System Access API
+            const filename = prompt('Enter filename (without .json extension):', defaultName.replace('.json', ''));
+            
+            if (!filename) return; // User cancelled
+            
+            // Use browser's download functionality
+            const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const downloadLink = document.createElement('a');
             downloadLink.href = url;
-            downloadLink.download = `${configType}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+            downloadLink.download = `${filename}.json`;
+            downloadLink.style.display = 'none';
             
             document.body.appendChild(downloadLink);
             downloadLink.click();
             document.body.removeChild(downloadLink);
             URL.revokeObjectURL(url);
             
-            showAlert('Configuration downloaded as JSON file!', 'success');
+            showAlert(`Configuration downloaded as ${filename}.json!`, 'success');
         });
     }
+    
+    // Enhanced save changes functionality
+    if (saveChangesBtn) {
+        saveChangesBtn.addEventListener('click', function() {
+            if (!hasUnsavedChanges) {
+                showAlert('No changes to save', 'info');
+                return;
+            }
+            
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+            
+            const activeTabPane = document.querySelector('.tab-pane.show.active');
+            const configSection = activeTabPane.querySelector('.config-section');
+            const configType = configSection.dataset.configType;
+            
+            // Update config from form before saving
+            updateConfigFromForm(configType, null);
+            
+            const configData = window.currentConfigs[configType];
+            
+            fetch(`${window.location.pathname}/api/save_config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    config_type: configType,
+                    config_data: configData
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    markAsSaved();
+                    storeOriginalConfig(configType, configData);
+                    showAlert('Changes saved successfully!', 'success');
+                } else {
+                    showAlert(`Failed to save configuration: ${data.error || 'Unknown error'}`, 'danger');
+                }
+            })
+            .catch(error => {
+                showAlert(`Error saving configuration: ${error.message}`, 'danger');
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-check me-1"></i>Save Changes';
+            });
+        });
+    }
+    
+    // Initialize change tracking
+    addChangeListeners();
+    
+    // Add beforeunload warning for unsaved changes
+    window.addEventListener('beforeunload', function(e) {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    });
+    
+    // Override existing config loading to track original state
+    const originalConfigsReadyHandler = document.addEventListener;
+    document.addEventListener('configsReady', function(e) {
+        // Store original configs when loaded
+        if (window.currentConfigs) {
+            Object.keys(window.currentConfigs).forEach(configType => {
+                storeOriginalConfig(configType, window.currentConfigs[configType]);
+            });
+        }
+        markAsSaved(); // Mark as saved when configs are loaded
+    });
 });
 </script>

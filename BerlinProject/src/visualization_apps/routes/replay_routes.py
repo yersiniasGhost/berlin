@@ -648,5 +648,42 @@ def load_configs():
         logger.error(f"Error loading configs: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-# Additional routes can be added here (save_config, download_config, etc.)
+@replay_bp.route('/api/save_config', methods=['POST'])
+def save_config():
+    """Save configuration changes back to files"""
+    try:
+        data = request.get_json()
+        config_type = data.get('config_type')
+        config_data = data.get('config_data')
+        
+        if not config_type or not config_data:
+            return jsonify({'success': False, 'error': 'Missing config_type or config_data'})
+        
+        # Create saved_configs directory if it doesn't exist
+        saved_configs_dir = Path('saved_configs')
+        saved_configs_dir.mkdir(exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{config_type}.json"
+        filepath = saved_configs_dir / filename
+        
+        # Save the config
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+        
+        logger.info(f"Saved {config_type} configuration to {filepath}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Configuration saved successfully to {filename}',
+            'filepath': str(filepath.absolute()),
+            'filename': filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Error saving config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# Additional routes can be added here (download_config, etc.)
 # Following the same pattern as the original replay_visualization/app.py
