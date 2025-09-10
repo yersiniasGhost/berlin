@@ -1036,6 +1036,14 @@ def load_configs():
 def start_optimization():
     """HTTP endpoint to start optimization - creates temp files and triggers WebSocket"""
     try:
+        # Check if optimization is already running
+        global optimization_state
+        if optimization_state.get('running', False):
+            return jsonify({
+                'success': False, 
+                'error': 'An optimization is already running. Please stop or pause the current optimization before starting a new one.'
+            })
+        
         data = request.get_json()
         logger.info(f"Received start_optimization request with data keys: {list(data.keys()) if data else 'None'}")
         
@@ -1058,10 +1066,11 @@ def start_optimization():
             json.dump(data_config, data_file, indent=2)
             data_config_path = data_file.name
 
-        # Store paths globally so WebSocket handler can access them
-        global optimization_state
+        # Store paths and config data globally so WebSocket handler can access them
         optimization_state['ga_config_path_temp'] = ga_config_path
         optimization_state['data_config_path_temp'] = data_config_path
+        optimization_state['ga_config_data'] = ga_config  # Store the actual config data
+        optimization_state['data_config_data'] = data_config
 
         return jsonify({
             'success': True,
@@ -1383,28 +1392,43 @@ def export_best_elite():
         logger.error(f"Error exporting best elite: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@optimizer_bp.route('/api/export_elites')
-def export_elites():
-    """Export multiple elite configurations based on GA hyperparameters"""
+@optimizer_bp.route('/api/export_optimized_configs')
+def export_optimized_configs():
+    """Export complete optimization results package like the old system"""
     try:
-        # Use stored elites from optimization state
+        # Use stored data from optimization state
         elites = optimization_state.get('elites', [])
+        best_individuals_log = optimization_state.get('best_individuals_log', [])
+        ga_config_data = optimization_state.get('ga_config_data', {})
+        test_name = optimization_state.get('test_name', 'optimization')
         
         if not elites:
-            return jsonify({'success': False, 'error': 'No elites available'})
+            return jsonify({'success': False, 'error': 'No elite configurations available'})
         
-        # Get number of elites to save from GA hyperparameters, default to 5
-        elites_to_save = 5
+        # Generate timestamp for folder name
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        
+        # Get number of elites to save from GA hyperparameters (specifically "elites_to_save")
+        elites_to_save = 5  # Default
         try:
-            if optimization_state.get('ga_instance') and hasattr(optimization_state['ga_instance'], 'elitist_size'):
-                elites_to_save = optimization_state['ga_instance'].elitist_size
+            # First try from stored ga_config_data
+            if ga_config_data and 'ga_hyperparameters' in ga_config_data:
+                elites_to_save = ga_config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+                logger.info(f"📊 Found elites_to_save in stored config: {elites_to_save}")
             else:
-                # Try to get from current configs
-                if window and hasattr(window, 'currentConfigs') and window.currentConfigs.get('ga_config'):
-                    ga_config = window.currentConfigs['ga_config']
-                    elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elite_size', 5)
-        except:
-            pass  # Use default
+                # Try to read from the config paths used during optimization start
+                ga_config_path = optimization_state.get('ga_config_path')
+                if ga_config_path and os.path.exists(ga_config_path):
+                    with open(ga_config_path, 'r') as f:
+                        ga_config = json.load(f)
+                        elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+                        logger.info(f"📊 Found elites_to_save in config file: {elites_to_save}")
+                else:
+                    logger.warning(f"📊 Could not find GA config, using default elites_to_save: {elites_to_save}")
+            
+        except Exception as e:
+            logger.warning(f"Could not read elites_to_save from config, using default {elites_to_save}: {e}")
+            pass
         
         # Limit to available elites
         elites_to_export = min(elites_to_save, len(elites))
@@ -1426,60 +1450,154 @@ def export_elites():
             else:
                 return obj
         
-        elite_configs = []
+        # Prepare optimization results package
+        optimization_package = {
+            'folder_name': f"{timestamp}_{test_name}",
+            'timestamp': timestamp,
+            'test_name': test_name,
+            'files': {}
+        }
         
+        # 1. Elite configurations (same format as old system)
+        elite_files = {}
         for i in range(elites_to_export):
             elite = elites[i]
             
-            # Convert elite individual to configuration format
             if hasattr(elite, 'individual') and hasattr(elite.individual, 'monitor_configuration'):
                 monitor_config = elite.individual.monitor_configuration
+                
+                # Extract trade executor config
+                elite_trade_executor = {}
+                if hasattr(monitor_config, 'trade_executor'):
+                    te = monitor_config.trade_executor
+                    elite_trade_executor = {
+                        'default_position_size': getattr(te, 'default_position_size', 100.0),
+                        'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
+                        'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
+                        'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
+                        'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
+                        'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
+                        'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
+                    }
+                else:
+                    elite_trade_executor = {
+                        'default_position_size': 100.0,
+                        'stop_loss_pct': 0.01,
+                        'take_profit_pct': 0.02,
+                        'ignore_bear_signals': False,
+                        'trailing_stop_loss': False,
+                        'trailing_stop_distance_pct': 0.01,
+                        'trailing_stop_activation_pct': 0.005
+                    }
+                
+                # Convert indicators to proper dict format
+                elite_indicators_list = []
+                if hasattr(monitor_config, 'indicators') and monitor_config.indicators:
+                    for indicator in monitor_config.indicators:
+                        indicator_dict = {
+                            'name': indicator.name,
+                            'type': indicator.type,
+                            'function': indicator.function,
+                            'agg_config': indicator.agg_config,
+                            'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
+                            'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}
+                        }
+                        elite_indicators_list.append(indicator_dict)
+                
+                # Create elite config in the same format as old system
                 elite_config = {
-                    'test_name': f'Elite_{i + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
                     'monitor': {
-                        'name': getattr(monitor_config, 'name', f'Elite #{i + 1} Strategy'),
-                        'description': f'Elite #{i + 1} from optimization run',
-                        'bars': serialize_object(getattr(monitor_config, 'bars', {})),
+                        'name': getattr(monitor_config, 'name', f"Elite {i+1}"),
+                        'description': getattr(monitor_config, 'description', f"Elite monitor #{i+1}"),
+                        'trade_executor': elite_trade_executor,
                         'enter_long': serialize_object(getattr(monitor_config, 'enter_long', [])),
                         'exit_long': serialize_object(getattr(monitor_config, 'exit_long', [])),
-                        'trade_executor': serialize_object(getattr(monitor_config, 'trade_executor', {}))
+                        'bars': serialize_object(getattr(monitor_config, 'bars', {})),
                     },
-                    'indicators': serialize_object(getattr(monitor_config, 'indicators', []))
+                    'indicators': elite_indicators_list
                 }
-            elif hasattr(elite, 'individual') and hasattr(elite.individual, 'genotype'):
-                genotype = elite.individual.genotype
-                elite_config = {
-                    'test_name': f'Elite_{i + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-                    'monitor': serialize_object(genotype) if isinstance(genotype, dict) else {},
-                    'indicators': []
-                }
-            else:
-                # Last resort
-                elite_config = {
-                    'test_name': f'Elite_{i + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-                    'monitor': {
-                        'name': f'Elite #{i + 1} Strategy',
-                        'description': f'Elite #{i + 1} solution from genetic algorithm optimization'
-                    },
-                    'indicators': [],
-                    'elite_fitness': elite.fitness_values.tolist() if hasattr(elite, 'fitness_values') else []
-                }
-            
-            # Add performance stats if available
-            if hasattr(elite, 'fitness_values'):
-                elite_config['performance_stats'] = {
-                    'fitness_values': elite.fitness_values.tolist() if hasattr(elite.fitness_values, 'tolist') else list(elite.fitness_values)
-                }
-            
-            elite_configs.append(elite_config)
+                
+                elite_filename = f"{timestamp}_{test_name}_elite_{i+1}.json"
+                elite_files[elite_filename] = elite_config
         
-        logger.info(f"Exporting {len(elite_configs)} elite configurations")
+        # 2. Objectives evolution CSV
+        objectives_csv = ""
+        if best_individuals_log:
+            # Get all unique objective names
+            all_objectives = set()
+            for entry in best_individuals_log:
+                all_objectives.update(entry['metrics'].keys())
+            
+            # CSV header
+            header = ['Generation'] + sorted(list(all_objectives))
+            objectives_csv = ','.join(header) + '\n'
+            
+            # CSV data rows
+            for entry in best_individuals_log:
+                row = [str(entry['generation'])]
+                for obj_name in sorted(list(all_objectives)):
+                    row.append(str(entry['metrics'].get(obj_name, '')))
+                objectives_csv += ','.join(row) + '\n'
+        
+        # 3. Original GA config with metadata
+        ga_config_with_metadata = dict(ga_config_data)
+        ga_config_with_metadata['optimization_metadata'] = {
+            'timestamp': timestamp,
+            'results_directory': f"{timestamp}_{test_name}",
+            'elites_exported': elites_to_export,
+            'total_generations': len(best_individuals_log) if best_individuals_log else 0
+        }
+        
+        # 4. Summary report
+        summary_text = f"""Genetic Algorithm Optimization Results
+=====================================
+
+Test Name: {test_name}
+Timestamp: {timestamp}
+Total Generations: {len(best_individuals_log) if best_individuals_log else 0}
+Elites Saved: {elites_to_export}
+
+"""
+        
+        if best_individuals_log:
+            summary_text += "Final Best Metrics:\n"
+            final_metrics = best_individuals_log[-1]['metrics']
+            for metric_name, metric_value in final_metrics.items():
+                summary_text += f"  {metric_name}: {metric_value}\n"
+            summary_text += "\n"
+        
+        if elites:
+            summary_text += "Elite Performance Summary:\n"
+            for i in range(elites_to_export):
+                elite = elites[i]
+                if hasattr(elite, 'fitness_values'):
+                    fitness_str = ", ".join([f"{val:.6f}" for val in elite.fitness_values])
+                    summary_text += f"  Elite {i+1}: [{fitness_str}]\n"
+            summary_text += "\n"
+        
+        summary_text += f"Files created:\n"
+        for filename in elite_files.keys():
+            summary_text += f"  - {filename}\n"
+        summary_text += f"  - {timestamp}_{test_name}_objectives.csv\n"
+        summary_text += f"  - {timestamp}_{test_name}_original_ga_config.json\n"
+        summary_text += f"  - {timestamp}_{test_name}_summary.txt\n"
+        
+        # Package everything for frontend
+        optimization_package['files'] = elite_files
+        optimization_package['objectives_csv'] = objectives_csv
+        optimization_package['objectives_filename'] = f"{timestamp}_{test_name}_objectives.csv"
+        optimization_package['ga_config'] = ga_config_with_metadata
+        optimization_package['ga_config_filename'] = f"{timestamp}_{test_name}_original_ga_config.json"
+        optimization_package['summary'] = summary_text
+        optimization_package['summary_filename'] = f"{timestamp}_{test_name}_summary.txt"
+        optimization_package['elites_count'] = elites_to_export
+        
+        logger.info(f"✅ Prepared optimization package with {elites_to_export} elites")
         
         return jsonify({
             'success': True,
-            'elites': elite_configs,
-            'count': len(elite_configs),
-            'message': f'{len(elite_configs)} elite configurations exported successfully'
+            'package': optimization_package,
+            'message': f'Optimization package prepared with {elites_to_export} elite configurations'
         })
         
     except Exception as e:

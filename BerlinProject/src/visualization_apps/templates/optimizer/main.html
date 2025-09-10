@@ -50,8 +50,8 @@
                             <button type="button" class="btn btn-danger btn-lg me-3" id="stopOptimizerBtn" disabled>
                                 <i class="fas fa-stop me-2"></i>Stop
                             </button>
-                            <button type="button" class="btn btn-primary btn-lg" id="saveElitesBtn" disabled style="display: none;">
-                                <i class="fas fa-trophy me-2"></i>Save Elite Configurations
+                            <button type="button" class="btn btn-primary btn-lg" id="saveOptimizedConfigsBtn" disabled style="display: none;">
+                                <i class="fas fa-trophy me-2"></i>Save Optimized Configs
                             </button>
                         </div>
                         <div class="col-md-4">
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const pauseOptimizerBtn = document.getElementById('pauseOptimizerBtn');
     const stopOptimizerBtn = document.getElementById('stopOptimizerBtn');
     const chartsSection = document.getElementById('chartsSection');
-    const saveElitesBtn = document.getElementById('saveElitesBtn');
+    const saveOptimizedConfigsBtn = document.getElementById('saveOptimizedConfigsBtn');
     
     let charts = {};
     let optimizationRunning = false;
@@ -261,6 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pauseOptimizerBtn.disabled = false;
             stopOptimizerBtn.disabled = false;
             hideElitesButton(); // Hide save button when starting new optimization
+            clearAllChartsAndData(); // Clear previous optimization data
             
             const response = await fetch('/optimizer/api/start_optimization', {
                 method: 'POST',
@@ -308,32 +309,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Pause optimization
+    // Pause/Resume optimization
     pauseOptimizerBtn.addEventListener('click', async function() {
+        const isPaused = this.innerHTML.includes('Resume');
+        
         try {
-            const response = await fetch('/optimizer/api/pause_optimization', {
-                method: 'POST'
-            });
+            let response;
+            if (isPaused) {
+                // Resume optimization
+                response = await fetch('/optimizer/api/resume_optimization', {
+                    method: 'POST'
+                });
+            } else {
+                // Pause optimization
+                response = await fetch('/optimizer/api/pause_optimization', {
+                    method: 'POST'
+                });
+            }
             
             const result = await response.json();
             
             if (result.success) {
-                optimizationRunning = false;
-                this.disabled = true;
-                startOptimizerBtn.disabled = false;
-                
-                // Show save button when paused (user might want to save current elites)
-                saveElitesBtn.style.display = 'inline-block';
-                saveElitesBtn.disabled = false;
-                
-                showAlert('Optimization paused', 'info');
-                stopPolling();
+                if (isPaused) {
+                    // Changed from Resume back to Pause
+                    this.innerHTML = '<i class="fas fa-pause me-2"></i>Pause';
+                    this.className = 'btn btn-warning btn-lg me-3';
+                    optimizationRunning = true;
+                    startOptimizerBtn.disabled = true;
+                    hideElitesButton(); // Hide save button when resuming
+                    showAlert('Optimization resumed', 'info');
+                    startPolling();
+                } else {
+                    // Changed from Pause to Resume
+                    this.innerHTML = '<i class="fas fa-play me-2"></i>Resume';
+                    this.className = 'btn btn-success btn-lg me-3';
+                    optimizationRunning = false;
+                    startOptimizerBtn.disabled = true; // Keep start disabled when paused
+                    
+                    // Show save button when paused (user might want to save current elites)
+                    saveOptimizedConfigsBtn.style.display = 'inline-block';
+                    saveOptimizedConfigsBtn.disabled = false;
+                    
+                    showAlert('Optimization paused', 'info');
+                    stopPolling();
+                }
             } else {
-                throw new Error(result.error || 'Failed to pause optimization');
+                throw new Error(result.error || `Failed to ${isPaused ? 'resume' : 'pause'} optimization`);
             }
             
         } catch (error) {
-            showAlert(`Failed to pause optimization: ${error.message}`, 'danger');
+            showAlert(`Failed to ${isPaused ? 'resume' : 'pause'} optimization: ${error.message}`, 'danger');
         }
     });
     
@@ -365,14 +390,12 @@ document.addEventListener('DOMContentLoaded', function() {
         stopOptimizerBtn.disabled = true;
         optimizationRunning = false;
         
-        // Clear the generations tracking set for next optimization
-        addedGenerations.clear();
+        // Reset pause button to original state
+        pauseOptimizerBtn.innerHTML = '<i class="fas fa-pause me-2"></i>Pause';
+        pauseOptimizerBtn.className = 'btn btn-warning btn-lg me-3';
         
-        // Clear the performance metrics table
-        const tableBody = document.getElementById('metricsTable');
-        if (tableBody) {
-            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No performance data yet</td></tr>';
-        }
+        // Clear all data when stopping/resetting
+        clearAllChartsAndData();
     }
     
     function showCharts() {
@@ -456,14 +479,92 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         charts.bestStrategy = Highcharts.chart('bestStrategyChart', {
-            chart: { type: 'candlestick' },
+            chart: { 
+                type: 'candlestick',
+                zoomType: 'xy',
+                panKey: 'shift',
+                panning: {
+                    enabled: true,
+                    type: 'xy'
+                },
+                events: {
+                    load: function() {
+                        // Add mouse wheel zoom support
+                        const chartContainer = this.container;
+                        
+                        chartContainer.addEventListener('wheel', function(e) {
+                            // Only zoom on wheel over chart area
+                            if (e.target.closest('.highcharts-container')) {
+                                e.preventDefault();
+                                
+                                const chart = chartContainer.chart || chartContainer.hcChart;
+                                if (chart && chart.xAxis && chart.xAxis[0] && chart.yAxis && chart.yAxis[0]) {
+                                    const xAxis = chart.xAxis[0];
+                                    const yAxis = chart.yAxis[0];
+                                    
+                                    // Get current extremes
+                                    const currentXMin = xAxis.min;
+                                    const currentXMax = xAxis.max;
+                                    const currentYMin = yAxis.min;
+                                    const currentYMax = yAxis.max;
+                                    
+                                    const xRange = currentXMax - currentXMin;
+                                    const yRange = currentYMax - currentYMin;
+                                    
+                                    // Zoom factor
+                                    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+                                    const newXRange = xRange * zoomFactor;
+                                    const newYRange = yRange * zoomFactor;
+                                    
+                                    // Get mouse position for zoom center
+                                    const rect = chartContainer.getBoundingClientRect();
+                                    const mouseX = e.clientX - rect.left;
+                                    const mouseY = e.clientY - rect.top;
+                                    const plotLeft = chart.plotLeft;
+                                    const plotTop = chart.plotTop;
+                                    const plotWidth = chart.plotWidth;
+                                    const plotHeight = chart.plotHeight;
+                                    
+                                    // Calculate zoom centers
+                                    let xCenterRatio = 0.5;
+                                    let yCenterRatio = 0.5;
+                                    
+                                    if (mouseX >= plotLeft && mouseX <= plotLeft + plotWidth) {
+                                        xCenterRatio = (mouseX - plotLeft) / plotWidth;
+                                    }
+                                    if (mouseY >= plotTop && mouseY <= plotTop + plotHeight) {
+                                        yCenterRatio = 1 - ((mouseY - plotTop) / plotHeight); // Invert Y
+                                    }
+                                    
+                                    // Calculate new extremes
+                                    const xCenter = currentXMin + (xRange * xCenterRatio);
+                                    const yCenter = currentYMin + (yRange * yCenterRatio);
+                                    
+                                    const newXMin = xCenter - (newXRange * xCenterRatio);
+                                    const newXMax = xCenter + (newXRange * (1 - xCenterRatio));
+                                    const newYMin = yCenter - (newYRange * yCenterRatio);
+                                    const newYMax = yCenter + (newYRange * (1 - yCenterRatio));
+                                    
+                                    // Apply zoom
+                                    xAxis.setExtremes(newXMin, newXMax, false);
+                                    yAxis.setExtremes(newYMin, newYMax, true);
+                                }
+                            }
+                        });
+                    }
+                }
+            },
             title: { text: 'Best Strategy Performance' },
             xAxis: { 
                 type: 'datetime',
                 ordinal: true, // Use ordinal axis to remove all gaps
-                breaks: [] // Clear any default breaks
+                breaks: [], // Clear any default breaks
+                crosshair: true
             },
-            yAxis: { title: { text: 'Price' } },
+            yAxis: { 
+                title: { text: 'Price' },
+                crosshair: true
+            },
             plotOptions: {
                 candlestick: {
                     upColor: '#28a745',
@@ -477,7 +578,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: [],
                 type: 'candlestick'
             }],
-            credits: { enabled: false }
+            credits: { enabled: false },
+            tooltip: {
+                xDateFormat: '%Y-%m-%d %H:%M',
+                shared: true
+            }
         });
     }
     
@@ -503,8 +608,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Show save button if we have elites
                 if (data.elites && data.elites.length > 0) {
-                    saveElitesBtn.style.display = 'inline-block';
-                    saveElitesBtn.disabled = false;
+                    saveOptimizedConfigsBtn.style.display = 'inline-block';
+                    saveOptimizedConfigsBtn.disabled = false;
                 }
                 
                 if (data.progress.completed) {
@@ -858,88 +963,97 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     
-    // Show completion popup for saving elites
+    // Show completion popup for saving optimized configs
     function showCompletionSavePopup() {
-        if (confirm('🏆 Optimization completed!\n\nWould you like to save the elite configurations?')) {
-            saveElites();
+        if (confirm('🏆 Optimization completed!\n\nWould you like to save the optimized configurations and results?')) {
+            saveOptimizedConfigs();
         }
     }
     
-    // Save Elites function
-    async function saveElites() {
-        const saveBtn = document.getElementById('saveElitesBtn');
+    // Save Optimized Configs function
+    async function saveOptimizedConfigs() {
+        const saveBtn = document.getElementById('saveOptimizedConfigsBtn');
         const originalText = saveBtn.innerHTML;
         
         try {
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
             
-            // Get elite configurations (will save the number specified in GA hyperparameters)
-            const response = await fetch('/optimizer/api/export_elites');
+            // Get complete optimization package (like old system)
+            const response = await fetch('/optimizer/api/export_optimized_configs');
             const result = await response.json();
             
             if (result.success) {
-                const eliteConfigs = result.elites || [result.config]; // Handle both single and multiple elites
-                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const package = result.package;
+                const folderName = package.folder_name;
                 
-                // Save each elite configuration
-                for (let i = 0; i < eliteConfigs.length; i++) {
-                    const config = eliteConfigs[i];
-                    const jsonString = JSON.stringify(config, null, 2);
-                    const defaultName = `elite_${i + 1}_${timestamp}`;
-                    
-                    // Try to use File System Access API for modern browsers
-                    if ('showSaveFilePicker' in window) {
-                        try {
-                            const fileHandle = await window.showSaveFilePicker({
-                                suggestedName: `${defaultName}.json`,
-                                types: [
-                                    {
-                                        description: 'JSON files',
-                                        accept: {
-                                            'application/json': ['.json']
-                                        }
-                                    }
-                                ]
-                            });
-                            
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(jsonString);
-                            await writable.close();
-                            
-                        } catch (error) {
-                            if (error.name === 'AbortError') {
-                                break; // User cancelled, stop saving more files
-                            }
-                            console.warn('File System Access API failed:', error);
-                            // Fall through to fallback for this file
-                            const filename = prompt(`Enter filename for Elite #${i + 1} (without .json):`, defaultName);
-                            if (filename) {
-                                const blob = new Blob([jsonString], { type: 'application/json' });
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.download = `${filename}.json`;
-                                link.click();
-                                URL.revokeObjectURL(url);
-                            }
-                        }
-                    } else {
-                        // Fallback for browsers without File System Access API
-                        const filename = prompt(`Enter filename for Elite #${i + 1} (without .json):`, defaultName);
-                        if (filename) {
-                            const blob = new Blob([jsonString], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = `${filename}.json`;
-                            link.click();
-                            URL.revokeObjectURL(url);
-                        }
-                    }
+                console.log('🏆 Received optimization package:', package);
+                
+                // Download all files organized with folder prefix in filenames
+                const confirmDownload = confirm(
+                    `Save optimization results to Downloads folder?\n\n` +
+                    `Folder: ${folderName}\n` +
+                    `Elite configs: ${package.elites_count}\n` +
+                    `Total files: ${Object.keys(package.files).length + 3}\n\n` +
+                    `Files will be saved with folder prefix for easy organization.`
+                );
+                
+                if (!confirmDownload) return;
+                
+                // Download all files with folder prefix for easy organization
+                const allFiles = [];
+                
+                // Add elite configs
+                for (const [filename, config] of Object.entries(package.files)) {
+                    allFiles.push({
+                        filename: `${folderName}/${filename}`,
+                        content: JSON.stringify(config, null, 2),
+                        type: 'application/json'
+                    });
                 }
                 
-                showAlert(`🏆 ${eliteConfigs.length} elite configuration(s) saved successfully!`, 'success');
+                // Add objectives CSV
+                if (package.objectives_csv) {
+                    allFiles.push({
+                        filename: `${folderName}/${package.objectives_filename}`,
+                        content: package.objectives_csv,
+                        type: 'text/csv'
+                    });
+                }
+                
+                // Add GA config
+                allFiles.push({
+                    filename: `${folderName}/${package.ga_config_filename}`,
+                    content: JSON.stringify(package.ga_config, null, 2),
+                    type: 'application/json'
+                });
+                
+                // Add summary
+                allFiles.push({
+                    filename: `${folderName}/${package.summary_filename}`,
+                    content: package.summary,
+                    type: 'text/plain'
+                });
+                
+                // Download all files with folder structure in filename
+                for (const file of allFiles) {
+                    const blob = new Blob([file.content], { type: file.type });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = file.filename;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    await new Promise(resolve => setTimeout(resolve, 150)); // Small delay between downloads
+                }
+                
+                showAlert(
+                    `🏆 Optimization results downloaded!\n\n` +
+                    `${allFiles.length} files saved to Downloads folder.\n` +
+                    `Files are prefixed with "${folderName}/" for easy organization.\n\n` +
+                    `Elite configs: ${package.elites_count} (top performers)`, 
+                    'success'
+                );
             } else {
                 showAlert(`Failed to get elite configurations: ${result.error || 'Unknown error'}`, 'danger');
             }
@@ -953,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Add click listener for save button
-    saveElitesBtn.addEventListener('click', saveElites);
+    saveOptimizedConfigsBtn.addEventListener('click', saveOptimizedConfigs);
     
     // Reset buttons state
     function resetButtons() {
@@ -966,8 +1080,107 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Hide save button when starting new optimization
     function hideElitesButton() {
-        saveElitesBtn.style.display = 'none';
-        saveElitesBtn.disabled = true;
+        saveOptimizedConfigsBtn.style.display = 'none';
+        saveOptimizedConfigsBtn.disabled = true;
+    }
+    
+    // Clear all charts and data from previous optimization runs
+    function clearAllChartsAndData() {
+        console.log('🧹 Clearing all charts and data from previous run');
+        
+        // Clear the generations tracking set
+        addedGenerations.clear();
+        
+        // Clear the performance metrics table
+        const tableBody = document.getElementById('metricsTable');
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No performance data yet</td></tr>';
+        }
+        
+        // Clear all chart data if charts exist
+        if (charts.objective) {
+            // Clear objective evolution chart
+            while(charts.objective.series.length > 0) {
+                charts.objective.series[0].remove(false);
+            }
+            charts.objective.redraw();
+        }
+        
+        if (charts.parallelCoords) {
+            // Clear parallel coordinates chart
+            charts.parallelCoords.destroy();
+            charts.parallelCoords = Highcharts.chart('parallelCoordsChart', {
+                chart: {
+                    type: 'line',
+                    parallelCoordinates: true,
+                    parallelAxes: {
+                        lineWidth: 2,
+                        gridlinesWidth: 1
+                    }
+                },
+                title: { text: 'Elite Population Analysis' },
+                plotOptions: {
+                    series: {
+                        animation: { duration: 500 },
+                        lineWidth: 2.5,
+                        opacity: 0.75,
+                        marker: { enabled: false }
+                    }
+                },
+                legend: { enabled: false },
+                credits: { enabled: false }
+            });
+        }
+        
+        if (charts.winningTrades) {
+            // Clear winning trades chart
+            charts.winningTrades.series[0].setData([], true);
+            charts.winningTrades.update({
+                xAxis: { categories: [] }
+            }, false);
+        }
+        
+        if (charts.losingTrades) {
+            // Clear losing trades chart
+            charts.losingTrades.series[0].setData([], true);
+            charts.losingTrades.update({
+                xAxis: { categories: [] }
+            }, false);
+        }
+        
+        if (charts.bestStrategy) {
+            // Clear best strategy chart
+            charts.bestStrategy.series[0].setData([], false);
+            
+            // Clear any existing plot bands
+            if (charts.bestStrategy.xAxis[0].plotLinesAndBands) {
+                charts.bestStrategy.xAxis[0].plotLinesAndBands.slice().forEach(band => {
+                    if (band.options.className && band.options.className.includes('trade-band')) {
+                        band.destroy();
+                    }
+                });
+            }
+            
+            charts.bestStrategy.redraw();
+        }
+        
+        // Reset progress bar
+        const progressBar = document.getElementById('optimizationProgress');
+        const progressText = document.getElementById('progressText');
+        const statusText = document.getElementById('optimizationStatus');
+        
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            progressBar.setAttribute('aria-valuenow', 0);
+        }
+        if (progressText) {
+            progressText.textContent = 'Starting...';
+        }
+        if (statusText) {
+            statusText.textContent = 'Generation: 0 / 0';
+        }
+        
+        console.log('✅ All charts and data cleared');
     }
 });
 </script>

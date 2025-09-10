@@ -79,25 +79,19 @@
                         <div class="col-12">
                             <h6>Performance Metrics</h6>
                             <div class="row">
-                                <div class="col-md-3">
-                                    <div class="text-center p-3 border rounded">
-                                        <div class="h5 mb-0" id="winRate">-</div>
-                                        <small class="text-muted">Win Rate</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
+                                <div class="col-md-4">
                                     <div class="text-center p-3 border rounded">
                                         <div class="h5 mb-0" id="totalPnL">-</div>
                                         <small class="text-muted">Total P&L</small>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-4">
                                     <div class="text-center p-3 border rounded">
                                         <div class="h5 mb-0" id="avgWin">-</div>
                                         <small class="text-muted">Avg Win</small>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-4">
                                     <div class="text-center p-3 border rounded">
                                         <div class="h5 mb-0" id="avgLoss">-</div>
                                         <small class="text-muted">Avg Loss</small>
@@ -266,12 +260,10 @@ document.addEventListener('DOMContentLoaded', function() {
             cumulativePnL += trade.pnl;
         });
         
-        const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
         const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
         const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
         
         // Update UI
-        document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
         document.getElementById('totalPnL').textContent = `${cumulativePnL.toFixed(2)}%`;
         document.getElementById('avgWin').textContent = `${avgWin.toFixed(2)}%`;
         document.getElementById('avgLoss').textContent = `${avgLoss.toFixed(2)}%`;
@@ -286,7 +278,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const chartConfig = {
             chart: { 
                 height: 500,
-                zoomType: 'x'
+                zoomType: 'x',
+                panKey: 'shift',
+                panning: {
+                    enabled: true,
+                    type: 'x'
+                }
             },
             title: { text: 'Price Chart with Trade Background Shading' },
             xAxis: { 
@@ -438,7 +435,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const chartConfig = {
             chart: { 
                 type: 'line',
-                height: 300
+                height: 300,
+                zoomType: 'x',
+                panKey: 'shift',
+                panning: {
+                    enabled: true,
+                    type: 'x'
+                }
             },
             title: { text: 'Cumulative P&L Evolution' },
             xAxis: { 
@@ -546,6 +549,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     type: 'line',
                     height: 150,
                     zoomType: 'x',
+                    panKey: 'shift',
+                    panning: {
+                        enabled: true,
+                        type: 'x'
+                    },
                     marginBottom: isLastChart ? 60 : 20 // More space for x-axis labels on last chart
                 },
                 title: { 
@@ -596,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function enableChartSynchronization(chart) {
-        // Enhanced synchronization for stacked charts
+        // Enhanced synchronization for stacked charts including scroll zoom
         chart.update({
             chart: {
                 events: {
@@ -606,14 +614,65 @@ document.addEventListener('DOMContentLoaded', function() {
                             const max = event.xAxis[0].max;
                             syncAllCharts(min, max, chart);
                         }
+                    },
+                    load: function() {
+                        // Add mouse wheel zoom synchronization and pan support
+                        const chartContainer = this.container;
+                        
+                        // Mouse wheel zoom (works with or without Ctrl/Cmd key)
+                        chartContainer.addEventListener('wheel', function(e) {
+                            // Only zoom on wheel over chart area, not the entire page
+                            if (e.target.closest('.highcharts-container')) {
+                                e.preventDefault();
+                                
+                                const chart = chartContainer.chart || chartContainer.hcChart;
+                                if (chart && chart.xAxis && chart.xAxis[0]) {
+                                    const xAxis = chart.xAxis[0];
+                                    const currentMin = xAxis.min;
+                                    const currentMax = xAxis.max;
+                                    const range = currentMax - currentMin;
+                                    
+                                    // Smaller zoom factor for smoother zoom
+                                    const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95;
+                                    const newRange = range * zoomFactor;
+                                    
+                                    // Get mouse position relative to chart for zoom center
+                                    const rect = chartContainer.getBoundingClientRect();
+                                    const mouseX = e.clientX - rect.left;
+                                    const plotLeft = chart.plotLeft;
+                                    const plotWidth = chart.plotWidth;
+                                    
+                                    // Calculate zoom center based on mouse position
+                                    let centerRatio = 0.5; // Default center
+                                    if (mouseX >= plotLeft && mouseX <= plotLeft + plotWidth) {
+                                        centerRatio = (mouseX - plotLeft) / plotWidth;
+                                    }
+                                    
+                                    const center = currentMin + (range * centerRatio);
+                                    const newMin = center - (newRange * centerRatio);
+                                    const newMax = center + (newRange * (1 - centerRatio));
+                                    
+                                    // Ensure we don't zoom beyond data limits
+                                    const dataMin = xAxis.getExtremes().dataMin;
+                                    const dataMax = xAxis.getExtremes().dataMax;
+                                    
+                                    if (newMin >= dataMin && newMax <= dataMax && newRange > 0) {
+                                        syncAllCharts(newMin, newMax, chart);
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // Store reference for cleanup
+                        this.syncContainer = chartContainer;
                     }
                 }
             },
             xAxis: {
                 events: {
                     afterSetExtremes: function(e) {
-                        // Only sync if this was a user action
-                        if (e.trigger === 'zoom' || e.trigger === 'pan' || e.trigger === 'selection') {
+                        // Only sync if this was a user action (including mouse wheel)
+                        if (e.trigger === 'zoom' || e.trigger === 'pan' || e.trigger === 'selection' || e.trigger === 'mousewheel') {
                             syncAllCharts(e.min, e.max, chart);
                         }
                     }
