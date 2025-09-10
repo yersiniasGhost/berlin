@@ -624,8 +624,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Only zoom on wheel over chart area, not the entire page
                             if (e.target.closest('.highcharts-container')) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 
-                                const chart = chartContainer.chart || chartContainer.hcChart;
+                                // Prevent sync loop
+                                if (window.syncInProgress) return;
+                                
+                                const chart = chartContainer.chart || chartContainer.hcChart || this;
                                 if (chart && chart.xAxis && chart.xAxis[0]) {
                                     const xAxis = chart.xAxis[0];
                                     const currentMin = xAxis.min;
@@ -633,14 +637,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                     const range = currentMax - currentMin;
                                     
                                     // Smaller zoom factor for smoother zoom
-                                    const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95;
+                                    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
                                     const newRange = range * zoomFactor;
                                     
                                     // Get mouse position relative to chart for zoom center
                                     const rect = chartContainer.getBoundingClientRect();
                                     const mouseX = e.clientX - rect.left;
-                                    const plotLeft = chart.plotLeft;
-                                    const plotWidth = chart.plotWidth;
+                                    const plotLeft = chart.plotLeft || 60;
+                                    const plotWidth = chart.plotWidth || (rect.width - 120);
                                     
                                     // Calculate zoom center based on mouse position
                                     let centerRatio = 0.5; // Default center
@@ -652,16 +656,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                     const newMin = center - (newRange * centerRatio);
                                     const newMax = center + (newRange * (1 - centerRatio));
                                     
-                                    // Ensure we don't zoom beyond data limits
-                                    const dataMin = xAxis.getExtremes().dataMin;
-                                    const dataMax = xAxis.getExtremes().dataMax;
+                                    // Ensure we don't zoom beyond data limits and maintain minimum range
+                                    const dataMin = xAxis.getExtremes().dataMin || currentMin;
+                                    const dataMax = xAxis.getExtremes().dataMax || currentMax;
+                                    const minRange = (dataMax - dataMin) / 1000; // Minimum zoom level
                                     
-                                    if (newMin >= dataMin && newMax <= dataMax && newRange > 0) {
+                                    if (newMin >= dataMin && newMax <= dataMax && newRange > minRange) {
+                                        console.log('Wheel zoom:', {newMin, newMax, range: newRange});
                                         syncAllCharts(newMin, newMax, chart);
                                     }
                                 }
                             }
-                        });
+                        }, { passive: false });
                         
                         // Store reference for cleanup
                         this.syncContainer = chartContainer;
@@ -686,18 +692,23 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.syncInProgress) return;
         window.syncInProgress = true;
         
+        console.log('Syncing all charts:', {min, max, sourceChart: sourceChart.renderTo?.id || 'unknown'});
+        
         try {
+            let syncedCount = 0;
             Object.values(charts).forEach(chart => {
                 if (chart !== sourceChart && chart.xAxis && chart.xAxis[0]) {
-                    chart.xAxis[0].setExtremes(min, max, false);
-                    chart.redraw();
+                    // Use setExtremes with redraw true for immediate visual feedback
+                    chart.xAxis[0].setExtremes(min, max, true, false);
+                    syncedCount++;
                 }
             });
+            console.log(`Synced ${syncedCount} charts`);
         } finally {
             // Re-enable sync after a short delay
             setTimeout(() => {
                 window.syncInProgress = false;
-            }, 100);
+            }, 50); // Shorter delay for more responsive sync
         }
     }
     
