@@ -134,6 +134,8 @@ class UIExternalTool(ExternalTool):
         Process completed candle and send candlestick update to browser
         """
         try:
+            logger.info(f"UIExternalTool received completed candle: {card_id} {symbol} {timeframe}")
+            
             # Prepare candlestick data in Highcharts format
             candlestick_point = [
                 int(completed_candle.timestamp.timestamp() * 1000),  # Timestamp in milliseconds
@@ -154,12 +156,17 @@ class UIExternalTool(ExternalTool):
 
             # Get session ID and emit
             session_id = self.get_session_id_from_app_service()
-            self.emit_to_session('candle_completed', update_data, session_id)
-
-            logger.debug(f"Sent completed candle for {symbol} {timeframe}: {candlestick_point}")
+            success = self.emit_to_session('candle_completed', update_data, session_id)
+            
+            if success:
+                logger.info(f"Successfully sent completed candle for {symbol} {timeframe} to session {session_id}: {candlestick_point}")
+            else:
+                logger.error(f"Failed to send completed candle for {symbol} {timeframe}")
 
         except Exception as e:
             logger.error(f"Error processing completed candle for {card_id}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def get_candlestick_history(self, card_id: str, timeframe: str = '1m', limit: int = 200) -> List[List]:
         """

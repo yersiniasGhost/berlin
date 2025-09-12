@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="/static/js/candle-history.js"></script>
     <style>
         * {
             margin: 0;
@@ -830,6 +831,25 @@
         .modal::-webkit-scrollbar {
             display: none;
         }
+
+        /* Debug mode toggle styling */
+        #debugModeToggle:checked {
+            background: #238636;
+            border-color: #238636;
+        }
+
+        #debugModeToggle:checked::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            left: 2px;
+            top: -1px;
+        }
+
+        #debugModeToggle:hover {
+            border-color: #58a6ff;
+        }
     </style>
 </head>
 <body>
@@ -880,6 +900,12 @@
                             <button class="size-btn" data-size="medium" title="Medium View">M</button>
                             <button class="size-btn" data-size="small" title="Small View">S</button>
                         </div>
+                    </div>
+                    <div class="status-item">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; color: #e6edf3; cursor: pointer;">
+                            <input type="checkbox" id="debugModeToggle" style="appearance: none; width: 16px; height: 16px; border: 1px solid #30363d; border-radius: 3px; background: #0d1117; position: relative;">
+                            <span style="font-size: 0.875rem;">Debug Mode</span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -944,6 +970,9 @@
         // WebSocket connection
         const socket = io();
         let cards = {};
+
+        // Initialize global candle history handler
+        setupGlobalCandleHandler(socket);
 
         // Modal state
         let modalSelectedFile = null;
@@ -1470,6 +1499,11 @@
                         // Clean up localStorage
                         localStorage.removeItem(`portfolio-${cardId}`);
                         localStorage.removeItem(`card-size-${cardId}`);
+                        
+                        // Clean up candle history for this card
+                        if (window.candleHistoryManager) {
+                            window.candleHistoryManager.clearCardHistory(cardId);
+                        }
 
                         // Show loading message if no cards left
                         const container = document.getElementById('cardsContainer');
@@ -1631,10 +1665,36 @@
             });
         }
 
+        // Debug mode functionality
+        let debugMode = false;
+
+        function initializeDebugMode() {
+            const debugToggle = document.getElementById('debugModeToggle');
+            
+            // Restore saved debug mode preference (defaults to false if not set)
+            debugMode = localStorage.getItem('debug-mode') === 'true';
+            debugToggle.checked = debugMode;
+            
+            // Set up debug mode toggle
+            debugToggle.addEventListener('change', function() {
+                debugMode = this.checked;
+                localStorage.setItem('debug-mode', debugMode);
+                
+                // Send debug mode change to server
+                socket.emit('debug_mode_changed', { enabled: debugMode });
+                
+                // Show message
+                showMessage(`Debug mode ${debugMode ? 'enabled' : 'disabled'}`, 'info');
+            });
+        }
+
         // Event listeners that need to be set up after DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize global size controls
             initializeGlobalSizeControls();
+            
+            // Initialize debug mode
+            initializeDebugMode();
             // Add input listener for symbol field
             const symbolInput = document.getElementById('modalSymbolInput');
             if (symbolInput) {

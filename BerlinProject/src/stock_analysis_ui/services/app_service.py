@@ -15,6 +15,7 @@ from data_streamer.data_streamer import DataStreamer
 from models.monitor_configuration import MonitorConfiguration, load_monitor_config
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+from stock_analysis_ui.services.csv_logger import CSVLogger
 
 
 class AppService:
@@ -39,6 +40,9 @@ class AppService:
         self.data_link: Optional[Union[SchwabDataLink, CSReplayDataLink]] = None
         # MODIFIED: Pass self to UIExternalTool so it can access combination data
         self.ui_tool: UIExternalTool = UIExternalTool(socketio, app_service=self)
+        
+        # CSV Logger for debug mode
+        self.csv_logger: CSVLogger = CSVLogger()
 
         # State tracking
         self.is_streaming: bool = False
@@ -62,6 +66,10 @@ class AppService:
             if self.data_link:
                 if hasattr(self.data_link, 'disconnect'):
                     self.data_link.disconnect()
+
+            # Cleanup CSV logger
+            if self.csv_logger:
+                self.csv_logger.cleanup()
 
             self.combinations.clear()
             self.logger.info(f"AppService cleanup completed for session {self.session_id}")
@@ -171,6 +179,10 @@ class AppService:
 
             # Connect UI tool to DataStreamer
             data_streamer.connect_tool(self.ui_tool)
+            
+            # Connect CSV logger to DataStreamer if it supports it
+            if hasattr(data_streamer, 'connect_csv_logger'):
+                data_streamer.connect_csv_logger(self.csv_logger)
 
             # Register DataStreamer with the data_link
             self.data_link.add_data_streamer(symbol, data_streamer)
@@ -346,3 +358,15 @@ class AppService:
             status["authenticated"] = self.auth_manager.is_authenticated()
 
         return status
+
+    def set_debug_mode(self, enabled: bool) -> None:
+        """Enable or disable debug mode CSV logging"""
+        try:
+            if enabled:
+                self.csv_logger.enable()
+                self.logger.info(f"Debug mode enabled for session {self.session_id}")
+            else:
+                self.csv_logger.disable()
+                self.logger.info(f"Debug mode disabled for session {self.session_id}")
+        except Exception as e:
+            self.logger.error(f"Error setting debug mode: {e}")

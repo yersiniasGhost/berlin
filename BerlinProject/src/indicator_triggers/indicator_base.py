@@ -220,7 +220,14 @@ class IndicatorRegistry(metaclass=Singleton):
     
     def register(self, indicator_class: Type[BaseIndicator]):
         """Register an indicator class."""
-        self._indicators[indicator_class.name] = indicator_class
+        # Get the name from a temporary instance with default config
+        temp_config = IndicatorConfiguration(
+            indicator_name="temp", 
+            display_name="temp", 
+            parameters={}
+        )
+        temp_instance = indicator_class(temp_config)
+        self._indicators[temp_instance.name] = indicator_class
     
     def get_indicator_class(self, name: str) -> Type[BaseIndicator]:
         """Get indicator class by name."""

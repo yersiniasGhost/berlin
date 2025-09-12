@@ -251,6 +251,34 @@ def register_websocket_events(socketio, initial_app_service):
             logger.error(f"Error handling debug request: {e}")
             emit('error', {'message': str(e)})
 
+    @socketio.on('debug_mode_changed')
+    def handle_debug_mode_changed(data):
+        """Handle debug mode toggle from client"""
+        try:
+            session_id, authenticated = get_session_from_websocket()
+
+            if not authenticated or not session_id:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            app_service = get_session_app_service(session_id)
+            if not app_service:
+                emit('error', {'message': 'Invalid session'})
+                return
+
+            enabled = data.get('enabled', False)
+            
+            # Set debug mode on the app service
+            if hasattr(app_service, 'set_debug_mode'):
+                app_service.set_debug_mode(enabled)
+                logger.info(f"Debug mode {'enabled' if enabled else 'disabled'} for session {session_id}")
+            else:
+                logger.warning(f"App service for session {session_id} doesn't support debug mode")
+
+        except Exception as e:
+            logger.error(f"Error handling debug mode change: {e}")
+            emit('error', {'message': str(e)})
+
     @socketio.on('ping')
     def handle_ping():
         """Handle ping for connection testing"""

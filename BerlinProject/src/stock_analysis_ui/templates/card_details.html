@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Details - Trading Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="/static/js/candle-history.js"></script>
     <!-- Highcharts for candlestick chart -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
@@ -435,6 +436,73 @@
             color: #7d8590;
         }
 
+        /* Candle History Table */
+        .candle-table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            background: #0d1117;
+            margin-top: 1rem;
+        }
+
+        .candle-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .candle-table thead {
+            background: #21262d;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .candle-table th {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            color: #f0f6fc;
+            border-bottom: 2px solid #30363d;
+            border-right: 1px solid #30363d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.625rem;
+        }
+
+        .candle-table th:last-child {
+            border-right: none;
+        }
+
+        .candle-table tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .candle-table tbody tr:hover {
+            background: #161b22;
+        }
+
+        .candle-table tbody tr:nth-child(even) {
+            background: rgba(125, 133, 144, 0.05);
+        }
+
+        .candle-table td {
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid #30363d;
+            border-right: 1px solid #30363d;
+            color: #e6edf3;
+        }
+
+        .candle-table td:last-child {
+            border-right: none;
+        }
+
+        .candle-bullish { color: #56d364; }
+        .candle-bearish { color: #f85149; }
+        .candle-doji { color: #d29922; }
+
         /* Empty state */
         .empty-state {
             text-align: center;
@@ -649,7 +717,7 @@
                         </div>
                     </div>
 
-                    <!-- Right Column: Trade History -->
+                    <!-- Right Column: Trade History and Candle History -->
                     <div class="trades-section">
                         <div class="section-header">
                             <div>
@@ -663,6 +731,27 @@
                             <div class="empty-state">
                                 <div class="empty-state-icon"></div>
                                 <div class="empty-state-text">No trades executed yet</div>
+                            </div>
+                        </div>
+
+                        <!-- Candle History Section -->
+                        <div class="section-header" style="margin-top: 2rem;">
+                            <div>
+                                <div class="section-title">Candle History</div>
+                                <div class="section-subtitle">Recent completed candles for analysis</div>
+                            </div>
+                            <div class="chart-controls">
+                                <button class="chart-btn active" onclick="loadCandleHistory('1m')" data-candle-timeframe="1m">1M</button>
+                                <button class="chart-btn" onclick="loadCandleHistory('5m')" data-candle-timeframe="5m">5M</button>
+                                <button class="chart-btn" onclick="loadCandleHistory('15m')" data-candle-timeframe="15m">15M</button>
+                            </div>
+                        </div>
+
+                        <div id="candleHistoryList">
+                            <!-- Will be populated by JavaScript -->
+                            <div class="empty-state">
+                                <div class="empty-state-icon"></div>
+                                <div class="empty-state-text">Loading candle history...</div>
                             </div>
                         </div>
                     </div>
@@ -693,6 +782,9 @@
         // WebSocket connection
         const socket = io();
 
+        // Initialize global candle history handler
+        setupGlobalCandleHandler(socket);
+
         // Global variables for monitor configuration
         let currentMonitorConfig = null;
 
@@ -700,6 +792,9 @@
         let candlestickChart = null;
         let candlestickData = [];
         let currentTimeframe = '1m';
+
+        // Candle history variables
+        let currentCandleTimeframe = '1m';
 
         // Sidebar toggle function
         function toggleSidebar() {
@@ -709,10 +804,30 @@
 
         // Connect to the card's data stream
         socket.on('connect', function() {
-            console.log('Connected to server');
+            console.log('Connected to server for card details page');
             if (cardId) {
                 loadCardDetails(cardId);
             }
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server');
+        });
+
+        socket.on('error', function(error) {
+            console.error('Socket error:', error);
+        });
+
+        // Listen for ALL events to debug
+        const originalEmit = socket.emit;
+        socket.emit = function(...args) {
+            console.log('Emitting:', args[0], args[1]);
+            return originalEmit.apply(this, args);
+        };
+
+        // Add generic listener for debugging
+        socket.onAny(function(eventName, ...args) {
+            console.log('Received WebSocket event:', eventName, args);
         });
 
         // Listen for real-time updates
@@ -738,11 +853,28 @@
             }
         });
 
-        // Listen for completed candles
-        socket.on('candle_completed', function(data) {
-            if (data.card_id === cardId) {
-                console.log('Received completed candle:', data);
-                addCompletedCandleToChart(data);
+        // Listen for candle history updates from the global handler
+        document.addEventListener('candleHistoryUpdated', function(event) {
+            const { cardId: eventCardId, timeframe, candleData } = event.detail;
+            
+            console.log('Received candle history update:', event.detail);
+            
+            // Check if this update is for our card
+            if (eventCardId === cardId) {
+                // Add to candlestick chart for any timeframe
+                const chartData = {
+                    card_id: cardId,
+                    timeframe: timeframe,
+                    completed_candle: candleData
+                };
+                addCompletedCandleToChart(chartData);
+                
+                // Update the candle history table if it matches current timeframe
+                if (timeframe === currentCandleTimeframe) {
+                    console.log(`Updating ${timeframe} candle history table for ${cardId}`);
+                    const history = window.candleHistoryManager.getCandleHistory(cardId, timeframe);
+                    updateCandleHistorySection(history);
+                }
             }
         });
 
@@ -802,6 +934,9 @@
 
                     // Load initial candlestick data
                     await loadCandlestickData(currentTimeframe);
+
+                    // Initialize candle history (will show empty state until completed candles arrive)
+                    loadCandleHistory(currentCandleTimeframe);
 
                     // Check for portfolio data with trade history - check both possible locations
                     if (data.portfolio_data && data.portfolio_data.trade_history) {
@@ -1390,6 +1525,122 @@
                 </tr>
             `;
         }
+
+        // Candle History Functions
+        function loadCandleHistory(timeframe) {
+            console.log(`Loading candle history for timeframe: ${timeframe}`);
+
+            // Update active button
+            document.querySelectorAll('[data-candle-timeframe]').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-candle-timeframe="${timeframe}"]`)?.classList.add('active');
+
+            currentCandleTimeframe = timeframe;
+
+            // Get existing candle history from persistent storage
+            const existingHistory = window.candleHistoryManager.getCandleHistory(cardId, timeframe);
+            
+            console.log(`Found ${existingHistory.length} existing candles for ${cardId} ${timeframe}`);
+            
+            if (existingHistory.length > 0) {
+                updateCandleHistorySection(existingHistory);
+            } else {
+                const container = document.getElementById('candleHistoryList');
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"></div>
+                        <div class="empty-state-text">Waiting for completed ${timeframe} candles...</div>
+                    </div>
+                `;
+            }
+        }
+
+        function updateCandleHistorySection(candleData) {
+            const container = document.getElementById('candleHistoryList');
+
+            if (!candleData || candleData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"></div>
+                        <div class="empty-state-text">No candle data available for ${currentCandleTimeframe}</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Convert candlestick data format to candle rows
+            const candleRows = candleData.map(candle => {
+                // Handle different data formats: [timestamp, open, high, low, close] or object
+                let timestamp, open, high, low, close;
+                
+                if (Array.isArray(candle)) {
+                    [timestamp, open, high, low, close] = candle;
+                } else if (candle && typeof candle === 'object') {
+                    timestamp = candle.timestamp || candle.time || candle.bar_time;
+                    open = candle.open;
+                    high = candle.high;
+                    low = candle.low;
+                    close = candle.close;
+                } else {
+                    return null;
+                }
+
+                if (!timestamp || open == null || high == null || low == null || close == null) {
+                    return null;
+                }
+
+                return {
+                    timestamp: new Date(timestamp),
+                    open: parseFloat(open),
+                    high: parseFloat(high),
+                    low: parseFloat(low),
+                    close: parseFloat(close)
+                };
+            }).filter(candle => candle !== null);
+
+            // Sort by timestamp (newest first)
+            candleRows.sort((a, b) => b.timestamp - a.timestamp);
+
+            // Create table HTML
+            const tableHTML = `
+                <div class="candle-table-container">
+                    <table class="candle-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Open</th>
+                                <th>High</th>
+                                <th>Low</th>
+                                <th>Close</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${candleRows.slice(0, 20).map(candle => createCandleRow(candle)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            container.innerHTML = tableHTML;
+        }
+
+        function createCandleRow(candle) {
+            const time = candle.timestamp.toLocaleTimeString();
+            const open = candle.open.toFixed(2);
+            const high = candle.high.toFixed(2);
+            const low = candle.low.toFixed(2);
+            const close = candle.close.toFixed(2);
+
+            return `
+                <tr>
+                    <td>${time}</td>
+                    <td>${open}</td>
+                    <td>${high}</td>
+                    <td>${low}</td>
+                    <td>${close}</td>
+                </tr>
+            `;
+        }
+
 
         console.log('Card details page initialized for real data streaming.');
     </script>

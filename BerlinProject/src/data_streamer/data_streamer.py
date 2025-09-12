@@ -42,6 +42,7 @@ class DataStreamer:
         # Processing components
         self.indicator_processor: IndicatorProcessor = IndicatorProcessor(monitor_config)
         self.external_tools: List[ExternalTool] = []
+        self.csv_logger = None  # CSV logger for debug mode
 
         # ONLY CHANGE: Use unified TradeExecutor with configuration from monitor_config
         self.trade_executor: TradeExecutorUnified = TradeExecutorUnified(monitor_config)
@@ -61,11 +62,28 @@ class DataStreamer:
         if tick_data.symbol != self.symbol:
             return
 
+        # Log pip data if CSV logger is available and enabled
+        if self.csv_logger and self.csv_logger.enabled:
+            self.csv_logger.log_pip(self.card_id, self.symbol, tick_data)
+
         # Process tick through all aggregators
-        for timeframe, aggregator in self.aggregators.items():
+        for agg_key, aggregator in self.aggregators.items():
             completed_candle = aggregator.process_tick(tick_data)
             if completed_candle is not None:
-                logger.debug(f"Completed {timeframe} {aggregator._get_aggregator_type()} candle")
+                # Extract timeframe from aggregator key (e.g., "1m-normal" -> "1m")
+                timeframe = agg_key.split('-')[0]
+                logger.info(f"Completed {timeframe} {aggregator._get_aggregator_type()} candle for {self.symbol}")
+                
+                # Log completed candle data if CSV logger is available and enabled (ONLY 1-minute candles)
+                if self.csv_logger and self.csv_logger.enabled and timeframe == "1m":
+                    self.csv_logger.log_candle(self.card_id, self.symbol, timeframe, completed_candle)
+                
+                # Send completed candle to UI tools for real-time updates
+                for tool in self.external_tools:
+                    if hasattr(tool, 'process_completed_candle'):
+                        aggregator_history = aggregator.get_history()
+                        logger.info(f"Sending completed {timeframe} candle to UI tool for {self.card_id}")
+                        tool.process_completed_candle(self.card_id, self.symbol, timeframe, completed_candle, aggregator_history)
 
         # Calculate indicators based on current aggregator state
         self.indicators, self.raw_indicators, self.bar_scores = (
@@ -187,6 +205,16 @@ class DataStreamer:
         if external_tool not in self.external_tools:
             self.external_tools.append(external_tool)
             logger.info(f"Connected external tool: {type(external_tool).__name__}")
+
+    def connect_csv_logger(self, csv_logger) -> None:
+        """
+        Connect a CSV logger for debug mode
+
+        Args:
+            csv_logger: CSV logger instance
+        """
+        self.csv_logger = csv_logger
+        logger.info(f"Connected CSV logger for {self.symbol}")
 
     def _get_all_candle_data(self) -> Dict[str, List[TickData]]:
         """Get all candle data from aggregators - needed for API routes"""

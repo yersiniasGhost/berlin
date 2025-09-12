@@ -9,6 +9,11 @@ import numpy as np
 from candle_aggregator.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from models.tick_data import TickData
+# Import the new indicator system
+from indicator_triggers.indicator_base import IndicatorRegistry, IndicatorConfiguration
+from indicator_triggers.refactored_indicators import *  # This registers all indicators
+
+# Keep old imports for fallback during transition
 from features.indicators import *
 from features.indicators2 import support_level, resistance_level
 
@@ -22,7 +27,41 @@ class IndicatorProcessorHistoricalNew:
 
     def __init__(self, configuration: MonitorConfiguration) -> None:
         self.config: MonitorConfiguration = configuration
-        # logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
+        self.indicator_objects = {}  # {indicator_name: indicator_instance}
+        self.registry = IndicatorRegistry()
+        
+        # Build indicator objects from configuration
+        self._build_indicator_objects()
+        
+        logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators ({len(self.indicator_objects)} objects created)")
+
+    def _build_indicator_objects(self):
+        """Build indicator objects from monitor configuration."""
+        for indicator_def in self.config.indicators:
+            try:
+                # Create IndicatorConfiguration from IndicatorDefinition
+                indicator_config = IndicatorConfiguration(
+                    indicator_name=indicator_def.function,  # e.g., "sma_crossover"
+                    display_name=indicator_def.name,       # e.g., "sma1m" 
+                    parameters=indicator_def.parameters or {}
+                )
+                
+                # Create indicator instance
+                indicator_obj = self.registry.create_indicator(indicator_config)
+                
+                # Store additional metadata from the definition
+                indicator_obj.timeframe = indicator_def.get_timeframe()
+                indicator_obj.timeframe_minutes = self._parse_timeframe_to_minutes(indicator_def.get_timeframe())
+                indicator_obj.lookback = indicator_def.parameters.get('lookback', 10)
+                indicator_obj.agg_config = indicator_def.agg_config
+                
+                self.indicator_objects[indicator_def.name] = indicator_obj
+                
+                logger.debug(f"Created indicator object: {indicator_def.name} -> {indicator_def.function}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to create indicator object for {indicator_def.name}: {e}")
+                logger.warning(f"Will use fallback method for this indicator")
 
     def calculate_indicators(self, aggregators: Dict[str, CandleAggregator]) -> Tuple[
         Dict[str, List[float]],  # indicator_history (time-decayed)
@@ -73,9 +112,10 @@ class IndicatorProcessorHistoricalNew:
             for comp_name, comp_values in component_data.items():
                 component_history[comp_name] = comp_values
 
-            # Apply lookback scoring using vectorized operations
+            # Apply timeframe-aware lookback scoring 
             lookback = indicator_def.parameters.get('lookback', 10)
-            processed_values = self._apply_lookback_vectorized(raw_values, lookback)
+            timeframe_minutes = self._parse_timeframe_to_minutes(indicator_def.get_timeframe())
+            processed_values = self._apply_lookback_timeframe_aware(raw_values, lookback, timeframe_minutes, candles)
             indicator_history[indicator_def.name] = processed_values
 
             # logger.debug(f"Processed {indicator_def.name}: {len(processed_values)} values")
@@ -125,27 +165,21 @@ class IndicatorProcessorHistoricalNew:
 
     def _calculate_indicator_batch(self, tick_history: List[TickData], indicator_def) -> List[float]:
         """
-        Calculate single indicator for entire history using batch processing
-        This uses the same indicator functions as the live system
+        Calculate single indicator for entire history using object-oriented approach
         """
         try:
             if len(tick_history) < 10:
                 return [0.0] * len(tick_history)
 
-            # Use the same indicator functions as IndicatorProcessor
-            if indicator_def.function == 'sma_crossover':
-                result = sma_crossover(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'macd_histogram_crossover':
-                result = macd_histogram_crossover(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'bol_bands_lower_band_bounce':
-                result = bol_bands_lower_band_bounce(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'support_level':
-                result = support_level(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'resistance_level':
-                result = resistance_level(tick_history, indicator_def.parameters)
+            # Try to use the indicator object first (new system)
+            if indicator_def.name in self.indicator_objects:
+                indicator_obj = self.indicator_objects[indicator_def.name]
+                result = indicator_obj.calculate(tick_history)
+                logger.debug(f"Used indicator object for {indicator_def.name}")
             else:
-                logger.warning(f"Unknown indicator function: {indicator_def.function}")
-                result = np.array([0.0] * len(tick_history))
+                # Fallback to old hardcoded functions
+                logger.warning(f"No indicator object found for {indicator_def.name}, using fallback functions")
+                result = self._calculate_indicator_fallback(tick_history, indicator_def)
 
             # Ensure result is a list of the right length
             if isinstance(result, np.ndarray):
@@ -162,6 +196,25 @@ class IndicatorProcessorHistoricalNew:
         except Exception as e:
             logger.error(f"Error calculating {indicator_def.function}: {e}")
             return [0.0] * len(tick_history)
+
+    def _calculate_indicator_fallback(self, tick_history: List[TickData], indicator_def) -> np.ndarray:
+        """
+        Fallback method using the old hardcoded functions for backward compatibility
+        """
+        # Use the same indicator functions as before
+        if indicator_def.function == 'sma_crossover':
+            return sma_crossover(tick_history, indicator_def.parameters)
+        elif indicator_def.function == 'macd_histogram_crossover':
+            return macd_histogram_crossover(tick_history, indicator_def.parameters)
+        elif indicator_def.function == 'bol_bands_lower_band_bounce':
+            return bol_bands_lower_band_bounce(tick_history, indicator_def.parameters)
+        elif indicator_def.function == 'support_level':
+            return support_level(tick_history, indicator_def.parameters)
+        elif indicator_def.function == 'resistance_level':
+            return resistance_level(tick_history, indicator_def.parameters)
+        else:
+            logger.warning(f"Unknown indicator function: {indicator_def.function}")
+            return np.array([0.0] * len(tick_history))
 
     def _calculate_component_data(self, tick_history: List[TickData], indicator_def) -> Dict[str, List[float]]:
         """
@@ -240,6 +293,82 @@ class IndicatorProcessorHistoricalNew:
             # Apply same formula as live system
             processed_values[i] = (1.0 - lookback_ratio) * np.sign(trigger_value)
 
+        return processed_values.tolist()
+
+    def _parse_timeframe_to_minutes(self, timeframe_str: str) -> int:
+        """Convert timeframe string to minutes (e.g., '5m' -> 5, '1h' -> 60)."""
+        if timeframe_str.endswith('m'):
+            return int(timeframe_str[:-1])
+        elif timeframe_str.endswith('h'):
+            return int(timeframe_str[:-1]) * 60
+        else:
+            # Default to 1 minute if unable to parse
+            return 1
+
+    def _apply_lookback_timeframe_aware(self, raw_values: List[float], lookback: int, 
+                                      timeframe_minutes: int, candles: List[TickData]) -> List[float]:
+        """
+        Apply timeframe-aware lookback scoring with proper persistence and decay.
+        
+        Example: 5m indicator with lookback=5
+        - Minutes 0-5: Value = 1.0 (persistence phase)
+        - Minutes 5-10: Value = 0.8 (1st decay: 1.0 - 0.2)
+        - Minutes 10-15: Value = 0.6 (2nd decay: 1.0 - 0.4)
+        - Minutes 15-20: Value = 0.4 (3rd decay: 1.0 - 0.6)
+        - Minutes 20-25: Value = 0.2 (4th decay: 1.0 - 0.8)
+        - After 25 minutes: Value = 0.0
+        """
+        if not raw_values or not candles:
+            return []
+
+        # Convert to numpy for faster operations
+        raw_array = np.array(raw_values)
+        processed_values = np.zeros(len(raw_array))
+        
+        # Calculate decay amount per step
+        decay_per_step = 1.0 / lookback if lookback > 0 else 1.0
+
+        # Process each time point
+        for i in range(len(raw_array)):
+            current_timestamp = candles[i].timestamp
+            
+            # Look back through history to find most recent trigger
+            most_recent_trigger_value = 0.0
+            most_recent_trigger_time = None
+            
+            for j in range(i, -1, -1):
+                if raw_array[j] != 0:
+                    most_recent_trigger_value = raw_array[j]
+                    most_recent_trigger_time = candles[j].timestamp
+                    break
+            
+            # No trigger found - value is 0
+            if most_recent_trigger_time is None:
+                processed_values[i] = 0.0
+                continue
+            
+            # Calculate time elapsed since trigger (in minutes)
+            time_elapsed_seconds = (current_timestamp - most_recent_trigger_time).total_seconds()
+            time_elapsed_minutes = time_elapsed_seconds / 60.0
+            
+            # Determine value based on timeframe-aware persistence and decay
+            if time_elapsed_minutes < timeframe_minutes:
+                # Persistence phase: stay at full strength
+                processed_values[i] = 1.0 * np.sign(most_recent_trigger_value)
+            else:
+                # Decay phase: calculate which decay step we're in
+                decay_time = time_elapsed_minutes - timeframe_minutes
+                decay_steps = int(decay_time / timeframe_minutes)
+                
+                # Calculate decayed value
+                if decay_steps >= lookback:
+                    # Fully decayed
+                    processed_values[i] = 0.0
+                else:
+                    # Partial decay
+                    decayed_value = 1.0 - (decay_steps + 1) * decay_per_step
+                    processed_values[i] = decayed_value * np.sign(most_recent_trigger_value)
+        
         return processed_values.tolist()
 
     def _calculate_bar_scores_batch(self, indicator_history: Dict[str, List[float]], max_length: int) -> Dict[str, List[float]]:

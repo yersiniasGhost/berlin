@@ -9,7 +9,7 @@ import talib as ta
 from scipy.signal import argrelextrema
 
 from models.tick_data import TickData
-from features.indicator_base import BaseIndicator, ParameterSpec, ParameterType, IndicatorRegistry 
+from indicator_triggers.indicator_base import BaseIndicator, ParameterSpec, ParameterType, IndicatorRegistry 
 
 
 class SMAIndicator(BaseIndicator):
