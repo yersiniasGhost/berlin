@@ -67,7 +67,8 @@ class MlfOptimizerConfig:
             propagation_fraction=self.hyper_parameters.propagation_fraction,
             elitist_size=self.hyper_parameters.elite_size,
             chance_of_mutation=self.hyper_parameters.chance_of_mutation,
-            chance_of_crossover=self.hyper_parameters.chance_of_crossover
+            chance_of_crossover=self.hyper_parameters.chance_of_crossover,
+            random_seed=self.hyper_parameters.random_seed
         )
 
         return genetic_algorithm

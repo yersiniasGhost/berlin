@@ -41,18 +41,29 @@
                 <div class="card-body">
                     <div class="row align-items-center">
                         <div class="col-md-8">
-                            <button type="button" class="btn btn-success btn-lg me-3" id="startOptimizerBtn" disabled>
-                                <i class="fas fa-play me-2"></i>Start Optimization
-                            </button>
-                            <button type="button" class="btn btn-warning btn-lg me-3" id="pauseOptimizerBtn" disabled>
-                                <i class="fas fa-pause me-2"></i>Pause
-                            </button>
-                            <button type="button" class="btn btn-danger btn-lg me-3" id="stopOptimizerBtn" disabled>
-                                <i class="fas fa-stop me-2"></i>Stop
-                            </button>
-                            <button type="button" class="btn btn-primary btn-lg" id="saveOptimizedConfigsBtn" disabled style="display: none;">
-                                <i class="fas fa-trophy me-2"></i>Save Optimized Configs
-                            </button>
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-success btn-lg me-3" id="startOptimizerBtn" disabled>
+                                    <i class="fas fa-play me-2"></i>Start Optimization
+                                </button>
+                                <button type="button" class="btn btn-warning btn-lg me-3" id="pauseOptimizerBtn" disabled>
+                                    <i class="fas fa-pause me-2"></i>Pause
+                                </button>
+                                <button type="button" class="btn btn-danger btn-lg me-3" id="stopOptimizerBtn" disabled>
+                                    <i class="fas fa-stop me-2"></i>Stop
+                                </button>
+                                <button type="button" class="btn btn-primary btn-lg" id="saveOptimizedConfigsBtn" disabled style="display: none;">
+                                    <i class="fas fa-trophy me-2"></i>Save Optimized Configs
+                                </button>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="randomSeedInput" class="form-label">
+                                        <i class="fas fa-dice"></i> Random Seed (Optional)
+                                    </label>
+                                    <input type="number" class="form-control" id="randomSeedInput" placeholder="e.g., 42" min="1">
+                                    <div class="form-text">Set a seed to reproduce the same optimization results</div>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <div class="progress mb-2" style="height: 25px;">
@@ -255,21 +266,35 @@ document.addEventListener('DOMContentLoaded', function() {
             showAlert('Please load both GA and data configurations first', 'warning');
             return;
         }
-        
+
         try {
             this.disabled = true;
             pauseOptimizerBtn.disabled = false;
             stopOptimizerBtn.disabled = false;
             hideElitesButton(); // Hide save button when starting new optimization
             clearAllChartsAndData(); // Clear previous optimization data
-            
+
+            // Get the random seed from the input field
+            const randomSeedInput = document.getElementById('randomSeedInput');
+            const randomSeed = randomSeedInput.value ? parseInt(randomSeedInput.value) : null;
+
+            // Clone the ga_config and inject the random seed if provided
+            let gaConfig = JSON.parse(JSON.stringify(window.currentConfigs.ga_config)); // Deep clone
+            if (randomSeed !== null) {
+                if (!gaConfig.ga_hyperparameters) {
+                    gaConfig.ga_hyperparameters = {};
+                }
+                gaConfig.ga_hyperparameters.random_seed = randomSeed;
+                console.log(`🎲 Using random seed: ${randomSeed}`);
+            }
+
             const response = await fetch('/optimizer/api/start_optimization', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    ga_config: window.currentConfigs.ga_config,
+                    ga_config: gaConfig,
                     data_config: window.currentConfigs.data_config
                 })
             });

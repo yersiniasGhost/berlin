@@ -346,6 +346,17 @@
                     <span id="configStatusMessage"></span>
                 </div>
 
+                <!-- Optimization Settings -->
+                <div class="row mb-3">
+                    <div class="col-md-6 offset-md-3">
+                        <label for="randomSeedInput" class="form-label">
+                            <i class="fas fa-dice"></i> Random Seed (Optional)
+                        </label>
+                        <input type="number" class="form-control" id="randomSeedInput" placeholder="e.g., 42" min="1">
+                        <div class="form-text">Set a seed to reproduce the same optimization results</div>
+                    </div>
+                </div>
+
                 <!-- Start Optimization Button -->
                 <div class="text-center">
                     <button id="startOptimizationBtn" class="btn btn-success btn-lg" disabled>
@@ -843,8 +854,24 @@
         // Start optimization
         async function startOptimization() {
             const formData = compactGAForm ? compactGAForm.getFormData() : null;
-            const gaConfig = formData ? formData.monitorConfig : currentGAConfig;
+            let gaConfig = formData ? formData.monitorConfig : currentGAConfig;
             const dataConfig = formData ? formData.dataConfig : currentDataConfig;
+
+            // Get the random seed from the standalone input field
+            const randomSeedInput = document.getElementById('randomSeedInput');
+            const randomSeed = randomSeedInput.value ? parseInt(randomSeedInput.value) : null;
+
+            // Clone the gaConfig and inject the random seed if provided
+            if (gaConfig) {
+                gaConfig = JSON.parse(JSON.stringify(gaConfig)); // Deep clone
+                if (!gaConfig.ga_hyperparameters) {
+                    gaConfig.ga_hyperparameters = {};
+                }
+                if (randomSeed !== null) {
+                    gaConfig.ga_hyperparameters.random_seed = randomSeed;
+                    console.log(`Using random seed: ${randomSeed}`);
+                }
+            }
 
             // Debug logging
             console.log('Starting optimization with:');
