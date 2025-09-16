@@ -152,6 +152,7 @@ class MlfFitnessCalculator(FitnessCalculator):
 
             # Process results
             for cnt, result in enumerate(future_results):
+                print("111111111111111")
                 try:
                     if result['success']:
                         # Successful evaluation
@@ -160,7 +161,7 @@ class MlfFitnessCalculator(FitnessCalculator):
                             fitness_values=result['fitness_values'],
                             individual=result['individual']
                         )
-
+                        print("2222222222222222222222")
                         # Progress logging
                         if self.display_results or cnt % 50 == 0:
                             stats = result['portfolio_stats']
@@ -193,6 +194,7 @@ class MlfFitnessCalculator(FitnessCalculator):
                     fitness_results.append(individual_stats)
 
         except Exception as e:
+            print("33333333333333333333333333")
             logger.error(f"Critical error in parallel fitness calculation: {e}")
             # Fallback to sequential processing
             logger.warning("Falling back to sequential processing")
