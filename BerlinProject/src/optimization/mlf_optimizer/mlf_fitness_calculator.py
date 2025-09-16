@@ -5,6 +5,8 @@ import logging
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 import pickle
+import os
+import platform
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
@@ -79,6 +81,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     data_config_file: str = ""
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
+    force_sequential: bool = False
 
 
     def __post_init__(self):
@@ -149,7 +152,16 @@ class MlfFitnessCalculator(FitnessCalculator):
             # Submit all jobs and collect results
             logger.debug(f"Submitting {len(worker_args)} jobs to process pool")
             print("0000000000000000000000000000")
-            future_results = list(executor.map(evaluate_individual_worker, worker_args))
+            print(f"DEBUG: About to call executor.map with {len(worker_args)} jobs")
+            print(f"DEBUG: Executor type: {type(executor)}")
+            print(f"DEBUG: Max workers: {self.max_workers}")
+
+            try:
+                future_results = list(executor.map(evaluate_individual_worker, worker_args))
+                print(f"DEBUG: executor.map completed successfully, got {len(future_results)} results")
+            except Exception as map_error:
+                print(f"DEBUG: executor.map failed with error: {map_error}")
+                raise map_error
 
             # Process results
             for cnt, result in enumerate(future_results):
