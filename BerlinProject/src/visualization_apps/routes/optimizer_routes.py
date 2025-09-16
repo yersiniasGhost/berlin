@@ -693,6 +693,11 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                     'best_individuals_log': optimization_state['best_individuals_log'],
                     'elite_objective_values': elite_objectives,
                     'objective_names': objectives,
+                    'progress': {
+                        'current_generation': current_gen,
+                        'total_generations': genetic_algorithm.number_of_generations,
+                        'completed': False
+                    },
                     'optimizer_charts': optimizer_charts  # Specifically for optimizer frontend
                 })
 

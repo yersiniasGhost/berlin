@@ -27,30 +27,24 @@ def evaluate_individual_worker(args):
     try:
         # Create a new BacktestDataStreamer for this worker
         backtest_streamer = BacktestDataStreamer()
-        print("**************************************************************")
         # Copy precomputed data from the source streamer
         backtest_streamer.copy_data_from(source_streamer_data)
 
-        print(f"{worker_id} : STEP AAAAAAAAAAAAAAAAAA")
         # Set the monitor configuration and run backtest
         backtest_streamer.replace_monitor_config(individual.monitor_configuration)
         portfolio = backtest_streamer.run()
 
-        print(f"{worker_id} : STEP BBBBBBBBBBBBBBBBB")
         # Calculate fitness values using the objectives
         fitness_values = np.array([
             obj.calculate_objective(individual, portfolio)
             for obj in objectives_data
         ])
 
-        print(f"{worker_id} : STEP CCCCCCCCCCCCCCCCCCCC")
-
         # Apply penalty if first objective indicates failure
         if fitness_values[0] == 100.0:
             fitness_values = np.ones_like(fitness_values) * 100.0
 
         # Return success result
-        print(f"{worker_id}: return")
         return {
             'success': True,
             'fitness_values': fitness_values,
@@ -81,7 +75,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     data_config_file: str = ""
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
-    force_sequential: bool = True
+    force_sequential: bool = False
 
 
     def __post_init__(self):
@@ -208,7 +202,6 @@ class MlfFitnessCalculator(FitnessCalculator):
                     fitness_results.append(individual_stats)
 
         except Exception as e:
-            print("33333333333333333333333333")
             logger.error(f"Critical error in parallel fitness calculation: {e}")
             # Fallback to sequential processing
             logger.warning("Falling back to sequential processing")

@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         window.socket.on('generation_complete', function(data) {
             console.log('Generation complete:', data.generation);
-            updateProgressBar(data);
+            updateProgressBar(data.progress);
             updateCharts(data.optimizer_charts || data.chart_data || {});
         });
         
@@ -587,7 +587,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function startPolling() {
-        pollInterval = setInterval(updateProgress, 2000); // Poll every 2 seconds
+<!--        pollInterval = setInterval(updateProgress, 2000); // Poll every 2 seconds-->
     }
     
     function stopPolling() {

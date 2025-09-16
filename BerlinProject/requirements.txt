@@ -9,7 +9,7 @@ pymongo
 bson
 pydantic
 pydantic-core
-talib
+ta-lib
 matplotlib
 plotly
 setuptools
