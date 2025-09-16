@@ -48,6 +48,7 @@ def evaluate_individual_worker(args):
             fitness_values = np.ones_like(fitness_values) * 100.0
 
         # Return success result
+        print(f"{worker_id}: return")
         return {
             'success': True,
             'fitness_values': fitness_values,
@@ -62,6 +63,7 @@ def evaluate_individual_worker(args):
 
     except Exception as e:
         # Return error result
+        print(f"{worker_id}: exception {e}")
         return {
             'success': False,
             'error': str(e),
