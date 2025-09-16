@@ -192,5 +192,4 @@ class MlfProblem(ProblemDomain):
                                 new_value = value + random.uniform(-delta, delta)
                             new_value = max(low, min(new_value, high))
                             indicator.parameters[name] = new_value
-            print("mutated ", cnt)
         individual.source += f", mutated: {cnt}, idx: {iteration}"

@@ -25,19 +25,23 @@ def evaluate_individual_worker(args):
     try:
         # Create a new BacktestDataStreamer for this worker
         backtest_streamer = BacktestDataStreamer()
-
+        print("**************************************************************")
         # Copy precomputed data from the source streamer
         backtest_streamer.copy_data_from(source_streamer_data)
 
+        print(f"{worker_id} : STEP AAAAAAAAAAAAAAAAAA")
         # Set the monitor configuration and run backtest
         backtest_streamer.replace_monitor_config(individual.monitor_configuration)
         portfolio = backtest_streamer.run()
 
+        print(f"{worker_id} : STEP BBBBBBBBBBBBBBBBB")
         # Calculate fitness values using the objectives
         fitness_values = np.array([
             obj.calculate_objective(individual, portfolio)
             for obj in objectives_data
         ])
+
+        print(f"{worker_id} : STEP CCCCCCCCCCCCCCCCCCCC")
 
         # Apply penalty if first objective indicates failure
         if fitness_values[0] == 100.0:
