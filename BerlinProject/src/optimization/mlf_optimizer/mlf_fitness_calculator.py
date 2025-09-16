@@ -148,6 +148,7 @@ class MlfFitnessCalculator(FitnessCalculator):
 
             # Submit all jobs and collect results
             logger.debug(f"Submitting {len(worker_args)} jobs to process pool")
+            print("0000000000000000000000000000")
             future_results = list(executor.map(evaluate_individual_worker, worker_args))
 
             # Process results
