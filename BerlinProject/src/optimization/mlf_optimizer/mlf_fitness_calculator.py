@@ -81,7 +81,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     data_config_file: str = ""
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
-    force_sequential: bool = False
+    force_sequential: bool = True
 
 
     def __post_init__(self):
@@ -130,6 +130,9 @@ class MlfFitnessCalculator(FitnessCalculator):
         """
         Parallel evaluation of population fitness using ProcessPoolExecutor
         """
+        if self.force_sequential:
+            return self._calculate_fitness_sequential(iteration_key, population)
+
         fitness_results: List[IndividualStats] = []
 
         logger.info(
@@ -151,7 +154,6 @@ class MlfFitnessCalculator(FitnessCalculator):
 
             # Submit all jobs and collect results
             logger.debug(f"Submitting {len(worker_args)} jobs to process pool")
-            print("0000000000000000000000000000")
             print(f"DEBUG: About to call executor.map with {len(worker_args)} jobs")
             print(f"DEBUG: Executor type: {type(executor)}")
             print(f"DEBUG: Max workers: {self.max_workers}")
@@ -165,7 +167,7 @@ class MlfFitnessCalculator(FitnessCalculator):
 
             # Process results
             for cnt, result in enumerate(future_results):
-                print("111111111111111")
+
                 try:
                     if result['success']:
                         # Successful evaluation
@@ -174,7 +176,6 @@ class MlfFitnessCalculator(FitnessCalculator):
                             fitness_values=result['fitness_values'],
                             individual=result['individual']
                         )
-                        print("2222222222222222222222")
                         # Progress logging
                         if self.display_results or cnt % 50 == 0:
                             stats = result['portfolio_stats']
