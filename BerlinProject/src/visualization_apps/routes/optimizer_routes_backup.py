@@ -1,1 +1,0 @@
-# Backup of the problematic optimizer function before fixing

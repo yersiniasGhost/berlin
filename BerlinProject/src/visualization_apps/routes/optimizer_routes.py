@@ -636,6 +636,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             # Check if stopped
             if not optimization_state['running']:
                 logger.info("Optimization stopped by user")
+                socketio.emit('optimization_stopped', {})
                 break
 
             # Wait while paused
@@ -645,6 +646,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             # Check if stopped during pause
             if not optimization_state['running']:
                 logger.info("Optimization stopped during pause")
+                socketio.emit('optimization_stopped', {})
                 break
 
             # Fix generation numbering - stats returns 0-based, we want 1-based display
@@ -1104,7 +1106,7 @@ def api_stop_optimization():
         logger.info("Optimization stopped via REST API")
         return jsonify({
             'success': True,
-            'message': 'Optimization stopped',
+            'message': 'Optimization stopping....',
             'generation': optimization_state.get('current_generation', 0)
         })
     except Exception as e:

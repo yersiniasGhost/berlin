@@ -204,8 +204,11 @@ document.addEventListener('DOMContentLoaded', function() {
         window.socket.on('optimization_complete', function(data) {
             showAlert('Optimization completed!', 'success');
             optimizationRunning = false;
-            resetButtons();
-            stopPolling();
+            saveOptimizedConfigsBtn.style.display = 'inline-block';
+            saveOptimizedConfigsBtn.disabled = false;
+            startOptimizerBtn.disabled = false;
+            pauseOptimizerBtn.disabled = true;
+            stopOptimizerBtn.disabled = true;
         });
         
         window.socket.on('optimization_error', function(data) {
@@ -222,9 +225,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         window.socket.on('optimization_stopped', function(data) {
-            showAlert('Optimization stopped', 'warning');
-            resetButtons();
-            stopPolling();
+            showAlert('Optimization fully stopped', 'warning');
+            saveOptimizedConfigsBtn.style.display = 'inline-block';
+            saveOptimizedConfigsBtn.disabled = false;
+            startOptimizerBtn.disabled = false;
+            pauseOptimizerBtn.disabled = true;
+            stopOptimizerBtn.disabled = true;
         });
     }
     
@@ -373,8 +379,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (result.success) {
                 showAlert('Optimization stopped', 'warning');
-                resetButtons();
-                stopPolling();
+                 saveOptimizedConfigsBtn.style.display = 'inline-block';
+                 saveOptimizedConfigsBtn.disabled = false;
             } else {
                 throw new Error(result.error || 'Failed to stop optimization');
             }
