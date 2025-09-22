@@ -23,7 +23,7 @@ class EnvVars(metaclass=Singleton):
         self.data_provider = self.get_env('DATA_PROVIDER')
 
         # MongoDB settings
-        self.mongo_host = self.get_env('MONGO_HOST', '192.168.1.156')
+        self.mongo_host = self.get_env('MONGO_HOST', 'localhost')
         self.mongo_port = int(self.get_env('MONGO_PORT', '27017'))
         self.mongo_database = self.get_env('MONGO_DATABASE', 'MTA_devel')
         self.mongo_collection = self.get_env("MONGO_COLLECTION", "tick_history_polygon")
