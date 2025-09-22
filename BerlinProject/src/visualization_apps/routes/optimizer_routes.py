@@ -1038,8 +1038,8 @@ def start_optimization():
     """HTTP endpoint to start optimization - creates temp files and triggers WebSocket"""
     try:
         # Check if optimization is already running
-        global optimization_state
-        if optimization_state.get('running', False):
+        from .. import optimization_state
+        if optimization_state.is_running():
             return jsonify({
                 'success': False, 
                 'error': 'An optimization is already running. Please stop or pause the current optimization before starting a new one.'
@@ -1068,10 +1068,12 @@ def start_optimization():
             data_config_path = data_file.name
 
         # Store paths and config data globally so WebSocket handler can access them
-        optimization_state['ga_config_path_temp'] = ga_config_path
-        optimization_state['data_config_path_temp'] = data_config_path
-        optimization_state['ga_config_data'] = ga_config  # Store the actual config data
-        optimization_state['data_config_data'] = data_config
+        optimization_state.update({
+            'ga_config_path_temp': ga_config_path,
+            'data_config_path_temp': data_config_path,
+            'ga_config_data': ga_config,
+            'data_config_data': data_config
+        })
 
         return jsonify({
             'success': True,
@@ -1317,6 +1319,9 @@ def save_config():
 def export_best_elite():
     """Export the best performing elite as a JSON configuration"""
     try:
+        # Import thread-safe optimization_state
+        from .. import optimization_state
+        
         # Use stored elites from optimization state
         elites = optimization_state.get('elites', [])
         
@@ -1405,6 +1410,9 @@ def export_best_elite():
 def export_optimized_configs():
     """Export complete optimization results package like the old system"""
     try:
+        # Import thread-safe optimization_state
+        from .. import optimization_state
+        
         # Use stored data from optimization state
         elites = optimization_state.get('elites', [])
         best_individuals_log = optimization_state.get('best_individuals_log', [])
@@ -1619,6 +1627,9 @@ Elites Saved: {elites_to_export}
 def get_elite(index):
     """Get a specific elite by index"""
     try:
+        # Import thread-safe optimization_state
+        from .. import optimization_state
+        
         elites = optimization_state.get('elites', [])
         
         if not elites:
@@ -1649,6 +1660,9 @@ def get_elite(index):
 def export_elite(index):
     """Export a specific elite configuration"""
     try:
+        # Import thread-safe optimization_state
+        from .. import optimization_state
+        
         elites = optimization_state.get('elites', [])
         
         if not elites:
