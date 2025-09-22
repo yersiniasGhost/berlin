@@ -1037,8 +1037,12 @@ def load_configs():
 def start_optimization():
     """HTTP endpoint to start optimization - creates temp files and triggers WebSocket"""
     try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
+        
         # Check if optimization is already running
-        from .. import optimization_state
         if optimization_state.is_running():
             return jsonify({
                 'success': False, 
@@ -1092,7 +1096,10 @@ def start_optimization():
 def api_stop_optimization():
     """Stop the optimization via REST API"""
     try:
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         optimization_state.update({
             'running': False,
@@ -1120,7 +1127,10 @@ def api_stop_optimization():
 def api_pause_optimization():
     """Pause the optimization via REST API"""
     try:
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         if optimization_state.is_running():
             optimization_state.set('paused', True)
@@ -1146,7 +1156,10 @@ def api_pause_optimization():
 def api_resume_optimization():
     """Resume the optimization via REST API"""
     try:
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         if optimization_state.is_running() and optimization_state.is_paused():
             optimization_state.set('paused', False)
@@ -1172,7 +1185,10 @@ def api_resume_optimization():
 def get_progress():
     """Get current optimization progress and chart data"""
     try:
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         if not optimization_state.is_running():
             return jsonify({
@@ -1319,8 +1335,10 @@ def save_config():
 def export_best_elite():
     """Export the best performing elite as a JSON configuration"""
     try:
-        # Import thread-safe optimization_state
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         # Use stored elites from optimization state
         elites = optimization_state.get('elites', [])
@@ -1410,8 +1428,10 @@ def export_best_elite():
 def export_optimized_configs():
     """Export complete optimization results package like the old system"""
     try:
-        # Import thread-safe optimization_state
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         # Use stored data from optimization state
         elites = optimization_state.get('elites', [])
@@ -1627,8 +1647,10 @@ Elites Saved: {elites_to_export}
 def get_elite(index):
     """Get a specific elite by index"""
     try:
-        # Import thread-safe optimization_state
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         elites = optimization_state.get('elites', [])
         
@@ -1660,8 +1682,10 @@ def get_elite(index):
 def export_elite(index):
     """Export a specific elite configuration"""
     try:
-        # Import thread-safe optimization_state
-        from .. import optimization_state
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from app import optimization_state
         
         elites = optimization_state.get('elites', [])
         
