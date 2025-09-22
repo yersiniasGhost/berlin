@@ -4,31 +4,20 @@ Handles genetic algorithm optimization with real-time WebSocket updates
 """
 
 from flask import Blueprint, render_template, request, jsonify
-from flask_socketio import SocketIO, emit
 import os
-import sys
 import json
 import logging
-import threading
 import time
-import csv
 import math
 import numpy as np
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
+from .optimization_state import OptimizationState
 
-# Add project path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(current_dir, '..', '..'))
-
-# Import necessary modules for optimizer visualization
 from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
-from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
 from portfolios.portfolio_tool import TradeReason
-from optimization.genetic_optimizer.abstractions import IndividualBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
-from optimization.genetic_optimizer.genetic_algorithm import crowd_sort
 
 # Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
@@ -59,10 +48,12 @@ def sanitize_nan_values(obj):
     else:
         return obj
 
+
 def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
     ideal_point = np.min([ind.fitness_values for ind in front], axis=0)
     balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
     return balanced_front
+
 
 def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) -> List[IndividualStats]:
     elitists: List[IndividualStats] = []
@@ -72,6 +63,7 @@ def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) ->
             if len(elitists) < number_of_elites:
                 elitists.append(stat)
     return elitists
+
 
 def generate_optimizer_chart_data(best_individual, elites, io, data_config_path, best_individuals_log, objectives):
     """Generate chart data specifically for optimizer visualization"""
@@ -300,6 +292,7 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
         traceback.print_exc()
         return {}
 
+
 def load_raw_candle_data(data_config_path: str, io):
     """Load raw candlestick data from Yahoo Finance using the same data as trade execution"""
     logger.info("📊 Loading raw candle data for visualization")
@@ -346,6 +339,7 @@ def load_raw_candle_data(data_config_path: str, io):
     except Exception as e:
         logger.error(f"❌ Error loading candle data: {e}")
         raise
+
 
 def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
     """Extract trade history, triggers, P&L history, and bar scores from portfolio"""
@@ -461,8 +455,9 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
 
     return trade_history, triggers, pnl_history, bar_scores_history
 
+
 def generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path):
-    """Generate chart data for the given best individual using NEW indicator system"""
+    """Generate chart data for the given the best individual using NEW indicator system"""
     # Load candle data
     candlestick_data, data_config = load_raw_candle_data(data_config_path, io)
 
@@ -555,7 +550,9 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
         'new_indicators_used': list(new_indicator_results.keys())
     }
 
-def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str, socketio, optimization_state):
+
+def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str,
+                                                       socketio, opt_state):
     """Run the genetic algorithm optimization with NEW indicator system"""
 
     try:
@@ -575,8 +572,8 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         logger.info(f"   Date range: {data_config.get('start_date')} to {data_config.get('end_date')}")
 
         test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
-        optimization_state.set('test_name', test_name)
-        optimization_state.set('ga_config_path', ga_config_path)
+        opt_state.set('test_name', test_name)
+        opt_state.set('ga_config_path', ga_config_path)
 
         # Process indicators using old system for now (new system disabled)
         processed_indicators = []
@@ -591,7 +588,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         genetic_algorithm = io.create_project()
 
         # Store instances for state management using thread-safe methods
-        optimization_state.update({
+        opt_state.update({
             'ga_instance': genetic_algorithm,
             'io_instance': io,
             'total_generations': genetic_algorithm.number_of_generations,
@@ -608,7 +605,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
         # Store timestamp for later use
         optimization_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        optimization_state.set('timestamp', optimization_timestamp)
+        opt_state.set('timestamp', optimization_timestamp)
 
         # Emit initial status
         socketio.emit('optimization_started', {
@@ -622,20 +619,14 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         # Run optimization with generation-by-generation updates
         for observer, statsobserver in genetic_algorithm.run_ga_iterations(1):
             # Check if stopped using thread-safe methods
-            if not optimization_state.is_running():
+            if not opt_state.is_running():
                 logger.info("Optimization stopped by user")
                 socketio.emit('optimization_stopped', {})
                 break
 
             # Wait while paused using thread-safe methods
-            while optimization_state.is_paused() and optimization_state.is_running():
+            while opt_state.is_paused() and opt_state.is_running():
                 time.sleep(0.1)
-
-            # Check if stopped during pause
-            if not optimization_state.is_running():
-                logger.info("Optimization stopped during pause")
-                socketio.emit('optimization_stopped', {})
-                break
 
             # Fix generation numbering - stats returns 0-based, we want 1-based display
             current_gen = observer.iteration + 1  # Convert from 0-based to 1-based
@@ -643,22 +634,21 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             metrics = statsobserver.best_metric_iteration
 
             elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)            
-            elite_objectives=[e.fitness_values for e in elites]
-            optimization_state.update({
+            opt_state.update({
                 'current_generation': current_gen,
                 'last_best_individual': best_individual,
                 'elites': elites
             })
 
-            # Log best individual for this generation
+            # Log the best individual for this generation
             objectives = [o.name for o in io.fitness_calculator.objectives]
             fitness_log = {
                 'generation': current_gen,
                 'metrics': dict(zip(objectives, metrics))
             }
-            current_log = optimization_state.get('best_individuals_log', [])
+            current_log = opt_state.get('best_individuals_log', [])
             current_log.append(fitness_log)
-            optimization_state.set('best_individuals_log', current_log)
+            opt_state.set('best_individuals_log', current_log)
 
             # Log progress
             metric_out = [f"{obj}={metric:.4f}" for obj, metric in zip(objectives, metrics)]
@@ -673,7 +663,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 # Generate optimizer-specific chart data
                 optimizer_charts = generate_optimizer_chart_data(
                     best_individual, elites, io, data_config_path, 
-                    optimization_state.get('best_individuals_log', []), objectives
+                    opt_state.get('best_individuals_log', []), objectives
                 )
 
                 # Convert numpy arrays to regular Python lists for JSON serialization
@@ -684,7 +674,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                     'total_generations': genetic_algorithm.number_of_generations,
                     'fitness_metrics': dict(zip(objectives, metrics)),
                     'chart_data': optimizer_charts,
-                    'best_individuals_log': optimization_state.get('best_individuals_log', []),
+                    'best_individuals_log': opt_state.get('best_individuals_log', []),
                     'elite_objective_values': elite_objectives,
                     'objective_names': objectives,
                     'progress': {
@@ -701,26 +691,14 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 break
 
         # Optimization completed
-        if optimization_state['running']:
+        if opt_state.is_running():
             logger.info("⏱️  Optimization completed successfully with NEW indicator system")
-
             # Auto-saving disabled - user will manually save best elites via UI button
             logger.info("✅ Optimization completed - elites available for manual saving via UI")
-            # try:
-            #     results_info = save_optimization_results_with_new_indicators(
-            #         optimization_state['best_individuals_log'],
-            #         optimization_state['last_best_individual'],
-            #         optimization_state.get('elites', []),
-            #         ga_config_path,
-            #         test_name,
-            #         optimization_state.get('timestamp'),
-            #         optimization_state.get('processed_indicators', [])
-            #     )
-
             # Emit completion event without automatic saving
             socketio.emit('optimization_complete', {
-                'total_generations': optimization_state.get('current_generation'),
-                'best_individuals_log': optimization_state.get('best_individuals_log', []),
+                'total_generations': opt_state.get('current_generation'),
+                'best_individuals_log': opt_state.get('best_individuals_log', []),
                 'manual_save_available': True
             })
 
@@ -732,11 +710,13 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
     finally:
         # Reset state using thread-safe methods
-        optimization_state.update({
+        opt_state.update({
             'running': False,
             'paused': False,
             'thread': None
         })
+        print("FINALLY:", opt_state.get('elites'), "\n", opt_state)
+
 
 def save_optimization_results_with_new_indicators(best_individuals_log, best_individual, elites, ga_config_path, test_name, timestamp=None, processed_indicators=None):
     """Save optimization results including NEW indicator information"""
@@ -868,10 +848,12 @@ def save_optimization_results_with_new_indicators(best_individuals_log, best_ind
 
 # ===== ROUTES =====
 
+
 @optimizer_bp.route('/')
 def optimizer_main():
     """Main optimizer visualization page"""
     return render_template('optimizer/main.html')
+
 
 @optimizer_bp.route('/api/upload_file', methods=['POST'])
 def upload_file():
@@ -909,6 +891,7 @@ def upload_file():
     except Exception as e:
         logger.error(f"Error uploading file: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
 
 @optimizer_bp.route('/api/load_examples')
 def load_examples():
@@ -985,11 +968,10 @@ def load_examples():
         logger.error(f"Error loading example configs: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+
 # WebSocket events need to be registered with the main socketio instance
 # This will be handled in the main app.py file
 
-# Additional routes following the same pattern...
-# (start_optimization, pause_optimization, etc. as WebSocket events)
 
 @optimizer_bp.route('/api/load_configs', methods=['POST'])
 def load_configs():
@@ -1037,13 +1019,8 @@ def load_configs():
 def start_optimization():
     """HTTP endpoint to start optimization - creates temp files and triggers WebSocket"""
     try:
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from app import optimization_state
-        
         # Check if optimization is already running
-        if optimization_state.is_running():
+        if OptimizationState().is_running():
             return jsonify({
                 'success': False, 
                 'error': 'An optimization is already running. Please stop or pause the current optimization before starting a new one.'
@@ -1072,7 +1049,7 @@ def start_optimization():
             data_config_path = data_file.name
 
         # Store paths and config data globally so WebSocket handler can access them
-        optimization_state.update({
+        OptimizationState().update({
             'ga_config_path_temp': ga_config_path,
             'data_config_path_temp': data_config_path,
             'ga_config_data': ga_config,
@@ -1091,6 +1068,7 @@ def start_optimization():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
 
 @optimizer_bp.route('/api/stop_optimization', methods=['POST'])
 def api_stop_optimization():
@@ -1331,113 +1309,16 @@ def save_config():
         logger.error(f"Error saving config: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@optimizer_bp.route('/api/export_best_elite')
-def export_best_elite():
-    """Export the best performing elite as a JSON configuration"""
-    try:
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from app import optimization_state
-        
-        # Use stored elites from optimization state
-        elites = optimization_state.get('elites', [])
-        
-        if not elites:
-            return jsonify({'success': False, 'error': 'No elites available'})
-        
-        # Get the best elite (first in list, should be sorted by fitness)
-        best_elite = elites[0]
-        
-        # Convert elite individual to configuration format with proper serialization
-        elite_config = None
-        
-        def serialize_object(obj):
-            """Convert objects to JSON-serializable format"""
-            if hasattr(obj, '__dict__'):
-                # Convert object to dict, handling nested objects
-                result = {}
-                for key, value in obj.__dict__.items():
-                    if hasattr(value, '__dict__'):
-                        result[key] = serialize_object(value)
-                    elif isinstance(value, list):
-                        result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
-                    elif isinstance(value, dict):
-                        result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
-                    else:
-                        result[key] = value
-                return result
-            else:
-                return obj
-        
-        # Try different methods to get the configuration
-        if hasattr(best_elite, 'individual') and hasattr(best_elite.individual, 'monitor_configuration'):
-            # Best case: elite has the full monitor configuration
-            monitor_config = best_elite.individual.monitor_configuration
-            elite_config = {
-                'test_name': f'Best_Elite_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-                'monitor': {
-                    'name': getattr(monitor_config, 'name', 'Best Elite Strategy'),
-                    'description': f'Best performing elite from optimization run',
-                    'bars': serialize_object(getattr(monitor_config, 'bars', {})),
-                    'enter_long': serialize_object(getattr(monitor_config, 'enter_long', [])),
-                    'exit_long': serialize_object(getattr(monitor_config, 'exit_long', [])),
-                    'trade_executor': serialize_object(getattr(monitor_config, 'trade_executor', {}))
-                },
-                'indicators': serialize_object(getattr(monitor_config, 'indicators', []))
-            }
-        elif hasattr(best_elite, 'individual') and hasattr(best_elite.individual, 'genotype'):
-            # Fallback: use genotype data
-            genotype = best_elite.individual.genotype
-            elite_config = {
-                'test_name': f'Best_Elite_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-                'monitor': genotype if isinstance(genotype, dict) else {},
-                'indicators': []
-            }
-        else:
-            # Last resort: create a basic config with fitness info
-            elite_config = {
-                'test_name': f'Best_Elite_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-                'monitor': {
-                    'name': 'Best Elite Strategy',
-                    'description': 'Elite solution from genetic algorithm optimization'
-                },
-                'indicators': [],
-                'elite_fitness': best_elite.fitness_values.tolist() if hasattr(best_elite, 'fitness_values') else []
-            }
-            
-        # Add performance stats if available
-        if hasattr(best_elite, 'fitness_values'):
-            elite_config['performance_stats'] = {
-                'fitness_values': best_elite.fitness_values.tolist() if hasattr(best_elite.fitness_values, 'tolist') else list(best_elite.fitness_values)
-            }
-        
-        logger.info(f"Exporting best elite configuration: {elite_config.get('test_name', 'Unknown')}")
-        
-        return jsonify({
-            'success': True,
-            'config': elite_config,
-            'message': 'Best elite configuration exported successfully'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error exporting best elite: {e}")
-        return jsonify({'success': False, 'error': str(e)})
 
 @optimizer_bp.route('/api/export_optimized_configs')
 def export_optimized_configs():
     """Export complete optimization results package like the old system"""
     try:
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from app import optimization_state
-        
-        # Use stored data from optimization state
-        elites = optimization_state.get('elites', [])
-        best_individuals_log = optimization_state.get('best_individuals_log', [])
-        ga_config_data = optimization_state.get('ga_config_data', {})
-        test_name = optimization_state.get('test_name', 'optimization')
+        print("EXPORT", OptimizationState().get('elites'))
+        elites = OptimizationState().get('elites', [])
+        best_individuals_log = OptimizationState().get('best_individuals_log', [])
+        ga_config_data = OptimizationState().get('ga_config_data', {})
+        test_name = OptimizationState().get('test_name', 'optimization')
         
         if not elites:
             return jsonify({'success': False, 'error': 'No elite configurations available'})
@@ -1454,7 +1335,7 @@ def export_optimized_configs():
                 logger.info(f"📊 Found elites_to_save in stored config: {elites_to_save}")
             else:
                 # Try to read from the config paths used during optimization start
-                ga_config_path = optimization_state.get('ga_config_path')
+                ga_config_path = OptimizationState().get('ga_config_path')
                 if ga_config_path and os.path.exists(ga_config_path):
                     with open(ga_config_path, 'r') as f:
                         ga_config = json.load(f)
@@ -1647,12 +1528,7 @@ Elites Saved: {elites_to_export}
 def get_elite(index):
     """Get a specific elite by index"""
     try:
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from app import optimization_state
-        
-        elites = optimization_state.get('elites', [])
+        elites = OptimizationState().get('elites', [])
         
         if not elites:
             return jsonify({'success': False, 'error': 'No elites available'})
@@ -1682,12 +1558,8 @@ def get_elite(index):
 def export_elite(index):
     """Export a specific elite configuration"""
     try:
-        import sys
-        import os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from app import optimization_state
-        
-        elites = optimization_state.get('elites', [])
+
+        elites = OptimizationState().get('elites', [])
         
         if not elites:
             return jsonify({'success': False, 'error': 'No elites available'})

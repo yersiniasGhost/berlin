@@ -156,11 +156,11 @@ class BacktestDataStreamer:
         """
         if not self.tick_history:
             logger.error("No tick history available for backtest")
-            return
+            raise ValueError("Expected Tick History")
 
         if not self.trade_executor:
             logger.error("No trade executor available - call replace_monitor_config() first")
-            return
+            raise ValueError("Requires TradeExecutor")
 
         logger.debug(f"Running optimized backtest with {len(self.tick_history)} ticks")
 
