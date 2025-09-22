@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 
 # Import necessary modules for optimizer visualization
 from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
-from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
+from mongo_tools.mongo_db_connect import MongoDBConnect
 from portfolios.portfolio_tool import TradeReason
 from optimization.genetic_optimizer.abstractions import IndividualBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats

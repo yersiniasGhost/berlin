@@ -10,7 +10,9 @@ from candle_aggregator.candle_aggregator_heiken import CAHeiken
 from config.env_vars import EnvVars
 
 
-class YahooFinanceHistorical:
+# we use mongodb and the collection tick_history_polygon now.
+
+class MongoDBConnect:
     """
     1. Query MongoDB for date range
     2. Convert nested data to TickData objects
@@ -61,7 +63,7 @@ class YahooFinanceHistorical:
                                 monitor_config: MonitorConfiguration) -> bool:
 
         # Processing data for ticker and date range
-        
+
         # Clear any existing data to ensure fresh load
         self.aggregators.clear()
         self.ticker = ticker

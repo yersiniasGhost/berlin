@@ -17,7 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 
 # Import necessary modules for indicator visualization
-from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
+from mongo_tools.mongo_db_connect import MongoDBConnect
 
 # Import new indicator system - this is the key integration
 from indicator_triggers.indicator_base import IndicatorRegistry, IndicatorConfiguration
@@ -33,7 +33,7 @@ class NewIndicatorVisualizer:
     """Visualizer using the NEW refactored indicator system"""
     
     def __init__(self):
-        self.yahoo_finance = YahooFinanceHistorical()
+        self.mongo_db = MongoDBConnect()
         self.registry = IndicatorRegistry()
 
     def load_and_process_data_with_new_system(self, ticker: str, start_date: str, end_date: str, indicator_configs: list):
@@ -86,13 +86,13 @@ class NewIndicatorVisualizer:
             )
 
             # Process data using YahooFinanceHistorical
-            success = self.yahoo_finance.process_historical_data(ticker, start_date, end_date, temp_monitor)
+            success = self.mongo_db.process_historical_data(ticker, start_date, end_date, temp_monitor)
 
             if not success:
                 return None, None, None
 
             # Get aggregators
-            aggregators = self.yahoo_finance.aggregators
+            aggregators = self.mongo_db.aggregators
 
             # Get the main aggregator key for timestamps
             main_key = None
@@ -319,7 +319,7 @@ def fetch_yahoo_data():
         end_date = data.get('end_date', '2024-12-31')
 
         # Test data availability by creating a temporary load
-        yahoo_source = YahooFinanceHistorical()
+        mongo_source = MongoDBConnect()
         
         # Create minimal monitor for testing
         from models.monitor_configuration import MonitorConfiguration
@@ -330,11 +330,11 @@ def fetch_yahoo_data():
             trade_executor={'default_position_size': 100.0}
         )
 
-        success = yahoo_source.process_historical_data(ticker, start_date, end_date, test_monitor)
+        success = mongo_source.process_historical_data(ticker, start_date, end_date, test_monitor)
         
         if success:
             # Get sample data info
-            aggregators = yahoo_source.aggregators
+            aggregators = mongo_source.aggregators
             main_key = list(aggregators.keys())[0]
             candles = aggregators[main_key].history
             
