@@ -39,19 +39,6 @@ logger = logging.getLogger('OptimizerVisualization')
 # Create Blueprint
 optimizer_bp = Blueprint('optimizer', __name__, url_prefix='/optimizer')
 
-# Global optimization state
-optimization_state = {
-    'running': False,
-    'paused': False,
-    'thread': None,
-    'ga_instance': None,
-    'io_instance': None,
-    'current_generation': 0,
-    'total_generations': 0,
-    'best_individuals_log': [],
-    'last_best_individual': None,
-    'test_name': None
-}
 
 def sanitize_nan_values(obj):
     """
@@ -77,7 +64,7 @@ def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
     balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
     return balanced_front
 
-def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) -> [List[IndividualStats]]:
+def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) -> List[IndividualStats]:
     elitists: List[IndividualStats] = []
     for front in fronts.values():
         sorted_front = balance_fronts(front)
@@ -568,9 +555,8 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
         'new_indicators_used': list(new_indicator_results.keys())
     }
 
-def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str, socketio):
+def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str, socketio, optimization_state):
     """Run the genetic algorithm optimization with NEW indicator system"""
-    global optimization_state
 
     try:
         logger.info("🚀 Starting threaded optimization with NEW indicator system")
@@ -589,8 +575,8 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         logger.info(f"   Date range: {data_config.get('start_date')} to {data_config.get('end_date')}")
 
         test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
-        optimization_state['test_name'] = test_name
-        optimization_state['ga_config_path'] = ga_config_path
+        optimization_state.set('test_name', test_name)
+        optimization_state.set('ga_config_path', ga_config_path)
 
         # Process indicators using old system for now (new system disabled)
         processed_indicators = []
@@ -604,13 +590,15 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         io = MlfOptimizerConfig.from_json(config_data, data_config_path)
         genetic_algorithm = io.create_project()
 
-        # Store instances for state management
-        optimization_state['ga_instance'] = genetic_algorithm
-        optimization_state['io_instance'] = io
-        optimization_state['total_generations'] = genetic_algorithm.number_of_generations
-        optimization_state['current_generation'] = 0
-        optimization_state['best_individuals_log'] = []
-        optimization_state['processed_indicators'] = processed_indicators
+        # Store instances for state management using thread-safe methods
+        optimization_state.update({
+            'ga_instance': genetic_algorithm,
+            'io_instance': io,
+            'total_generations': genetic_algorithm.number_of_generations,
+            'current_generation': 0,
+            'best_individuals_log': [],
+            'processed_indicators': processed_indicators
+        })
 
         logger.info(f"   Test: {test_name}")
         logger.info(f"   Generations: {genetic_algorithm.number_of_generations}")
@@ -620,7 +608,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
         # Store timestamp for later use
         optimization_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        optimization_state['timestamp'] = optimization_timestamp
+        optimization_state.set('timestamp', optimization_timestamp)
 
         # Emit initial status
         socketio.emit('optimization_started', {
@@ -633,18 +621,18 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
         # Run optimization with generation-by-generation updates
         for observer, statsobserver in genetic_algorithm.run_ga_iterations(1):
-            # Check if stopped
-            if not optimization_state['running']:
+            # Check if stopped using thread-safe methods
+            if not optimization_state.is_running():
                 logger.info("Optimization stopped by user")
                 socketio.emit('optimization_stopped', {})
                 break
 
-            # Wait while paused
-            while optimization_state['paused'] and optimization_state['running']:
+            # Wait while paused using thread-safe methods
+            while optimization_state.is_paused() and optimization_state.is_running():
                 time.sleep(0.1)
 
             # Check if stopped during pause
-            if not optimization_state['running']:
+            if not optimization_state.is_running():
                 logger.info("Optimization stopped during pause")
                 socketio.emit('optimization_stopped', {})
                 break
@@ -656,9 +644,11 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
             elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)            
             elite_objectives=[e.fitness_values for e in elites]
-            optimization_state['current_generation'] = current_gen
-            optimization_state['last_best_individual'] = best_individual
-            optimization_state['elites'] = elites
+            optimization_state.update({
+                'current_generation': current_gen,
+                'last_best_individual': best_individual,
+                'elites': elites
+            })
 
             # Log best individual for this generation
             objectives = [o.name for o in io.fitness_calculator.objectives]
@@ -666,7 +656,9 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 'generation': current_gen,
                 'metrics': dict(zip(objectives, metrics))
             }
-            optimization_state['best_individuals_log'].append(fitness_log)
+            current_log = optimization_state.get('best_individuals_log', [])
+            current_log.append(fitness_log)
+            optimization_state.set('best_individuals_log', current_log)
 
             # Log progress
             metric_out = [f"{obj}={metric:.4f}" for obj, metric in zip(objectives, metrics)]
@@ -681,7 +673,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 # Generate optimizer-specific chart data
                 optimizer_charts = generate_optimizer_chart_data(
                     best_individual, elites, io, data_config_path, 
-                    optimization_state['best_individuals_log'], objectives
+                    optimization_state.get('best_individuals_log', []), objectives
                 )
 
                 # Convert numpy arrays to regular Python lists for JSON serialization
@@ -692,7 +684,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                     'total_generations': genetic_algorithm.number_of_generations,
                     'fitness_metrics': dict(zip(objectives, metrics)),
                     'chart_data': optimizer_charts,
-                    'best_individuals_log': optimization_state['best_individuals_log'],
+                    'best_individuals_log': optimization_state.get('best_individuals_log', []),
                     'elite_objective_values': elite_objectives,
                     'objective_names': objectives,
                     'progress': {
@@ -727,8 +719,8 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
             # Emit completion event without automatic saving
             socketio.emit('optimization_complete', {
-                'total_generations': optimization_state['current_generation'],
-                'best_individuals_log': optimization_state['best_individuals_log'],
+                'total_generations': optimization_state.get('current_generation'),
+                'best_individuals_log': optimization_state.get('best_individuals_log', []),
                 'manual_save_available': True
             })
 
@@ -739,10 +731,12 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         socketio.emit('optimization_error', {'error': str(e)})
 
     finally:
-        # Reset state
-        optimization_state['running'] = False
-        optimization_state['paused'] = False
-        optimization_state['thread'] = None
+        # Reset state using thread-safe methods
+        optimization_state.update({
+            'running': False,
+            'paused': False,
+            'thread': None
+        })
 
 def save_optimization_results_with_new_indicators(best_individuals_log, best_individual, elites, ga_config_path, test_name, timestamp=None, processed_indicators=None):
     """Save optimization results including NEW indicator information"""
@@ -1095,13 +1089,17 @@ def start_optimization():
 @optimizer_bp.route('/api/stop_optimization', methods=['POST'])
 def api_stop_optimization():
     """Stop the optimization via REST API"""
-    global optimization_state
     try:
-        optimization_state['running'] = False
-        optimization_state['paused'] = False
+        from .. import optimization_state
         
-        if optimization_state['thread'] and optimization_state['thread'].is_alive():
-            optimization_state['thread'].join(timeout=2)
+        optimization_state.update({
+            'running': False,
+            'paused': False
+        })
+        
+        thread = optimization_state.get('thread')
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
         
         logger.info("Optimization stopped via REST API")
         return jsonify({
@@ -1119,10 +1117,11 @@ def api_stop_optimization():
 @optimizer_bp.route('/api/pause_optimization', methods=['POST'])
 def api_pause_optimization():
     """Pause the optimization via REST API"""
-    global optimization_state
     try:
-        if optimization_state.get('running', False):
-            optimization_state['paused'] = True
+        from .. import optimization_state
+        
+        if optimization_state.is_running():
+            optimization_state.set('paused', True)
             logger.info("Optimization paused via REST API")
             return jsonify({
                 'success': True,
@@ -1144,10 +1143,11 @@ def api_pause_optimization():
 @optimizer_bp.route('/api/resume_optimization', methods=['POST'])
 def api_resume_optimization():
     """Resume the optimization via REST API"""
-    global optimization_state
     try:
-        if optimization_state.get('running', False) and optimization_state.get('paused', False):
-            optimization_state['paused'] = False
+        from .. import optimization_state
+        
+        if optimization_state.is_running() and optimization_state.is_paused():
+            optimization_state.set('paused', False)
             logger.info("Optimization resumed via REST API")
             return jsonify({
                 'success': True,
@@ -1169,10 +1169,10 @@ def api_resume_optimization():
 @optimizer_bp.route('/api/get_progress')
 def get_progress():
     """Get current optimization progress and chart data"""
-    global optimization_state
-    
     try:
-        if not optimization_state.get('running', False):
+        from .. import optimization_state
+        
+        if not optimization_state.is_running():
             return jsonify({
                 'success': True,
                 'progress': {
@@ -1188,25 +1188,26 @@ def get_progress():
         progress = {
             'current_generation': optimization_state.get('current_generation', 0),
             'total_generations': optimization_state.get('total_generations', 0),
-            'completed': not optimization_state.get('running', False)
+            'completed': not optimization_state.is_running()
         }
         
         # Generate chart data from logged data
         charts = {}
         
         # Objective evolution chart - separate line for each objective
-        if optimization_state.get('best_individuals_log'):
+        best_individuals_log = optimization_state.get('best_individuals_log', [])
+        if best_individuals_log:
             objective_evolution = {}
             
             # Get objective names from the first entry
-            first_entry = optimization_state['best_individuals_log'][0] if optimization_state['best_individuals_log'] else {}
+            first_entry = best_individuals_log[0] if best_individuals_log else {}
             objectives = list(first_entry.get('metrics', {}).keys())
             
             # Initialize data structure for each objective
             for obj_name in objectives:
                 objective_evolution[obj_name] = []
             
-            for entry in optimization_state['best_individuals_log']:
+            for entry in best_individuals_log:
                 generation = entry['generation']
                 metrics = entry['metrics']
                 
@@ -1219,8 +1220,9 @@ def get_progress():
         
         # Elite population data
         elites_data = []
-        if optimization_state.get('elites'):
-            for i, elite in enumerate(optimization_state['elites'][:10]):  # Top 10 elites
+        elites = optimization_state.get('elites', [])
+        if elites:
+            for i, elite in enumerate(elites[:10]):  # Top 10 elites
                 # Try to get actual performance metrics from the elite individual
                 total_pnl = 0.0
                 win_rate = 0.0

@@ -4,10 +4,12 @@ import os
 import sys
 import json
 import logging
+import math
+import threading
 import numpy as np
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 from werkzeug.utils import secure_filename
 
 # Add project path
@@ -69,25 +71,91 @@ def sanitize_nan_values(obj):
     else:
         return obj
 
-# Optimizer utility functions
-def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
-    ideal_point = np.min([ind.fitness_values for ind in front], axis=0)
-    balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
-    return balanced_front
+# Import optimizer utility functions from routes to avoid duplication
+from routes.optimizer_routes import balance_fronts, select_winning_population
 
-def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) -> [List[IndividualStats]]:
-    elitists: List[IndividualStats] = []
-    for front in fronts.values():
-        sorted_front = balance_fronts(front)
-        for stat in sorted_front:
-            if len(elitists) < number_of_elites:
-                elitists.append(stat)
-    return elitists
+class OptimizationState:
+    """Thread-safe optimization state management"""
+    
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._state = {
+            'running': False,
+            'paused': False,
+            'current_generation': 0,
+            'total_generations': 0,
+            'best_individuals_log': [],
+            'last_best_individual': None,
+            'elites': [],
+            'thread': None,
+            'ga_instance': None,
+            'io_instance': None,
+            'test_name': None,
+            'ga_config_path': None,
+            'data_config_path_temp': None,
+            'ga_config_path_temp': None,
+            'timestamp': None,
+            'processed_indicators': []
+        }
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Thread-safe get operation"""
+        with self._lock:
+            return self._state.get(key, default)
+    
+    def set(self, key: str, value: Any) -> None:
+        """Thread-safe set operation"""
+        with self._lock:
+            self._state[key] = value
+    
+    def update(self, updates: Dict[str, Any]) -> None:
+        """Thread-safe bulk update operation"""
+        with self._lock:
+            self._state.update(updates)
+    
+    def reset_optimization_state(self) -> None:
+        """Reset optimization-specific state while preserving config paths"""
+        with self._lock:
+            ga_config_path_temp = self._state.get('ga_config_path_temp')
+            data_config_path_temp = self._state.get('data_config_path_temp')
+            
+            self._state.update({
+                'running': False,
+                'paused': False,
+                'current_generation': 0,
+                'total_generations': 0,
+                'best_individuals_log': [],
+                'last_best_individual': None,
+                'elites': [],
+                'thread': None,
+                'ga_instance': None,
+                'io_instance': None,
+                'test_name': None,
+                'ga_config_path': None,
+                'timestamp': None,
+                'processed_indicators': []
+            })
+            
+            if ga_config_path_temp:
+                self._state['ga_config_path_temp'] = ga_config_path_temp
+            if data_config_path_temp:
+                self._state['data_config_path_temp'] = data_config_path_temp
+    
+    def is_running(self) -> bool:
+        """Thread-safe check if optimization is running"""
+        with self._lock:
+            return self._state.get('running', False)
+    
+    def is_paused(self) -> bool:
+        """Thread-safe check if optimization is paused"""
+        with self._lock:
+            return self._state.get('paused', False)
+
+optimization_state = OptimizationState()
 
 # Import optimizer WebSocket functions
 from routes.optimizer_routes import (
     run_genetic_algorithm_threaded_with_new_indicators, 
-    optimization_state,
     save_optimization_results_with_new_indicators
 )
 
@@ -100,9 +168,8 @@ def index():
 @socketio.on('start_optimization')
 def handle_start_optimization(data):
     """Start the genetic algorithm optimization with NEW indicator system"""
-    global optimization_state
     
-    if optimization_state['running']:
+    if optimization_state.is_running():
         emit('optimization_error', {'error': 'Optimization already running'})
         return
 
@@ -114,69 +181,72 @@ def handle_start_optimization(data):
         emit('optimization_error', {'error': 'Config paths not provided. Make sure to call /api/start_optimization first.'})
         return
 
-    # Reset state and clear cached instances
-    optimization_state['running'] = True
-    optimization_state['paused'] = False
-    optimization_state['current_generation'] = 0
-    optimization_state['best_individuals_log'] = []
-    optimization_state['ga_instance'] = None  # Clear cached GA instance
-    optimization_state['io_instance'] = None  # Clear cached IO instance
+    # Reset state and clear cached instances using thread-safe method
+    optimization_state.update({
+        'running': True,
+        'paused': False,
+        'current_generation': 0,
+        'best_individuals_log': [],
+        'ga_instance': None,  # Clear cached GA instance
+        'io_instance': None   # Clear cached IO instance
+    })
 
     # Start optimization thread with NEW indicator system
-    import threading
-    optimization_state['thread'] = threading.Thread(
+    thread = threading.Thread(
         target=run_genetic_algorithm_threaded_with_new_indicators,
-        args=(ga_config_path, data_config_path, socketio)
+        args=(ga_config_path, data_config_path, socketio, optimization_state)
     )
-    optimization_state['thread'].start()
+    optimization_state.set('thread', thread)
+    thread.start()
 
 @socketio.on('pause_optimization')
 def handle_pause_optimization():
     """Pause the optimization"""
-    global optimization_state
 
-    if optimization_state['running']:
-        optimization_state['paused'] = True
+    if optimization_state.is_running():
+        optimization_state.set('paused', True)
         emit('optimization_paused', {
-            'generation': optimization_state['current_generation'],
-            'total_generations': optimization_state['total_generations']
+            'generation': optimization_state.get('current_generation'),
+            'total_generations': optimization_state.get('total_generations')
         })
         logger.info("Optimization paused by user")
 
 @socketio.on('resume_optimization')
 def handle_resume_optimization():
     """Resume the optimization"""
-    global optimization_state
 
-    if optimization_state['running'] and optimization_state['paused']:
-        optimization_state['paused'] = False
+    if optimization_state.is_running() and optimization_state.is_paused():
+        optimization_state.set('paused', False)
         emit('optimization_resumed', {
-            'generation': optimization_state['current_generation'],
-            'total_generations': optimization_state['total_generations']
+            'generation': optimization_state.get('current_generation'),
+            'total_generations': optimization_state.get('total_generations')
         })
         logger.info("Optimization resumed by user")
 
 @socketio.on('stop_optimization')
 def handle_stop_optimization():
     """Stop the optimization"""
-    global optimization_state
 
-    optimization_state['running'] = False
-    optimization_state['paused'] = False
+    optimization_state.update({
+        'running': False,
+        'paused': False
+    })
 
-    if optimization_state['thread'] and optimization_state['thread'].is_alive():
-        optimization_state['thread'].join(timeout=2)
+    thread = optimization_state.get('thread')
+    if thread and thread.is_alive():
+        thread.join(timeout=10)  # Increased timeout for better cleanup
+        if thread.is_alive():
+            logger.warning("Optimization thread did not terminate gracefully within timeout")
 
     emit('optimization_stopped', {
-        'generation': optimization_state['current_generation'],
-        'total_generations': optimization_state['total_generations']
+        'generation': optimization_state.get('current_generation'),
+        'total_generations': optimization_state.get('total_generations')
     })
     logger.info("Optimization stopped by user")
 
 @socketio.on('save_current_best')
 def handle_save_current_best():
     """Save the current best results without stopping the optimization"""
-    global optimization_state
     
     logger.info("📁 Saving current best results with NEW indicator system...")
     
@@ -191,16 +261,17 @@ def handle_save_current_best():
         # Generate timestamp for this save
         save_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         
-        # Get the current GA config path and test name
+        # Get the current GA config path and test name (thread-safe)
         ga_config_path = optimization_state.get('ga_config_path', 'unknown_config.json')
         test_name = optimization_state.get('test_name', 'unknown_test')
+        current_gen = optimization_state.get('current_generation', 0)
         
         # Save current results with timestamp indicating it's a partial save
-        test_name_with_partial = f"{test_name}_partial_gen_{optimization_state.get('current_generation', 0)}"
+        test_name_with_partial = f"{test_name}_partial_gen_{current_gen}"
         
         results_info = save_optimization_results_with_new_indicators(
-            optimization_state['best_individuals_log'],
-            optimization_state['last_best_individual'],
+            optimization_state.get('best_individuals_log', []),
+            optimization_state.get('last_best_individual'),
             optimization_state.get('elites', []),
             ga_config_path,
             test_name_with_partial,
@@ -209,12 +280,12 @@ def handle_save_current_best():
         )
         
         emit('save_current_success', {
-            'generation': optimization_state.get('current_generation', 0),
+            'generation': current_gen,
             'total_generations': optimization_state.get('total_generations', 0),
             'results_info': results_info
         })
         
-        logger.info(f"✅ Successfully saved current best results at generation {optimization_state.get('current_generation', 0)}")
+        logger.info(f"✅ Successfully saved current best results at generation {current_gen}")
         
     except Exception as e:
         logger.error(f"❌ Error saving current best: {e}")
@@ -243,4 +314,4 @@ if __name__ == '__main__':
     logger.info("   - Indicator API: /api/indicators/*")
     
     # Start the Flask-SocketIO application
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000, use_reloader=False, log_output=True)
