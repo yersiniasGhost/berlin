@@ -13,5 +13,4 @@ class Singleton(type):
             with cls._lock:
                 if class_key not in cls._instances:
                     cls._instances[class_key] = super(Singleton, cls).__call__(*args, **kwargs)
-        print("\n\nSINGLETON", cls, cls._instances[class_key], "\n\n")
         return cls._instances[class_key]

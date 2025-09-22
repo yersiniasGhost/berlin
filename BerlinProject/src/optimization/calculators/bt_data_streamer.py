@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Any
 
 from models.monitor_configuration import MonitorConfiguration
 from candle_aggregator.candle_aggregator import CandleAggregator
-from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
+from mongo_tools.mongo_db_connect import MongoDBConnect
 from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 from portfolios.portfolio_tool import Portfolio
 from portfolios.trade_executor_unified import TradeExecutorUnified
@@ -79,16 +79,16 @@ class BacktestDataStreamer:
 
 
     def load_historical_data(self):
-        """Load historical data into aggregators via YahooFinanceHistorical - happens once"""
+        """Load historical data into aggregators via MongoDBConnect - happens once"""
         if not all([self.ticker, self.start_date, self.end_date, self.monitor_config]):
             logger.error("Cannot load historical data: missing required parameters")
             return
 
-        yahoo_source = YahooFinanceHistorical()
-        yahoo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
+        mongo_source = MongoDBConnect()
+        mongo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
 
-        self.aggregators = yahoo_source.aggregators
-        logger.info(f"Got {len(self.aggregators)} aggregators from YahooFinanceHistorical:")
+        self.aggregators = mongo_source.aggregators
+        logger.info(f"Got {len(self.aggregators)} aggregators from MongoDBConnect:")
 
         for timeframe, aggregator in self.aggregators.items():
             history_count = len(aggregator.get_history())

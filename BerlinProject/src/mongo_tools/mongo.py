@@ -4,7 +4,7 @@ import pymongo.errors
 from pymongo import MongoClient
 from config.singleton import Singleton
 from config.log_wrapper import log
-from config.env_vars import get_required_env_var
+from config.env_vars import EnvVars
 
 
 def get_info_from_url(url: str) -> Tuple[str, str, str]:
@@ -19,26 +19,20 @@ def get_info_from_url(url: str) -> Tuple[str, str, str]:
     raise Exception(f"Not able to find user/pass form URL")
 
 
-DATABASE = "MTA_devel"
-MONGOCLIENT = "localhost"
-# MONGOCLIENT = "192.168.1.155"
-
 class Mongo(metaclass=Singleton):
 
     def __init__(self):
-        # connection_url = get_required_env_var("MTA_MONGO_URL")
-        # stripped = re.sub(r'//.*@', '//', connection_url)
-        # user, pw, db = get_info_from_url(connection_url)
+        # Get configuration from environment variables
+        env = EnvVars()
+
         try:
-            # log(__name__).info(f"Connecting to MongoDB at: {stripped}")
-            db = DATABASE
-            self._client = MongoClient(MONGOCLIENT, 27017)
-            log(__name__).info(f"Using database: {db}")
-            self._db = self._client[db]
+            log(__name__).info(f"Connecting to MongoDB at: {env.mongo_host}:{env.mongo_port}")
+            self._client = MongoClient(env.mongo_host, env.mongo_port)
+            log(__name__).info(f"Using database: {env.mongo_database}")
+            self._db = self._client[env.mongo_database]
         except pymongo.errors.ConfigurationError as e:
             log(__name__).error(f"An invalid mongoDB URI host error was received.")
             raise e
-        # self.connection_url = connection_url
 
     @property
     def client(self):

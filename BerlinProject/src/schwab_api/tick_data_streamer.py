@@ -4,7 +4,6 @@ import json
 import logging
 import pandas as pd
 from datetime import datetime
-from schwab_api.authentication import SchwabAuthClient
 from schwab_api.streamer_client import SchwabStreamerClient
 from typing import Dict, List, Any, Optional
 
@@ -60,7 +59,3 @@ class TickDataProcessor:
         bid_size = tick.get('4')
         ask_size = tick.get('5')
         volume = tick.get('8')
-
-        # Create tick record
-        tick_record = {
-            'timestamp': timestamp,

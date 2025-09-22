@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 
 # Import necessary modules for replay visualization
 from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
-from optimization.calculators.yahoo_finance_historical import YahooFinanceHistorical
+from mongo_tools.mongo_db_connect import MongoDBConnect
 from portfolios.portfolio_tool import TradeReason
 from models.monitor_configuration import MonitorConfiguration, TradeExecutorConfig
 
@@ -258,9 +258,9 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             trade_executor=te_config
         )
 
-        # Load historical data using Yahoo Finance Historical
-        yahoo_source = YahooFinanceHistorical()
-        yahoo_source.process_historical_data(
+        # Load historical data using MongoDB
+        mongo_source = MongoDBConnect()
+        mongo_source.process_historical_data(
             data_config['ticker'],
             data_config['start_date'],
             data_config['end_date'],
