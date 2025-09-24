@@ -144,9 +144,9 @@ class MlfProblem(ProblemDomain):
                         cnt += 1
 
                         current_weight = bar_config['indicators'][indicator_name]
-                        delta = percent_change * (10.0 - 0.1)  # Weight range is 0.1 to 3.0
+                        delta = 0.15  #  percent_change * (10.0 - 0.1)  # Weight range is 0.1 to 3.0
                         new_weight = current_weight + random.uniform(-delta, delta)
-                        new_weight = max(0.1, min(new_weight, 100.0))
+                        new_weight = max(0.01, min(new_weight, 1.0))
 
                         bar_config['indicators'][indicator_name] = new_weight
 
@@ -156,10 +156,10 @@ class MlfProblem(ProblemDomain):
                     cnt += 1
 
                     current_threshold = enter_condition['threshold']
-                    delta = percent_change * (1.0 - 0.0)  # Threshold range is 0.1 to 0.9
+                    delta = 0.1  #   percent_change * (1.0 - 0.0)  # Threshold range is 0.1 to 0.9
                     new_threshold = current_threshold + random.uniform(-delta, delta)
                     # new_threshold = max(0.0, min(new_threshold, 1.0))
-                    new_threshold = max(0.5, min(new_threshold, 1.0))
+                    new_threshold = max(0.4, min(new_threshold, 1.0))
 
                     enter_condition['threshold'] = new_threshold
 
