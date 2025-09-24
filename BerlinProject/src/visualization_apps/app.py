@@ -8,12 +8,13 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from indicator_triggers.indicator_api import indicator_api
-from visualization_apps.routes.optimization_state import OptimizationState
+
+from routes.optimization_state import OptimizationState
 # Import and register route blueprints
 from routes.replay_routes import replay_bp
 from routes.optimizer_routes import optimizer_bp
 from routes.indicator_routes import indicator_bp
+from routes.indicator_route import indicator_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

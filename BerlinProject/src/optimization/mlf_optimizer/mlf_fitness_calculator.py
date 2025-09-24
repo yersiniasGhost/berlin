@@ -7,6 +7,7 @@ import multiprocessing as mp
 import pickle
 import os
 import platform
+import random
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
@@ -70,9 +71,8 @@ def evaluate_individual_worker(args):
 
 @dataclass
 class MlfFitnessCalculator(FitnessCalculator):
-    backtest_streamer: BacktestDataStreamer = None
+    backtest_streamers: List[BacktestDataStreamer] = None
     display_results: bool = False
-    data_config_file: str = ""
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
     force_sequential: bool = False
@@ -84,6 +84,11 @@ class MlfFitnessCalculator(FitnessCalculator):
             self.max_workers = mp.cpu_count()
 
         logger.info(f"Initialized parallel fitness calculator with {self.max_workers} workers")
+        logger.info(f"Got {len(self.backtest_streamers)} data split streamers")
+
+    def _select_random_streamer(self) -> BacktestDataStreamer:
+        """Randomly select one of the available data streamers"""
+        return random.choice(self.backtest_streamers)
 
 
 
@@ -134,7 +139,9 @@ class MlfFitnessCalculator(FitnessCalculator):
 
         try:
             # Prepare data for workers (serialize once)
-            source_streamer_data = self.backtest_streamer  # Pass entire streamer for copying
+            selected_streamer = self._select_random_streamer()
+            source_streamer_data = selected_streamer  # Pass selected streamer for copying
+            logger.info(f"🔄 Using: {selected_streamer.ticker} {selected_streamer.start_date} to {selected_streamer.end_date}")
             objectives_data = self.objectives
 
             # Create arguments for each worker
@@ -224,8 +231,9 @@ class MlfFitnessCalculator(FitnessCalculator):
 
         for cnt, individual in enumerate(population):
             try:
-                self.backtest_streamer.replace_monitor_config(individual.monitor_configuration)
-                portfolio = self.backtest_streamer.run()
+                selected_streamer = self._select_random_streamer()
+                selected_streamer.replace_monitor_config(individual.monitor_configuration)
+                portfolio = selected_streamer.run()
 
                 # Progress logging
                 if self.display_results or cnt % 50 == 0:

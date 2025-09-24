@@ -20,6 +20,8 @@ class MongoDBConnect:
     4. Store completed candles in aggregator histories
     """
 
+    #
+
     def __init__(self):
         # Get configuration from environment variables
         env = EnvVars()
@@ -144,10 +146,6 @@ class MongoDBConnect:
 
             # Sort chronologically
             raw_ticks.sort(key=lambda x: x.timestamp)
-
-            # Loaded raw ticks
-
-            # Debug: Skip final tick object logging for performance
 
             return raw_ticks
 
