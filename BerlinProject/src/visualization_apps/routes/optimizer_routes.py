@@ -49,6 +49,44 @@ def sanitize_nan_values(obj):
         return obj
 
 
+# Column metadata for custom display names and formatting
+PERFORMANCE_TABLE_COLUMNS = {
+    'generation': {'title': 'Gen', 'type': 'number'},
+    'total_trades': {'title': 'Total Trades', 'type': 'number'},
+    'winning_trades': {'title': 'Winning', 'type': 'number'},
+    'losing_trades': {'title': 'Losing', 'type': 'number'},
+    'total_pnl': {'title': 'Total P&L (%)', 'type': 'percentage'},
+    'avg_win': {'title': 'Avg Win (%)', 'type': 'percentage'},
+    'avg_loss': {'title': 'Avg Loss (%)', 'type': 'percentage'},
+    'market_return': {'title': 'Market Return (%)', 'type': 'percentage'}
+}
+
+
+def get_table_columns_from_data(performance_metrics):
+    """Auto-detect table columns from performance data"""
+    if not performance_metrics:
+        return []
+
+    # Get all keys from the first data row
+    sample_data = performance_metrics[0]
+    columns = []
+
+    for key in sample_data.keys():
+        # Use custom metadata if available, otherwise create default
+        column_info = PERFORMANCE_TABLE_COLUMNS.get(key, {
+            'title': key.replace('_', ' ').title(),
+            'type': 'number'  # default type
+        })
+
+        columns.append({
+            'key': key,
+            'title': column_info['title'],
+            'type': column_info['type']
+        })
+
+    return columns
+
+
 def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
     ideal_point = np.min([ind.fitness_values for ind in front], axis=0)
     balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
@@ -234,8 +272,16 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
                     total_pnl = pnl_data[-1]['cumulative_pnl'] if pnl_data else 0.0
                     avg_win = sum(p['trade_pnl'] for p in winning_trades) / len(winning_trades) if winning_trades else 0.0
                     avg_loss = sum(p['trade_pnl'] for p in losing_trades) / len(losing_trades) if losing_trades else 0.0
-                    
-                    # Create performance data for the current generation (like old app does)
+
+                    # Calculate market return (first close to last close)
+                    market_return = -6969.0  # Default error value
+                    candlestick_data = chart_data.get('candlestick_data', [])
+                    if candlestick_data and len(candlestick_data) >= 2:
+                        first_close = candlestick_data[0][4]  # [timestamp, open, high, low, close]
+                        last_close = candlestick_data[-1][4]
+                        market_return = ((last_close - first_close) / first_close) * 100.0
+
+                    # THIS IS WHERE YOU ADD NEW FUNCTIONS TO BE DISPLAYED IN THE PERFORMANCE METRIC TABLE
                     perf_data = {
                         'generation': current_generation,
                         'total_pnl': total_pnl,
@@ -243,7 +289,8 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
                         'winning_trades': len(winning_trades),
                         'losing_trades': len(losing_trades),
                         'avg_win': avg_win,
-                        'avg_loss': avg_loss
+                        'avg_loss': avg_loss,
+                        'market_return': market_return
                     }
                     performance_metrics = [perf_data]
                     logger.info(f"✅ Performance metrics calculated: {perf_data}")
@@ -267,6 +314,9 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
                 except Exception as e:
                     logger.error(f"❌ Error creating fallback performance metrics: {e}")
         
+        # Auto-detect table columns from performance metrics
+        table_columns = get_table_columns_from_data(performance_metrics)
+
         # Combine all chart data (matching old app format)
         optimizer_charts = {
             'objective_evolution': objective_evolution,
@@ -275,6 +325,7 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
             'elite_population_data': elite_population_data,
             'objective_names': objectives,
             'performance_metrics': performance_metrics,
+            'table_columns': table_columns,  # Dynamic table column definitions
             'best_strategy': {
                 'candlestick_data': chart_data.get('candlestick_data', []),
                 'triggers': chart_data.get('triggers', [])

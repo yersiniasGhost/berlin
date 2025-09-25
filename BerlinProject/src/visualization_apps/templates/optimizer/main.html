@@ -920,33 +920,53 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 5. Update Performance Metrics Table
         if (chartData.performance_metrics) {
-            updatePerformanceMetricsTable(chartData.performance_metrics);
+            updatePerformanceMetricsTable(chartData.performance_metrics, chartData.table_columns);
         }
     }
     
-    function updatePerformanceMetricsTable(metricsData) {
+    function updatePerformanceMetricsTable(metricsData, tableColumns) {
         const tableBody = document.getElementById('metricsTable');
-        
+        const tableHead = tableBody.closest('table').querySelector('thead tr');
+
         if (!metricsData || metricsData.length === 0) {
             return; // Don't clear existing data, just don't add new data
         }
-        
+
+        // Build table header dynamically if we have column definitions
+        if (tableColumns && tableColumns.length > 0) {
+            let headerHtml = '';
+            tableColumns.forEach(column => {
+                headerHtml += `<th>${column.title}</th>`;
+            });
+            tableHead.innerHTML = headerHtml;
+        }
+
         // Clear the "No performance data yet" message if it exists
         if (tableBody.innerHTML.includes('No performance data yet')) {
             tableBody.innerHTML = '';
         }
-        
+
         // Only add new generations that haven't been added before
         metricsData.forEach(metric => {
             const generation = metric.generation;
-            
+
             if (!addedGenerations.has(generation)) {
                 addedGenerations.add(generation);
-                
-                const pnlClass = metric.total_pnl >= 0 ? 'text-success' : 'text-danger';
-                
-                const newRow = `
-                    <tr id="generation-${generation}">
+
+                let rowHtml = `<tr id="generation-${generation}">`;
+
+                if (tableColumns && tableColumns.length > 0) {
+                    // Build row dynamically based on column definitions
+                    tableColumns.forEach(column => {
+                        const value = metric[column.key];
+                        const formattedValue = formatTableValue(value, column.type, column.key);
+                        const cellClass = getTableCellClass(column.key, value);
+                        rowHtml += `<td class="${cellClass}">${formattedValue}</td>`;
+                    });
+                } else {
+                    // Fallback to hardcoded structure if no column definitions
+                    const pnlClass = metric.total_pnl >= 0 ? 'text-success' : 'text-danger';
+                    rowHtml += `
                         <td><strong>${generation}</strong></td>
                         <td>${metric.total_trades}</td>
                         <td class="text-success">${metric.winning_trades}</td>
@@ -954,11 +974,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         <td class="${pnlClass}">${metric.total_pnl.toFixed(2)}%</td>
                         <td class="text-success">${metric.avg_win.toFixed(2)}%</td>
                         <td class="text-danger">${metric.avg_loss.toFixed(2)}%</td>
-                    </tr>
-                `;
-                
-                tableBody.insertAdjacentHTML('beforeend', newRow);
-                
+                    `;
+                }
+
+                rowHtml += '</tr>';
+                tableBody.insertAdjacentHTML('beforeend', rowHtml);
+
                 // Scroll to bottom to show latest generation
                 const tableContainer = tableBody.closest('.table-responsive');
                 if (tableContainer) {
@@ -967,7 +988,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
+    function formatTableValue(value, type, key) {
+        if (value == null || value === undefined) {
+            return '-';
+        }
+
+        switch (type) {
+            case 'percentage':
+                return `${parseFloat(value).toFixed(2)}%`;
+            case 'decimal':
+                return parseFloat(value).toFixed(3);
+            case 'number':
+            default:
+                // Special handling for generation (make bold)
+                if (key === 'generation') {
+                    return `<strong>${parseInt(value)}</strong>`;
+                }
+                return parseInt(value);
+        }
+    }
+
+    function getTableCellClass(key, value) {
+        // Apply Bootstrap classes based on column type and value
+        switch (key) {
+            case 'total_pnl':
+                return value >= 0 ? 'text-success' : 'text-danger';
+            case 'winning_trades':
+                return 'text-success';
+            case 'losing_trades':
+                return 'text-danger';
+            case 'avg_win':
+                return 'text-success';
+            case 'avg_loss':
+                return 'text-danger';
+            default:
+                return '';
+        }
+    }
+
     // Initialize charts when page loads
     document.addEventListener('DOMContentLoaded', function() {
         // No layout management needed for fixed layout
