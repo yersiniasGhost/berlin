@@ -1,2 +1,2 @@
 from .types import RANDOM_TRADER, MODEL_AGENT, BUY, SELL, HOLD, ACTION, IN, OUT
-from .env_vars import EnvVars
+

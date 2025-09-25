@@ -13,7 +13,7 @@ from routes.optimizer_routes import optimizer_bp
 from routes.indicator_routes import indicator_bp
 from routes.indicator_route import indicator_api
 
-from mlf_utils import LogManager
+from mlf_utils.log_manager import LogManager
 # Configure logging
 lm = LogManager('mlf-app.log')
 lm.configure_library_loggers()

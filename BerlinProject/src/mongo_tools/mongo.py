@@ -3,7 +3,7 @@ from typing import Tuple
 import pymongo.errors
 from pymongo import MongoClient
 from mlf_utils.singleton import Singleton
-from mlf_utils import LogManager
+from mlf_utils.log_manager import LogManager
 from config.env_vars import EnvVars
 
 

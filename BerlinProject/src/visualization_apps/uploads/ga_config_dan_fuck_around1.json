@@ -207,6 +207,7 @@
     "elites_to_save": 2,
     "elite_size": 12,
     "chance_of_mutation": 0.05,
-    "chance_of_crossover": 0.03
+    "chance_of_crossover": 0.03,
+    "num_splits": 1
   }
 }

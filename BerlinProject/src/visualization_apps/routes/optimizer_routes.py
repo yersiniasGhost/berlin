@@ -621,18 +621,27 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             if not observer.success:
                 print("NOT SUCCESSFUL... trying again with next epoch")
                 continue
+
+            # Fix generation numbering first - stats returns 0-based, we want 1-based display
+            current_gen = observer.iteration + 1  # Convert from 0-based to 1-based
+
             # Check if stopped using thread-safe methods
             if not opt_state.is_running():
-                logger.info("Optimization stopped by user")
-                socketio.emit('optimization_stopped', {})
+                logger.info(f"🛑 Optimization stopped by user at generation {current_gen}")
+                socketio.emit('optimization_stopped', {
+                    'generation': current_gen,
+                    'total_generations': genetic_algorithm.number_of_generations
+                })
                 break
 
-            # Wait while paused using thread-safe methods
-            while opt_state.is_paused() and opt_state.is_running():
-                time.sleep(0.1)
+            # Wait while paused using thread-safe methods - pause after finishing current generation
+            if opt_state.is_paused() and opt_state.is_running():
+                logger.info(f"⏸️ Optimization paused after completing generation {current_gen}")
+                while opt_state.is_paused() and opt_state.is_running():
+                    time.sleep(0.1)
 
-            # Fix generation numbering - stats returns 0-based, we want 1-based display
-            current_gen = observer.iteration + 1  # Convert from 0-based to 1-based
+                if opt_state.is_running():  # If still running after unpause
+                    logger.info(f"▶️ Optimization resumed at generation {current_gen}")
             best_individual = statsobserver.best_front[0].individual
             metrics = statsobserver.best_metric_iteration
 
@@ -712,13 +721,28 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         socketio.emit('optimization_error', {'error': str(e)})
 
     finally:
-        # Reset state using thread-safe methods
+        # Clean up temporary files if they exist
+        try:
+            ga_config_path_temp = opt_state.get('ga_config_path_temp')
+            data_config_path_temp = opt_state.get('data_config_path_temp')
+
+            if ga_config_path_temp and Path(ga_config_path_temp).exists():
+                Path(ga_config_path_temp).unlink()
+
+            if data_config_path_temp and Path(data_config_path_temp).exists():
+                Path(data_config_path_temp).unlink()
+
+        except Exception:
+            pass
+
+        # Reset optimization state
         opt_state.update({
             'running': False,
             'paused': False,
-            'thread': None
+            'thread': None,
+            'ga_config_path_temp': None,
+            'data_config_path_temp': None
         })
-        print("FINALLY:", opt_state.get('elites'), "\n", opt_state)
 
 
 def save_optimization_results_with_new_indicators(best_individuals_log, best_individual, elites, ga_config_path, test_name, timestamp=None, processed_indicators=None):
@@ -1073,23 +1097,43 @@ def start_optimization():
         return jsonify({'success': False, 'error': str(e)})
 
 
-optimizer_bp.route('/api/stop_optimization', methods=['POST'])
-
-
+@optimizer_bp.route('/api/stop_optimization', methods=['POST'])
 def api_stop_optimization():
     """Stop the optimization via REST API"""
     try:
-        OptimizationState().update({'running': False,
-                                    'paused': False})
+        from flask import current_app
+
+        # Stop the optimization immediately
+        OptimizationState().update({
+            'running': False,
+            'paused': False
+        })
+
+        # Try to gracefully stop the thread
         thread = OptimizationState().get('thread')
         if thread and thread.is_alive():
-            thread.join(timeout=2)
+            thread.join(timeout=5)
+            if thread.is_alive():
+                logger.warning("Optimization thread did not terminate gracefully within timeout")
 
         logger.info("Optimization stopped via REST API")
+
+        # Also emit WebSocket event for real-time UI updates
+        try:
+            socketio = current_app.extensions.get('socketio')
+            if socketio:
+                socketio.emit('optimization_stopped', {
+                    'generation': OptimizationState().get('current_generation', 0),
+                    'total_generations': OptimizationState().get('total_generations', 0)
+                })
+        except Exception as ws_error:
+            logger.warning(f"Could not emit WebSocket event: {ws_error}")
+
         return jsonify({
             'success': True,
-            'message': 'Optimization stopping....',
-            'generation': OptimizationState().get('current_generation', 0)
+            'message': 'Optimization stopped',
+            'generation': OptimizationState().get('current_generation', 0),
+            'total_generations': OptimizationState().get('total_generations', 0)
         })
     except Exception as e:
         logger.error(f"Error stopping optimization: {e}")
@@ -1381,6 +1425,86 @@ def get_elite(index):
     except Exception as e:
         logger.error(f"Error getting elite {index}: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+@optimizer_bp.route('/api/pause_optimization', methods=['POST'])
+def api_pause_optimization():
+    """Pause the optimization via REST API"""
+    try:
+        from flask import current_app
+
+        if OptimizationState().is_running():
+            OptimizationState().set('paused', True)
+            logger.info("Optimization paused via REST API - will finish current generation")
+
+            # Also emit WebSocket event for real-time UI updates
+            try:
+                socketio = current_app.extensions.get('socketio')
+                if socketio:
+                    socketio.emit('optimization_paused', {
+                        'generation': OptimizationState().get('current_generation', 0),
+                        'total_generations': OptimizationState().get('total_generations', 0)
+                    })
+            except Exception as ws_error:
+                logger.warning(f"Could not emit WebSocket event: {ws_error}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Optimization paused - will finish current generation',
+                'generation': OptimizationState().get('current_generation', 0),
+                'total_generations': OptimizationState().get('total_generations', 0)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No optimization is currently running'
+            })
+    except Exception as e:
+        logger.error(f"Error pausing optimization: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@optimizer_bp.route('/api/resume_optimization', methods=['POST'])
+def api_resume_optimization():
+    """Resume the optimization via REST API"""
+    try:
+        from flask import current_app
+
+        if OptimizationState().is_running() and OptimizationState().is_paused():
+            OptimizationState().set('paused', False)
+            logger.info("Optimization resumed via REST API")
+
+            # Also emit WebSocket event for real-time UI updates
+            try:
+                socketio = current_app.extensions.get('socketio')
+                if socketio:
+                    socketio.emit('optimization_resumed', {
+                        'generation': OptimizationState().get('current_generation', 0),
+                        'total_generations': OptimizationState().get('total_generations', 0)
+                    })
+            except Exception as ws_error:
+                logger.warning(f"Could not emit WebSocket event: {ws_error}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Optimization resumed',
+                'generation': OptimizationState().get('current_generation', 0),
+                'total_generations': OptimizationState().get('total_generations', 0)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No paused optimization found to resume'
+            })
+    except Exception as e:
+        logger.error(f"Error resuming optimization: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 
 @optimizer_bp.route('/api/export_elite/<int:index>')
 def export_elite(index):

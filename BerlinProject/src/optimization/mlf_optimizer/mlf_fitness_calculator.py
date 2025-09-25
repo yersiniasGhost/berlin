@@ -12,7 +12,7 @@ from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
 
-from mlf_utils import LogManager
+from mlf_utils.log_manager import LogManager
 
 
 def evaluate_individual_worker(args):

@@ -3,7 +3,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from .singleton import Singleton
 from typing import Dict
-from config import EnvVars
+from config.env_vars import EnvVars
 
 
 class LogManager(metaclass=Singleton):

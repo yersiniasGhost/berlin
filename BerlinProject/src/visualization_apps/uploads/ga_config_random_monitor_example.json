@@ -32,7 +32,7 @@
         "description": "needs macd and sma both triggered",
         "indicators": {
           "macd1m": 74,
-          "macd15m": 99,
+          "macd5m": 99,
           "sma1m": 3.0
         }
       },
@@ -62,10 +62,10 @@
       }
     },
     {
-      "name": "macd15m",
+      "name": "macd5m",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
-      "agg_config": "15m-normal",
+      "agg_config": "5m-normal",
       "calc_on_pip": false,
       "parameters": {
         "slow": 29,
