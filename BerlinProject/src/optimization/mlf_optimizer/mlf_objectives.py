@@ -8,6 +8,7 @@ from models.tick_data import TickData
 
 @dataclass
 class MaximizeProfit(ObjectiveFunctionBase):
+    target_profit_per_trade: Optional[float] = 0.05
 
     def __post_init__(self):
         self.name = "Maximize Profit per Trade"
@@ -27,7 +28,10 @@ class MaximizeProfit(ObjectiveFunctionBase):
             return 100.0
         # FIXED: For maximization in a minimization framework, use reciprocal
         # Lower objective value = better fitness
-        objective_value = 1.0 - (total_profit/trade_count)
+        per_trade = (total_profit/trade_count)
+        objective_value = max(0.0, 1.0 - per_trade / self.target_profit_per_trade)
+        print("per_trade ", per_trade, "objective_value", objective_value)
+        # objective_value = 1.0 - (total_profit/trade_count)
         # objective_value = 100 * (0.06 - (total_profit/trade_count))
         # objective_value = 1.0 / total_profit
         # print(objective_value, total_profit, objective_value*self.weight)
@@ -119,11 +123,11 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
 
 
 @dataclass
-class MaximizeNetPnL2(ObjectiveFunctionBase):
+class MaximizeScaledNetPnL(ObjectiveFunctionBase):
     global_pct: Optional[float] = None
 
     def __post_init__(self):
-        self.name = "Maximize Net PnL"
+        self.name = "Maximize Net PnL (Scaled)"
 
 
     def calculate_objective(self, *args) -> float:
@@ -135,7 +139,7 @@ class MaximizeNetPnL2(ObjectiveFunctionBase):
 
         net_pnl = (total_profit - total_loss) / 100.0
         if total_profit == 0.0 and total_loss == 0.0:
-            objective_value = 100.0
+            return 100.0
 
         objective_value = max(0.0, 1.0 - net_pnl / self.global_pct)
         return objective_value * self.weight
@@ -144,8 +148,8 @@ class MaximizeNetPnL2(ObjectiveFunctionBase):
     def preprocess(self, *args):
         tick_history: List[TickData] = args[0]
         # simply grab first and last
-        start = tick_history[0].close
-        end = tick_history[-1].close
-        self.global_pct = abs(end - start / start)
+        max_close = max(tick_history, key=lambda x: x.close).close
+        min_close = min(tick_history, key=lambda x: x.close).close
+        self.global_pct = abs((max_close-min_close)/min_close)
 
 
