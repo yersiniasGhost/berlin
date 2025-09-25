@@ -1,7 +1,9 @@
+from typing import List, Optional
 from dataclasses import dataclass
 from optimization.genetic_optimizer.abstractions.objective_function_base import ObjectiveFunctionBase
 from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
+from models.tick_data import TickData
 
 
 @dataclass
@@ -48,11 +50,11 @@ class MinimizeLoss(ObjectiveFunctionBase):
         total_loss = portfolio.get_total_percent_losses()  # This returns percentage values
         trade_count = portfolio.get_losing_trades_count()
         if trade_count == 0:
-            return 0.2
+            return 0.0
         # FIXED: Direct minimization - higher losses = higher objective value (worse)
         objective_value = total_loss / trade_count
 
-        return objective_value * self.weight + 0.2
+        return objective_value * self.weight
 
 
 @dataclass
@@ -114,3 +116,36 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
             objective_value = 1.0 / net_pnl
 
         return objective_value * self.weight
+
+
+@dataclass
+class MaximizeNetPnL2(ObjectiveFunctionBase):
+    global_pct: Optional[float] = None
+
+    def __post_init__(self):
+        self.name = "Maximize Net PnL"
+
+
+    def calculate_objective(self, *args) -> float:
+        individual: MlfIndividual = args[0]
+        portfolio: Portfolio = args[1]
+
+        total_profit = portfolio.get_total_percent_profits()
+        total_loss = portfolio.get_total_percent_losses()
+
+        net_pnl = (total_profit - total_loss) / 100.0
+        if total_profit == 0.0 and total_loss == 0.0:
+            objective_value = 100.0
+
+        objective_value = max(0.0, 1.0 - net_pnl / self.global_pct)
+        return objective_value * self.weight
+
+    # Let's calculate a "maximum expected return" and shoot for that as our objective
+    def preprocess(self, *args):
+        tick_history: List[TickData] = args[0]
+        # simply grab first and last
+        start = tick_history[0].close
+        end = tick_history[-1].close
+        self.global_pct = abs(end - start / start)
+
+

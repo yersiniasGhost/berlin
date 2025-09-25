@@ -136,6 +136,8 @@ class MlfFitnessCalculator(FitnessCalculator):
             # Prepare data for workers (serialize once)
             source_streamer_data = self.backtest_streamer  # Pass entire streamer for copying
             objectives_data = self.objectives
+            for obj in self.objectives:
+                obj.preprocess(source_streamer_data.tick_history)
 
             # Create arguments for each worker
             worker_args = [
