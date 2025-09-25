@@ -30,7 +30,6 @@ class MaximizeProfit(ObjectiveFunctionBase):
         # Lower objective value = better fitness
         per_trade = (total_profit/trade_count)
         objective_value = max(0.0, 1.0 - per_trade / self.target_profit_per_trade)
-        print("per_trade ", per_trade, "objective_value", objective_value)
         # objective_value = 1.0 - (total_profit/trade_count)
         # objective_value = 100 * (0.06 - (total_profit/trade_count))
         # objective_value = 1.0 / total_profit
