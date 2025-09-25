@@ -25,7 +25,7 @@ class MongoDBConnect:
     def __init__(self):
         # Get configuration from environment variables
         env = EnvVars()
-
+        print("USOING: ", env.mongo_host)
         self.client = MongoClient(env.mongo_host, env.mongo_port, serverSelectionTimeoutMS=5000)
         self.db = self.client[env.mongo_database]
         self.collection = self.db[env.mongo_collection]

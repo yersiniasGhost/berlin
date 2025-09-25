@@ -45,7 +45,8 @@ class MlfOptimizerConfig:
 
         for split_config in dc.split_configs:
             csa = CSAContainer(split_config, aggregator_list)
-            streamer = BacktestDataStreamer(csa.get_aggregators(), split_config, self.monitor_config)
+            streamer = BacktestDataStreamer()
+            streamer.initialize(csa.get_aggregators(), split_config, self.monitor_config)
             backtest_streamers.append(streamer)
 
         # Create fitness calculator

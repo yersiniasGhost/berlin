@@ -311,7 +311,7 @@ def load_raw_candle_data(data_config_path: str, io):
         logger.info(f"   Data config path: {data_config_path}")
 
         # Use the SAME data source as trade execution to ensure consistency
-        backtest_streamer = io.fitness_calculator.backtest_streamer
+        backtest_streamer = io.fitness_calculator.selected_streamer
         
         # Debug: Check what ticker is actually loaded in the streamer
         actual_ticker = getattr(backtest_streamer, 'ticker', 'UNKNOWN')
@@ -462,7 +462,7 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
     candlestick_data, data_config = load_raw_candle_data(data_config_path, io)
 
     # IMPORTANT: Run backtest for this specific individual to get trades and bar scores
-    backtest_streamer = io.fitness_calculator.backtest_streamer
+    backtest_streamer = io.fitness_calculator.selected_streamer
     backtest_streamer.replace_monitor_config(best_individual.monitor_configuration)
 
     # Process indicators using NEW SYSTEM for this individual
@@ -618,6 +618,9 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
         # Run optimization with generation-by-generation updates
         for observer, statsobserver in genetic_algorithm.run_ga_iterations(1):
+            if not observer.success:
+                print("NOT SUCCESSFUL... trying again with next epoch")
+                continue
             # Check if stopped using thread-safe methods
             if not opt_state.is_running():
                 logger.info("Optimization stopped by user")
@@ -1070,6 +1073,31 @@ def start_optimization():
         return jsonify({'success': False, 'error': str(e)})
 
 
+optimizer_bp.route('/api/stop_optimization', methods=['POST'])
+
+
+def api_stop_optimization():
+    """Stop the optimization via REST API"""
+    try:
+        OptimizationState().update({'running': False,
+                                    'paused': False})
+        thread = OptimizationState().get('thread')
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
+
+        logger.info("Optimization stopped via REST API")
+        return jsonify({
+            'success': True,
+            'message': 'Optimization stopping....',
+            'generation': OptimizationState().get('current_generation', 0)
+        })
+    except Exception as e:
+        logger.error(f"Error stopping optimization: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 
 @optimizer_bp.route('/api/save_config', methods=['POST'])
 def save_config():
@@ -1322,6 +1350,7 @@ Elites Saved: {elites_to_export}
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
 
 @optimizer_bp.route('/api/get_elite/<int:index>')
 def get_elite(index):

@@ -24,14 +24,28 @@ class BacktestDataStreamer:
     3. All attributes are pickle-friendly
     """
 
+    def __init__(self):
+        self.monitor_config: Optional[dict] = None
+        self.ticker: Optional[str] = None
+        self.start_date: Optional[str] = None
+        self.end_date: Optional[str] = None
+
+        # Core data attributes
+        self.aggregators: Optional[list] = None
+        self.tick_history: List[TickData] = []
+        self.primary_timeframe = None
+        self.primary_aggregator = None
+
+        # Create unified trade executor from monitor config
+        self.trade_executor: Optional[TradeExecutorUnified] = None
 
 
-    def __init__(self, aggregators: Dict[str, CandleAggregator], data_config: Dict[str, Any], monitor_config: MonitorConfiguration):
+
+    def initialize(self, aggregators: Dict[str, CandleAggregator], data_config: Dict[str, Any], monitor_config: MonitorConfiguration):
         """
         Initialize BacktestDataStreamer with pre-built aggregators and data config.
         """
         self.monitor_config = monitor_config
-
         self.ticker = data_config['ticker']
         self.start_date = data_config['start_date']
         self.end_date = data_config['end_date']
@@ -74,34 +88,8 @@ class BacktestDataStreamer:
         self.tick_history.clear()
 
         # Load all historical data once
-        self.load_historical_data()
+        # self.load_historical_data()
         self._build_tick_history()
-
-
-
-    # def load_historical_data(self):
-    #     """Load historical data into aggregators via MongoDBConnect - happens once"""
-    #     if not all([self.ticker, self.start_date, self.end_date, self.monitor_config]):
-    #         logger.error("Cannot load historical data: missing required parameters")
-    #         return
-    #
-    #     mongo_source = MongoDBConnect()
-    #     # mongo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
-    #
-    #     split_config = {'ticker': self.ticker, 'start_date': self.start_date, 'end_date': self.end_date}
-    #     csa= CSAConainer(split_config, self.monitor_config, mongo_source)
-    #
-    #
-    #     self.aggregators = mongo_source.aggregators
-    #     logger.info(f"Got {len(self.aggregators)} aggregators from MongoDBConnect:")
-    #
-    #     for timeframe, aggregator in self.aggregators.items():
-    #         history_count = len(aggregator.get_history())
-    #         logger.info(f"  {timeframe}: {history_count} candles")
-
-    # data streamer not loading data any more the tool will load the data first and implement splits
-    # we will give it
-
 
 
     def _build_tick_history(self):
