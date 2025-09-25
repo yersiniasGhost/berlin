@@ -21,6 +21,7 @@ class Observer:
     fitness_values: np.array = None   # List[List[float]] = None
     start_time = None
     delta_time = None
+    success: bool = True
 
     def __post_init__(self):
         self.start_time = time.time()

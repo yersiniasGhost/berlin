@@ -10,7 +10,7 @@ from enum import Enum
 import json
 import numpy as np
 from models.tick_data import TickData
-from config.singleton import Singleton
+from mlf_utils.singleton import Singleton
 
 
 class ParameterType(Enum):

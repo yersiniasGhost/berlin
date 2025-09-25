@@ -24,31 +24,46 @@ class BacktestDataStreamer:
     3. All attributes are pickle-friendly
     """
 
+    def __init__(self):
+        self.monitor_config: Optional[dict] = None
+        self.ticker: Optional[str] = None
+        self.start_date: Optional[str] = None
+        self.end_date: Optional[str] = None
 
-
-    def __init__(self, monitor_config: MonitorConfiguration = None, data_config_file: str = None):
-        """
-        Initialize with optional parameters for backward compatibility.
-        For parallel processing, use the parameterless constructor and set data manually.
-        """
-        self.monitor_config = monitor_config
-        self.data_config_file = data_config_file
-
-        # Core data attributes (will be set by load_historical_data or copied from parent)
-        self.ticker = None
-        self.start_date = None
-        self.end_date = None
-        self.aggregators: Dict[str, CandleAggregator] = {}
+        # Core data attributes
+        self.aggregators: Optional[list] = None
         self.tick_history: List[TickData] = []
         self.primary_timeframe = None
         self.primary_aggregator = None
 
-        # Trade executor (recreated for each individual)
-        self.trade_executor = None
+        # Create unified trade executor from monitor config
+        self.trade_executor: Optional[TradeExecutorUnified] = None
 
-        # If both parameters provided, initialize fully (backward compatibility)
-        if monitor_config is not None and data_config_file is not None:
-            self._initialize_from_config(data_config_file)
+
+
+    def initialize(self, aggregators: Dict[str, CandleAggregator], data_config: Dict[str, Any], monitor_config: MonitorConfiguration):
+        """
+        Initialize BacktestDataStreamer with pre-built aggregators and data config.
+        """
+        self.monitor_config = monitor_config
+        self.ticker = data_config['ticker']
+        self.start_date = data_config['start_date']
+        self.end_date = data_config['end_date']
+
+        # Core data attributes
+        self.aggregators = aggregators
+        self.tick_history: List[TickData] = []
+        self.primary_timeframe = None
+        self.primary_aggregator = None
+
+        # Create unified trade executor from monitor config
+        self.trade_executor = TradeExecutorUnified(self.monitor_config)
+
+        # Build tick history from provided aggregators
+        self._build_tick_history()
+
+        logger.info(f"🔄 BacktestDataStreamer initialized: {self.ticker} {self.start_date} to {self.end_date}")
+        logger.info(f"   Got {len(self.aggregators)} aggregators with {len(self.tick_history)} ticks")
 
 
 
@@ -73,27 +88,8 @@ class BacktestDataStreamer:
         self.tick_history.clear()
 
         # Load all historical data once
-        self.load_historical_data()
+        # self.load_historical_data()
         self._build_tick_history()
-
-
-
-    def load_historical_data(self):
-        """Load historical data into aggregators via MongoDBConnect - happens once"""
-        if not all([self.ticker, self.start_date, self.end_date, self.monitor_config]):
-            logger.error("Cannot load historical data: missing required parameters")
-            return
-
-        mongo_source = MongoDBConnect()
-        mongo_source.process_historical_data(self.ticker, self.start_date, self.end_date, self.monitor_config)
-
-        self.aggregators = mongo_source.aggregators
-        logger.info(f"Got {len(self.aggregators)} aggregators from MongoDBConnect:")
-
-        for timeframe, aggregator in self.aggregators.items():
-            history_count = len(aggregator.get_history())
-            logger.info(f"  {timeframe}: {history_count} candles")
-
 
 
     def _build_tick_history(self):

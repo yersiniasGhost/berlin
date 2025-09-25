@@ -266,6 +266,11 @@ document.addEventListener('DOMContentLoaded', function() {
             this.disabled = true;
             pauseOptimizerBtn.disabled = false;
             stopOptimizerBtn.disabled = false;
+
+            // Reset pause button to "Pause" state when starting new optimization
+            pauseOptimizerBtn.innerHTML = '<i class="fas fa-pause me-2"></i>Pause';
+            pauseOptimizerBtn.className = 'btn btn-warning btn-lg me-3';
+
             hideElitesButton(); // Hide save button when starting new optimization
             clearAllChartsAndData(); // Clear previous optimization data
             
@@ -379,8 +384,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (result.success) {
                 showAlert('Optimization stopped', 'warning');
-                 saveOptimizedConfigsBtn.style.display = 'inline-block';
-                 saveOptimizedConfigsBtn.disabled = false;
+                resetButtons(); // This will reset pause button to "Pause" state
+                saveOptimizedConfigsBtn.style.display = 'inline-block';
+                saveOptimizedConfigsBtn.disabled = false;
             } else {
                 throw new Error(result.error || 'Failed to stop optimization');
             }

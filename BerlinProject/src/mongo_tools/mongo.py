@@ -2,8 +2,8 @@ import re
 from typing import Tuple
 import pymongo.errors
 from pymongo import MongoClient
-from config.singleton import Singleton
-from config.log_wrapper import log
+from mlf_utils.singleton import Singleton
+from mlf_utils.log_manager import LogManager
 from config.env_vars import EnvVars
 
 
@@ -23,15 +23,16 @@ class Mongo(metaclass=Singleton):
 
     def __init__(self):
         # Get configuration from environment variables
+        self.logger = LogManager().get_logger("Mongo")
         env = EnvVars()
 
         try:
-            log(__name__).info(f"Connecting to MongoDB at: {env.mongo_host}:{env.mongo_port}")
+            self.logger.info(f"Connecting to MongoDB at: {env.mongo_host}:{env.mongo_port}")
             self._client = MongoClient(env.mongo_host, env.mongo_port)
-            log(__name__).info(f"Using database: {env.mongo_database}")
+            self.logger.info(f"Using database: {env.mongo_database}")
             self._db = self._client[env.mongo_database]
         except pymongo.errors.ConfigurationError as e:
-            log(__name__).error(f"An invalid mongoDB URI host error was received.")
+            self.logger.error(f"An invalid mongoDB URI host error was received.")
             raise e
 
     @property

@@ -2,9 +2,8 @@ from typing import Optional
 from dotenv import load_dotenv
 from pathlib import Path
 import os
-import sys
 
-from .singleton import Singleton
+from mlf_utils.singleton import Singleton
 
 
 class EnvVars(metaclass=Singleton):
@@ -42,6 +41,7 @@ class EnvVars(metaclass=Singleton):
         self.ibkr_extended_hours = self.get_env("IBKR_EXTENDED_HOURS")
 
         # Application settings
+        self.log_path = self.get_env('LOG_PATH', "~/tmp/logs")
         self.debug = self.get_bool('DEBUG', "False")
         self.log_level = self.get_env('LOG_LEVEL', 'INFO')
 
