@@ -14,6 +14,8 @@ from optimization.genetic_optimizer.abstractions.objective_function_base import 
 from models.monitor_configuration import MonitorConfiguration
 from models.indicator_definition import IndicatorDefinition
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
+from models.data_container import DataContainer
+from candle_aggregator.csa_container import CSAContainer
 
 
 @dataclass
@@ -32,21 +34,23 @@ class MlfOptimizerConfig:
         self.model_config = {"preprocess_config": "test_ds"}
 
     def create_project(self) -> GeneticAlgorithm:
-        """
-        Create genetic algorithm project with unified trade executor.
-        Trade executor configuration is now handled within monitor_config.
-        """
-        # NEW: Create backtest streamer with unified trade executor (no separate trade_executor parameter)
-        backtest_streamer = BacktestDataStreamer(
-            monitor_config=self.monitor_config,
-            data_config_file=self.data_config_file
-        )
+        """Create genetic algorithm project with data splits"""
+        # Load data and create splits
+        dc = DataContainer.from_file(self.data_config_file)
+        dc.create_splits(self.hyper_parameters.num_splits)
+
+        # Create streamers for each split
+        backtest_streamers: List[BacktestDataStreamer] = []
+        aggregator_list = list(self.monitor_config.get_aggregator_configs().keys())
+
+        for split_config in dc.split_configs:
+            csa = CSAContainer(split_config, aggregator_list)
+            streamer = BacktestDataStreamer()
+            streamer.initialize(csa.get_aggregators(), split_config, self.monitor_config)
+            backtest_streamers.append(streamer)
 
         # Create fitness calculator
-        self.fitness_calculator = MlfFitnessCalculator(
-            backtest_streamer=backtest_streamer,
-            data_config_file=self.data_config_file
-        )
+        self.fitness_calculator = MlfFitnessCalculator(backtest_streamers=backtest_streamers)
 
         # Add objectives to fitness calculator
         for obj_name, objective in self.objectives.items():

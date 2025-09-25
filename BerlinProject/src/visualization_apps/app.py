@@ -1,23 +1,24 @@
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 import os
-import sys
-import logging
 import math
 import threading
 from datetime import datetime
 from pathlib import Path
 
-from indicator_triggers.indicator_api import indicator_api
-from visualization_apps.routes.optimization_state import OptimizationState
 # Import and register route blueprints
+from routes.optimization_state import OptimizationState
 from routes.replay_routes import replay_bp
 from routes.optimizer_routes import optimizer_bp
 from routes.indicator_routes import indicator_bp
+from routes.indicator_route import indicator_api
 
+from mlf_utils.log_manager import LogManager
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('VisualizationApp')
+lm = LogManager('mlf-app.log')
+lm.configure_library_loggers()
+logger = lm.get_logger("visualization-app")
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'visualization-apps-secret-key'
@@ -230,4 +231,4 @@ if __name__ == '__main__':
     logger.info("   - Indicator API: /api/indicators/*")
     
     # Start the Flask-SocketIO application
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000, use_reloader=False, log_output=True)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000, use_reloader=False, log_output=True, allow_unsafe_werkzeug=True)

@@ -1,6 +1,6 @@
 from typing import Any, Dict
 import threading
-from config.singleton import Singleton
+from mlf_utils import Singleton
 
 
 class OptimizationState(metaclass=Singleton):
