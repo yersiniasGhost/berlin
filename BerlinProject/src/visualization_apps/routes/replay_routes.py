@@ -17,10 +17,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 
 # Import necessary modules for replay visualization
-from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
-from mongo_tools.mongo_db_connect import MongoDBConnect
+from candle_aggregator.csa_container import CSAContainer
 from portfolios.portfolio_tool import TradeReason
-from models.monitor_configuration import MonitorConfiguration, TradeExecutorConfig
+from optimization.calculators.bt_data_streamer import BacktestDataStreamer
 
 # Remove new indicator system imports that are causing backend conflicts  
 # from indicator_triggers.indicator_base import IndicatorRegistry
@@ -103,11 +102,11 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
         # Generate bar scores history from the stored calculation
         try:
             # Access the bar score history we calculated before running the backtest
-            if (hasattr(backtest_streamer, 'bar_score_history_dict') and
-                    backtest_streamer.bar_score_history_dict and
+            if (hasattr(backtest_streamer, 'bar_score_history') and
+                    backtest_streamer.bar_score_history and
                     backtest_streamer.tick_history):
 
-                bar_score_history_dict = backtest_streamer.bar_score_history_dict
+                bar_score_history_dict = backtest_streamer.bar_score_history
                 tick_history = backtest_streamer.tick_history
 
                 logger.info(f"📊 Found bar scores history with {len(bar_score_history_dict)} bars")
@@ -259,29 +258,29 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         )
 
         # Load historical data using MongoDB
-        mongo_source = MongoDBConnect()
-        mongo_source.process_historical_data(
-            data_config['ticker'],
-            data_config['start_date'],
-            data_config['end_date'],
-            monitor_obj
-        )
+        # mongo_source = MongoDBConnect()
+        # mongo_source.process_historical_data(
+        #     data_config['ticker'],
+        #     data_config['start_date'],
+        #     data_config['end_date'],
+        #     monitor_obj
+        # )
 
-        # Create backtest streamer manually
-        from optimization.calculators.bt_data_streamer import BacktestDataStreamer
-
-        backtest_streamer = BacktestDataStreamer(monitor_obj, data_config_path)
+        aggregator_list = list(monitor_obj.get_aggregator_configs().keys())
+        csa = CSAContainer(data_config, aggregator_list)
+        backtest_streamer = BacktestDataStreamer()
+        backtest_streamer.initialize(csa.get_aggregators(), data_config, monitor_obj)
 
         # Calculate indicators and bar scores using the monitor configuration
-        from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
-
-        indicator_processor = IndicatorProcessorHistoricalNew(monitor_obj)
-        indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
-            indicator_processor.calculate_indicators(backtest_streamer.aggregators)
-        )
-
-        # Store the bar score history for later access
-        backtest_streamer.bar_score_history_dict = bar_score_history_dict
+        # from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
+        #
+        # indicator_processor = IndicatorProcessorHistoricalNew(monitor_obj)
+        # indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
+        #     indicator_processor.calculate_indicators(backtest_streamer.aggregators)
+        # )
+        #
+        # # Store the bar score history for later access
+        # backtest_streamer.bar_score_history_dict = bar_score_history_dict
 
         # Run the backtest to get trades
         portfolio = backtest_streamer.run()
@@ -313,6 +312,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         # Format component data for charts (MACD, SMA components)
         component_data_formatted = {}
+        component_history = backtest_streamer.component_history
         if component_history:
             for comp_name, comp_values in component_history.items():
                 # Convert to Highcharts format with timestamps
@@ -333,6 +333,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         # Add indicator_history for the trigger signals chart (using time-decayed values)
         indicator_history_formatted = []
+        indicator_history = backtest_streamer.indicator_history
         if indicator_history and tick_history:
             for i, tick in enumerate(tick_history):
                 timestamp = int(tick.timestamp.timestamp() * 1000)
