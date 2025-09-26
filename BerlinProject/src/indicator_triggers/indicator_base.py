@@ -5,7 +5,7 @@ Provides parameter metadata, validation, and serialization for UI integration.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Union, Optional, Type
+from typing import Dict, List, Any, Union, Optional, Type, Tuple
 from enum import Enum
 import json
 import numpy as np
@@ -107,13 +107,11 @@ class BaseIndicator(ABC):
         self.config = config or self._create_default_config()
         self._validate_parameters()
     
-    @property
+    @classmethod
     @abstractmethod
-    def name(self) -> str:
-        """Unique identifier for this indicator type."""
+    def name(cls) -> str:
         pass
-    
-    @property
+
     @abstractmethod
     def display_name(self) -> str:
         """Human-readable name for UI display."""
@@ -132,7 +130,7 @@ class BaseIndicator(ABC):
         pass
     
     @abstractmethod
-    def calculate(self, tick_data: List[TickData]) -> np.ndarray:
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Calculate indicator values for given tick data."""
         pass
     
@@ -154,12 +152,11 @@ class BaseIndicator(ABC):
         
         for param_name, param_value in self.config.parameters.items():
             if param_name not in specs:
-                raise ValueError(f"Unknown parameter: {param_name}")
+                continue
+                # raise ValueError(f"Unknown parameter: {param_name}")
             
             if not specs[param_name].validate(param_value):
-                raise ValueError(
-                    f"Invalid value for parameter {param_name}: {param_value}"
-                )
+                raise ValueError(f"Invalid value for parameter {param_name}: {param_value}")
     
     def get_parameter(self, name: str) -> Any:
         """Get parameter value by name."""
@@ -220,7 +217,7 @@ class IndicatorRegistry(metaclass=Singleton):
     
     def register(self, indicator_class: Type[BaseIndicator]):
         """Register an indicator class."""
-        self._indicators[indicator_class.name] = indicator_class
+        self._indicators[indicator_class.__name__] = indicator_class
     
     def get_indicator_class(self, name: str) -> Type[BaseIndicator]:
         """Get indicator class by name."""

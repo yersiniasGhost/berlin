@@ -162,9 +162,7 @@ class BacktestDataStreamer:
 
         # STEP 1: Calculate ALL indicators for entire timeline at once (batch processing)
         indicator_processor = IndicatorProcessorHistoricalNew(self.monitor_config)
-        indicator_history, raw_indicator_history, bar_score_history, component_history = (
-            indicator_processor.calculate_indicators(self.aggregators)
-        )
+        indicator_history, raw_indicator_history, bar_score_history, component_history = indicator_processor.calculate_indicators(self.aggregators)
 
         # STEP 2: Execute trades using pre-calculated indicators
         for i, tick_data in enumerate(self.tick_history):

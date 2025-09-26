@@ -8,8 +8,8 @@ from flask import Blueprint, jsonify, request
 import json
 from pathlib import Path
 
-from features.indicator_base import IndicatorConfiguration, IndicatorRegistry
-from features.refactored_indicators import *  # Import to register indicators
+from indicator_triggers.indicator_base import IndicatorConfiguration, IndicatorRegistry
+from indicator_triggers.refactored_indicators import *  # Import to register indicators
 
 
 class IndicatorConfigManager:
