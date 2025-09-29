@@ -107,13 +107,11 @@ class BaseIndicator(ABC):
         self.config = config or self._create_default_config()
         self._validate_parameters()
     
-    @property
     @abstractmethod
     def name(self) -> str:
         """Unique identifier for this indicator type."""
         pass
     
-    @property
     @abstractmethod
     def display_name(self) -> str:
         """Human-readable name for UI display."""

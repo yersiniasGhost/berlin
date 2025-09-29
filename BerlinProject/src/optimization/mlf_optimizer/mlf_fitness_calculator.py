@@ -73,7 +73,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     display_results: bool = False
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
-    force_sequential: bool = False
+    force_sequential: bool = True
     selected_streamer: Optional[BacktestDataStreamer] = None
     split = None
     repeat_split: int = 0

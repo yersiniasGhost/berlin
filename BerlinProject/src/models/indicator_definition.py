@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field as PydanticField
 class IndicatorDefinition(BaseModel):
     id: PyObjectId = PydanticField(None, alias="_id")
     name: str
+    indicator: str
     type: Literal[CANDLE_STICK_PATTERN, INDICATOR_TYPE]
     function: Optional[str] = None
     parameters: Optional[dict] = None

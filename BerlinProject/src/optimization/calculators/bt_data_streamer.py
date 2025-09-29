@@ -25,7 +25,7 @@ class BacktestDataStreamer:
     """
 
     def __init__(self):
-        self.monitor_config: Optional[dict] = None
+        self.monitor_config: Optional[MonitorConfiguration] = None
         self.ticker: Optional[str] = None
         self.start_date: Optional[str] = None
         self.end_date: Optional[str] = None
@@ -35,6 +35,9 @@ class BacktestDataStreamer:
         self.tick_history: List[TickData] = []
         self.primary_timeframe = None
         self.primary_aggregator = None
+        self.component_history = None
+        self.indicator_history = None
+        self.bar_score_history = None
 
         # Create unified trade executor from monitor config
         self.trade_executor: Optional[TradeExecutorUnified] = None
@@ -162,9 +165,7 @@ class BacktestDataStreamer:
 
         # STEP 1: Calculate ALL indicators for entire timeline at once (batch processing)
         indicator_processor = IndicatorProcessorHistoricalNew(self.monitor_config)
-        indicator_history, raw_indicator_history, bar_score_history, component_history = (
-            indicator_processor.calculate_indicators(self.aggregators)
-        )
+        indicator_history, raw_indicator_history, bar_score_history, component_history = indicator_processor.calculate_indicators(self.aggregators)
 
         # STEP 2: Execute trades using pre-calculated indicators
         for i, tick_data in enumerate(self.tick_history):
@@ -186,7 +187,7 @@ class BacktestDataStreamer:
                 indicators=indicators,
                 bar_scores=bar_scores
             )
-
+        return indicator_history, raw_indicator_history, bar_score_history, component_history
 
 
     def replace_monitor_config(self, monitor_config: MonitorConfiguration):
@@ -220,7 +221,10 @@ class BacktestDataStreamer:
 
     def run(self) -> Portfolio:
         """Complete backtest process"""
-        self.run_backtest()
+        indicator_history, raw_indicator_history, bar_score_history, component_history = self.run_backtest()
+        self.component_history = component_history
+        self.indicator_history = indicator_history
+        self.bar_score_history = bar_score_history
         return self.trade_executor.portfolio
 
 

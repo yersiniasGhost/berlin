@@ -3,30 +3,30 @@ Refactored technical indicators using the new configurable base system.
 """
 
 import math
-from typing import List
+from typing import List, Tuple, Dict
 import numpy as np
 import talib as ta
 from scipy.signal import argrelextrema
 
 from models.tick_data import TickData
-from features.indicator_base import BaseIndicator, ParameterSpec, ParameterType, IndicatorRegistry 
+from features.indicator_base import BaseIndicator, ParameterSpec, ParameterType, IndicatorRegistry
 
 
 class SMAIndicator(BaseIndicator):
     """Simple Moving Average indicator."""
-    
+
     @property
     def name(self) -> str:
         return "sma"
-    
+
     @property
     def display_name(self) -> str:
         return "Simple Moving Average"
-    
+
     @property
     def description(self) -> str:
         return "Calculates the simple moving average over a specified period"
-    
+
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
         return [
@@ -42,32 +42,33 @@ class SMAIndicator(BaseIndicator):
                 ui_group="Basic Settings"
             )
         ]
-    
-    def calculate(self, tick_data: List[TickData]) -> np.ndarray:
+
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         period = self.get_parameter("period")
-        
+
         if len(tick_data) < period:
-            return np.array([math.nan] * len(tick_data))
-        
+            return np.array([math.nan] * len(tick_data)), {}
+
         closes = np.array([tick.close for tick in tick_data])
-        return ta.SMA(closes, timeperiod=period)
+        sma = ta.SMA(closes, timeperiod=period)
+        return sma, {f"{self.name}_macd": sma}
 
 
 class SMACrossoverIndicator(BaseIndicator):
     """SMA Crossover signal indicator."""
-    
+
     @property
     def name(self) -> str:
         return "sma_crossover"
-    
+
     @property
     def display_name(self) -> str:
         return "SMA Crossover"
-    
+
     @property
     def description(self) -> str:
         return "Generates signals when price crosses above/below SMA with threshold"
-    
+
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
         return [
@@ -103,14 +104,14 @@ class SMACrossoverIndicator(BaseIndicator):
                 ui_group="Signal Settings"
             )
         ]
-    
-    def calculate(self, tick_data: List[TickData]) -> np.ndarray:
+
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         period = self.get_parameter("period")
         crossover_value = self.get_parameter("crossover_value")
         trend = self.get_parameter("trend")
-        
+
         if len(tick_data) < period:
-            return np.array([math.nan] * len(tick_data))
+            return np.array([math.nan] * len(tick_data)), {f"{self.name}_macd": np.array([0]*len(tick_data))}
 
         # Calculate SMA
         closes = np.array([tick.close for tick in tick_data])
@@ -127,24 +128,24 @@ class SMACrossoverIndicator(BaseIndicator):
         result = np.zeros(len(tick_data))
         result[1:] = np.logical_and(crossovers[1:], ~crossovers[:-1])
 
-        return result
+        return result, {f"{self.name}_macd": sma}
 
 
 class MACDHistogramCrossoverIndicator(BaseIndicator):
     """MACD Histogram Crossover signal indicator."""
-    
+
     @property
     def name(self) -> str:
         return "macd_histogram_crossover"
-    
+
     @property
     def display_name(self) -> str:
         return "MACD Histogram Crossover"
-    
+
     @property
     def description(self) -> str:
         return "Generates signals when MACD histogram crosses threshold levels"
-    
+
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
         return [
@@ -202,20 +203,20 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 ui_group="Signal Settings"
             )
         ]
-    
+
     def calculate(self, tick_data: List[TickData]) -> np.ndarray:
         fast = self.get_parameter("fast")
         slow = self.get_parameter("slow")
         signal = self.get_parameter("signal")
         histogram_threshold = self.get_parameter("histogram_threshold")
         trend = self.get_parameter("trend")
-        
+
         if len(tick_data) < slow + signal:
             return np.array([math.nan] * len(tick_data))
 
         closes = np.array([tick.close for tick in tick_data], dtype=np.float64)
         macd, signal_line, histogram = ta.MACD(closes, fastperiod=fast, slowperiod=slow, signalperiod=signal)
-        
+
         result = np.zeros(len(tick_data))
 
         if trend == 'bullish':
@@ -230,19 +231,19 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
 
 class BollingerBandsLowerBandBounceIndicator(BaseIndicator):
     """Bollinger Bands Lower Band Bounce signal indicator."""
-    
+
     @property
     def name(self) -> str:
         return "bollinger_lower_bounce"
-    
+
     @property
     def display_name(self) -> str:
         return "Bollinger Bands Lower Band Bounce"
-    
+
     @property
     def description(self) -> str:
         return "Detects bounce signals when price touches lower band and moves back toward middle"
-    
+
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
         return [
@@ -300,8 +301,8 @@ class BollingerBandsLowerBandBounceIndicator(BaseIndicator):
                 ui_group="Signal Settings"
             )
         ]
-    
-    def calculate(self, tick_data: List[TickData]) -> np.ndarray:
+
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, List[np.ndarray]]:
         period = self.get_parameter("period")
         sd = self.get_parameter("sd")
         candle_bounce_number = int(self.get_parameter("candle_bounce_number"))
