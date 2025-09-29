@@ -110,9 +110,9 @@ class GeneticAlgorithm:
 
 
     def prepare_next_generation(self, fronts: Dict[int, List]) -> List[IndividualBase]:
-        com = self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index)
+        com = max(1.0e-6, self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index))
         print("New mutation rate: ", com)
-        coc = self.chance_of_crossover * self.crossover_decay_factor ** self.iteration_index
+        coc = max(1.0e-6, self.chance_of_crossover * self.crossover_decay_factor ** self.iteration_index)
         print("New mutation rate: ", coc)
 
         elitists, parents = self.select_winning_population(fronts)
