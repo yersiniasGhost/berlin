@@ -108,16 +108,18 @@
                             <!-- Stacked Charts Container with shared x-axis -->
                             <div id="stackedChartsContainer">
                                 <!-- Chart Container -->
-                                <div id="candlestickChart" style="height: 400px; margin-bottom: 2px;"></div>
-                                
+                                <div id="candlestickChart" style="height: 500px; margin-bottom: 5px;"></div>
+
                                 <!-- P&L Chart -->
-                                <div id="pnlChart" style="height: 200px; margin-bottom: 2px;"></div>
-                                
-                                <!-- Individual Bar Scores Charts -->
-                                <div id="barScoresContainer"></div>
-                                
-                                <!-- Component Charts (MACD, SMA, etc.) -->
-                                <div id="componentChartsContainer"></div>
+                                <div id="pnlChart" style="height: 300px; margin-bottom: 5px;"></div>
+
+                                <!-- Tabbed Indicator Charts Container -->
+                                <div id="indicatorChartsContainer" style="margin-top: 20px;">
+                                    <h6>Indicator Analysis</h6>
+                                    <!-- Indicator tabs will be dynamically created here -->
+                                    <ul class="nav nav-tabs" id="indicatorTabs" role="tablist"></ul>
+                                    <div class="tab-content" id="indicatorTabContent" style="border: 1px solid #dee2e6; border-top: none; padding: 15px;"></div>
+                                </div>
                             </div>
                         </div>
                         
@@ -230,12 +232,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.pnl_data && data.trades && data.candlestick_data) {
             createPnLChart(data.pnl_data, data.trades, data.candlestick_data);
         }
-        
-        // Create bar scores charts
-        if (data.bar_scores_history && data.threshold_config) {
-            createBarScoresCharts(data.bar_scores_history, data.threshold_config);
+
+        // Create indicator charts (raw values + triggers)
+        if (data.component_history && data.raw_indicator_history && data.indicator_history && data.candlestick_data) {
+            createIndicatorCharts(data.component_history, data.raw_indicator_history, data.indicator_history, data.candlestick_data);
         }
-        
+
         // Populate trade history
         populateTradeHistory(data.trades);
     }
@@ -276,23 +278,24 @@ document.addEventListener('DOMContentLoaded', function() {
     function createCandlestickChart(candlestickData, trades) {
         // Prepare trade bands instead of triangular markers
         const chartConfig = {
-            chart: { 
+            chart: {
                 height: 500,
                 zoomType: 'x',
                 panKey: 'shift',
                 panning: {
                     enabled: true,
                     type: 'x'
-                }
+                },
+                marginBottom: 10 // Reduce space for x-axis since labels are hidden
             },
             title: { text: 'Price Chart with Trade Background Shading' },
-            xAxis: { 
+            xAxis: {
                 type: 'datetime',
                 ordinal: true, // Keep ordinal to remove gaps in candlestick chart
                 breaks: [], // Clear any default breaks
                 crosshair: true,
                 labels: {
-                    enabled: false // Hide x-axis labels for stacked charts
+                    enabled: false // Hide x-axis labels (shown only on P&L chart)
                 },
                 lineWidth: 0,
                 tickWidth: 0,
@@ -391,49 +394,90 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function createPnLChart(pnlData, trades, candlestickData) {
-        // Build P&L data that starts at 0 and updates only on trade exits
+        // Build P&L data with unrealized gains during open positions
         let adjustedPnlData = [];
-        
+
         // Get time range from candlestick data
         const candlestickStart = candlestickData[0][0]; // First candlestick timestamp
         const candlestickEnd = candlestickData[candlestickData.length - 1][0]; // Last candlestick timestamp
-        
-        // Start P&L at 0 from the very beginning of candlestick data
-        adjustedPnlData.push([candlestickStart, 0]);
-        
-        if (trades && trades.length > 0) {
-            // Filter and sort sell/exit trades only
-            const exitTrades = trades.filter(t => t.type === 'sell')
-                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            
-            let cumulativePnL = 0;
-            
-            // Add P&L points only at exit trades
-            exitTrades.forEach(exitTrade => {
-                const exitTime = new Date(exitTrade.timestamp).getTime();
-                
-                // Only add if exit is within candlestick timeframe
-                if (exitTime >= candlestickStart && exitTime <= candlestickEnd) {
-                    cumulativePnL += (exitTrade.pnl || 0);
-                    adjustedPnlData.push([exitTime, cumulativePnL]);
+
+        if (!trades || trades.length === 0) {
+            // If no trades, just show flat line at 0
+            adjustedPnlData.push([candlestickStart, 0]);
+            adjustedPnlData.push([candlestickEnd, 0]);
+        } else {
+            // Sort trades by timestamp
+            const sortedTrades = [...trades].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const buyTrades = sortedTrades.filter(t => t.type === 'buy');
+            const sellTrades = sortedTrades.filter(t => t.type === 'sell');
+
+            // Create a map of candlestick data for quick lookup
+            const candlestickMap = new Map();
+            candlestickData.forEach(candle => {
+                candlestickMap.set(candle[0], candle[4]); // timestamp -> close price
+            });
+
+            let cumulativeRealizedPnL = 0;
+            let currentPosition = null; // {entryPrice, entryTime, buyIndex}
+            let buyIndex = 0;
+            let sellIndex = 0;
+
+            // Process each candlestick chronologically
+            candlestickData.forEach((candle, idx) => {
+                const timestamp = candle[0];
+                const closePrice = candle[4];
+
+                // Check if there's a buy trade at this timestamp
+                while (buyIndex < buyTrades.length && new Date(buyTrades[buyIndex].timestamp).getTime() <= timestamp) {
+                    if (!currentPosition) {
+                        currentPosition = {
+                            entryPrice: buyTrades[buyIndex].price,
+                            entryTime: new Date(buyTrades[buyIndex].timestamp).getTime(),
+                            buyIndex: buyIndex
+                        };
+                        console.log(`📊 Position opened at ${new Date(timestamp)}, entry price: ${currentPosition.entryPrice}`);
+                    }
+                    buyIndex++;
+                }
+
+                // Check if there's a sell trade at this timestamp
+                while (sellIndex < sellTrades.length && new Date(sellTrades[sellIndex].timestamp).getTime() <= timestamp) {
+                    if (currentPosition) {
+                        // Close position and add realized P&L
+                        cumulativeRealizedPnL += (sellTrades[sellIndex].pnl || 0);
+                        console.log(`📊 Position closed at ${new Date(timestamp)}, realized P&L: ${sellTrades[sellIndex].pnl}, cumulative: ${cumulativeRealizedPnL}`);
+                        currentPosition = null;
+                    }
+                    sellIndex++;
+                }
+
+                // Only add data points when in a position
+                if (currentPosition) {
+                    // Calculate current P&L (realized + unrealized)
+                    const unrealizedPnL = ((closePrice - currentPosition.entryPrice) / currentPosition.entryPrice) * 100;
+                    const currentPnL = cumulativeRealizedPnL + unrealizedPnL;
+                    adjustedPnlData.push([timestamp, currentPnL]);
+                } else {
+                    // When no position, only add points at trade exits to maintain flat line
+                    if (sellIndex > 0 && adjustedPnlData.length > 0) {
+                        // Check if we just closed a position
+                        const lastDataPoint = adjustedPnlData[adjustedPnlData.length - 1];
+                        if (lastDataPoint[0] < timestamp) {
+                            // Add a point to extend the flat line
+                            adjustedPnlData.push([timestamp, cumulativeRealizedPnL]);
+                        }
+                    } else if (adjustedPnlData.length === 0) {
+                        // Add initial point at 0 if we haven't started yet
+                        adjustedPnlData.push([timestamp, 0]);
+                    }
                 }
             });
-            
-            // Extend final P&L value to the end of the candlestick chart
-            if (adjustedPnlData.length > 1 && adjustedPnlData[adjustedPnlData.length - 1][0] < candlestickEnd) {
-                const finalPnL = adjustedPnlData[adjustedPnlData.length - 1][1];
-                adjustedPnlData.push([candlestickEnd, finalPnL]);
-                console.log(`📈 Extended P&L chart to end: ${new Date(candlestickEnd)} with final P&L: ${finalPnL.toFixed(2)}%`);
-            }
-        } else {
-            // If no trades, extend 0 P&L to the end
-            adjustedPnlData.push([candlestickEnd, 0]);
         }
-        
+
         console.log(`📈 P&L Chart data points: ${adjustedPnlData.length}, Range: ${new Date(candlestickStart)} to ${new Date(candlestickEnd)}`);
-        
+
         const chartConfig = {
-            chart: { 
+            chart: {
                 type: 'line',
                 height: 300,
                 zoomType: 'x',
@@ -441,18 +485,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 panning: {
                     enabled: true,
                     type: 'x'
-                }
+                },
+                marginBottom: 60 // Extra space for x-axis labels
             },
             title: { text: 'Cumulative P&L Evolution' },
-            xAxis: { 
+            xAxis: {
                 type: 'datetime',
-                ordinal: false, // Use actual timestamps, not ordinal spacing
+                ordinal: true, // Match candlestick chart - removes gaps for weekends/after hours
                 breaks: [],
+                crosshair: true,
                 labels: {
-                    enabled: false // Hide x-axis labels for stacked charts
+                    enabled: true // Show x-axis labels (this is the bottom chart)
                 },
-                lineWidth: 0,
-                tickWidth: 0
+                lineWidth: 1,
+                tickWidth: 1
             },
             yAxis: { 
                 title: { text: 'Cumulative P&L (%)' },
@@ -467,8 +513,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: 'Cumulative P&L',
                 data: adjustedPnlData,
                 color: '#007bff',
-                lineWidth: 2,
-                step: 'right' // Step line to hold values until next exit
+                lineWidth: 2
+                // Removed step line - now shows continuous unrealized P&L
             }],
             credits: { enabled: false }
         };
@@ -482,127 +528,259 @@ document.addEventListener('DOMContentLoaded', function() {
         enableChartSynchronization(charts.pnl);
     }
     
-    function createBarScoresCharts(barScoresHistory, thresholdConfig) {
-        const container = document.getElementById('barScoresContainer');
-        if (!container || !barScoresHistory || barScoresHistory.length === 0) return;
-        
-        // Get all unique indicator names from the bar scores history
-        const indicatorNames = new Set();
-        barScoresHistory.forEach(entry => {
-            if (entry.scores) {
-                Object.keys(entry.scores).forEach(name => indicatorNames.add(name));
-            }
-        });
-        
-        const indicators = Array.from(indicatorNames);
-        console.log('📊 Creating bar scores charts for indicators:', indicators);
-        
-        // Clear existing charts
-        container.innerHTML = '';
-        
-        // Create a chart for each indicator
-        indicators.forEach((indicatorName, index) => {
-            const isLastChart = index === indicators.length - 1;
-            
-            // Create div for this indicator's chart
-            const chartDiv = document.createElement('div');
-            chartDiv.id = `barScoreChart_${indicatorName}`;
-            chartDiv.style.height = '150px';
-            chartDiv.style.marginBottom = '2px';
-            container.appendChild(chartDiv);
-            
-            // Prepare data for this indicator
-            let indicatorData = barScoresHistory.map(entry => [
-                new Date(entry.timestamp).getTime(),
-                entry.scores[indicatorName] || 0
-            ]);
-            
-            // Ensure bar scores start from the same time as candlestick data
-            if (charts.candlestick && indicatorData.length > 0) {
-                const candlestickMinTime = charts.candlestick.xAxis[0].getExtremes().dataMin;
-                const indicatorMinTime = indicatorData[0][0];
-                
-                // If indicator starts later than candlestick, add a point at the start with 0
-                if (indicatorMinTime > candlestickMinTime) {
-                    indicatorData.unshift([candlestickMinTime, 0]);
-                    console.log(`📊 Adjusted ${indicatorName} start time from ${new Date(indicatorMinTime)} to ${new Date(candlestickMinTime)}`);
+    function createIndicatorCharts(componentHistory, rawIndicatorHistory, indicatorHistory, candlestickData) {
+        console.log('📊 Creating indicator charts');
+        console.log('Component history keys:', Object.keys(componentHistory));
+        console.log('Raw indicator history keys:', Object.keys(rawIndicatorHistory));
+        console.log('Indicator history keys:', Object.keys(indicatorHistory));
+
+        // Get all unique indicator names from raw_indicator_history
+        const indicatorNames = Object.keys(rawIndicatorHistory);
+        if (indicatorNames.length === 0) {
+            console.log('⚠️ No indicators found');
+            return;
+        }
+
+        const tabsContainer = document.getElementById('indicatorTabs');
+        const contentContainer = document.getElementById('indicatorTabContent');
+        tabsContainer.innerHTML = '';
+        contentContainer.innerHTML = '';
+
+        // Create a tab for each indicator
+        indicatorNames.forEach((indicatorName, index) => {
+            const isActive = index === 0;
+            const tabId = `indicator-tab-${index}`;
+            const contentId = `indicator-content-${index}`;
+
+            // Create tab button
+            const tabButton = document.createElement('li');
+            tabButton.className = 'nav-item';
+            tabButton.innerHTML = `
+                <button class="nav-link ${isActive ? 'active' : ''}"
+                        id="${tabId}"
+                        data-bs-toggle="tab"
+                        data-bs-target="#${contentId}"
+                        type="button"
+                        role="tab">
+                    ${indicatorName}
+                </button>
+            `;
+            tabsContainer.appendChild(tabButton);
+
+            // Create tab content
+            const tabContent = document.createElement('div');
+            tabContent.className = `tab-pane fade ${isActive ? 'show active' : ''}`;
+            tabContent.id = contentId;
+            tabContent.role = 'tabpanel';
+
+            // Add chart containers for raw values and triggers
+            const rawChartId = `rawChart_${indicatorName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const triggerChartId = `triggerChart_${indicatorName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+            tabContent.innerHTML = `
+                <div id="${rawChartId}" style="height: 300px; margin-bottom: 10px;"></div>
+                <div id="${triggerChartId}" style="height: 200px;"></div>
+            `;
+            contentContainer.appendChild(tabContent);
+
+            // Create charts after a short delay to ensure DOM is ready
+            setTimeout(() => {
+                const rawChart = createRawIndicatorChart(indicatorName, componentHistory, candlestickData, rawChartId);
+                const triggerChart = createTriggerChart(indicatorName, rawIndicatorHistory, indicatorHistory, triggerChartId);
+
+                // Enable synchronization with all other charts
+                if (rawChart) {
+                    enableChartSynchronization(rawChart);
                 }
-            }
-            
-            // Get threshold for this indicator from both enter_long and exit_long configs
-            let threshold = null;
-            const allThresholds = [
-                ...(thresholdConfig.enter_long || []),
-                ...(thresholdConfig.exit_long || [])
-            ];
-            
-            const thresholdEntry = allThresholds.find(t => 
-                t.name === indicatorName || t.indicator === indicatorName
-            );
-            if (thresholdEntry && thresholdEntry.threshold !== undefined) {
-                threshold = thresholdEntry.threshold;
-            }
-            
-            // Create chart configuration
-            const chartConfig = {
-                chart: { 
-                    type: 'line',
-                    height: 150,
-                    zoomType: 'x',
-                    panKey: 'shift',
-                    panning: {
-                        enabled: true,
-                        type: 'x'
-                    },
-                    marginBottom: isLastChart ? 60 : 20 // More space for x-axis labels on last chart
-                },
-                title: { 
-                    text: `${indicatorName} Scores`,
-                    style: { fontSize: '12px' }
-                },
-                xAxis: { 
-                    type: 'datetime',
-                    ordinal: true, // Keep ordinal for consistency with candlestick chart
-                    breaks: [],
-                    crosshair: true,
-                    labels: {
-                        enabled: isLastChart // Only show x-axis labels on the last chart
-                    },
-                    lineWidth: isLastChart ? 1 : 0,
-                    tickWidth: isLastChart ? 1 : 0
-                },
-                yAxis: { 
-                    title: { text: 'Score' },
-                    plotLines: threshold !== null ? [{
-                        value: threshold,
-                        color: '#ff6b6b',
-                        width: 2,
-                        dashStyle: 'dash',
-                        label: {
-                            text: `Threshold: ${threshold}`,
-                            align: 'right',
-                            style: { color: '#ff6b6b' }
-                        }
-                    }] : []
-                },
-                series: [{
-                    name: indicatorName,
-                    data: indicatorData,
-                    color: '#007bff',
-                    lineWidth: 2
-                }],
-                credits: { enabled: false }
-            };
-            
-            // Create chart
-            const chart = Highcharts.chart(chartDiv.id, chartConfig);
-            charts[`barScore_${indicatorName}`] = chart;
-            
-            // Enable synchronization for this chart
-            enableChartSynchronization(chart);
+                if (triggerChart) {
+                    enableChartSynchronization(triggerChart);
+                }
+            }, 100);
         });
     }
-    
+
+    function createRawIndicatorChart(indicatorName, componentHistory, candlestickData, chartId) {
+        // Determine chart type based on indicator name
+        const indicatorLower = indicatorName.toLowerCase();
+
+        if (indicatorLower.includes('macd')) {
+            return createMACDChart(indicatorName, componentHistory, chartId);
+        } else if (indicatorLower.includes('sma') || indicatorLower.includes('ema')) {
+            return createSMAChart(indicatorName, componentHistory, candlestickData, chartId);
+        } else {
+            // Default: line chart for unknown indicator types
+            return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
+        }
+    }
+
+    function createMACDChart(indicatorName, componentHistory, chartId) {
+        // Find MACD components for this indicator using the naming convention: {indicator_name}_macd, {indicator_name}_signal, {indicator_name}_histogram
+        const macdKey = `${indicatorName}_macd`;
+        const signalKey = `${indicatorName}_signal`;
+        const histogramKey = `${indicatorName}_histogram`;
+
+        const series = [];
+        if (componentHistory[macdKey]) {
+            series.push({ name: 'MACD Line', data: componentHistory[macdKey], color: '#2962FF', lineWidth: 2, marker: { enabled: false } });
+        }
+        if (componentHistory[signalKey]) {
+            series.push({ name: 'Signal Line', data: componentHistory[signalKey], color: '#FF6D00', lineWidth: 2, marker: { enabled: false } });
+        }
+        if (componentHistory[histogramKey]) {
+            series.push({
+                name: 'Histogram',
+                data: componentHistory[histogramKey],
+                type: 'column',
+                color: '#00897B'
+            });
+        }
+
+        if (series.length === 0) {
+            console.warn(`⚠️ No MACD components found for ${indicatorName}`);
+        }
+
+        const chartConfig = {
+            chart: { height: 300, zoomType: 'x' },
+            title: { text: `${indicatorName} - Raw Values`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: { title: { text: 'Value' } },
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, chartConfig);
+        charts[`raw_${indicatorName}`] = chart;
+        return chart;
+    }
+
+    function createSMAChart(indicatorName, componentHistory, candlestickData, chartId) {
+        // Find SMA component for this indicator using the naming convention: {indicator_name}_sma
+        const smaKey = `${indicatorName}_sma`;
+
+        const series = [
+            {
+                name: 'Price',
+                data: candlestickData,
+                type: 'candlestick',
+                color: '#dc3545',
+                upColor: '#28a745'
+            }
+        ];
+
+        if (componentHistory[smaKey]) {
+            series.push({
+                name: indicatorName,
+                data: componentHistory[smaKey],
+                type: 'line',
+                color: '#2962FF',
+                lineWidth: 2,
+                marker: { enabled: false }
+            });
+        } else {
+            console.warn(`⚠️ No SMA component found for ${indicatorName}`);
+        }
+
+        const chartConfig = {
+            chart: { height: 300, zoomType: 'x' },
+            title: { text: `${indicatorName} - Raw Values (with Price)`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: { title: { text: 'Price' } },
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, chartConfig);
+        charts[`raw_${indicatorName}`] = chart;
+        return chart;
+    }
+
+    function createGenericIndicatorChart(indicatorName, componentHistory, chartId) {
+        // For unknown indicator types, just plot any matching components
+        const matchingKeys = Object.keys(componentHistory).filter(k =>
+            k.toLowerCase().includes(indicatorName.toLowerCase())
+        );
+
+        const series = matchingKeys.map(key => ({
+            name: key,
+            data: componentHistory[key],
+            lineWidth: 2,
+            marker: { enabled: false }
+        }));
+
+        const chartConfig = {
+            chart: { height: 300, zoomType: 'x' },
+            title: { text: `${indicatorName} - Raw Values`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: { title: { text: 'Value' } },
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, chartConfig);
+        charts[`raw_${indicatorName}`] = chart;
+        return chart;
+    }
+
+    function createTriggerChart(indicatorName, rawIndicatorHistory, indicatorHistory, chartId) {
+        const series = [];
+
+        // Add time-decayed trigger values (1, 0.9, 0.8, etc.)
+        if (indicatorHistory[indicatorName]) {
+            series.push({
+                name: 'Trigger with Decay',
+                data: indicatorHistory[indicatorName],
+                color: '#9C27B0',
+                lineWidth: 2,
+                marker: { enabled: false }
+            });
+        }
+
+        const chartConfig = {
+            chart: { height: 200, zoomType: 'x' },
+            title: { text: `${indicatorName} - Trigger Values`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: true }
+            },
+            yAxis: {
+                title: { text: 'Trigger Value' },
+                min: 0,
+                max: 1.1,
+                plotLines: [{
+                    value: 1,
+                    color: '#999',
+                    width: 1,
+                    dashStyle: 'dash'
+                }]
+            },
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, chartConfig);
+        charts[`trigger_${indicatorName}`] = chart;
+        return chart;
+    }
+
     function enableChartSynchronization(chart) {
         // Enhanced synchronization for stacked charts including scroll zoom
         chart.update({
@@ -618,49 +796,49 @@ document.addEventListener('DOMContentLoaded', function() {
                     load: function() {
                         // Add mouse wheel zoom synchronization and pan support
                         const chartContainer = this.container;
-                        
+
                         // Mouse wheel zoom (works with or without Ctrl/Cmd key)
                         chartContainer.addEventListener('wheel', function(e) {
                             // Only zoom on wheel over chart area, not the entire page
                             if (e.target.closest('.highcharts-container')) {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                
+
                                 // Prevent sync loop
                                 if (window.syncInProgress) return;
-                                
+
                                 const chart = chartContainer.chart || chartContainer.hcChart || this;
                                 if (chart && chart.xAxis && chart.xAxis[0]) {
                                     const xAxis = chart.xAxis[0];
                                     const currentMin = xAxis.min;
                                     const currentMax = xAxis.max;
                                     const range = currentMax - currentMin;
-                                    
+
                                     // Smaller zoom factor for smoother zoom
                                     const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
                                     const newRange = range * zoomFactor;
-                                    
+
                                     // Get mouse position relative to chart for zoom center
                                     const rect = chartContainer.getBoundingClientRect();
                                     const mouseX = e.clientX - rect.left;
                                     const plotLeft = chart.plotLeft || 60;
                                     const plotWidth = chart.plotWidth || (rect.width - 120);
-                                    
+
                                     // Calculate zoom center based on mouse position
                                     let centerRatio = 0.5; // Default center
                                     if (mouseX >= plotLeft && mouseX <= plotLeft + plotWidth) {
                                         centerRatio = (mouseX - plotLeft) / plotWidth;
                                     }
-                                    
+
                                     const center = currentMin + (range * centerRatio);
                                     const newMin = center - (newRange * centerRatio);
                                     const newMax = center + (newRange * (1 - centerRatio));
-                                    
+
                                     // Ensure we don't zoom beyond data limits and maintain minimum range
                                     const dataMin = xAxis.getExtremes().dataMin || currentMin;
                                     const dataMax = xAxis.getExtremes().dataMax || currentMax;
                                     const minRange = (dataMax - dataMin) / 1000; // Minimum zoom level
-                                    
+
                                     if (newMin >= dataMin && newMax <= dataMax && newRange > minRange) {
                                         console.log('Wheel zoom:', {newMin, newMax, range: newRange});
                                         syncAllCharts(newMin, newMax, chart);
@@ -668,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                         }, { passive: false });
-                        
+
                         // Store reference for cleanup
                         this.syncContainer = chartContainer;
                     }
@@ -686,14 +864,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     function syncAllCharts(min, max, sourceChart) {
         // Prevent infinite loops by temporarily disabling sync
         if (window.syncInProgress) return;
         window.syncInProgress = true;
-        
+
         console.log('Syncing all charts:', {min, max, sourceChart: sourceChart.renderTo?.id || 'unknown'});
-        
+
         try {
             let syncedCount = 0;
             Object.values(charts).forEach(chart => {
