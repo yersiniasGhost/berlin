@@ -632,7 +632,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         # if 'indicators' in config_data:
         #     registry = IndicatorRegistry()
         #     ... (new system code commented out)
-        logger.info("Using old indicator system for compatibility")
+        logger.info("Using NEW indicator system for compatibility")
 
         # Create optimizer config with processed indicators
         io = MlfOptimizerConfig.from_json(config_data, data_config_path)

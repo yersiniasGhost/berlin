@@ -73,7 +73,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     display_results: bool = False
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
-    force_sequential: bool = True
+    force_sequential: bool = False
     selected_streamer: Optional[BacktestDataStreamer] = None
 
 
@@ -253,7 +253,7 @@ class MlfFitnessCalculator(FitnessCalculator):
 
             except Exception as e:
                 self.logger.error(f"Error evaluating individual {cnt}: {e}")
-                fitness_values = np.array([100.0] * len(self.objectives))
+                fitness_values = np.array([99.0] * len(self.objectives))
                 individual_stats = IndividualStats(index=cnt, fitness_values=fitness_values, individual=individual)
                 fitness_results.append(individual_stats)
 
@@ -269,8 +269,8 @@ class MlfFitnessCalculator(FitnessCalculator):
                 for objective in self.objectives
             ])
 
-            if fitness_values[0] == 100.0:
-                fitness_values = np.ones_like(fitness_values) * 100.0
+            # if fitness_values[0] == 100.0:
+            #     fitness_values = np.ones_like(fitness_values) * 100.0
 
             return IndividualStats(
                 index=index,

@@ -40,7 +40,7 @@ class IndicatorCalculator:
             lookback = self.config.parameters.get('lookback', None)
             if lookback:
                 processed_values = self._apply_lookback_vectorized(result, lookback)
-            return result, components, processed_values.tolist()
+            return result, components, processed_values
 
         except Exception as e:
             logger.error(f"Error calculating {self.indicator.name()}: {e}")
@@ -52,8 +52,8 @@ class IndicatorCalculator:
         Apply time-based lookback scoring using vectorized operations
         This replicates the same logic as IndicatorProcessor.calculate_time_based_metric
         """
-        if not raw_values:
-            return []
+        # if not raw_values:
+        #     return []
 
         # Convert to numpy for faster operations
         raw_array = np.array(raw_values)
