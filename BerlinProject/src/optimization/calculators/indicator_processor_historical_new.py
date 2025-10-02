@@ -104,6 +104,9 @@ class IndicatorProcessorHistoricalNew:
     def __init__(self, configuration: MonitorConfiguration) -> None:
         self.config: MonitorConfiguration = configuration
         self.indicator_calculators: List[IndicatorCalculator] = self._create_indicator_objects()
+        # Store primary timeframe info (calculated once when aggregators are provided)
+        self.primary_timeframe_minutes: int = None
+        self.primary_timeframe_length: int = None
         # logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
 
     def _create_indicator_objects(self):
@@ -114,6 +117,62 @@ class IndicatorProcessorHistoricalNew:
         except Exception as e:
             print(e)
         return indicators
+
+    def _initialize_primary_timeframe_info(self, aggregators: Dict[str, CandleAggregator]) -> None:
+        """Calculate and store primary timeframe information once"""
+        if not aggregators:
+            self.primary_timeframe_minutes = 1
+            self.primary_timeframe_length = 0
+            return
+
+        # Find shortest timeframe (primary)
+        self.primary_timeframe_minutes = min(agg.get_timeframe_minutes() for agg in aggregators.values())
+
+        # Get length from primary timeframe aggregator
+        for agg in aggregators.values():
+            if agg.get_timeframe_minutes() == self.primary_timeframe_minutes:
+                history = agg.get_history()
+                current = agg.get_current_candle()
+                self.primary_timeframe_length = len(history) + (1 if current else 0)
+                break
+
+    def _align_to_primary_timeframe(
+        self,
+        values: List[float],
+        indicator_timeframe_minutes: int
+    ) -> np.ndarray:
+        """
+        Align indicator values from coarser timeframe to primary timeframe using linear interpolation.
+
+        Args:
+            values: Indicator values from coarser timeframe
+            indicator_timeframe_minutes: Minutes per candle for this indicator
+
+        Returns:
+            Interpolated values aligned to primary timeframe
+        """
+        if not values or len(values) == 0:
+            return np.zeros(self.primary_timeframe_length)
+
+        # If already at primary timeframe, no interpolation needed
+        if indicator_timeframe_minutes == self.primary_timeframe_minutes:
+            return np.array(values)
+
+        # Calculate the ratio (e.g., 5m/1m = 5)
+        ratio = indicator_timeframe_minutes / self.primary_timeframe_minutes
+
+        # Create index mappings
+        # Old indices: where each coarse value sits in the primary timeline
+        old_indices = np.arange(len(values)) * ratio
+
+        # New indices: all positions in primary timeline
+        new_indices = np.arange(self.primary_timeframe_length)
+
+        # Linear interpolation
+        values_array = np.array(values)
+        interpolated = np.interp(new_indices, old_indices, values_array)
+
+        return interpolated
 
     def calculate_indicators(self, aggregators: Dict[str, CandleAggregator]) -> Tuple[
         Dict[str, List[float]],  # indicator_history (time-decayed)
@@ -126,19 +185,21 @@ class IndicatorProcessorHistoricalNew:
 
         Returns:
             - indicator_history: {indicator_name: [time_decayed_value_at_tick_0, ...]}
-            - raw_indicator_history: {indicator_name: [trigger_value_at_tick_0, ...]}  
+            - raw_indicator_history: {indicator_name: [trigger_value_at_tick_0, ...]}
             - bar_score_history: {bar_name: [score_at_tick_0, score_at_tick_1, ...]}
             - component_history: {component_name: [component_value_at_tick_0, ...]}  # NEW
         """
         # logger.info("Starting batch historical indicator calculation...")
+
+        # Initialize primary timeframe info once
+        self._initialize_primary_timeframe_info(aggregators)
 
         # Extract all candle data from aggregators
         all_candle_data = self._extract_all_candle_data(aggregators)
         if not all_candle_data:
             return {}, {}, {}, {}
 
-        max_length = max(len(candles) for candles in all_candle_data.values())
-        # logger.info(f"Processing timeline of {max_length} data points")
+        # logger.info(f"Processing timeline of {self.primary_timeframe_length} data points")
 
         # Process each indicator
         raw_indicator_history = {}
@@ -148,18 +209,35 @@ class IndicatorProcessorHistoricalNew:
         for indicator in self.indicator_calculators:
             # Get the correct aggregator key for this indicator
             aggregator_key = indicator.get_aggregator_key()
-
             candles = all_candle_data[aggregator_key]
 
             # Calculate raw indicator values (triggers) for entire history
-            raw_values, component_history, processed_values = indicator.calculate_indicator_batch(candles)
-            raw_indicator_history[indicator.name] = raw_values
-            indicator_history[indicator.name] = processed_values
+            raw_values, components, processed_values = indicator.calculate_indicator_batch(candles)
 
-            # logger.debug(f"Processed {indicator_def.name}: {len(processed_values)} values")
+            # Get the aggregator's timeframe in minutes
+            aggregator = aggregators[aggregator_key]
+            indicator_timeframe_minutes = aggregator.get_timeframe_minutes()
+
+            # Align to primary timeframe if needed
+            aligned_raw_values = self._align_to_primary_timeframe(raw_values, indicator_timeframe_minutes)
+            aligned_processed_values = self._align_to_primary_timeframe(processed_values, indicator_timeframe_minutes)
+
+            raw_indicator_history[indicator.name] = aligned_raw_values.tolist()
+            indicator_history[indicator.name] = aligned_processed_values.tolist()
+
+            # Align component values as well
+            if components:
+                for component_name, component_values in components.items():
+                    aligned_component = self._align_to_primary_timeframe(
+                        component_values.tolist() if isinstance(component_values, np.ndarray) else component_values,
+                        indicator_timeframe_minutes
+                    )
+                    component_history[f"{indicator.name}_{component_name}"] = aligned_component.tolist()
+
+            # logger.debug(f"Processed {indicator.name}: {len(aligned_processed_values)} values")
 
         # Calculate bar scores for entire timeline
-        bar_score_history = self._calculate_bar_scores_batch(indicator_history, max_length)
+        bar_score_history = self._calculate_bar_scores_batch(indicator_history, self.primary_timeframe_length)
 
         # logger.info(f"Completed batch indicator calculation")
         return indicator_history, raw_indicator_history, bar_score_history, component_history
@@ -181,9 +259,10 @@ class IndicatorProcessorHistoricalNew:
         return all_candle_data
 
 
-    def _calculate_bar_scores_batch(self, indicator_history: Dict[str, List[float]], max_length: int) -> Dict[str, List[float]]:
+    def _calculate_bar_scores_batch(self, indicator_history: Dict[str, List[float]], timeline_length: int) -> Dict[str, List[float]]:
         """
-        Calculate bar scores for entire timeline using batch processing
+        Calculate bar scores for entire timeline using batch processing.
+        All indicators are now aligned to primary timeframe, so calculation is simplified.
         """
         bar_score_history = {}
 
@@ -195,11 +274,6 @@ class IndicatorProcessorHistoricalNew:
         # Calculate bar scores for each bar configuration
         for bar_name, bar_config in self.config.bars.items():
             bar_scores = []
-
-            # Get timeline length from indicator history
-            timeline_length = max_length
-            if indicator_history:
-                timeline_length = max(len(values) for values in indicator_history.values() if values)
 
             # Calculate bar score at each time point
             for i in range(timeline_length):
@@ -215,10 +289,9 @@ class IndicatorProcessorHistoricalNew:
 
                 for indicator_name, weight in weights.items():
                     if indicator_name in indicator_history:
-                        indicator_values = indicator_history[indicator_name]
-                        if i < len(indicator_values):
-                            weighted_sum += indicator_values[i] * weight
-                            total_weight += weight
+                        # All indicators are now aligned, so direct indexing is safe
+                        weighted_sum += indicator_history[indicator_name][i] * weight
+                        total_weight += weight
 
                 # Calculate final score
                 final_score = weighted_sum / total_weight if total_weight > 0 else 0.0

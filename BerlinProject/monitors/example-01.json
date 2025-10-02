@@ -1,0 +1,168 @@
+{
+  "ga_hyperparameters": {
+    "chance_of_crossover": 0.03,
+    "chance_of_mutation": 0.05,
+    "elite_size": 5,
+    "elites_to_save": 2,
+    "number_of_iterations": 50,
+    "population_size": 40,
+    "propagation_fraction": 0.4,
+    "num_splits": 1
+  },
+  "test_name": "Simple moving average tests",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "description": "Example strategy using unified trade executor with configurable parameters",
+    "name": "Unified Trading Strategy",
+    "user_id": "65f2d6666666666666666666",
+    "enter_long": [
+      {
+        "name": "macd_bull_strong",
+        "threshold": 0.8
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "macd_bear_strong",
+        "threshold": 0.8
+      }
+    ],
+    "bars": {
+      "macd_bear_strong": {
+        "description": "Strong bearish signal for exits",
+        "indicators": {
+          "macd1m-bear": 2.5
+        },
+        "type": "bear"
+      },
+      "macd_bull_strong": {
+        "description": "needs macd and sma both triggered",
+        "indicators": {
+          "sma1m": 1
+        },
+        "type": "bull"
+      }
+    },
+    "trade_executor": {
+      "default_position_size": 100,
+      "ignore_bear_signals": false,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 1,
+      "trailing_stop_activation_pct": 0.005,
+      "trailing_stop_distance_pct": 0.01,
+      "trailing_stop_loss": true
+    }
+  },
+  "indicators": [
+    {
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "function": "sma_crossover",
+      "indicator": "SMACrossoverIndicator",
+
+      "name": "sma1m",
+      "parameters": {
+        "crossover_value": 0.01,
+        "lookback": 10,
+        "period": 20,
+        "trend": "bullish"
+      },
+      "ranges": {
+        "crossover_value": {
+          "r": [
+            0.0005,
+            0.04
+          ],
+          "t": "float"
+        },
+        "lookback": {
+          "r": [
+            5,
+            20
+          ],
+          "t": "int"
+        },
+        "period": {
+          "r": [
+            10,
+            40
+          ],
+          "t": "int"
+        }
+      },
+      "type": "Indicator"
+    },
+    {
+      "agg_config": "1m-heiken-ashi",
+      "calc_on_pip": false,
+      "function": "macd_histogram_crossover",
+      "indicator": "MACDHistogramCrossoverIndicator",
+
+      "name": "macd1m-bear",
+      "parameters": {
+        "fast": 12,
+        "histogram_threshold": 0.08,
+        "lookback": 10,
+        "signal": 9,
+        "slow": 26,
+        "trend": "bearish"
+      },
+      "ranges": {
+        "fast": {
+          "r": [
+            7,
+            18
+          ],
+          "t": "int"
+        },
+        "histogram_threshold": {
+          "r": [
+            0.005,
+            0.12
+          ],
+          "t": "float"
+        },
+        "lookback": {
+          "r": [
+            5,
+            20
+          ],
+          "t": "int"
+        },
+        "signal": {
+          "r": [
+            6,
+            15
+          ],
+          "t": "int"
+        },
+        "slow": {
+          "r": [
+            12,
+            35
+          ],
+          "t": "int"
+        }
+      },
+      "type": "Indicator"
+    }
+  ],
+  "objectives": [
+    {
+      "objective": "MaximizeProfit",
+      "weight": 0.5
+    },
+    {
+      "objective": "MinimizeLoss",
+      "weight": 1
+    },
+    {
+      "objective": "MinimizeLosingTrades",
+      "weight": 2
+    },
+    {
+      "objective": "MaximizeScaledNetPnL",
+      "weight": 1
+    }
+  ]
+}

@@ -13,6 +13,7 @@ class CandleAggregator(ABC):
     def __init__(self, symbol: str, timeframe: str):
         self.symbol = symbol
         self.timeframe = timeframe
+        self.timeframe_minutes = self._calculate_timeframe_minutes()
         self.current_candle: Optional[TickData] = None
         self.history: List[TickData] = []
         self.completed_candle: Optional[TickData] = None
@@ -31,6 +32,25 @@ class CandleAggregator(ABC):
     def _update_existing_candle(self, tick_data: TickData) -> None:
         """Update current candle with new tick"""
         pass
+
+    def _calculate_timeframe_minutes(self) -> int:
+        """Convert timeframe string to minutes (calculated once during init)
+        Handles formats like '1m', '5m', '1m-normal', '5m-heiken'"""
+        # Extract just the timeframe part (before '-' if present)
+        base_timeframe = self.timeframe.split('-')[0] if '-' in self.timeframe else self.timeframe
+
+        timeframe_map = {
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60
+        }
+        return timeframe_map.get(base_timeframe, 1)
+
+    def get_timeframe_minutes(self) -> int:
+        """Get timeframe in minutes"""
+        return self.timeframe_minutes
 
     def process_tick(self, tick_data: TickData) -> Optional[TickData]:
         """Process tick and return completed candle if timeframe ended"""
