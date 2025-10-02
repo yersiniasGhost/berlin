@@ -187,7 +187,7 @@ class IndicatorProcessorHistoricalNew:
             - indicator_history: {indicator_name: [time_decayed_value_at_tick_0, ...]}
             - raw_indicator_history: {indicator_name: [trigger_value_at_tick_0, ...]}
             - bar_score_history: {bar_name: [score_at_tick_0, score_at_tick_1, ...]}
-            - component_history: {component_name: [component_value_at_tick_0, ...]}  # NEW
+            - component_history: {component_name: [component_value_at_tick_0, ...]}  # Not aligned to min timeframe
         """
         # logger.info("Starting batch historical indicator calculation...")
 
@@ -228,11 +228,7 @@ class IndicatorProcessorHistoricalNew:
             # Align component values as well
             if components:
                 for component_name, component_values in components.items():
-                    aligned_component = self._align_to_primary_timeframe(
-                        component_values.tolist() if isinstance(component_values, np.ndarray) else component_values,
-                        indicator_timeframe_minutes
-                    )
-                    component_history[f"{indicator.name}_{component_name}"] = aligned_component.tolist()
+                    component_history[f"{indicator.name}_{component_name}"] = component_values.tolist() if isinstance(component_values, np.ndarray) else component_values
 
             # logger.debug(f"Processed {indicator.name}: {len(aligned_processed_values)} values")
 
