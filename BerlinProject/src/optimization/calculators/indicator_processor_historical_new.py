@@ -17,7 +17,8 @@ class IndicatorCalculator:
     def __init__(self, config: IndicatorDefinition):
         self.config: IndicatorDefinition = config
         self.aggregator_key = self.get_aggregator_key()
-        ind: str = config.indicator
+        # Use indicator_class if available, otherwise fall back to name for backwards compatibility
+        ind: str = config.indicator_class if config.indicator_class else config.name
         if not ind:
             raise ValueError("Invalid indicator configuration.  Missing 'indicator' name/type")
         self.indicator = IndicatorRegistry().get_indicator_class(ind)(self.config)
@@ -36,11 +37,11 @@ class IndicatorCalculator:
                 return [0.0] * len(tick_history), {}, []
             result, components = self.indicator.calculate(tick_history)
             # Apply lookback scoring using vectorized operations
-            processed_values = result
+            trigger_values_with_lookback = result
             lookback = self.config.parameters.get('lookback', None)
             if lookback:
-                processed_values = self._apply_lookback_vectorized(result, lookback)
-            return result, components, processed_values
+                trigger_values_with_lookback = self._apply_lookback_vectorized(result, lookback)
+            return result, components, trigger_values_with_lookback
 
         except Exception as e:
             logger.error(f"Error calculating {self.indicator.name()}: {e}")
@@ -57,7 +58,7 @@ class IndicatorCalculator:
 
         # Convert to numpy for faster operations
         raw_array = np.array(raw_values)
-        processed_values = np.zeros(len(raw_array))
+        trigger_values_with_lookback = np.zeros(len(raw_array))
 
         # Apply lookback scoring for each time point
         for i in range(len(raw_array)):
@@ -68,7 +69,7 @@ class IndicatorCalculator:
             # Find non-zero indices (triggers)
             non_zero_mask = window != 0
             if not np.any(non_zero_mask):
-                processed_values[i] = 0.0
+                trigger_values_with_lookback[i] = 0.0
                 continue
 
             # Get most recent trigger
@@ -81,9 +82,9 @@ class IndicatorCalculator:
             lookback_ratio = lookback_location / float(lookback)
 
             # Apply same formula as live system
-            processed_values[i] = (1.0 - lookback_ratio) * np.sign(trigger_value)
+            trigger_values_with_lookback[i] = (1.0 - lookback_ratio) * np.sign(trigger_value)
 
-        return processed_values.tolist()
+        return trigger_values_with_lookback.tolist()
 
 
     def get_aggregator_key(self) -> str:
@@ -268,26 +269,35 @@ class IndicatorProcessorHistoricalNew:
             candles = all_candle_data[aggregator_key]
 
             # Calculate raw indicator values (triggers) for entire history
-            raw_values, components, processed_values = indicator.calculate_indicator_batch(candles)
+            raw_values, components, trigger_values_with_lookback = indicator.calculate_indicator_batch(candles)
 
             # Get the aggregator's timeframe in minutes
             aggregator = aggregators[aggregator_key]
             indicator_timeframe_minutes = aggregator.get_timeframe_minutes()
 
+            # DEBUG: Log alignment info
+            print(f"[ALIGN] {indicator.name}: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m | "
+                       f"Before: {len(raw_values)} values | After: {self.primary_timeframe_length} values")
+
             # Align to primary timeframe if needed
             # tmp = self._align_to_primary_timeframe_debug(raw_values, indicator_timeframe_minutes, indicator.name, candles)
             aligned_raw_values = self._align_to_primary_timeframe(raw_values, indicator_timeframe_minutes)
-            aligned_processed_values = self._align_to_primary_timeframe(processed_values, indicator_timeframe_minutes)
+            aligned_trigger_values_with_lookback = self._align_to_primary_timeframe(trigger_values_with_lookback, indicator_timeframe_minutes)
+
+            # DEBUG: Verify alignment worked
+            print(f"[VERIFY] {indicator.name}: aligned_raw_values length = {len(aligned_raw_values)}, "
+                       f"aligned_trigger_values_with_lookback length = {len(aligned_trigger_values_with_lookback)}, "
+                       f"expected = {self.primary_timeframe_length}")
 
             raw_indicator_history[indicator.name] = aligned_raw_values.tolist()
-            indicator_history[indicator.name] = aligned_processed_values.tolist()
+            indicator_history[indicator.name] = aligned_trigger_values_with_lookback.tolist()
 
             # Align component values as well
             if components:
                 for component_name, component_values in components.items():
                     component_history[f"{indicator.name}_{component_name}"] = component_values.tolist() if isinstance(component_values, np.ndarray) else component_values
 
-            # logger.debug(f"Processed {indicator.name}: {len(aligned_processed_values)} values")
+            # logger.debug(f"Processed {indicator.name}: {len(aligned_trigger_values_with_lookback)} values")
 
         # Calculate bar scores for entire timeline
         bar_score_history = self._calculate_bar_scores_batch(indicator_history, self.primary_timeframe_length)
@@ -324,18 +334,25 @@ class IndicatorProcessorHistoricalNew:
             logger.debug("No bar configurations found")
             return bar_score_history
 
+        print(f"\n[BAR CALC DEBUG] Timeline length: {timeline_length}")
+        print(f"[BAR CALC DEBUG] Available indicators: {list(indicator_history.keys())}")
+        for ind_name, ind_values in indicator_history.items():
+            print(f"[BAR CALC DEBUG]   {ind_name}: {len(ind_values)} values")
+
         # Calculate bar scores for each bar configuration
         for bar_name, bar_config in self.config.bars.items():
             bar_scores = []
 
+            # Extract indicator weights from bar config
+            if isinstance(bar_config, dict) and 'indicators' in bar_config:
+                weights = bar_config['indicators']
+            else:
+                weights = bar_config
+
+            print(f"\n[BAR CALC DEBUG] Calculating '{bar_name}' bar using indicators: {weights}")
+
             # Calculate bar score at each time point
             for i in range(timeline_length):
-                # Extract indicator weights from bar config
-                if isinstance(bar_config, dict) and 'indicators' in bar_config:
-                    weights = bar_config['indicators']
-                else:
-                    weights = bar_config
-
                 # Calculate weighted sum for this time point
                 weighted_sum = 0.0
                 total_weight = 0.0
@@ -350,6 +367,7 @@ class IndicatorProcessorHistoricalNew:
                 final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
                 bar_scores.append(final_score)
 
+            print(f"[BAR CALC DEBUG] '{bar_name}' bar: calculated {len(bar_scores)} values (expected {timeline_length})")
             bar_score_history[bar_name] = bar_scores
             logger.debug(f"Calculated bar scores for {bar_name}: {len(bar_scores)} values")
 

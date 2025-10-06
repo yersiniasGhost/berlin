@@ -337,6 +337,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Format component_history (MACD line, signal, histogram, SMA values) for frontend
         component_history_formatted = {}
         if component_history and tick_history:
+            print(f"\n[COMPONENT DEBUG] Available components: {list(component_history.keys())}")
             for comp_name, comp_values in component_history.items():
                 series = []
                 for i, value in enumerate(comp_values):
@@ -344,6 +345,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
                         timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
                         series.append([timestamp, float(value)])
                 component_history_formatted[comp_name] = series
+                print(f"[COMPONENT DEBUG] {comp_name}: {len(series)} values formatted")
 
 
         # Merge P&L information into trade objects for frontend
