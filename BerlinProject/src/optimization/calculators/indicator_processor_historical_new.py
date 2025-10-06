@@ -151,7 +151,7 @@ class IndicatorProcessorHistoricalNew:
         Returns:
             Interpolated values aligned to primary timeframe
         """
-        if not values or len(values) == 0:
+        if values is None or len(values) == 0:
             return np.zeros(self.primary_timeframe_length)
 
         # If already at primary timeframe, no interpolation needed
@@ -171,6 +171,62 @@ class IndicatorProcessorHistoricalNew:
         # Linear interpolation
         values_array = np.array(values)
         interpolated = np.interp(new_indices, old_indices, values_array)
+
+        return interpolated
+
+    def _align_to_primary_timeframe_debug(
+        self,
+        values: List[float],
+        indicator_timeframe_minutes: int,
+        indicator_name: str,
+        aggregator: CandleAggregator
+    ) -> np.ndarray:
+        """
+        Debug version with timestamp and value output.
+        """
+        if values is None or len(values) == 0:
+            return np.zeros(self.primary_timeframe_length)
+
+        # If already at primary timeframe, no interpolation needed
+        if indicator_timeframe_minutes == self.primary_timeframe_minutes:
+            logger.info(f"[ALIGN DEBUG] {indicator_name}: No alignment needed (already at {self.primary_timeframe_minutes}m)")
+            return np.array(values)
+
+        # Calculate the ratio (e.g., 5m/1m = 5)
+        ratio = indicator_timeframe_minutes / self.primary_timeframe_minutes
+
+        # Create index mappings
+        old_indices = np.arange(len(values)) * ratio
+        new_indices = np.arange(self.primary_timeframe_length)
+
+        # Linear interpolation
+        values_array = np.array(values)
+        interpolated = np.interp(new_indices, old_indices, values_array)
+
+        # Debug output
+        print(f"\n[ALIGN DEBUG] {indicator_name}:")
+        print(f"  Timeframe: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m (ratio: {ratio})")
+        print(f"  Input values: {len(values)} | Output values: {len(interpolated)}")
+
+        # Show sample timestamps and values
+        history = aggregator.get_history()
+        current = aggregator.get_current_candle()
+        candles = history + ([current] if current else [])
+
+        # Show first few and last few alignments
+        sample_indices = list(range(min(3, len(candles)))) + list(range(max(0, len(candles) - 3), len(candles)))
+        sample_indices = sorted(set(sample_indices))
+
+        print(f"  Sample alignments:")
+        for i in sample_indices:
+            if i < len(candles):
+                timestamp = candles[i].timestamp
+                source_value = values[i] if i < len(values) else "N/A"
+                # Find corresponding interpolated indices
+                start_interp_idx = int(i * ratio)
+                end_interp_idx = min(int((i + 1) * ratio), len(interpolated))
+                interp_values = interpolated[start_interp_idx:end_interp_idx]
+                print(f"    [{i}] {timestamp}: source={source_value:.4f} -> interpolated[{start_interp_idx}:{end_interp_idx}]={[f'{v:.4f}' for v in interp_values]}")
 
         return interpolated
 
@@ -219,6 +275,7 @@ class IndicatorProcessorHistoricalNew:
             indicator_timeframe_minutes = aggregator.get_timeframe_minutes()
 
             # Align to primary timeframe if needed
+            # tmp = self._align_to_primary_timeframe_debug(raw_values, indicator_timeframe_minutes, indicator.name, candles)
             aligned_raw_values = self._align_to_primary_timeframe(raw_values, indicator_timeframe_minutes)
             aligned_processed_values = self._align_to_primary_timeframe(processed_values, indicator_timeframe_minutes)
 

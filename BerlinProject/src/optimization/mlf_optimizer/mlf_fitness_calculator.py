@@ -58,7 +58,9 @@ def evaluate_individual_worker(args):
 
     except Exception as e:
         # Return error result
-        print(f"{worker_id}: exception {e}")
+        print(f"HERE {worker_id}: exception {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'success': False,
             'error': str(e),
