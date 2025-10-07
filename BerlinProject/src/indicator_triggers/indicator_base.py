@@ -137,11 +137,11 @@ class BaseIndicator(ABC):
     def _create_default_config(self) -> IndicatorConfiguration:
         """Create default configuration with default parameter values."""
         default_params = {
-            spec.name: spec.default_value 
+            spec.name: spec.default_value
             for spec in self.get_parameter_specs()
         }
         return IndicatorConfiguration(
-            indicator_name=self.name,
+            indicator_name=self.__class__.name(),
             display_name=self.display_name,
             parameters=default_params
         )
@@ -202,7 +202,7 @@ class BaseIndicator(ABC):
             groups[spec.ui_group].append(field_schema)
         
         return {
-            'indicator_name': self.name,
+            'indicator_name': self.__class__.name(),
             'display_name': self.display_name,
             'description': self.description,
             'parameter_groups': groups

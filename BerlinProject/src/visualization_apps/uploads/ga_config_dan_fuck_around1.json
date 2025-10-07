@@ -51,6 +51,7 @@
   "indicators": [
     {
       "name": "macd15m",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
       "agg_config": "15m-normal",
@@ -75,6 +76,7 @@
 
         {
       "name": "macd5m",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
       "agg_config": "5m-normal",
@@ -99,6 +101,7 @@
 
         {
       "name": "sma15m",
+      "indicator_class": "SMACrossoverIndicator",
       "type": "Indicator",
       "function": "sma_crossover",
       "agg_config": "5m-normal",
@@ -119,6 +122,7 @@
 
     {
       "name": "sma5m",
+      "indicator_class": "SMACrossoverIndicator",
       "type": "Indicator",
       "function": "sma_crossover",
       "agg_config": "5m-normal",
@@ -139,6 +143,7 @@
 
         {
       "name": "sma5m-bear",
+      "indicator_class": "SMACrossoverIndicator",
       "type": "Indicator",
       "function": "sma_crossover",
       "agg_config": "15m-normal",
@@ -159,6 +164,7 @@
 
         {
       "name": "macd5m-bear",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
       "type": "Indicator",
       "function": "macd_histogram_crossover",
       "agg_config": "5m-normal",

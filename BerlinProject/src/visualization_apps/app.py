@@ -12,6 +12,7 @@ from routes.replay_routes import replay_bp
 from routes.optimizer_routes import optimizer_bp
 from routes.indicator_routes import indicator_bp
 from routes.indicator_route import indicator_api
+from routes.monitor_config_routes import monitor_config_bp
 
 from mlf_utils.log_manager import LogManager
 # Configure logging
@@ -28,8 +29,9 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Register the new indicator API blueprint
 app.register_blueprint(indicator_api)
 app.register_blueprint(replay_bp)
-app.register_blueprint(optimizer_bp) 
+app.register_blueprint(optimizer_bp)
 app.register_blueprint(indicator_bp)
+app.register_blueprint(monitor_config_bp)
 
 # Create upload folders
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
