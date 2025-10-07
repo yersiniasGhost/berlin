@@ -29,6 +29,37 @@
             z-index: 1000;
             transition: all 0.3s;
         }
+
+        .sidebar.collapsed {
+            left: -250px;
+        }
+
+        .hamburger-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1001;
+            background: #2c3e50;
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .hamburger-btn:hover {
+            background: #34495e;
+        }
+
+        .hamburger-btn.sidebar-open {
+            left: 265px;
+        }
         
         .sidebar .nav-link {
             color: #ecf0f1;
@@ -58,7 +89,12 @@
         .main-content {
             margin-left: 250px;
             padding: 20px;
+            padding-top: 70px;
             transition: all 0.3s;
+        }
+
+        .main-content.sidebar-collapsed {
+            margin-left: 0;
         }
         
         .logo-section {
@@ -400,8 +436,13 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <!-- Hamburger Menu Button -->
+    <button class="hamburger-btn sidebar-open" onclick="toggleSidebar()" id="hamburgerBtn">
+        <i class="fas fa-bars"></i>
+    </button>
+
     <!-- Sidebar -->
-    <nav class="sidebar">
+    <nav class="sidebar" id="sidebar">
         <div class="logo-section">
             <img src="{{ url_for('static', filename='mlf_logo.png') }}" alt="Logo" class="logo-img">
             <h4>Visualization Suite</h4>
@@ -428,11 +469,16 @@
                     <i class="fas fa-chart-line"></i>Indicator Visualization
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'monitor_config.monitor_config_main' %}active{% endif %}" href="{{ url_for('monitor_config.monitor_config_main') }}">
+                    <i class="fas fa-cog"></i>Monitor Configuration
+                </a>
+            </li>
         </ul>
     </nav>
     
     <!-- Main Content -->
-    <div class="main-content">
+    <div class="main-content" id="mainContent">
         <!-- Flash Messages -->
         <div class="alert-container" id="alertContainer"></div>
         
@@ -440,10 +486,12 @@
         <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
             <h6 class="alert-heading mb-2"><i class="fas fa-info-circle me-2"></i>Development Updates</h6>
             <ul class="mb-2 small">
-                <li>Made changes to replay visualization p&l graph</li>
-                <li>Added indicators and their triggers to replay visualization</li>
-                <li>Added num_splits into the ga hyperparameters</li>
-                <li>Fixed pause/ resume button and stop button</li>
+                <li>Added in a monitor configuration tab to sidebar. Used for editing/ creating new monitors</li>
+                <li>Changed replay visualization page to have a more compact modern config editor</li>
+                <li>Made navigation sidebar collapsible</li>
+                <li>Made edits to indicator timeframe alignment on the back end (broke indicator visualization)</li>
+
+
             </ul>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -479,9 +527,15 @@
             }, 5000);
         };
         
-        // Mobile sidebar toggle
+        // Sidebar toggle
         function toggleSidebar() {
-            document.querySelector('.sidebar').classList.toggle('show');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            const hamburgerBtn = document.getElementById('hamburgerBtn');
+
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('sidebar-collapsed');
+            hamburgerBtn.classList.toggle('sidebar-open');
         }
         
         // Individual indicator panel toggle

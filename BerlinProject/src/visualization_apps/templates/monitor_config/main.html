@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}Monitor Configuration Editor{% endblock %}
+
+{% block extra_head %}
+<style>
+    .config-tabs {
+        border-bottom: 2px solid #dee2e6;
+        margin-bottom: 2rem;
+    }
+
+    .config-tabs .nav-link {
+        color: #495057;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s;
+    }
+
+    .config-tabs .nav-link:hover {
+        border-bottom-color: #3498db;
+        background-color: transparent;
+    }
+
+    .config-tabs .nav-link.active {
+        color: #3498db;
+        border-bottom-color: #3498db;
+        background-color: transparent;
+    }
+
+    .tab-content {
+        padding: 1.5rem;
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .form-section {
+        margin-bottom: 2rem;
+    }
+
+    .form-section h6 {
+        color: #2c3e50;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #ecf0f1;
+    }
+
+    .indicator-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 0;
+        margin-bottom: 1rem;
+        background: #f8f9fa;
+        transition: all 0.3s;
+    }
+
+    .indicator-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .indicator-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        cursor: pointer;
+        border-radius: 0.5rem 0.5rem 0 0;
+        transition: background 0.3s;
+    }
+
+    .indicator-card-header:hover {
+        background: #e9ecef;
+    }
+
+    .indicator-card-title {
+        font-weight: 600;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .indicator-card-body {
+        padding: 1rem;
+        display: none;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .indicator-card-body.show {
+        display: block;
+    }
+
+    .collapse-icon {
+        transition: transform 0.3s;
+        color: #6c757d;
+    }
+
+    .collapse-icon.expanded {
+        transform: rotate(90deg);
+    }
+
+    .btn-remove {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.3s;
+    }
+
+    .btn-remove:hover {
+        background: #c0392b;
+    }
+
+    .btn-add {
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 0.5rem 1.5rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.3s;
+    }
+
+    .btn-add:hover {
+        background: #229954;
+    }
+
+    .file-selector {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 2px solid #ecf0f1;
+    }
+
+    .bar-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: #fff;
+    }
+
+    .bar-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #ecf0f1;
+    }
+
+    /* Compact parameter inputs */
+    .indicator-card-body .form-control,
+    .indicator-card-body .form-select {
+        max-width: 200px;
+        font-size: 0.875rem;
+    }
+
+    .indicator-card-body .form-label {
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .indicator-card-body .row.g-2 {
+        row-gap: 0.5rem !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-cog me-2"></i>Monitor Configuration Editor
+            </h2>
+        </div>
+    </div>
+
+    <!-- File Selector -->
+    <div class="row">
+        <div class="col-12">
+            <div class="file-selector">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <label for="fileInput" class="form-label mb-0">
+                            <i class="fas fa-file me-2"></i>Select Configuration File
+                        </label>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="file" class="form-control" id="fileInput" accept=".json">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" id="loadBtn" disabled>
+                            <i class="fas fa-upload me-2"></i>Load
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Editor -->
+    <div class="row" id="configEditor" style="display: none;">
+        <div class="col-12">
+            <!-- Tabs -->
+            <ul class="nav config-tabs" id="configTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="monitor-tab" data-bs-toggle="tab"
+                            data-bs-target="#monitor-pane" type="button" role="tab">
+                        <i class="fas fa-info-circle me-2"></i>Monitor
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
+                            data-bs-target="#indicators-pane" type="button" role="tab">
+                        <i class="fas fa-chart-line me-2"></i>Indicators
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="bars-tab" data-bs-toggle="tab"
+                            data-bs-target="#bars-pane" type="button" role="tab">
+                        <i class="fas fa-bars me-2"></i>Bars
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="trade-executor-tab" data-bs-toggle="tab"
+                            data-bs-target="#trade-executor-pane" type="button" role="tab">
+                        <i class="fas fa-exchange-alt me-2"></i>Trade Executor
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="configTabContent">
+                <!-- Monitor Tab -->
+                <div class="tab-pane fade show active" id="monitor-pane" role="tabpanel">
+                    <div class="form-section">
+                        <h6>Basic Information</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="monitorName" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="monitorName">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="monitorDescription" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="monitorDescription">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicators Tab -->
+                <div class="tab-pane fade" id="indicators-pane" role="tabpanel">
+                    <div class="mb-3">
+                        <button class="btn-add" id="addIndicatorBtn">
+                            <i class="fas fa-plus me-2"></i>Add Indicator
+                        </button>
+                    </div>
+                    <div id="indicatorsContainer"></div>
+                </div>
+
+                <!-- Bars Tab -->
+                <div class="tab-pane fade" id="bars-pane" role="tabpanel">
+                    <div class="mb-3">
+                        <button class="btn-add" id="addBarBtn">
+                            <i class="fas fa-plus me-2"></i>Add Bar
+                        </button>
+                    </div>
+                    <div id="barsContainer"></div>
+                </div>
+
+                <!-- Trade Executor Tab -->
+                <div class="tab-pane fade" id="trade-executor-pane" role="tabpanel">
+                    <div class="form-section">
+                        <h6>Position Settings</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="positionSize" class="form-label">Position Size</label>
+                                <input type="number" class="form-control" id="positionSize" step="0.01">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="stopLoss" class="form-label">Stop Loss %</label>
+                                <input type="number" class="form-control" id="stopLoss" step="0.001">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="takeProfit" class="form-label">Take Profit %</label>
+                                <input type="number" class="form-control" id="takeProfit" step="0.001">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h6>Trailing Stop Loss</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="trailingStopEnabled">
+                                    <label class="form-check-label" for="trailingStopEnabled">
+                                        Enable Trailing Stop
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="trailingDistance" class="form-label">Distance %</label>
+                                <input type="number" class="form-control" id="trailingDistance" step="0.001">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="trailingActivation" class="form-label">Activation %</label>
+                                <input type="number" class="form-control" id="trailingActivation" step="0.001">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h6>Entry Conditions</h6>
+                        <div id="enterLongContainer"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h6>Exit Conditions</h6>
+                        <div id="exitLongContainer"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h6>Behavior</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ignoreBearSignals">
+                            <label class="form-check-label" for="ignoreBearSignals">
+                                Ignore Bear Signals
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-secondary" id="cancelBtn">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </button>
+                <button class="btn btn-success" id="saveBtn">
+                    <i class="fas fa-save me-2"></i>Save Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/monitor-config.js') }}"></script>
+{% endblock %}

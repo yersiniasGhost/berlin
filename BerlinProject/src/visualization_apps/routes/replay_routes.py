@@ -651,34 +651,78 @@ def save_config():
         data = request.get_json()
         config_type = data.get('config_type')
         config_data = data.get('config_data')
-        
+
         if not config_type or not config_data:
             return jsonify({'success': False, 'error': 'Missing config_type or config_data'})
-        
+
         # Create saved_configs directory if it doesn't exist
         saved_configs_dir = Path('saved_configs')
         saved_configs_dir.mkdir(exist_ok=True)
-        
+
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{timestamp}_{config_type}.json"
         filepath = saved_configs_dir / filename
-        
+
         # Save the config
         with open(filepath, 'w') as f:
             json.dump(config_data, f, indent=2)
-        
+
         logger.info(f"Saved {config_type} configuration to {filepath}")
-        
+
         return jsonify({
             'success': True,
             'message': f'Configuration saved successfully to {filename}',
             'filepath': str(filepath.absolute()),
             'filename': filename
         })
-        
+
     except Exception as e:
         logger.error(f"Error saving config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@replay_bp.route('/api/run_replay', methods=['POST'])
+def run_replay():
+    """Run replay visualization with the new compact UI"""
+    try:
+        data = request.get_json()
+        monitor_config = data.get('monitor_config')
+        data_config = data.get('data_config')
+
+        if not monitor_config or not data_config:
+            return jsonify({'success': False, 'error': 'Both configurations are required'})
+
+        # Create temporary files for the configs
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='_monitor_config.json', delete=False) as monitor_file:
+            json.dump(monitor_config, monitor_file, indent=2)
+            monitor_config_path = monitor_file.name
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='_data_config.json', delete=False) as data_file:
+            json.dump(data_config, data_file, indent=2)
+            data_config_path = data_file.name
+
+        try:
+            # Run the backtest
+            chart_data = run_monitor_backtest(monitor_config_path, data_config_path)
+
+            return jsonify({
+                'success': True,
+                'data': chart_data
+            })
+        finally:
+            # Clean up temporary files
+            try:
+                os.unlink(monitor_config_path)
+                os.unlink(data_config_path)
+            except:
+                pass
+
+    except Exception as e:
+        logger.error(f"Error running replay: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 # Additional routes can be added here (download_config, etc.)
