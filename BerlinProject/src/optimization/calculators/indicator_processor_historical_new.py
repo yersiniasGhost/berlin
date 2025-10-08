@@ -275,19 +275,10 @@ class IndicatorProcessorHistoricalNew:
             aggregator = aggregators[aggregator_key]
             indicator_timeframe_minutes = aggregator.get_timeframe_minutes()
 
-            # DEBUG: Log alignment info
-            print(f"[ALIGN] {indicator.name}: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m | "
-                       f"Before: {len(raw_values)} values | After: {self.primary_timeframe_length} values")
-
             # Align to primary timeframe if needed
             # tmp = self._align_to_primary_timeframe_debug(raw_values, indicator_timeframe_minutes, indicator.name, candles)
             aligned_raw_values = self._align_to_primary_timeframe(raw_values, indicator_timeframe_minutes)
             aligned_trigger_values_with_lookback = self._align_to_primary_timeframe(trigger_values_with_lookback, indicator_timeframe_minutes)
-
-            # DEBUG: Verify alignment worked
-            print(f"[VERIFY] {indicator.name}: aligned_raw_values length = {len(aligned_raw_values)}, "
-                       f"aligned_trigger_values_with_lookback length = {len(aligned_trigger_values_with_lookback)}, "
-                       f"expected = {self.primary_timeframe_length}")
 
             raw_indicator_history[indicator.name] = aligned_raw_values.tolist()
             indicator_history[indicator.name] = aligned_trigger_values_with_lookback.tolist()
@@ -334,11 +325,6 @@ class IndicatorProcessorHistoricalNew:
             logger.debug("No bar configurations found")
             return bar_score_history
 
-        print(f"\n[BAR CALC DEBUG] Timeline length: {timeline_length}")
-        print(f"[BAR CALC DEBUG] Available indicators: {list(indicator_history.keys())}")
-        for ind_name, ind_values in indicator_history.items():
-            print(f"[BAR CALC DEBUG]   {ind_name}: {len(ind_values)} values")
-
         # Calculate bar scores for each bar configuration
         for bar_name, bar_config in self.config.bars.items():
             bar_scores = []
@@ -348,8 +334,6 @@ class IndicatorProcessorHistoricalNew:
                 weights = bar_config['indicators']
             else:
                 weights = bar_config
-
-            print(f"\n[BAR CALC DEBUG] Calculating '{bar_name}' bar using indicators: {weights}")
 
             # Calculate bar score at each time point
             for i in range(timeline_length):
@@ -367,7 +351,6 @@ class IndicatorProcessorHistoricalNew:
                 final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
                 bar_scores.append(final_score)
 
-            print(f"[BAR CALC DEBUG] '{bar_name}' bar: calculated {len(bar_scores)} values (expected {timeline_length})")
             bar_score_history[bar_name] = bar_scores
             logger.debug(f"Calculated bar scores for {bar_name}: {len(bar_scores)} values")
 

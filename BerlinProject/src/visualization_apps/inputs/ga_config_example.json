@@ -1,0 +1,34 @@
+{
+  "objectives": [
+    {
+      "objective": "MaximizeProfit",
+      "weight": 1.0,
+      "parameters": {}
+    },
+    {
+      "objective": "MinimizeLoss",
+      "weight": 1.0,
+      "parameters": {}
+    },
+    {
+      "objective": "MinimizeLosingTrades",
+      "weight": 2.0,
+      "parameters": {}
+    },
+    {
+      "objective": "MaximizeNetPnL",
+      "weight": 1.0,
+      "parameters": {}
+    }
+  ],
+  "ga_hyperparameters": {
+    "number_of_iterations": 500,
+    "population_size": 200,
+    "propagation_fraction": 0.4,
+    "elites_to_save": 2,
+    "elite_size": 12,
+    "chance_of_mutation": 0.05,
+    "chance_of_crossover": 0.03,
+    "num_splits": 1
+  }
+}
