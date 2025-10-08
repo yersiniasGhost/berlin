@@ -334,10 +334,10 @@ class IndicatorProcessorHistoricalNew:
             logger.debug("No bar configurations found")
             return bar_score_history
 
-        print(f"\n[BAR CALC DEBUG] Timeline length: {timeline_length}")
-        print(f"[BAR CALC DEBUG] Available indicators: {list(indicator_history.keys())}")
-        for ind_name, ind_values in indicator_history.items():
-            print(f"[BAR CALC DEBUG]   {ind_name}: {len(ind_values)} values")
+        # print(f"\n[BAR CALC DEBUG] Timeline length: {timeline_length}")
+        # print(f"[BAR CALC DEBUG] Available indicators: {list(indicator_history.keys())}")
+        # for ind_name, ind_values in indicator_history.items():
+        #     print(f"[BAR CALC DEBUG]   {ind_name}: {len(ind_values)} values")
 
         # Calculate bar scores for each bar configuration
         for bar_name, bar_config in self.config.bars.items():

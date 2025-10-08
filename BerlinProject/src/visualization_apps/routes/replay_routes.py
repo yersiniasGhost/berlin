@@ -337,7 +337,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Format component_history (MACD line, signal, histogram, SMA values) for frontend
         component_history_formatted = {}
         if component_history and tick_history:
-            print(f"\n[COMPONENT DEBUG] Available components: {list(component_history.keys())}")
+            # print(f"\n[COMPONENT DEBUG] Available components: {list(component_history.keys())}")
             for comp_name, comp_values in component_history.items():
                 series = []
                 for i, value in enumerate(comp_values):
