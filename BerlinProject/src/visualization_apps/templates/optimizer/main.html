@@ -2,6 +2,107 @@
 
 {% block title %}Optimizer Visualization{% endblock %}
 
+{% block extra_head %}
+<style>
+    .indicator-card, .bar-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 0;
+        margin-bottom: 1rem;
+        background: #f8f9fa;
+        transition: all 0.3s;
+    }
+
+    .indicator-card:hover, .bar-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .indicator-card-header, .bar-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        cursor: pointer;
+        border-radius: 0.5rem 0.5rem 0 0;
+        transition: background 0.3s;
+    }
+
+    .indicator-card-header:hover, .bar-card-header:hover {
+        background: #e9ecef;
+    }
+
+    .indicator-card-title {
+        font-weight: 600;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .indicator-card-body, .bar-card-body {
+        padding: 1rem;
+        display: none;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .indicator-card-body.show, .bar-card-body.show {
+        display: block;
+    }
+
+    .collapse-icon {
+        transition: transform 0.3s;
+        color: #6c757d;
+    }
+
+    .collapse-icon.expanded {
+        transform: rotate(90deg);
+    }
+
+    .btn-remove {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.3s;
+    }
+
+    .btn-remove:hover {
+        background: #c0392b;
+    }
+
+    /* Compact parameter inputs */
+    .indicator-card-body .form-control,
+    .indicator-card-body .form-select,
+    .bar-card-body .form-control,
+    .bar-card-body .form-select {
+        max-width: 150px;
+        font-size: 0.875rem;
+    }
+
+    .indicator-card-body .form-label,
+    .bar-card-body .form-label {
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .indicator-card-body .row.g-2,
+    .bar-card-body .row.g-2 {
+        row-gap: 0.5rem !important;
+    }
+
+    .objective-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: #fff;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -11,29 +112,283 @@
             </h2>
         </div>
     </div>
-    
-    <!-- Configuration Section -->
+
+    <!-- File Selector -->
     <div class="row">
         <div class="col-12">
-            {% set file_types = [
-                {'key': 'ga_config', 'title': 'GA Configuration', 'description': 'Upload your genetic algorithm configuration JSON file'},
-                {'key': 'data_config', 'title': 'Data Configuration', 'description': 'Upload your data configuration JSON file'}
-            ] %}
-            {% include 'components/file_upload.html' %}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-4">
+                            <label for="monitorFileInput" class="form-label mb-0">
+                                <i class="fas fa-file me-2"></i>Monitor Configuration File
+                            </label>
+                        </div>
+                        <div class="col-md-8">
+                            <input type="file" class="form-control" id="monitorFileInput" accept=".json">
+                        </div>
+                    </div>
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-4">
+                            <label for="dataFileInput" class="form-label mb-0">
+                                <i class="fas fa-database me-2"></i>Data Configuration File
+                            </label>
+                        </div>
+                        <div class="col-md-8">
+                            <input type="file" class="form-control" id="dataFileInput" accept=".json">
+                        </div>
+                    </div>
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-4">
+                            <label for="gaFileInput" class="form-label mb-0">
+                                <i class="fas fa-dna me-2"></i>GA Configuration File
+                            </label>
+                        </div>
+                        <div class="col-md-8">
+                            <input type="file" class="form-control" id="gaFileInput" accept=".json">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12 text-center">
+                            <button class="btn btn-primary btn-lg" id="loadConfigsBtn" disabled>
+                                <i class="fas fa-upload me-2"></i>Load Configurations
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
+
     <!-- Configuration Editor -->
-    <div class="row">
+    <div class="row" id="configEditor" style="display: none;">
         <div class="col-12">
-            {% set config_tabs = [
-                {'key': 'ga_config', 'title': 'GA Config', 'icon': 'fas fa-dna'},
-                {'key': 'data_config', 'title': 'Data Config', 'icon': 'fas fa-database'}
-            ] %}
-            {% include 'components/config_editor.html' %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-edit me-2"></i>Edit Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs mb-3" id="configTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="monitor-tab" data-bs-toggle="tab"
+                                    data-bs-target="#monitor-pane" type="button" role="tab">
+                                <i class="fas fa-info-circle me-2"></i>Monitor
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
+                                    data-bs-target="#indicators-pane" type="button" role="tab">
+                                <i class="fas fa-chart-line me-2"></i>Indicators
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bars-tab" data-bs-toggle="tab"
+                                    data-bs-target="#bars-pane" type="button" role="tab">
+                                <i class="fas fa-bars me-2"></i>Bars
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="trade-executor-tab" data-bs-toggle="tab"
+                                    data-bs-target="#trade-executor-pane" type="button" role="tab">
+                                <i class="fas fa-exchange-alt me-2"></i>Trade Executor
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="data-config-tab" data-bs-toggle="tab"
+                                    data-bs-target="#data-config-pane" type="button" role="tab">
+                                <i class="fas fa-database me-2"></i>Data Config
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="ga-config-tab" data-bs-toggle="tab"
+                                    data-bs-target="#ga-config-pane" type="button" role="tab">
+                                <i class="fas fa-dna me-2"></i>GA Config
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="configTabContent">
+                        <!-- Monitor Tab -->
+                        <div class="tab-pane fade show active" id="monitor-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <h6>Basic Information</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="monitorName" class="form-label">Name</label>
+                                        <input type="text" class="form-control" id="monitorName" style="max-width: 300px;">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="monitorDescription" class="form-label">Description</label>
+                                        <input type="text" class="form-control" id="monitorDescription" style="max-width: 300px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Indicators Tab -->
+                        <div class="tab-pane fade" id="indicators-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <button class="btn btn-success" id="addIndicatorBtn">
+                                    <i class="fas fa-plus me-2"></i>Add Indicator
+                                </button>
+                            </div>
+                            <div id="indicatorsContainer"></div>
+                        </div>
+
+                        <!-- Bars Tab -->
+                        <div class="tab-pane fade" id="bars-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <button class="btn btn-success" id="addBarBtn">
+                                    <i class="fas fa-plus me-2"></i>Add Bar
+                                </button>
+                            </div>
+                            <div id="barsContainer"></div>
+                        </div>
+
+                        <!-- Trade Executor Tab -->
+                        <div class="tab-pane fade" id="trade-executor-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <h6>Position Settings</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label for="positionSize" class="form-label">Position Size</label>
+                                        <input type="number" class="form-control" id="positionSize" step="0.01" style="max-width: 200px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="stopLoss" class="form-label">Stop Loss %</label>
+                                        <input type="number" class="form-control" id="stopLoss" step="0.001" style="max-width: 200px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="takeProfit" class="form-label">Take Profit %</label>
+                                        <input type="number" class="form-control" id="takeProfit" step="0.001" style="max-width: 200px;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <h6>Trailing Stop Loss</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="trailingStopEnabled">
+                                            <label class="form-check-label" for="trailingStopEnabled">
+                                                Enable Trailing Stop
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="trailingDistance" class="form-label">Distance %</label>
+                                        <input type="number" class="form-control" id="trailingDistance" step="0.001" style="max-width: 200px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="trailingActivation" class="form-label">Activation %</label>
+                                        <input type="number" class="form-control" id="trailingActivation" step="0.001" style="max-width: 200px;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <h6>Entry Conditions</h6>
+                                <div id="enterLongContainer"></div>
+                            </div>
+
+                            <div class="mb-3">
+                                <h6>Exit Conditions</h6>
+                                <div id="exitLongContainer"></div>
+                            </div>
+
+                            <div class="mb-3">
+                                <h6>Behavior</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="ignoreBearSignals">
+                                    <label class="form-check-label" for="ignoreBearSignals">
+                                        Ignore Bear Signals
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Config Tab -->
+                        <div class="tab-pane fade" id="data-config-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <h6>Data Configuration</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label for="dataTicker" class="form-label">Ticker Symbol</label>
+                                        <input type="text" class="form-control" id="dataTicker" placeholder="e.g., NVDA" style="max-width: 200px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="dataStartDate" class="form-label">Start Date</label>
+                                        <input type="date" class="form-control" id="dataStartDate" style="max-width: 200px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="dataEndDate" class="form-label">End Date</label>
+                                        <input type="date" class="form-control" id="dataEndDate" style="max-width: 200px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- GA Config Tab -->
+                        <div class="tab-pane fade" id="ga-config-pane" role="tabpanel">
+                            <div class="mb-4">
+                                <h6>Objectives</h6>
+                                <div class="mb-3">
+                                    <button class="btn btn-success btn-sm" id="addObjectiveBtn">
+                                        <i class="fas fa-plus me-2"></i>Add Objective
+                                    </button>
+                                </div>
+                                <div id="objectivesContainer"></div>
+                            </div>
+
+                            <div class="mb-3">
+                                <h6>GA Hyperparameters</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label for="numIterations" class="form-label">Number of Iterations</label>
+                                        <input type="number" class="form-control" id="numIterations" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="populationSize" class="form-label">Population Size</label>
+                                        <input type="number" class="form-control" id="populationSize" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="propagationFraction" class="form-label">Propagation Fraction</label>
+                                        <input type="number" class="form-control" id="propagationFraction" step="0.01" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="elitesToSave" class="form-label">Elites to Save</label>
+                                        <input type="number" class="form-control" id="elitesToSave" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="eliteSize" class="form-label">Elite Size</label>
+                                        <input type="number" class="form-control" id="eliteSize" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="chanceMutation" class="form-label">Chance of Mutation</label>
+                                        <input type="number" class="form-control" id="chanceMutation" step="0.01" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="chanceCrossover" class="form-label">Chance of Crossover</label>
+                                        <input type="number" class="form-control" id="chanceCrossover" step="0.01" style="max-width: 150px;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="numSplits" class="form-label">Number of Splits</label>
+                                        <input type="number" class="form-control" id="numSplits" style="max-width: 150px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
+
     <!-- Control Panel -->
     <div class="row mb-4">
         <div class="col-12">
@@ -173,6 +528,7 @@
 
 {% block extra_scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script src="{{ url_for('static', filename='js/optimizer-config.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const startOptimizerBtn = document.getElementById('startOptimizerBtn');
