@@ -19,6 +19,7 @@ class ParameterType(Enum):
     BOOLEAN = "boolean"
     STRING = "string"
     CHOICE = "choice"
+    LIST = "list"
 
 
 @dataclass

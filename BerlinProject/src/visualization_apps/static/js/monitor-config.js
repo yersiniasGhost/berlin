@@ -221,6 +221,21 @@ function renderIndicators(indicators) {
     indicators.forEach((indicator, index) => {
         const indicatorHtml = createIndicatorCard(indicator, index);
         container.insertAdjacentHTML('beforeend', indicatorHtml);
+
+        // If it's a CDLPatternIndicator, initialize the pattern listbox with loaded data
+        if (indicator.indicator_class === 'CDLPatternIndicator') {
+            const params = indicator.parameters || {};
+            const patterns = params.patterns || [];
+            const trend = params.trend || 'bullish';
+
+            // Re-render params with proper UI
+            updateIndicatorParams(index, indicator.indicator_class);
+
+            // Initialize listbox with loaded patterns
+            setTimeout(() => {
+                initializePatternListbox(index, trend, patterns);
+            }, 50);
+        }
     });
 }
 
@@ -317,20 +332,107 @@ function updateIndicatorParams(index, className) {
 
     let html = '';
     allParams.forEach(param => {
-        const inputType = param.type === 'integer' || param.type === 'float' ? 'number' : 'text';
-        const step = param.type === 'float' ? '0.001' : param.step || '1';
+        if (param.type === 'list' && param.name === 'patterns') {
+            // Handle patterns LIST parameter with dual listbox
+            const defaultList = Array.isArray(param.default) ? param.default : [];
+            html += `
+                <div class="col-md-12">
+                    <label class="form-label">${param.display_name}</label>
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label class="form-label text-muted small">Selected Patterns</label>
+                            <select multiple class="form-select" size="10"
+                                    data-indicator-param="${param.name}"
+                                    data-param-type="list"
+                                    data-listbox-type="selected"
+                                    style="height: 250px;">
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex flex-column justify-content-center align-items-center">
+                            <button type="button" class="btn btn-sm btn-outline-primary mb-2"
+                                    onclick="movePatterns(${index}, 'add')" title="Add selected">
+                                <i class="fas fa-angle-double-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary mb-2"
+                                    onclick="movePatterns(${index}, 'remove')" title="Remove selected">
+                                <i class="fas fa-angle-double-right"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mb-2"
+                                    onclick="movePatterns(${index}, 'add-all')" title="Add all">
+                                <i class="fas fa-angle-double-left"></i><i class="fas fa-angle-double-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    onclick="movePatterns(${index}, 'remove-all')" title="Remove all">
+                                <i class="fas fa-angle-double-right"></i><i class="fas fa-angle-double-right"></i>
+                            </button>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label text-muted small">Available Patterns</label>
+                            <select multiple class="form-select" size="10"
+                                    data-listbox-type="available"
+                                    style="height: 250px;">
+                            </select>
+                        </div>
+                    </div>
+                    <small class="form-text text-muted">Patterns filtered by trend selection</small>
+                </div>
+            `;
+        } else if (param.type === 'list') {
+            // Handle other LIST parameters (e.g., for candlestick patterns)
+            const defaultList = Array.isArray(param.default) ? param.default.join(', ') : '';
+            html += `
+                <div class="col-md-6">
+                    <label class="form-label">${param.display_name}</label>
+                    <input type="text" class="form-control" value="${defaultList}"
+                           data-indicator-param="${param.name}" data-param-type="list"
+                           placeholder="${param.description || 'Comma-separated list'}">
+                    <small class="form-text text-muted">Comma-separated values</small>
+                </div>
+            `;
+        } else if (param.type === 'choice') {
+            // Handle CHOICE parameters
+            const choices = param.choices || [];
+            let optionsHtml = choices.map(choice =>
+                `<option value="${choice}" ${choice === param.default ? 'selected' : ''}>${choice}</option>`
+            ).join('');
 
-        html += `
-            <div class="col-md-3">
-                <label class="form-label">${param.display_name}</label>
-                <input type="${inputType}" class="form-control" value="${param.default}"
-                       data-indicator-param="${param.name}" step="${step}"
-                       placeholder="${param.description || ''}">
-            </div>
-        `;
+            // Add onchange handler for trend parameter to update pattern lists
+            const onchangeAttr = param.name === 'trend' ? `onchange="updatePatternListboxes(${index}, this.value)"` : '';
+
+            html += `
+                <div class="col-md-3">
+                    <label class="form-label">${param.display_name}</label>
+                    <select class="form-select" data-indicator-param="${param.name}" ${onchangeAttr}>
+                        ${optionsHtml}
+                    </select>
+                </div>
+            `;
+        } else {
+            // Handle numeric and text parameters
+            const inputType = param.type === 'integer' || param.type === 'float' ? 'number' : 'text';
+            const step = param.type === 'float' ? '0.001' : param.step || '1';
+            html += `
+                <div class="col-md-3">
+                    <label class="form-label">${param.display_name}</label>
+                    <input type="${inputType}" class="form-control" value="${param.default}"
+                           data-indicator-param="${param.name}" step="${step}"
+                           placeholder="${param.description || ''}">
+                </div>
+            `;
+        }
     });
 
     paramsContainer.innerHTML = html;
+
+    // Initialize pattern listbox if this is a CDLPatternIndicator
+    if (className === 'CDLPatternIndicator') {
+        // Find trend parameter value
+        const trendSelect = paramsContainer.closest('.indicator-card-body').querySelector('[data-indicator-param="trend"]');
+        const trend = trendSelect ? trendSelect.value : 'bullish';
+
+        // Initialize with empty selection
+        initializePatternListbox(index, trend, []);
+    }
 }
 
 function addIndicator() {
@@ -513,8 +615,27 @@ function updateCurrentConfigIndicators() {
         const paramInputs = card.querySelectorAll('[data-indicator-param]');
         paramInputs.forEach(input => {
             const paramName = input.dataset.indicatorParam;
-            const paramValue = input.type === 'number' ? parseFloat(input.value) : input.value;
-            parameters[paramName] = paramValue;
+            const paramType = input.dataset.paramType;
+
+            if (paramType === 'list') {
+                // Check if it's a dual listbox (for patterns)
+                const listboxType = input.dataset.listboxType;
+                if (listboxType === 'selected') {
+                    // Get all selected patterns from the listbox
+                    parameters[paramName] = Array.from(input.options).map(opt => opt.value);
+                } else {
+                    // Convert comma-separated string to array (fallback for other lists)
+                    const listValue = input.value.trim();
+                    parameters[paramName] = listValue ? listValue.split(',').map(v => v.trim()) : [];
+                }
+            } else if (input.tagName === 'SELECT') {
+                // Handle select dropdowns
+                parameters[paramName] = input.value;
+            } else {
+                // Handle numeric and text inputs
+                const paramValue = input.type === 'number' ? parseFloat(input.value) : input.value;
+                parameters[paramName] = paramValue;
+            }
         });
 
         if (name) {
@@ -743,4 +864,131 @@ function collectBars() {
     });
 
     return bars;
+}
+
+// ========== Pattern Listbox Functions ==========
+
+function movePatterns(indicatorIndex, action) {
+    const card = document.querySelector(`[data-indicator-index="${indicatorIndex}"]`);
+    if (!card) return;
+
+    const selectedListbox = card.querySelector('[data-listbox-type="selected"]');
+    const availableListbox = card.querySelector('[data-listbox-type="available"]');
+
+    if (!selectedListbox || !availableListbox) return;
+
+    if (action === 'add') {
+        // Move selected items from available to selected
+        const selected = Array.from(availableListbox.selectedOptions);
+        selected.forEach(option => {
+            selectedListbox.appendChild(option.cloneNode(true));
+            option.remove();
+        });
+    } else if (action === 'remove') {
+        // Move selected items from selected to available
+        const selected = Array.from(selectedListbox.selectedOptions);
+        selected.forEach(option => {
+            availableListbox.appendChild(option.cloneNode(true));
+            option.remove();
+        });
+        sortListbox(availableListbox);
+    } else if (action === 'add-all') {
+        // Move all from available to selected
+        Array.from(availableListbox.options).forEach(option => {
+            selectedListbox.appendChild(option.cloneNode(true));
+        });
+        availableListbox.innerHTML = '';
+    } else if (action === 'remove-all') {
+        // Move all from selected to available
+        Array.from(selectedListbox.options).forEach(option => {
+            availableListbox.appendChild(option.cloneNode(true));
+        });
+        selectedListbox.innerHTML = '';
+        sortListbox(availableListbox);
+    }
+}
+
+function sortListbox(listbox) {
+    const options = Array.from(listbox.options);
+    options.sort((a, b) => a.value.localeCompare(b.value));
+    listbox.innerHTML = '';
+    options.forEach(option => listbox.appendChild(option));
+}
+
+function updatePatternListboxes(indicatorIndex, trend) {
+    const card = document.querySelector(`[data-indicator-index="${indicatorIndex}"]`);
+    if (!card) return;
+
+    const selectedListbox = card.querySelector('[data-listbox-type="selected"]');
+    const availableListbox = card.querySelector('[data-listbox-type="available"]');
+
+    if (!selectedListbox || !availableListbox) return;
+
+    // Get current selected patterns
+    const currentSelected = Array.from(selectedListbox.options).map(opt => opt.value);
+
+    // Get patterns for this trend type
+    const allPatterns = getPatternsByTrend(trend);
+
+    // Populate available patterns (excluding already selected)
+    availableListbox.innerHTML = '';
+    allPatterns.forEach(pattern => {
+        if (!currentSelected.includes(pattern)) {
+            const option = document.createElement('option');
+            option.value = pattern;
+            option.textContent = pattern;
+            availableListbox.appendChild(option);
+        }
+    });
+}
+
+function initializePatternListbox(indicatorIndex, trend, selectedPatterns) {
+    const card = document.querySelector(`[data-indicator-index="${indicatorIndex}"]`);
+    if (!card) return;
+
+    const selectedListbox = card.querySelector('[data-listbox-type="selected"]');
+    const availableListbox = card.querySelector('[data-listbox-type="available"]');
+
+    if (!selectedListbox || !availableListbox) return;
+
+    // Get patterns for this trend type
+    const allPatterns = getPatternsByTrend(trend);
+
+    // Populate selected patterns
+    selectedListbox.innerHTML = '';
+    selectedPatterns.forEach(pattern => {
+        const option = document.createElement('option');
+        option.value = pattern;
+        option.textContent = pattern;
+        selectedListbox.appendChild(option);
+    });
+
+    // Populate available patterns (excluding selected)
+    availableListbox.innerHTML = '';
+    allPatterns.forEach(pattern => {
+        if (!selectedPatterns.includes(pattern)) {
+            const option = document.createElement('option');
+            option.value = pattern;
+            option.textContent = pattern;
+            availableListbox.appendChild(option);
+        }
+    });
+
+    // Add double-click handlers
+    selectedListbox.addEventListener('dblclick', function(e) {
+        if (e.target.tagName === 'OPTION') {
+            // Move from selected to available
+            availableListbox.appendChild(e.target.cloneNode(true));
+            e.target.remove();
+            sortListbox(availableListbox);
+        }
+    });
+
+    availableListbox.addEventListener('dblclick', function(e) {
+        if (e.target.tagName === 'OPTION') {
+            // Move from available to selected
+            selectedListbox.appendChild(e.target.cloneNode(true));
+            e.target.remove();
+        }
+    });
 }

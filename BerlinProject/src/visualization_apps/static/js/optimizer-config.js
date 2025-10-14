@@ -96,20 +96,24 @@ async function loadConfigurations() {
         // Show editor
         document.getElementById('configEditor').style.display = 'block';
 
-        // Store configs globally for start button
-        window.currentConfigs = {
-            ga_config: collectAllConfigs(),
-            data_config: dataConfig
-        };
+        // Wait for pattern listboxes to be initialized before collecting config
+        // (CDL pattern listboxes are populated in a setTimeout, so we need to wait)
+        setTimeout(() => {
+            // Store configs globally for start button
+            window.currentConfigs = {
+                ga_config: collectAllConfigs(),
+                data_config: dataConfig
+            };
 
-        // Dispatch event to enable start button
-        document.dispatchEvent(new CustomEvent('configurationsLoaded', {
-            detail: {
-                monitor: monitorConfig,
-                data: dataConfig,
-                ga: gaConfig
-            }
-        }));
+            // Dispatch event to enable start button
+            document.dispatchEvent(new CustomEvent('configurationsLoaded', {
+                detail: {
+                    monitor: monitorConfig,
+                    data: dataConfig,
+                    ga: gaConfig
+                }
+            }));
+        }, 100); // Wait longer than the 50ms timeout for initializePatternListbox
     } catch (error) {
         alert('Error loading configurations: ' + error.message);
     }
@@ -229,8 +233,27 @@ function renderIndicators(indicators) {
     container.innerHTML = '';
 
     indicators.forEach((indicator, index) => {
-        const indicatorHtml = createIndicatorCardWithRanges(indicator, index);
-        container.insertAdjacentHTML('beforeend', indicatorHtml);
+        container.insertAdjacentHTML('beforeend', createIndicatorCardWithRanges(indicator, index));
+
+        // Special handling for CDLPatternIndicator - initialize dual listbox
+        if (indicator.indicator_class === 'CDLPatternIndicator') {
+            const params = indicator.parameters || {};
+            const patterns = params.patterns || [];
+            const trend = params.trend || 'bullish';
+
+            // First ensure the dual listbox UI exists (since renderIndicatorParamsWithRanges doesn't handle it)
+            // This needs to happen before we can initialize the patterns
+            const paramsContainer = document.getElementById(`indicator-params-${index}`);
+            if (paramsContainer && !paramsContainer.querySelector('[data-listbox-type="selected"]')) {
+                // Dual listbox doesn't exist yet, create it
+                updateIndicatorParamsWithRanges(index, indicator.indicator_class);
+            }
+
+            // Initialize pattern listbox with loaded patterns
+            setTimeout(() => {
+                initializePatternListbox(index, trend, patterns);
+            }, 50);
+        }
     });
 }
 
@@ -526,38 +549,94 @@ function updateIndicatorParamsWithRanges(index, className) {
 
     let html = '<div class="row g-2 mt-2">';
     allParams.forEach(param => {
-        if (param.type === 'choice' || param.type === 'string') {
-            // Skip non-numeric parameters
-            return;
-        }
-
-        const startVal = param.default;
-        const minVal = param.min !== undefined ? param.min : (param.default * 0.5);
-        const maxVal = param.max !== undefined ? param.max : (param.default * 1.5);
-        const step = param.type === 'float' ? '0.001' : '1';
-
-        html += `
-            <div class="col-md-6">
-                <label class="form-label">${param.display_name}</label>
-                <div class="row g-1">
-                    <div class="col-4">
-                        <input type="number" class="form-control form-control-sm"
-                               value="${startVal}" step="${step}" placeholder="Start"
-                               data-indicator-param="${param.name}" data-range-type="start">
-                    </div>
-                    <div class="col-4">
-                        <input type="number" class="form-control form-control-sm"
-                               value="${minVal}" step="${step}" placeholder="Min"
-                               data-indicator-param="${param.name}" data-range-type="min">
-                    </div>
-                    <div class="col-4">
-                        <input type="number" class="form-control form-control-sm"
-                               value="${maxVal}" step="${step}" placeholder="Max"
-                               data-indicator-param="${param.name}" data-range-type="max">
+        if (param.type === 'list' && param.name === 'patterns') {
+            // Handle patterns parameter with dual listbox (no ranges for lists)
+            html += `
+                <div class="col-md-12">
+                    <label class="form-label">${param.display_name}</label>
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label class="form-label small">Selected Patterns</label>
+                            <select multiple class="form-select" size="10"
+                                    data-indicator-param="patterns"
+                                    data-param-type="list"
+                                    data-listbox-type="selected"
+                                    style="max-width: 100%;">
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex flex-column justify-content-center align-items-center">
+                            <button type="button" class="btn btn-sm btn-primary mb-2"
+                                    onclick="movePatterns(${index}, 'add')"
+                                    title="Add selected patterns">
+                                <i class="fas fa-angle-double-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary"
+                                    onclick="movePatterns(${index}, 'remove')"
+                                    title="Remove selected patterns">
+                                <i class="fas fa-angle-double-right"></i>
+                            </button>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small">Available Patterns</label>
+                            <select multiple class="form-select" size="10"
+                                    data-listbox-type="available"
+                                    style="max-width: 100%;">
+                            </select>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        } else if (param.type === 'choice') {
+            // Handle choice parameters (fixed values, no ranges)
+            const choices = param.choices || [];
+            let optionsHtml = choices.map(choice =>
+                `<option value="${choice}" ${choice === param.default ? 'selected' : ''}>${choice}</option>`
+            ).join('');
+
+            // Add onchange handler for trend parameter to update pattern listboxes
+            const onchangeAttr = param.name === 'trend' ? `onchange="updatePatternListboxes(${index}, this.value)"` : '';
+
+            html += `
+                <div class="col-md-6">
+                    <label class="form-label">${param.display_name}</label>
+                    <select class="form-select form-control-sm" data-indicator-param="${param.name}" ${onchangeAttr}>
+                        ${optionsHtml}
+                    </select>
+                </div>
+            `;
+        } else if (param.type === 'string' || param.type === 'list') {
+            // Skip other non-numeric parameters
+            return;
+        } else {
+            // Handle numeric parameters with ranges
+            const startVal = param.default;
+            const minVal = param.min !== undefined ? param.min : (param.default * 0.5);
+            const maxVal = param.max !== undefined ? param.max : (param.default * 1.5);
+            const step = param.type === 'float' ? '0.001' : '1';
+
+            html += `
+                <div class="col-md-6">
+                    <label class="form-label">${param.display_name}</label>
+                    <div class="row g-1">
+                        <div class="col-4">
+                            <input type="number" class="form-control form-control-sm"
+                                   value="${startVal}" step="${step}" placeholder="Start"
+                                   data-indicator-param="${param.name}" data-range-type="start">
+                        </div>
+                        <div class="col-4">
+                            <input type="number" class="form-control form-control-sm"
+                                   value="${minVal}" step="${step}" placeholder="Min"
+                                   data-indicator-param="${param.name}" data-range-type="min">
+                        </div>
+                        <div class="col-4">
+                            <input type="number" class="form-control form-control-sm"
+                                   value="${maxVal}" step="${step}" placeholder="Max"
+                                   data-indicator-param="${param.name}" data-range-type="max">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     });
     html += '</div>';
 
@@ -776,10 +855,32 @@ function updateCurrentConfigIndicators() {
         const paramData = {};
         paramInputs.forEach(input => {
             const paramName = input.dataset.indicatorParam;
+            const paramType = input.dataset.paramType;
+            const listboxType = input.dataset.listboxType;
             const rangeType = input.dataset.rangeType; // 'start', 'min' or 'max'
-            const paramValue = input.type === 'number' ? parseFloat(input.value) : input.value;
 
             paramNames.add(paramName);
+
+            // Handle list parameters (like patterns)
+            if (paramType === 'list') {
+                if (listboxType === 'selected') {
+                    // For dual listbox, get all options from selected listbox
+                    const patterns = Array.from(input.options).map(opt => opt.value);
+                    parameters[paramName] = patterns;
+                    // No ranges for list parameters
+                }
+                return;
+            }
+
+            // Handle choice parameters (like trend)
+            if (input.tagName === 'SELECT' && !rangeType) {
+                parameters[paramName] = input.value;
+                // No ranges for choice parameters
+                return;
+            }
+
+            // Handle numeric parameters with ranges
+            const paramValue = input.type === 'number' ? parseFloat(input.value) : input.value;
 
             if (!paramData[paramName]) {
                 paramData[paramName] = { start: null, min: null, max: null, type: 'float' };
@@ -797,7 +898,7 @@ function updateCurrentConfigIndicators() {
             }
         });
 
-        // Second pass: build parameters and ranges with correct types
+        // Second pass: build parameters and ranges with correct types (only for numeric params)
         for (const [paramName, data] of Object.entries(paramData)) {
             parameters[paramName] = data.start;
 
@@ -1035,4 +1136,126 @@ function collectAllConfigs() {
     console.log('🔍 Indicators:', combinedConfig.indicators);
 
     return combinedConfig;
+}
+
+// Pattern management functions for dual listbox
+function movePatterns(indicatorIndex, action) {
+    const card = document.querySelector(`[data-indicator-index="${indicatorIndex}"]`);
+    if (!card) return;
+
+    const selectedListbox = card.querySelector('[data-listbox-type="selected"]');
+    const availableListbox = card.querySelector('[data-listbox-type="available"]');
+
+    if (!selectedListbox || !availableListbox) return;
+
+    if (action === 'add') {
+        // Move from available to selected
+        Array.from(availableListbox.selectedOptions).forEach(option => {
+            selectedListbox.appendChild(option.cloneNode(true));
+            option.remove();
+        });
+    } else if (action === 'remove') {
+        // Move from selected to available
+        Array.from(selectedListbox.selectedOptions).forEach(option => {
+            availableListbox.appendChild(option.cloneNode(true));
+            option.remove();
+        });
+        sortListbox(availableListbox);
+    }
+}
+
+function sortListbox(selectElement) {
+    const options = Array.from(selectElement.options);
+    options.sort((a, b) => a.value.localeCompare(b.value));
+    selectElement.innerHTML = '';
+    options.forEach(option => selectElement.appendChild(option));
+}
+
+function updatePatternListboxes(indicatorIndex, newTrend) {
+    const card = document.querySelector(`[data-indicator-index="${indicatorIndex}"]`);
+    if (!card) return;
+
+    const selectedListbox = card.querySelector('[data-listbox-type="selected"]');
+    const availableListbox = card.querySelector('[data-listbox-type="available"]');
+
+    if (!selectedListbox || !availableListbox) return;
+
+    // Get current selected patterns
+    const currentSelected = Array.from(selectedListbox.options).map(opt => opt.value);
+
+    // Get patterns for new trend
+    const newPatterns = getPatternsByTrend(newTrend);
+
+    // Update available listbox with new patterns, excluding already selected
+    availableListbox.innerHTML = '';
+    newPatterns.forEach(pattern => {
+        if (!currentSelected.includes(pattern)) {
+            const option = document.createElement('option');
+            option.value = pattern;
+            option.textContent = pattern;
+            availableListbox.appendChild(option);
+        }
+    });
+
+    // Remove selected patterns that are not in new trend's pattern list
+    Array.from(selectedListbox.options).forEach(option => {
+        if (!newPatterns.includes(option.value)) {
+            option.remove();
+        }
+    });
+}
+
+function initializePatternListbox(indicatorIndex, trend, selectedPatterns) {
+    const card = document.querySelector(`[data-indicator-index="${indicatorIndex}"]`);
+    if (!card) return;
+
+    const selectedListbox = card.querySelector('[data-listbox-type="selected"]');
+    const availableListbox = card.querySelector('[data-listbox-type="available"]');
+
+    if (!selectedListbox || !availableListbox) return;
+
+    // Get all patterns for this trend
+    const allPatterns = getPatternsByTrend(trend);
+
+    // Clear both listboxes
+    selectedListbox.innerHTML = '';
+    availableListbox.innerHTML = '';
+
+    // Add selected patterns to selected listbox
+    selectedPatterns.forEach(pattern => {
+        if (allPatterns.includes(pattern)) {
+            const option = document.createElement('option');
+            option.value = pattern;
+            option.textContent = pattern;
+            selectedListbox.appendChild(option);
+        }
+    });
+
+    // Add remaining patterns to available listbox
+    allPatterns.forEach(pattern => {
+        if (!selectedPatterns.includes(pattern)) {
+            const option = document.createElement('option');
+            option.value = pattern;
+            option.textContent = pattern;
+            availableListbox.appendChild(option);
+        }
+    });
+
+    // Add double-click handlers
+    selectedListbox.addEventListener('dblclick', function(e) {
+        if (e.target.tagName === 'OPTION') {
+            // Move from selected to available
+            availableListbox.appendChild(e.target.cloneNode(true));
+            e.target.remove();
+            sortListbox(availableListbox);
+        }
+    });
+
+    availableListbox.addEventListener('dblclick', function(e) {
+        if (e.target.tagName === 'OPTION') {
+            // Move from available to selected
+            selectedListbox.appendChild(e.target.cloneNode(true));
+            e.target.remove();
+        }
+    });
 }

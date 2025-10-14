@@ -528,6 +528,7 @@
 
 {% block extra_scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/optimizer-config.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

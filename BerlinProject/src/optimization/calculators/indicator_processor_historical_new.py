@@ -44,8 +44,12 @@ class IndicatorCalculator:
             return result, components, trigger_values_with_lookback
 
         except Exception as e:
+            import traceback
             logger.error(f"Error calculating {self.indicator.name()}: {e}")
-            raise ValueError(f"Cannot calculate: {self.indicator.name()}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            print(f"[ERROR] Failed to calculate {self.indicator.name()}: {e}")
+            print(f"[ERROR] Full traceback:\n{traceback.format_exc()}")
+            raise ValueError(f"Cannot calculate: {self.indicator.name()}") from e
 
     @staticmethod
     def _apply_lookback_vectorized(raw_values: List[float], lookback: int) -> List[float]:
@@ -276,8 +280,8 @@ class IndicatorProcessorHistoricalNew:
             indicator_timeframe_minutes = aggregator.get_timeframe_minutes()
 
             # DEBUG: Log alignment info
-            print(f"[ALIGN] {indicator.name}: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m | "
-                       f"Before: {len(raw_values)} values | After: {self.primary_timeframe_length} values")
+            # print(f"[ALIGN] {indicator.name}: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m | "
+            #            f"Before: {len(raw_values)} values | After: {self.primary_timeframe_length} values")
 
             # Align to primary timeframe if needed
             # tmp = self._align_to_primary_timeframe_debug(raw_values, indicator_timeframe_minutes, indicator.name, candles)
@@ -285,9 +289,9 @@ class IndicatorProcessorHistoricalNew:
             aligned_trigger_values_with_lookback = self._align_to_primary_timeframe(trigger_values_with_lookback, indicator_timeframe_minutes)
 
             # DEBUG: Verify alignment worked
-            print(f"[VERIFY] {indicator.name}: aligned_raw_values length = {len(aligned_raw_values)}, "
-                       f"aligned_trigger_values_with_lookback length = {len(aligned_trigger_values_with_lookback)}, "
-                       f"expected = {self.primary_timeframe_length}")
+            # print(f"[VERIFY] {indicator.name}: aligned_raw_values length = {len(aligned_raw_values)}, "
+            #            f"aligned_trigger_values_with_lookback length = {len(aligned_trigger_values_with_lookback)}, "
+            #            f"expected = {self.primary_timeframe_length}")
 
             raw_indicator_history[indicator.name] = aligned_raw_values.tolist()
             indicator_history[indicator.name] = aligned_trigger_values_with_lookback.tolist()
@@ -349,8 +353,6 @@ class IndicatorProcessorHistoricalNew:
             else:
                 weights = bar_config
 
-            print(f"\n[BAR CALC DEBUG] Calculating '{bar_name}' bar using indicators: {weights}")
-
             # Calculate bar score at each time point
             for i in range(timeline_length):
                 # Calculate weighted sum for this time point
@@ -367,7 +369,6 @@ class IndicatorProcessorHistoricalNew:
                 final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
                 bar_scores.append(final_score)
 
-            print(f"[BAR CALC DEBUG] '{bar_name}' bar: calculated {len(bar_scores)} values (expected {timeline_length})")
             bar_score_history[bar_name] = bar_scores
             logger.debug(f"Calculated bar scores for {bar_name}: {len(bar_scores)} values")
 
