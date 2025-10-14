@@ -167,22 +167,6 @@ class BacktestDataStreamer:
         indicator_processor = IndicatorProcessorHistoricalNew(self.monitor_config)
         indicator_history, raw_indicator_history, bar_score_history, component_history = indicator_processor.calculate_indicators(self.aggregators)
 
-        # Debug: Check if indicators and bar scores are being calculated
-        print(f"[BT DEBUG] Calculated indicators: {list(indicator_history.keys())}")
-        print(f"[BT DEBUG] Calculated bar scores: {list(bar_score_history.keys())}")
-
-        # Debug indicator values
-        for ind_name, values in indicator_history.items():
-            non_zero = sum(1 for v in values if v > 0.01)
-            max_val = max(values) if values else 0
-            print(f"[BT DEBUG] Indicator '{ind_name}': {non_zero}/{len(values)} non-zero, max={max_val:.3f}")
-
-        # Debug bar scores
-        for bar_name, values in bar_score_history.items():
-            non_zero = sum(1 for v in values if v > 0.5)
-            max_val = max(values) if values else 0
-            print(f"[BT DEBUG] Bar '{bar_name}': {non_zero}/{len(values)} above 0.5, max={max_val:.3f}")
-
         # STEP 2: Execute trades using pre-calculated indicators
         for i, tick_data in enumerate(self.tick_history):
             # Get pre-calculated indicators for this time point

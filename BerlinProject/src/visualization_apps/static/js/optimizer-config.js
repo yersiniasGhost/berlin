@@ -8,6 +8,26 @@ let dataConfig = null;
 let gaConfig = null;
 let indicatorClasses = {};
 
+// Default GA configuration (from ga_config_example.json)
+const DEFAULT_GA_CONFIG = {
+    objectives: [
+        { objective: "MaximizeProfit", weight: 1.0, parameters: {} },
+        { objective: "MinimizeLoss", weight: 1.0, parameters: {} },
+        { objective: "MinimizeLosingTrades", weight: 2.0, parameters: {} },
+        { objective: "MaximizeNetPnL", weight: 1.0, parameters: {} }
+    ],
+    ga_hyperparameters: {
+        number_of_iterations: 500,
+        population_size: 200,
+        propagation_fraction: 0.4,
+        elites_to_save: 2,
+        elite_size: 12,
+        chance_of_mutation: 0.05,
+        chance_of_crossover: 0.03,
+        num_splits: 1
+    }
+};
+
 const AVAILABLE_OBJECTIVES = [
     'MaximizeProfit',
     'MinimizeLosingTrades',
@@ -47,8 +67,8 @@ function setupEventListeners() {
 function checkFilesSelected() {
     const monitorFile = document.getElementById('monitorFileInput').files.length > 0;
     const dataFile = document.getElementById('dataFileInput').files.length > 0;
-    const gaFile = document.getElementById('gaFileInput').files.length > 0;
-    document.getElementById('loadConfigsBtn').disabled = !(monitorFile && dataFile && gaFile);
+    // GA file is now optional
+    document.getElementById('loadConfigsBtn').disabled = !(monitorFile && dataFile);
 }
 
 async function loadIndicatorClasses() {
@@ -70,7 +90,7 @@ async function loadConfigurations() {
     const dataFileInput = document.getElementById('dataFileInput');
     const gaFileInput = document.getElementById('gaFileInput');
 
-    if (!monitorFileInput.files.length || !dataFileInput.files.length || !gaFileInput.files.length) return;
+    if (!monitorFileInput.files.length || !dataFileInput.files.length) return;
 
     try {
         // Load monitor config
@@ -83,10 +103,15 @@ async function loadConfigurations() {
         const dataText = await dataFile.text();
         dataConfig = JSON.parse(dataText);
 
-        // Load GA config
-        const gaFile = gaFileInput.files[0];
-        const gaText = await gaFile.text();
-        gaConfig = JSON.parse(gaText);
+        // Load GA config (optional - use defaults if not provided)
+        if (gaFileInput.files.length > 0) {
+            const gaFile = gaFileInput.files[0];
+            const gaText = await gaFile.text();
+            gaConfig = JSON.parse(gaText);
+        } else {
+            // Use default GA config
+            gaConfig = JSON.parse(JSON.stringify(DEFAULT_GA_CONFIG)); // Deep clone
+        }
 
         // Render configurations
         renderMonitorConfiguration();
