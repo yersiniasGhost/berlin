@@ -1,0 +1,66 @@
+{
+  "test_name": "1m-5m-no-1m-weight",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "user_id": "65f2d6666666666666666666",
+    "name": "5 Minute Only Strategy",
+    "description": "Simple 5-minute indicators configuration",
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.4,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.02,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "enter_long": [
+      {
+        "name": "macd_sma_bull",
+        "threshold": 0.65
+      }
+    ],
+    "bars": {
+      "macd_sma_bull": {
+        "type": "bull",
+        "description": "5m MACD and SMA bullish signal",
+        "indicators": {
+          "macd5m": 3.0,
+          "sma1m": 0.0
+        }
+      }
+    }
+  },
+  "indicators": [
+    {
+      "name": "macd5m",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "type": "Indicator",
+      "function": "macd_histogram_crossover",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "slow": 26,
+        "fast": 12,
+        "signal": 9,
+        "histogram_threshold": 0.01,
+        "lookback": 10,
+        "trend": "bullish"
+      }
+    },
+    {
+      "name": "sma1m",
+      "indicator_class": "SMACrossoverIndicator",
+      "type": "Indicator",
+      "function": "sma_crossover",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "period": 20,
+        "crossover_value": 0.01,
+        "lookback": 10,
+        "trend": "bullish"
+      }
+    }
+  ]
+}

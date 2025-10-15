@@ -1,0 +1,85 @@
+{
+  "test_name": "cdl-patterns-only",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "user_id": "65f2d6666666666666666666",
+    "name": "Candlestick Patterns Only",
+    "description": "Testing CDL pattern indicators with 1m and 5m patterns",
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.4,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.02,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "enter_long": [
+      {
+        "name": "cdl_bull_bar",
+        "threshold": 0.5
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "cdl_bear_bar",
+        "threshold": 0.5
+      }
+    ],
+    "bars": {
+      "cdl_bull_bar": {
+        "type": "bull",
+        "description": "Bullish candlestick patterns from 1m and 5m",
+        "indicators": {
+          "cdl_bullish_1m": 2.0,
+          "cdl_bullish_5m": 1.5
+        }
+      },
+      "cdl_bear_bar": {
+        "type": "bear",
+        "description": "Bearish candlestick patterns from 1m",
+        "indicators": {
+          "cdl_bearish_1m": 2.0
+        }
+      }
+    }
+  },
+  "indicators": [
+    {
+      "name": "cdl_bullish_1m",
+      "indicator_class": "CDLPatternIndicator",
+      "type": "Indicator",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "patterns": ["CDLHAMMER", "CDLMORNINGSTAR"],
+        "trend": "bullish",
+        "lookback": 10
+      }
+    },
+    {
+      "name": "cdl_bullish_5m",
+      "indicator_class": "CDLPatternIndicator",
+      "type": "Indicator",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "patterns": ["CDLPIERCING", "CDLENGULFING"],
+        "trend": "bullish",
+        "lookback": 10
+      }
+    },
+    {
+      "name": "cdl_bearish_1m",
+      "indicator_class": "CDLPatternIndicator",
+      "type": "Indicator",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "patterns": ["CDLSHOOTINGSTAR", "CDLEVENINGSTAR"],
+        "trend": "bearish",
+        "lookback": 10
+      }
+    }
+  ]
+}

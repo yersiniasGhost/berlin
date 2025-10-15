@@ -1,0 +1,81 @@
+{
+  "test_name": "sma-common-patterns-1m",
+  "monitor": {
+    "_id": "65f2d5555555555555555555",
+    "user_id": "65f2d6666666666666666666",
+    "name": "SMA + Common Bullish Patterns 1m",
+    "description": "Simple 1m SMA with multiple common bullish candlestick patterns for entry",
+    "trade_executor": {
+      "default_position_size": 100.0,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 0.04,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.015,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "enter_long": [
+      {
+        "name": "bull_entry_bar",
+        "threshold": 0.5
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "bear_exit_bar",
+        "threshold": 0.5
+      }
+    ],
+    "bars": {
+      "bull_entry_bar": {
+        "type": "bull",
+        "description": "Bullish entry combining SMA and common candlestick patterns",
+        "indicators": {
+          "sma_1m": 2.0,
+          "cdl_bullish_1m": 1.5
+        }
+      },
+      "bear_exit_bar": {
+        "type": "bear",
+        "description": "Bearish exit based on SMA signal",
+        "indicators": {
+          "sma_1m": 2.0
+        }
+      }
+    }
+  },
+  "indicators": [
+    {
+      "name": "sma_1m",
+      "indicator_class": "SMACrossoverIndicator",
+      "type": "Indicator",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "period": 20,
+        "crossover_value": 0.01,
+        "trend": "bullish",
+        "lookback": 10
+      }
+    },
+    {
+      "name": "cdl_bullish_1m",
+      "indicator_class": "CDLPatternIndicator",
+      "type": "Indicator",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "patterns": [
+          "CDLHAMMER",
+          "CDLMORNINGSTAR",
+          "CDLENGULFING",
+          "CDLPIERCING",
+          "CDLHARAMI",
+          "CDLDOJI"
+        ],
+        "trend": "bullish",
+        "lookback": 10
+      }
+    }
+  ]
+}
