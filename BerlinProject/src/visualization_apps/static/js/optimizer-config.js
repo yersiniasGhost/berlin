@@ -219,7 +219,7 @@ function renderConditionsWithRanges(containerId, conditions) {
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Start</label>
+                    <label class="form-label">Threshold</label>
                     <input type="number" class="form-control form-control-sm" value="${startThreshold}" step="0.01"
                            data-condition-index="${index}" data-field="threshold_start">
                 </div>
@@ -408,14 +408,17 @@ function createBarCardWithRanges(barName, barConfig) {
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Weight</label>
                     <input type="number" class="form-control form-control-sm" value="${startValue}"
                            data-bar-indicator-weight-start step="0.1" placeholder="Start">
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min</label>
                     <input type="number" class="form-control form-control-sm" value="${weightRange[0]}"
                            data-bar-indicator-weight-min step="0.1" placeholder="Min">
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Max</label>
                     <input type="number" class="form-control form-control-sm" value="${weightRange[1]}"
                            data-bar-indicator-weight-max step="0.1" placeholder="Max">
                 </div>
@@ -614,8 +617,15 @@ function updateIndicatorParamsWithRanges(index, className) {
         } else if (param.type === 'choice') {
             // Handle choice parameters (fixed values, no ranges)
             const choices = param.choices || [];
+
+            // For CDLPattern trend parameter, default to 'bullish' if not already set
+            let defaultValue = param.default;
+            if (param.name === 'trend' && className === 'CDLPatternIndicator' && !defaultValue) {
+                defaultValue = 'bullish';
+            }
+
             let optionsHtml = choices.map(choice =>
-                `<option value="${choice}" ${choice === param.default ? 'selected' : ''}>${choice}</option>`
+                `<option value="${choice}" ${choice === defaultValue ? 'selected' : ''}>${choice}</option>`
             ).join('');
 
             // Add onchange handler for trend parameter to update pattern listboxes
@@ -686,6 +696,25 @@ function addIndicator() {
     container.insertAdjacentHTML('beforeend', indicatorHtml);
 
     refreshBarIndicatorDropdowns();
+
+    // Add event listener to indicator class selector to auto-populate patterns for CDLPattern
+    const card = container.querySelector(`[data-indicator-index="${index}"]`);
+    if (card) {
+        const classSelect = card.querySelector('[data-indicator-field="indicator_class"]');
+        if (classSelect) {
+            classSelect.addEventListener('change', function() {
+                if (this.value === 'CDLPatternIndicator') {
+                    // Auto-populate params which will set trend to 'bullish' and initialize pattern listbox
+                    updateIndicatorParamsWithRanges(index, 'CDLPatternIndicator');
+
+                    // Initialize pattern listbox with bullish patterns
+                    setTimeout(() => {
+                        initializePatternListbox(index, 'bullish', []);
+                    }, 50);
+                }
+            });
+        }
+    }
 }
 
 function removeIndicator(index) {
@@ -732,14 +761,17 @@ function addBarIndicatorWithRange(button) {
                 </select>
             </div>
             <div class="col-md-2">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Weight</label>
                 <input type="number" class="form-control form-control-sm" value="1.0"
                        data-bar-indicator-weight-start step="0.1" placeholder="Start">
             </div>
             <div class="col-md-2">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min</label>
                 <input type="number" class="form-control form-control-sm" value="${DEFAULT_WEIGHT_RANGE[0]}"
                        data-bar-indicator-weight-min step="0.1" placeholder="Min">
             </div>
             <div class="col-md-2">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Max</label>
                 <input type="number" class="form-control form-control-sm" value="${DEFAULT_WEIGHT_RANGE[1]}"
                        data-bar-indicator-weight-max step="0.1" placeholder="Max">
             </div>
@@ -796,7 +828,7 @@ function addCondition(containerId) {
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label">Start</label>
+                <label class="form-label">Threshold</label>
                 <input type="number" class="form-control form-control-sm" value="0.5" step="0.01"
                        data-condition-index="${newIndex}" data-field="threshold_start">
             </div>

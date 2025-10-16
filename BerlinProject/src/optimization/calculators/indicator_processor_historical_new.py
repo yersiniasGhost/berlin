@@ -40,7 +40,14 @@ class IndicatorCalculator:
             trigger_values_with_lookback = result
             lookback = self.config.parameters.get('lookback', None)
             if lookback:
+                # Debug logging
+                print(f"[CDL DECAY] {self.config.name}: Applying lookback decay with lookback={lookback}")
                 trigger_values_with_lookback = self._apply_lookback_vectorized(result, lookback)
+                # Show first 20 values to verify decay is working
+                print(f"[CDL DECAY] First 20 raw values: {result[:20]}")
+                print(f"[CDL DECAY] First 20 decayed values: {trigger_values_with_lookback[:20]}")
+            else:
+                print(f"[CDL DECAY] {self.config.name}: No lookback parameter found, skipping decay")
             return result, components, trigger_values_with_lookback
 
         except Exception as e:
@@ -84,6 +91,9 @@ class IndicatorCalculator:
             # Calculate decay based on position from end
             lookback_location = len(window) - last_trigger_idx - 1
             lookback_ratio = lookback_location / float(lookback)
+
+            # Clamp lookback_ratio to [0, 1] range to prevent values going below 0
+            lookback_ratio = min(1.0, max(0.0, lookback_ratio))
 
             # Apply same formula as live system
             trigger_values_with_lookback[i] = (1.0 - lookback_ratio) * np.sign(trigger_value)

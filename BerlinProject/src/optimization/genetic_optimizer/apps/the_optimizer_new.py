@@ -48,7 +48,7 @@ def display_final_results(fitness_calculator, best_individual):
     # Show indicators
     print(f"   Indicators ({len(best_individual.monitor_configuration.indicators)}):")
     for indicator in best_individual.monitor_configuration.indicators:
-        print(f"     • {indicator.name}: {indicator.function}")
+        print(f"     • {indicator.name}: {indicator.indicator_class}")
         key_params = {k: v for k, v in indicator.parameters.items() if k in ['period', 'lookback', 'threshold']}
         if key_params:
             print(f"       {key_params}")

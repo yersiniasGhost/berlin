@@ -883,7 +883,7 @@ def save_optimization_results_with_new_indicators(best_individuals_log, best_ind
                             'name': getattr(indicator, 'name', 'unknown'),
                             'display_name': getattr(indicator, 'display_name', getattr(indicator, 'name', 'unknown')),
                             'type': getattr(indicator, 'type', 'unknown'),
-                            'function': getattr(indicator, 'function', 'unknown'),
+                            'indicator_class': getattr(indicator, 'indicator_class', 'unknown'),
                             'agg_config': getattr(indicator, 'agg_config', '1m-normal'),
                             'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
                             'parameters': dict(getattr(indicator, 'parameters', {})),
@@ -1337,7 +1337,7 @@ def export_optimized_configs():
                         indicator_dict = {
                             'name': indicator.name,
                             'type': indicator.type,
-                            'function': indicator.function,
+                            'indicator_class': indicator.indicator_class,
                             'agg_config': indicator.agg_config,
                             'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
                             'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}

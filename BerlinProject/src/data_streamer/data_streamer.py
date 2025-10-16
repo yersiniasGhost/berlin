@@ -81,7 +81,7 @@ class DataStreamer:
         # Get portfolio performance metrics
         portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
 
-        # Send data to external tools
+        # Send data to external tools (including component data)
         for tool in self.external_tools:
             tool.process_tick(
                 card_id=self.card_id,
@@ -90,7 +90,8 @@ class DataStreamer:
                 indicators=self.indicators,
                 raw_indicators=self.raw_indicators,
                 bar_scores=self.bar_scores,
-                portfolio_metrics=portfolio_metrics
+                portfolio_metrics=portfolio_metrics,
+                component_data=self.indicator_processor.component_data
             )
 
     def _create_aggregator(self, agg_type: str, symbol: str, timeframe: str) -> CandleAggregator:

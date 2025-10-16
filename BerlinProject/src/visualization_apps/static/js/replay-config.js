@@ -16,40 +16,16 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
-    // Monitor file input
-    document.getElementById('monitorFileInput').addEventListener('change', function() {
-        const loadBtn = document.getElementById('loadMonitorBtn');
-        loadBtn.disabled = !this.files.length;
-    });
-
-    // Data file input
-    document.getElementById('dataFileInput').addEventListener('change', function() {
-        const loadBtn = document.getElementById('loadDataBtn');
-        loadBtn.disabled = !this.files.length;
-    });
-
-    // Load buttons
-    document.getElementById('loadMonitorBtn').addEventListener('click', loadMonitorConfiguration);
-    document.getElementById('loadDataBtn').addEventListener('click', loadDataConfiguration);
-
-    // Save button
-    document.getElementById('saveBtn').addEventListener('click', saveConfiguration);
-
-    // Cancel button
-    document.getElementById('cancelBtn').addEventListener('click', function() {
-        if (confirm('Are you sure you want to cancel? Unsaved changes will be lost.')) {
-            document.getElementById('configEditor').style.display = 'none';
-            monitorConfig = null;
-            dataConfig = null;
-        }
-    });
-
-    // Run replay button
-    document.getElementById('runReplayBtn').addEventListener('click', runReplay);
-
     // Add indicator/bar buttons
-    document.getElementById('addIndicatorBtn').addEventListener('click', addIndicator);
-    document.getElementById('addBarBtn').addEventListener('click', addBar);
+    const addIndicatorBtn = document.getElementById('addIndicatorBtn');
+    const addBarBtn = document.getElementById('addBarBtn');
+
+    if (addIndicatorBtn) {
+        addIndicatorBtn.addEventListener('click', addIndicator);
+    }
+    if (addBarBtn) {
+        addBarBtn.addEventListener('click', addBar);
+    }
 }
 
 async function loadIndicatorClasses() {
@@ -546,6 +522,44 @@ function removeBar(barName) {
     if (card && confirm('Remove this bar?')) {
         card.remove();
         refreshConditionDropdowns();
+    }
+}
+
+function addCondition(containerId) {
+    const container = document.getElementById(containerId);
+    const conditions = container.querySelectorAll('[data-condition-index]');
+    const newIndex = conditions.length / 2; // 2 inputs per condition (name, threshold)
+
+    const conditionHtml = `
+        <div class="row g-2 mb-2">
+            <div class="col-md-5">
+                <select class="form-select" data-condition-index="${newIndex}" data-field="name">
+                    ${generateBarNameOptions('')}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <input type="number" class="form-control" placeholder="Threshold"
+                       value="0.5" step="0.01"
+                       data-condition-index="${newIndex}" data-field="threshold">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-danger w-100" onclick="removeCondition('${containerId}', ${newIndex})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+
+    const addButton = container.querySelector('.btn-primary');
+    addButton.insertAdjacentHTML('beforebegin', conditionHtml);
+}
+
+function removeCondition(containerId, index) {
+    const container = document.getElementById(containerId);
+    const inputs = container.querySelectorAll(`[data-condition-index="${index}"]`);
+
+    if (inputs.length > 0 && confirm('Remove this condition?')) {
+        inputs[0].closest('.row.g-2').remove();
     }
 }
 

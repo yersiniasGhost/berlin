@@ -619,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showAlert('Please load both GA and data configurations first', 'warning');
             return;
         }
-        
+
         try {
             this.disabled = true;
             pauseOptimizerBtn.disabled = false;
@@ -631,15 +631,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
             hideElitesButton(); // Hide save button when starting new optimization
             clearAllChartsAndData(); // Clear previous optimization data
-            
+
+            // IMPORTANT: Re-collect all configs from the UI to capture any edits made after loading
+            // This ensures that date/ticker changes and other edits are reflected in the optimization
+            const updatedGAConfig = collectAllConfigs();
+            collectDataConfigData(); // Updates the global dataConfig with current UI values
+
             const response = await fetch('/optimizer/api/start_optimization', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    ga_config: window.currentConfigs.ga_config,
-                    data_config: window.currentConfigs.data_config
+                    ga_config: updatedGAConfig,
+                    data_config: dataConfig
                 })
             });
             

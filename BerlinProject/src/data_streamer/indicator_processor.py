@@ -1,18 +1,19 @@
 """
-Enhanced IndicatorProcessor with proper history tracking - CLEAN VERSION
+Enhanced IndicatorProcessor with proper history tracking - Refactored to use IndicatorRegistry
 """
 
 import logging
-from typing import Tuple
+from typing import Tuple, Dict, List
 from datetime import datetime
+import numpy as np
 
 from candle_aggregator.candle_aggregator import CandleAggregator
-from candle_aggregator.candle_aggregator_normal import CANormal
-from candle_aggregator.candle_aggregator_heiken import CAHeiken
-from features.indicators2 import support_level, resistance_level
 from models.monitor_configuration import MonitorConfiguration
-from features.indicators import *
 from models.tick_data import TickData
+from indicator_triggers.indicator_base import IndicatorRegistry
+from features.indicators import *
+# Import refactored indicators to ensure they are registered
+import indicator_triggers.refactored_indicators
 
 logger = logging.getLogger('IndicatorProcessor')
 
@@ -33,14 +34,39 @@ class IndicatorProcessor:
         self.max_history_length: int = 100  # Keep last 100 data points
         self.indicators: Dict[str, float] = {}
         self.raw_indicators: Dict[str, float] = {}
+        self.component_data: Dict[str, float] = {}  # NEW: Store component data (MACD, SMA values, etc.)
 
         self.indicator_trigger_history: Dict[str, List[float]] = {}
         for indicator in self.config.indicators:
             self.indicator_trigger_history[indicator.name] = []
 
+        # Create indicator objects using IndicatorRegistry
+        self.indicator_objects: Dict[str, any] = {}
+        self._initialize_indicators()
+
         self.first_pass = True
 
         logger.info(f"IndicatorProcessor initialized with {len(self.config.indicators)} indicators")
+
+    def _initialize_indicators(self) -> None:
+        """Initialize indicator objects using IndicatorRegistry"""
+        for indicator_def in self.config.indicators:
+            try:
+                ind_class_name = indicator_def.indicator_class
+
+                # Get indicator class from registry
+                indicator_class = IndicatorRegistry().get_indicator_class(ind_class_name)
+
+                # Instantiate the indicator with config
+                indicator_instance = indicator_class(indicator_def)
+                self.indicator_objects[indicator_def.name] = indicator_instance
+
+                logger.debug(f"Initialized indicator: {indicator_def.name} using {ind_class_name}")
+
+            except Exception as e:
+                logger.error(f"Failed to initialize indicator '{indicator_def.name}': {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
     # def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
     #     Dict[str, float], Dict[str, float], Dict[str, float]]:
@@ -132,8 +158,8 @@ class IndicatorProcessor:
 
             if should_calculate:
                 try:
-                    # Calculate the indicator
-                    result = self._calculate_single_indicator(all_candles, indicator_def)
+                    # Calculate the indicator (now returns tuple of result and components)
+                    result, components = self._calculate_single_indicator(all_candles, indicator_def)
 
                     if result is not None and len(result) > 0:
                         raw_value = float(result[-1])
@@ -152,6 +178,18 @@ class IndicatorProcessor:
                         # Store decayed value (user-facing indicator name)
                         self.indicators[indicator_def.name] = decay_value
 
+                        # Store component data (latest values only for real-time)
+                        if components:
+                            for component_name, component_values in components.items():
+                                # Store the latest component value
+                                if isinstance(component_values, (list, np.ndarray)) and len(component_values) > 0:
+                                    latest_value = float(component_values[-1]) if not np.isnan(component_values[-1]) else 0.0
+                                    self.component_data[f"{indicator_def.name}_{component_name}"] = latest_value
+
+                        # Debug: Print when candlestick patterns trigger
+                        if "CDLPatternIndicator" in str(indicator_def.indicator_class) and raw_value > 0:
+                            print(f"  📊 Indicator '{indicator_def.name}': raw={raw_value:.4f}, decay={decay_value:.4f}")
+
                         logger.debug(f"Calculated {indicator_def.name}: raw={raw_value:.4f}, decay={decay_value:.4f}")
 
                 except Exception as e:
@@ -164,6 +202,12 @@ class IndicatorProcessor:
 
         # Calculate bar scores from current indicator values
         bar_scores: Dict[str, float] = self._calculate_bar_scores(self.indicators)
+
+        # Debug: Print bar scores when patterns are active
+        if any("CDLPatternIndicator" in str(ind.indicator_class) for ind in self.config.indicators):
+            active_patterns = [name for name, val in self.indicators.items() if val > 0 and any(name == ind.name for ind in self.config.indicators if "CDLPatternIndicator" in str(ind.indicator_class))]
+            if active_patterns:
+                print(f"  📈 Bar Scores: {bar_scores}")
 
         # Log summary
         active_indicators = len([v for v in self.indicators.values() if v > 0])
@@ -215,40 +259,43 @@ class IndicatorProcessor:
 
     def _calculate_single_indicator(self,
                                     tick_history: List[TickData],
-                                    indicator_def) -> np.ndarray:
+                                    indicator_def) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        """
+        Calculate a single indicator using IndicatorRegistry system
+
+        Returns:
+            Tuple of (trigger_values, component_data)
+            - trigger_values: Array of indicator trigger signals
+            - component_data: Dict of component values (e.g., MACD components, SMA values)
+        """
         try:
             if len(tick_history) < 10:  # Need minimum data
-                return np.array([0.0])
+                return np.array([0.0]), {}
 
-            # Calculate based on function type
-            result = None
+            # Get the indicator object
+            if indicator_def.name not in self.indicator_objects:
+                logger.warning(f"Indicator object not found: {indicator_def.name}")
+                return np.array([0.0]), {}
 
-            if indicator_def.function == 'sma_crossover':
-                result = sma_crossover(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'macd_histogram_crossover':
-                result = macd_histogram_crossover(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'bol_bands_lower_band_bounce':
-                result = bol_bands_lower_band_bounce(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'support_level':
-                result = support_level(tick_history, indicator_def.parameters)
-            elif indicator_def.function == 'resistance_level':
-                result = resistance_level(tick_history, indicator_def.parameters)
-            else:
-                logger.warning(f"Unknown indicator function: {indicator_def.function}")
-                result = np.array([0.0])
+            indicator = self.indicator_objects[indicator_def.name]
 
-            # Ensure we return a valid numpy array
+            # Calculate using the indicator's calculate method
+            result, components = indicator.calculate(tick_history)
+
+            # Ensure we return valid numpy arrays
             if result is not None and hasattr(result, '__len__') and len(result) > 0:
                 if not isinstance(result, np.ndarray):
                     result = np.array(result)
             else:
                 result = np.array([0.0])
 
-            return result
+            return result, components
 
         except Exception as e:
-            logger.error(f"Error calculating indicator '{indicator_def.function}': {e}")
-            return np.array([0.0])
+            logger.error(f"Error calculating indicator '{indicator_def.name}': {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return np.array([0.0]), {}
 
 
     def _calculate_single_indicator_orig(self,

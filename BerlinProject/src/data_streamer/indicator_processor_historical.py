@@ -123,20 +123,23 @@ class IndicatorProcessorHistorical:
     @staticmethod
     def calculate_indicator(history: List[TickData], indicator: IndicatorDefinition) -> Dict[str, np.ndarray]:
 
-        if indicator.function == 'sma_crossover':
+        # Use indicator_class (new system) with fallback to function (old system) for compatibility
+        indicator_class = getattr(indicator, 'indicator_class', None) or getattr(indicator, 'function', None)
+
+        if indicator_class == 'sma_crossover':
             return {indicator.name: sma_crossover(history, indicator.parameters)}
 
-        elif indicator.function == 'macd_histogram_crossover':
+        elif indicator_class == 'macd_histogram_crossover':
             return {indicator.name: macd_histogram_crossover(history, indicator.parameters)}
 
-        elif indicator.function == 'bol_bands_lower_band_bounce':
+        elif indicator_class == 'bol_bands_lower_band_bounce':
             return {indicator.name: bol_bands_lower_band_bounce(history, indicator.parameters)}
 
-        elif indicator.function == 'support_level':
+        elif indicator_class == 'support_level':
             return {indicator.name: support_level(history, indicator.parameters)}
 
-        elif indicator.function == 'resistance_level':
+        elif indicator_class == 'resistance_level':
             return {indicator.name: resistance_level(history, indicator.parameters)}
 
         else:
-            raise ValueError(f"Unknown indicator: {indicator.name}")
+            raise ValueError(f"Unknown indicator: {indicator.name} (class: {indicator_class})")

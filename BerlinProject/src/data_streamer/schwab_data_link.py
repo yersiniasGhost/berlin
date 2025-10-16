@@ -58,7 +58,7 @@ class SchwabDataLink(DataLink):
 
         # Validation - only require symbol and price
         if not symbol or not close_price:
-            print(f"Missing required data: symbol={symbol}, price={close_price}")
+            logger.debug(f"Missing required data: symbol={symbol}, price={close_price}")
             return None
 
         # Convert price and validate
@@ -368,7 +368,7 @@ class SchwabDataLink(DataLink):
         """
         Process quote data and convert to TickData before passing to DataStreamers
         """
-        logger.info(f"Received quote data: {len(data)} quotes")
+        logger.debug(f"Received quote data: {len(data)} quotes")
 
         for quote in data:
             try:
@@ -389,7 +389,7 @@ class SchwabDataLink(DataLink):
 
                 symbol = tick_data.symbol
 
-                logger.info(f"Processing TickData for {symbol}: ${tick_data.close}")
+                logger.debug(f"Processing TickData for {symbol}: ${tick_data.close}")
 
                 # Pass TickData to all registered DataStreamers for this symbol
                 if symbol in self.data_streamers:

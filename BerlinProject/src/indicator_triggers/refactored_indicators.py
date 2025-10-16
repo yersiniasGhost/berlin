@@ -446,6 +446,17 @@ class CDLPatternIndicator(BaseIndicator):
                 choices=["bullish", "bearish"],
                 description="Direction of trend to detect (bullish or bearish patterns)",
                 ui_group="Signal Settings"
+            ),
+            ParameterSpec(
+                name="lookback",
+                display_name="Lookback Period",
+                parameter_type=ParameterType.INTEGER,
+                default_value=10,
+                min_value=1,
+                max_value=100,
+                step=1,
+                description="Number of candles for trigger decay (1.0 → 0.0)",
+                ui_group="Signal Settings"
             )
         ]
 
@@ -494,11 +505,18 @@ class CDLPatternIndicator(BaseIndicator):
                     # Always return positive 1.0 when pattern detected
                     if trend == "bullish":
                         # Detect bullish patterns (positive TA-Lib values)
-                        result = np.maximum(result, (pattern_values > 0).astype(float))
+                        pattern_detected = (pattern_values > 0).astype(float)
+                        # Debug: Check if pattern was detected on the most recent candle
+                        if len(pattern_detected) > 0 and pattern_detected[-1] == 1.0:
+                            print(f"🔔 [CDL PATTERN DETECTED] {pattern_name} (bullish) on latest candle!")
+                        result = np.maximum(result, pattern_detected)
                     else:  # bearish
                         # Detect bearish patterns (negative TA-Lib values)
                         # Convert to positive 1.0 for consistent bar weighting
-                        result = np.maximum(result, (pattern_values < 0).astype(float))
+                        pattern_detected = (pattern_values < 0).astype(float)
+                        if len(pattern_detected) > 0 and pattern_detected[-1] == 1.0:
+                            print(f"🔔 [CDL PATTERN DETECTED] {pattern_name} (bearish) on latest candle!")
+                        result = np.maximum(result, pattern_detected)
 
                 except Exception as e:
                     # If pattern function fails, skip it

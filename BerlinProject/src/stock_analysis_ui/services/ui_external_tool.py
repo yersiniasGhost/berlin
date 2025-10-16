@@ -75,7 +75,8 @@ class UIExternalTool(ExternalTool):
 
     def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
                      indicators: Dict[str, float], raw_indicators: Dict[str, float],
-                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
+                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None,
+                     component_data: Optional[Dict[str, float]] = None) -> None:
         """
         Process real-time tick data and send updates to browser (session-specific) - Enhanced for candlestick support
         """
@@ -89,7 +90,7 @@ class UIExternalTool(ExternalTool):
             self.last_update_time[card_id] = current_time
             self.update_counter[card_id] += 1
 
-            # Build update data - Enhanced with candlestick information
+            # Build update data - Enhanced with candlestick information and component data
             update_data = {
                 'card_id': card_id,
                 'symbol': symbol,
@@ -102,6 +103,10 @@ class UIExternalTool(ExternalTool):
                 'bar_scores': bar_scores,
                 'update_count': self.update_counter[card_id]
             }
+
+            # Add component data if available (MACD components, SMA values, etc.)
+            if component_data:
+                update_data['components'] = component_data
 
             # Add portfolio data if available
             if portfolio_metrics:

@@ -6,16 +6,15 @@ from pydantic import BaseModel, Field as PydanticField
 #  Current args for app config are 1m, 5m, 15m, 30m ,1h. Then "normal" or "heiken"
 
 class IndicatorDefinition(BaseModel):
-    id: PyObjectId = PydanticField(None, alias="_id")
+    id: Optional[PyObjectId] = PydanticField(None, alias="_id")
     name: str
     type: Literal[CANDLE_STICK_PATTERN, INDICATOR_TYPE]
-    indicator_class: Optional[str] = None
-    function: Optional[str] = None
-    parameters: Optional[dict] = None
-    ranges: Optional[dict] = None
-    description: str = "NA"
-    agg_config: Optional[str] = None
-    calc_on_pip: bool
+    indicator_class: str
+    parameters: Optional[dict] = PydanticField(default=None)
+    ranges: Optional[dict] = PydanticField(default=None)
+    description: str = PydanticField(default="NA")
+    agg_config: Optional[str] = PydanticField(default=None)
+    calc_on_pip: bool = PydanticField(default=False)
 
     #     change time increment to agg_config which is mix of interval and HA or normal
 

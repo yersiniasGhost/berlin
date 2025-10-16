@@ -156,12 +156,11 @@ def load_monitor_config(config_file: str) -> Optional[MonitorConfiguration]:
             indicator = IndicatorDefinition(
                 name=ind_data['name'],
                 type=ind_data['type'],
-                function=ind_data['function'],
+                indicator_class=ind_data['indicator_class'],
                 parameters=ind_data['parameters'],
-                # CHANGED: Use agg_config instead of time_increment
-                agg_config=ind_data.get('agg_config'),  # ← NEW: This reads from JSON
-                calc_on_pip=ind_data.get('calc_on_pip', False),  # ← Added default
-                ranges=ind_data.get('ranges')  # ← Added ranges if they exist
+                agg_config=ind_data.get('agg_config'),
+                calc_on_pip=ind_data.get('calc_on_pip', False),
+                ranges=ind_data.get('ranges')
             )
             indicators.append(indicator)
 
