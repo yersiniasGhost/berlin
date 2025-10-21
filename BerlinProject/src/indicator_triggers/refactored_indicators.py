@@ -102,9 +102,20 @@ class SMACrossoverIndicator(BaseIndicator):
                 choices=["bullish", "bearish"],
                 description="Direction of trend to detect",
                 ui_group="Signal Settings"
+            ),
+            ParameterSpec(
+                name="lookback",
+                display_name="Lookback Period",
+                parameter_type=ParameterType.INTEGER,
+                default_value=10,
+                min_value=1,
+                max_value=100,
+                step=1,
+                description="Number of candles for trigger decay (1.0 → 0.0)",
+                ui_group="Signal Settings"
             )
         ]
-    
+
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         period = self.get_parameter("period")
         crossover_value = self.get_parameter("crossover_value")
@@ -201,9 +212,20 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 choices=["bullish", "bearish"],
                 description="Direction of trend to detect",
                 ui_group="Signal Settings"
+            ),
+            ParameterSpec(
+                name="lookback",
+                display_name="Lookback Period",
+                parameter_type=ParameterType.INTEGER,
+                default_value=10,
+                min_value=1,
+                max_value=100,
+                step=1,
+                description="Number of candles for trigger decay (1.0 → 0.0)",
+                ui_group="Signal Settings"
             )
         ]
-    
+
     def calculate(self, tick_data: List[TickData]) -> np.ndarray:
         fast = self.get_parameter("fast")
         slow = self.get_parameter("slow")

@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const validateBtn = document.getElementById('validateConfigBtn');
     const saveAsJsonBtn = document.getElementById('saveAsJsonBtn');
     const validationResults = document.getElementById('validationResults');
-    
+
     // Make currentConfigs globally accessible
     window.currentConfigs = {};
     
@@ -77,10 +77,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('examplesLoaded', function(event) {
         loadExampleConfigurations(event.detail);
     });
-    
+
     function loadConfigurations(filePaths) {
         const loadConfigsBtn = document.getElementById('loadConfigsBtn');
-        
+
         fetch(`${window.location.pathname}/api/load_configs`, {
             method: 'POST',
             headers: {
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ga_config: data.ga_config,
                     data_config: data.data_config
                 };
-                
+
                 renderConfigurationForms();
                 showAlert('Configurations loaded successfully', 'success');
             } else {
@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     function loadExampleConfigurations(examples) {
         window.currentConfigs = examples;
         renderConfigurationForms();
@@ -146,10 +146,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ===== REUSABLE FORM GENERATION FUNCTIONS =====
-    
+
+    function isFieldMissing(fieldName, parentObject) {
+        // Check if a field is marked as missing required
+        const isMissing = parentObject && parentObject['__missing_required_' + fieldName];
+        return isMissing || false;
+    }
+
+    function getErrorFlagHtml(isMissing, value, isFinalValue = false) {
+        if (isMissing && !isFinalValue) {
+            // Required field is missing
+            return '<span class="badge bg-danger ms-1" title="Required field missing from config" data-bs-toggle="tooltip"><i class="fas fa-exclamation-circle"></i></span>';
+        }
+        if (!isFinalValue && (!value || value === '' || (Array.isArray(value) && value.length === 0))) {
+            // Field is empty (required but no value)
+            return '<span class="badge bg-danger ms-1" title="Required field is empty" data-bs-toggle="tooltip"><i class="fas fa-exclamation-circle"></i></span>';
+        }
+        return '';
+    }
+
     function createFormField(label, name, value, type = 'text', options = {}) {
         const fieldId = `${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const {placeholder = '', min, max, step, choices, description, readonly = false} = options;
+        const {placeholder = '', min, max, step, choices, description, readonly = false, isMissingRequired = false} = options;
         
         let inputHtml = '';
         const readonlyAttr = readonly ? 'readonly style="font-size: 0.875rem; background-color: #f8f9fa;"' : 'style="font-size: 0.875rem;"';
@@ -183,9 +201,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     value="${value || ''}" placeholder="${placeholder}" ${readonlyAttr}>`;
         }
         
+        const errorFlag = getErrorFlagHtml(isMissingRequired, value);
+
         return `
             <div class="col-md-6 mb-2">
-                <label for="${fieldId}" class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">${label}</label>
+                <label for="${fieldId}" class="form-label mb-1" style="font-size: 0.875rem; font-weight: 500;">
+                    ${label}${errorFlag}
+                </label>
                 ${inputHtml}
             </div>
         `;
@@ -284,12 +306,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Deep recursive function to create nested object fields
-    function createDeepObjectFields(obj, basePath, level = 0, sectionType = '') {
+    function createDeepObjectFields(obj, basePath, level = 0, sectionType = '', parentObj = null) {
         let fieldsHtml = '';
-        
+
         Object.keys(obj).forEach(key => {
+            // Skip internal metadata fields
+            if (key.startsWith('__')) {
+                return;
+            }
+
             const value = obj[key];
             const fieldPath = `${basePath}.${key}`;
+            const isMissingRequired = isFieldMissing(key, obj);
             
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                 // Special handling for bars section - don't create sub-panels for "indicators"
@@ -475,6 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
+                fieldOptions.isMissingRequired = isMissingRequired;
                 fieldsHtml += createFormField(
                     key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                     fieldPath,
@@ -1631,7 +1660,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function convertFormDataToConfig(formData, configType) {
         const config = {};
-        
+
         for (let [key, value] of formData.entries()) {
             if (value === 'true') {
                 value = true;
@@ -1640,15 +1669,15 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (value !== '' && !isNaN(value)) {
                 value = parseFloat(value);
             }
-            
+
             setNestedProperty(config, key, value);
         }
-        
+
         // Post-process objectives array to ensure proper structure
         if (config.objectives && Array.isArray(config.objectives)) {
             config.objectives = config.objectives.filter(obj => obj && (obj.objective || obj.weight));
         }
-        
+
         return config;
     }
     
@@ -1798,7 +1827,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update config from current form state before saving
             updateConfigFromForm(configType, null);
-            
+
             const configData = window.currentConfigs[configType];
             const jsonString = JSON.stringify(configData, null, 2);
             const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
