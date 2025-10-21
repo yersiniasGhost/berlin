@@ -20,8 +20,13 @@ class IndicatorCalculator:
         # Use indicator_class if available, otherwise fall back to name for backwards compatibility
         ind: str = config.indicator_class if config.indicator_class else config.name
         if not ind:
-            raise ValueError("Invalid indicator configuration.  Missing 'indicator' name/type")
-        self.indicator = IndicatorRegistry().get_indicator_class(ind)(self.config)
+            raise ValueError(f"Indicator '{config.name}': Missing 'indicator_class' or 'name'")
+
+        try:
+            self.indicator = IndicatorRegistry().get_indicator_class(ind)(self.config)
+        except ValueError as val_err:
+            # Re-raise with indicator name for better error messaging
+            raise ValueError(f"Indicator '{config.name}': {str(val_err)}")
 
     @property
     def name(self) -> str:
@@ -125,12 +130,27 @@ class IndicatorProcessorHistoricalNew:
         # logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
 
     def _create_indicator_objects(self):
+        """Create indicator objects and collect validation errors"""
         indicators: List[IndicatorCalculator] = []
-        try:
-            for indicator_def in self.config.indicators:
+        validation_errors = []
+
+        for indicator_def in self.config.indicators:
+            try:
                 indicators.append(IndicatorCalculator(indicator_def))
-        except Exception as e:
-            print(e)
+            except ValueError as val_err:
+                # Capture parameter validation errors with indicator name
+                error_msg = str(val_err)
+                logger.error(f"❌ Validation error for indicator '{indicator_def.name}': {error_msg}")
+                validation_errors.append(error_msg)
+            except Exception as e:
+                logger.error(f"❌ Error initializing indicator '{indicator_def.name}': {e}")
+                validation_errors.append(f"Indicator '{indicator_def.name}' initialization error: {e}")
+
+        # If there are validation errors, raise them all at once
+        if validation_errors:
+            combined_error = "\n".join(validation_errors)
+            raise ValueError(f"Configuration validation failed:\n{combined_error}")
+
         return indicators
 
     def _initialize_primary_timeframe_info(self, aggregators: Dict[str, CandleAggregator]) -> None:

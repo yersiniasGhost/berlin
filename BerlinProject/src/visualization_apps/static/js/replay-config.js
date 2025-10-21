@@ -208,8 +208,8 @@ function renderIndicators(indicators) {
             const patterns = params.patterns || [];
             const trend = params.trend || 'bullish';
 
-            // Update params to show dual listbox
-            updateIndicatorParams(index, indicator.indicator_class);
+            // Update params to show dual listbox with current parameters
+            updateIndicatorParams(index, indicator.indicator_class, params);
 
             // Initialize pattern listbox with loaded patterns
             setTimeout(() => {
@@ -255,7 +255,7 @@ function createIndicatorCard(indicator, index) {
                     </div>
                 </div>
                 <div class="row g-2 mt-2" id="indicator-params-${index}">
-                    ${renderIndicatorParams(params, index)}
+                    ${renderIndicatorParams(params, index, indicatorClass)}
                 </div>
             </div>
         </div>
@@ -273,7 +273,14 @@ function generateIndicatorClassOptions(selectedClass) {
     return options;
 }
 
-function renderIndicatorParams(params, index) {
+function renderIndicatorParams(params, index, indicatorClass) {
+    // If we have a schema, use it to render ALL required parameters
+    // Otherwise fall back to rendering only the params we have
+    if (indicatorClass && indicatorClasses[indicatorClass]) {
+        return updateIndicatorParams(index, indicatorClass, params);
+    }
+
+    // Fallback: render only existing parameters
     let html = '';
     for (const [key, value] of Object.entries(params)) {
         const inputType = typeof value === 'number' ? 'number' : 'text';
@@ -300,22 +307,41 @@ function toggleIndicatorCard(index) {
     }
 }
 
-function updateIndicatorParams(index, className) {
-    if (!className || !indicatorClasses[className]) return;
+function updateIndicatorParams(index, className, currentParams = {}) {
+    if (!className || !indicatorClasses[className]) {
+        console.warn(`No schema found for indicator class: ${className}`);
+        return '';
+    }
 
     const schema = indicatorClasses[className];
     const paramsContainer = document.getElementById(`indicator-params-${index}`);
 
-    const paramGroups = schema.parameter_groups || {};
-    const allParams = Object.values(paramGroups).flat();
+    // Try to get parameter specs from schema
+    let paramSpecs = schema.parameter_specs || [];
+
+    // Fallback to parameter_groups if parameter_specs not available
+    if (paramSpecs.length === 0 && schema.parameter_groups) {
+        const paramGroups = schema.parameter_groups;
+        paramSpecs = Object.values(paramGroups).flat();
+    }
+
+    console.log(`Rendering parameters for ${className}:`, paramSpecs.length, 'parameters');
 
     let html = '';
-    allParams.forEach(param => {
-        if (param.type === 'list' && param.name === 'patterns') {
+    paramSpecs.forEach(param => {
+        // Get the current value or empty string if missing
+        const currentValue = currentParams[param.name] !== undefined ? currentParams[param.name] : '';
+        const isMissing = currentParams[param.name] === undefined;
+        const errorBadge = isMissing ? '<span class="badge bg-danger ms-1" title="Required field missing"><i class="fas fa-exclamation-circle"></i></span>' : '';
+
+        // Map parameter_type to type for compatibility
+        const paramType = param.type || param.parameter_type || 'text';
+
+        if (paramType === 'list' && param.name === 'patterns') {
             // Handle patterns parameter with dual listbox
             html += `
                 <div class="col-md-12">
-                    <label class="form-label">${param.display_name}</label>
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
                     <div class="row">
                         <div class="col-md-5">
                             <label class="form-label small">Selected Patterns</label>
@@ -323,7 +349,7 @@ function updateIndicatorParams(index, className) {
                                     data-indicator-param="patterns"
                                     data-param-type="list"
                                     data-listbox-type="selected"
-                                    style="max-width: 100%;">
+                                    style="max-width: 100%; ${isMissing ? 'border: 2px solid #dc3545;' : ''}">
                             </select>
                         </div>
                         <div class="col-md-2 d-flex flex-column justify-content-center align-items-center">
@@ -348,23 +374,37 @@ function updateIndicatorParams(index, className) {
                     </div>
                 </div>
             `;
-        } else if (param.type === 'list') {
+        } else if (paramType === 'LIST') {
             // Handle other LIST parameters with comma-separated input
-            const defaultList = Array.isArray(param.default) ? param.default.join(', ') : '';
+            const valueStr = Array.isArray(currentValue) ? currentValue.join(', ') : currentValue;
             html += `
                 <div class="col-md-6">
-                    <label class="form-label">${param.display_name}</label>
-                    <input type="text" class="form-control" value="${defaultList}"
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
+                    <input type="text" class="form-control ${isMissing ? 'border-danger' : ''}" value="${valueStr}"
                            data-indicator-param="${param.name}" data-param-type="list"
                            placeholder="${param.description || 'Comma-separated list'}">
                     <small class="form-text text-muted">Comma-separated values</small>
                 </div>
             `;
-        } else if (param.type === 'choice') {
+        } else if (paramType === 'list') {
+            // Handle other LIST parameters with comma-separated input
+            const defaultList = Array.isArray(param.default) ? param.default.join(', ') : '';
+            const valueStr = Array.isArray(currentValue) ? currentValue.join(', ') : (currentValue || defaultList);
+            html += `
+                <div class="col-md-6">
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
+                    <input type="text" class="form-control ${isMissing ? 'border-danger' : ''}" value="${valueStr}"
+                           data-indicator-param="${param.name}" data-param-type="list"
+                           placeholder="${param.description || 'Comma-separated list'}">
+                    <small class="form-text text-muted">Comma-separated values</small>
+                </div>
+            `;
+        } else if (paramType === 'CHOICE' || paramType === 'choice') {
             // Handle CHOICE parameters
             const choices = param.choices || [];
-            let optionsHtml = choices.map(choice =>
-                `<option value="${choice}" ${choice === param.default ? 'selected' : ''}>${choice}</option>`
+            let optionsHtml = '<option value="">-- Select --</option>';
+            optionsHtml += choices.map(choice =>
+                `<option value="${choice}" ${choice === currentValue ? 'selected' : ''}>${choice}</option>`
             ).join('');
 
             // Add onchange handler for trend parameter to update pattern listboxes
@@ -372,28 +412,38 @@ function updateIndicatorParams(index, className) {
 
             html += `
                 <div class="col-md-3">
-                    <label class="form-label">${param.display_name}</label>
-                    <select class="form-select" data-indicator-param="${param.name}" ${onchangeAttr}>
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
+                    <select class="form-select ${isMissing ? 'border-danger' : ''}" data-indicator-param="${param.name}" ${onchangeAttr}>
+                        <option value="">-- Select --</option>
                         ${optionsHtml}
                     </select>
                 </div>
             `;
         } else {
             // Handle numeric and text parameters
-            const inputType = param.type === 'integer' || param.type === 'float' ? 'number' : 'text';
-            const step = param.type === 'float' ? '0.001' : param.step || '1';
+            const inputType = (paramType === 'INTEGER' || paramType === 'FLOAT' || paramType === 'integer' || paramType === 'float') ? 'number' : 'text';
+            const step = (paramType === 'FLOAT' || paramType === 'float') ? '0.001' : (param.step || '1');
+            // Don't fill in defaults - only use the current value, leave empty if missing
+            const displayValue = currentValue !== undefined ? currentValue : '';
+
             html += `
                 <div class="col-md-3">
-                    <label class="form-label">${param.display_name}</label>
-                    <input type="${inputType}" class="form-control" value="${param.default}"
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
+                    <input type="${inputType}" class="form-control ${isMissing ? 'border-danger' : ''}" value="${displayValue}"
                            data-indicator-param="${param.name}" step="${step}"
+                           ${param.min_value !== undefined ? `min="${param.min_value}"` : ''}
+                           ${param.max_value !== undefined ? `max="${param.max_value}"` : ''}
                            placeholder="${param.description || ''}">
                 </div>
             `;
         }
     });
 
-    paramsContainer.innerHTML = html;
+    if (paramsContainer) {
+        paramsContainer.innerHTML = html;
+    }
+
+    return html;
 }
 
 function addIndicator() {
@@ -798,7 +848,12 @@ async function runReplay() {
             document.getElementById('resultsSection').style.display = 'block';
             showAlert('Replay completed successfully', 'success');
         } else {
-            showAlert('Failed to run replay: ' + result.error, 'danger');
+            // Check if there are validation errors to display
+            if (result.has_validation_errors && result.validation_errors) {
+                showValidationErrors(result.validation_errors);
+            } else {
+                showAlert('Failed to run replay: ' + result.error, 'danger');
+            }
         }
     } catch (error) {
         showAlert('Error running replay: ' + error.message, 'danger');
@@ -1012,6 +1067,52 @@ function populateTradeHistory(trades) {
 function showAlert(message, type) {
     // Simple alert for now - could be enhanced with Bootstrap toast
     alert(message);
+}
+
+function showValidationErrors(validationErrors) {
+    /**
+     * Display validation errors in a user-friendly format
+     * Each error contains indicator name and specific parameter issues
+     */
+    if (!validationErrors || validationErrors.length === 0) {
+        showAlert('Configuration validation failed', 'danger');
+        return;
+    }
+
+    // Format errors for display
+    let errorMessage = '❌ Configuration Validation Failed:\n\n';
+
+    validationErrors.forEach((error, index) => {
+        // Parse error message to extract indicator name and issues
+        // Error format: "Indicator 'sma_1m': Parameter validation failed for SMACrossoverIndicator:\n  • Missing required parameter: 'trend'"
+
+        const lines = error.split('\n');
+        const firstLine = lines[0];
+
+        // Extract indicator name
+        const indicatorMatch = firstLine.match(/Indicator '([^']+)'/);
+        const indicatorName = indicatorMatch ? indicatorMatch[1] : 'Unknown';
+
+        errorMessage += `\n${index + 1}. Indicator: ${indicatorName}\n`;
+
+        // Add all parameter issues
+        lines.forEach(line => {
+            if (line.includes('Missing required parameter')) {
+                const paramMatch = line.match(/'([^']+)'/);
+                const paramName = paramMatch ? paramMatch[1] : 'unknown';
+                errorMessage += `   ⚠️  Missing required parameter: "${paramName}"\n`;
+            } else if (line.includes('must be')) {
+                errorMessage += `   ⚠️  ${line.trim()}\n`;
+            } else if (line.includes('not in allowed choices')) {
+                errorMessage += `   ⚠️  ${line.trim()}\n`;
+            } else if (line.includes('is below') || line.includes('is above')) {
+                errorMessage += `   ⚠️  ${line.trim()}\n`;
+            }
+        });
+    });
+
+    console.error('Validation Errors:', validationErrors);
+    showAlert(errorMessage, 'danger');
 }
 
 // Pattern management functions for dual listbox
