@@ -212,6 +212,8 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
     """Run backtest with the provided monitor configuration using the old working method"""
     logger.info("🔍 Running monitor backtest for visualization")
 
+    validation_errors = []  # Track validation errors from indicators
+
     try:
         # Load monitor config
         with open(monitor_config_path) as f:
@@ -276,10 +278,25 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Calculate indicators and bar scores using the monitor configuration
         from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 
-        indicator_processor = IndicatorProcessorHistoricalNew(monitor_obj)
-        indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
-            indicator_processor.calculate_indicators(backtest_streamer.aggregators)
-        )
+        try:
+            indicator_processor = IndicatorProcessorHistoricalNew(monitor_obj)
+            indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
+                indicator_processor.calculate_indicators(backtest_streamer.aggregators)
+            )
+        except ValueError as val_err:
+            # Capture parameter validation errors
+            error_msg = str(val_err)
+            logger.error(f"❌ Parameter validation error: {error_msg}")
+
+            # Extract indicator name and error details from the validation error message
+            # Error format: "Parameter validation failed for SMACrossoverIndicator:\n  • Missing required parameter: 'trend'\n  • ..."
+            if "Parameter validation failed for" in error_msg:
+                validation_errors.append(error_msg)
+            else:
+                validation_errors.append(f"Indicator validation error: {error_msg}")
+
+            # If there are validation errors, raise them so they get returned to the UI
+            raise ValueError(f"Configuration validation failed: {validation_errors}")
 
         # Store the bar score history for later access
         backtest_streamer.bar_score_history_dict = bar_score_history_dict
@@ -412,7 +429,18 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         logger.error(f"❌ Error running monitor backtest: {e}")
         import traceback
         traceback.print_exc()
-        raise
+
+        # Return validation errors if any were collected
+        if validation_errors:
+            # Parse validation errors for better formatting
+            error_details = {
+                'main_error': str(e),
+                'validation_errors': validation_errors,
+                'has_validation_errors': True
+            }
+            raise ValueError(json.dumps(error_details))
+        else:
+            raise
 
 # ===== ROUTES =====
 
@@ -568,7 +596,24 @@ def run_visualization():
         logger.error(f"Error running visualization: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+
+        # Check if error contains validation error details (JSON string)
+        error_str = str(e)
+        try:
+            if error_str.startswith('{'):
+                error_details = json.loads(error_str)
+                if error_details.get('has_validation_errors'):
+                    # Return structured error with validation details
+                    return jsonify({
+                        'success': False,
+                        'error': 'Configuration validation failed',
+                        'validation_errors': error_details.get('validation_errors', []),
+                        'has_validation_errors': True
+                    })
+        except:
+            pass
+
+        return jsonify({'success': False, 'error': error_str})
 
 @replay_bp.route('/api/get_chart_data', methods=['POST'])
 def get_chart_data():
@@ -723,7 +768,65 @@ def run_replay():
         logger.error(f"Error running replay: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+
+        # Check if error contains validation error details (JSON string)
+        error_str = str(e)
+        try:
+            if error_str.startswith('{'):
+                error_details = json.loads(error_str)
+                if error_details.get('has_validation_errors'):
+                    # Return structured error with validation details
+                    return jsonify({
+                        'success': False,
+                        'error': 'Configuration validation failed',
+                        'validation_errors': error_details.get('validation_errors', []),
+                        'has_validation_errors': True
+                    })
+        except:
+            pass
+
+        return jsonify({'success': False, 'error': error_str})
+
+@replay_bp.route('/api/indicator_schemas', methods=['GET'])
+def get_indicator_schemas():
+    """Get all indicator schemas with their required fields"""
+    try:
+        # Late import to avoid conflicts at module load time
+        from indicator_triggers.indicator_base import IndicatorRegistry
+
+        registry = IndicatorRegistry()
+        schemas = registry.get_ui_schemas()
+
+        # Format schemas for UI consumption
+        formatted_schemas = {}
+        for indicator_name, schema in schemas.items():
+            formatted_schemas[indicator_name] = {
+                'name': schema.get('indicator_name', indicator_name),
+                'display_name': schema.get('display_name', indicator_name),
+                'description': schema.get('description', ''),
+                'parameter_specs': schema.get('parameter_specs', [])
+            }
+
+        return jsonify({
+            'success': True,
+            'schemas': formatted_schemas
+        })
+
+    except ImportError as ie:
+        logger.warning(f"Could not import indicator system: {ie}")
+        return jsonify({
+            'success': False,
+            'error': f'Indicator system not available: {str(ie)}'
+        })
+    except Exception as e:
+        logger.error(f"Error getting indicator schemas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 
 # Additional routes can be added here (download_config, etc.)
 # Following the same pattern as the original replay_visualization/app.py

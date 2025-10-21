@@ -148,16 +148,77 @@ class BaseIndicator(ABC):
         )
     
     def _validate_parameters(self):
-        """Validate all parameters against specifications."""
+        """
+        Validate all parameters against specifications.
+        Raises ValueError with detailed message if validation fails.
+        - ALL parameters must be present (no auto-fill with defaults)
+        - ALL values must match their specs (type, range, choices, etc.)
+        """
         specs = {spec.name: spec for spec in self.get_parameter_specs()}
-        
+        errors = []
+
+        # Check for MISSING required parameters
+        for spec_name in specs:
+            if spec_name not in self.config.parameters:
+                errors.append(f"Missing required parameter: '{spec_name}'")
+
+        # Validate each PROVIDED parameter
         for param_name, param_value in self.config.parameters.items():
             if param_name not in specs:
+                errors.append(f"Unknown parameter: '{param_name}' (not defined in indicator specs)")
                 continue
-                # raise ValueError(f"Unknown parameter: {param_name}")
-            
-            if not specs[param_name].validate(param_value):
-                raise ValueError(f"Invalid value for parameter {param_name}: {param_value}")
+
+            spec = specs[param_name]
+            validation_error = self._validate_single_parameter(spec, param_value)
+            if validation_error:
+                errors.append(validation_error)
+
+        # Raise exception with ALL errors if any validation failed
+        if errors:
+            error_msg = f"Parameter validation failed for {self.__class__.__name__}:\n"
+            error_msg += "\n".join(f"  • {error}" for error in errors)
+            raise ValueError(error_msg)
+
+    def _validate_single_parameter(self, spec: ParameterSpec, value: Any) -> Optional[str]:
+        """
+        Validate a single parameter against its specification.
+        Returns error message if invalid, None if valid.
+        """
+        # Type validation
+        if spec.parameter_type == ParameterType.INTEGER:
+            if not isinstance(value, int) or isinstance(value, bool):
+                return f"Parameter '{spec.name}' must be INTEGER, got {type(value).__name__}"
+            if spec.min_value is not None and value < spec.min_value:
+                return f"Parameter '{spec.name}' value {value} is below minimum {spec.min_value}"
+            if spec.max_value is not None and value > spec.max_value:
+                return f"Parameter '{spec.name}' value {value} is above maximum {spec.max_value}"
+
+        elif spec.parameter_type == ParameterType.FLOAT:
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return f"Parameter '{spec.name}' must be FLOAT, got {type(value).__name__}"
+            if spec.min_value is not None and value < spec.min_value:
+                return f"Parameter '{spec.name}' value {value} is below minimum {spec.min_value}"
+            if spec.max_value is not None and value > spec.max_value:
+                return f"Parameter '{spec.name}' value {value} is above maximum {spec.max_value}"
+
+        elif spec.parameter_type == ParameterType.BOOLEAN:
+            if not isinstance(value, bool):
+                return f"Parameter '{spec.name}' must be BOOLEAN, got {type(value).__name__}"
+
+        elif spec.parameter_type == ParameterType.STRING:
+            if not isinstance(value, str):
+                return f"Parameter '{spec.name}' must be STRING, got {type(value).__name__}"
+
+        elif spec.parameter_type == ParameterType.CHOICE:
+            if spec.choices and value not in spec.choices:
+                return f"Parameter '{spec.name}' value '{value}' not in allowed choices: {spec.choices}"
+
+        elif spec.parameter_type == ParameterType.LIST:
+            if not isinstance(value, list):
+                return f"Parameter '{spec.name}' must be LIST, got {type(value).__name__}"
+            # For LIST type, items should be validated (e.g., pattern names for CDL)
+
+        return None  # Valid
     
     def get_parameter(self, name: str) -> Any:
         """Get parameter value by name."""

@@ -271,7 +271,7 @@ function renderIndicators(indicators) {
             const paramsContainer = document.getElementById(`indicator-params-${index}`);
             if (paramsContainer && !paramsContainer.querySelector('[data-listbox-type="selected"]')) {
                 // Dual listbox doesn't exist yet, create it
-                updateIndicatorParamsWithRanges(index, indicator.indicator_class);
+                updateIndicatorParamsWithRanges(index, indicator.indicator_class, params);
             }
 
             // Initialize pattern listbox with loaded patterns
@@ -319,14 +319,21 @@ function createIndicatorCardWithRanges(indicator, index) {
                     </div>
                 </div>
                 <div id="indicator-params-${index}">
-                    ${renderIndicatorParamsWithRanges(params, ranges, index)}
+                    ${renderIndicatorParamsWithRanges(params, ranges, index, indicatorClass)}
                 </div>
             </div>
         </div>
     `;
 }
 
-function renderIndicatorParamsWithRanges(params, ranges, index) {
+function renderIndicatorParamsWithRanges(params, ranges, index, indicatorClass) {
+    // If we have a schema and indicator class, use it to render ALL required parameters
+    // This is called during card creation, so we just return HTML without updating DOM
+    if (indicatorClass && indicatorClasses[indicatorClass]) {
+        return buildIndicatorParamsHTML(index, indicatorClass, params, ranges);
+    }
+
+    // Fallback: render only existing parameters
     let html = '<div class="row g-2 mt-2">';
 
     for (const [key, value] of Object.entries(params)) {
@@ -566,22 +573,37 @@ function toggleIndicatorCard(index) {
     }
 }
 
-function updateIndicatorParamsWithRanges(index, className) {
-    if (!className || !indicatorClasses[className]) return;
+function buildIndicatorParamsHTML(index, className, currentParams = {}, currentRanges = {}) {
+    if (!className || !indicatorClasses[className]) return '';
 
     const schema = indicatorClasses[className];
-    const paramsContainer = document.getElementById(`indicator-params-${index}`);
 
-    const paramGroups = schema.parameter_groups || {};
-    const allParams = Object.values(paramGroups).flat();
+    // Try to get parameter specs from schema
+    let paramSpecs = schema.parameter_specs || [];
+
+    // Fallback to parameter_groups if parameter_specs not available
+    if (paramSpecs.length === 0 && schema.parameter_groups) {
+        const paramGroups = schema.parameter_groups;
+        paramSpecs = Object.values(paramGroups).flat();
+    }
+
+    console.log(`Building HTML for parameters with ranges for ${className}:`, paramSpecs.length, 'parameters');
 
     let html = '<div class="row g-2 mt-2">';
-    allParams.forEach(param => {
-        if (param.type === 'list' && param.name === 'patterns') {
+    paramSpecs.forEach(param => {
+        // Get current value
+        const currentValue = currentParams[param.name];
+        const isMissing = currentParams[param.name] === undefined;
+        const errorBadge = isMissing ? '<span class="badge bg-danger ms-1" title="Required field missing"><i class="fas fa-exclamation-circle"></i></span>' : '';
+
+        // Map parameter_type to type for compatibility
+        const paramType = param.type || param.parameter_type || 'text';
+
+        if (paramType === 'list' && param.name === 'patterns') {
             // Handle patterns parameter with dual listbox (no ranges for lists)
             html += `
                 <div class="col-md-12">
-                    <label class="form-label">${param.display_name}</label>
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
                     <div class="row">
                         <div class="col-md-5">
                             <label class="form-label small">Selected Patterns</label>
@@ -614,18 +636,13 @@ function updateIndicatorParamsWithRanges(index, className) {
                     </div>
                 </div>
             `;
-        } else if (param.type === 'choice') {
+        } else if (paramType === 'CHOICE' || paramType === 'choice') {
             // Handle choice parameters (fixed values, no ranges)
             const choices = param.choices || [];
 
-            // For CDLPattern trend parameter, default to 'bullish' if not already set
-            let defaultValue = param.default;
-            if (param.name === 'trend' && className === 'CDLPatternIndicator' && !defaultValue) {
-                defaultValue = 'bullish';
-            }
-
-            let optionsHtml = choices.map(choice =>
-                `<option value="${choice}" ${choice === defaultValue ? 'selected' : ''}>${choice}</option>`
+            let optionsHtml = '<option value="">-- Select --</option>';
+            optionsHtml += choices.map(choice =>
+                `<option value="${choice}" ${choice === currentValue ? 'selected' : ''}>${choice}</option>`
             ).join('');
 
             // Add onchange handler for trend parameter to update pattern listboxes
@@ -633,39 +650,43 @@ function updateIndicatorParamsWithRanges(index, className) {
 
             html += `
                 <div class="col-md-6">
-                    <label class="form-label">${param.display_name}</label>
-                    <select class="form-select form-control-sm" data-indicator-param="${param.name}" ${onchangeAttr}>
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
+                    <select class="form-select form-control-sm ${isMissing ? 'border-danger' : ''}" data-indicator-param="${param.name}" ${onchangeAttr}>
+                        <option value="">-- Select --</option>
                         ${optionsHtml}
                     </select>
                 </div>
             `;
-        } else if (param.type === 'string' || param.type === 'list') {
+        } else if (paramType === 'STRING' || paramType === 'LIST' || paramType === 'string' || paramType === 'list') {
             // Skip other non-numeric parameters
             return;
         } else {
             // Handle numeric parameters with ranges
-            const startVal = param.default;
-            const minVal = param.min !== undefined ? param.min : (param.default * 0.5);
-            const maxVal = param.max !== undefined ? param.max : (param.default * 1.5);
-            const step = param.type === 'float' ? '0.001' : '1';
+            // Don't fill in defaults - only use the current value, leave empty if missing
+            const displayValue = currentValue !== undefined ? currentValue : '';
+            const rangeData = currentRanges[param.name] || {};
+            // Only calculate range values if we have a current value
+            const rangeValues = displayValue !== '' ? (rangeData.r || [displayValue * 0.5, displayValue * 1.5]) : ['', ''];
+            const paramTypeNormalized = paramType.toUpperCase();
+            const step = (paramTypeNormalized === 'FLOAT' || paramTypeNormalized === 'float') ? '0.001' : '1';
 
             html += `
                 <div class="col-md-6">
-                    <label class="form-label">${param.display_name}</label>
+                    <label class="form-label">${param.display_name}${errorBadge}</label>
                     <div class="row g-1">
                         <div class="col-4">
-                            <input type="number" class="form-control form-control-sm"
-                                   value="${startVal}" step="${step}" placeholder="Start"
+                            <input type="number" class="form-control form-control-sm ${isMissing ? 'border-danger' : ''}"
+                                   value="${displayValue}" step="${step}" placeholder="Start"
                                    data-indicator-param="${param.name}" data-range-type="start">
                         </div>
                         <div class="col-4">
                             <input type="number" class="form-control form-control-sm"
-                                   value="${minVal}" step="${step}" placeholder="Min"
+                                   value="${rangeValues[0]}" step="${step}" placeholder="Min"
                                    data-indicator-param="${param.name}" data-range-type="min">
                         </div>
                         <div class="col-4">
                             <input type="number" class="form-control form-control-sm"
-                                   value="${maxVal}" step="${step}" placeholder="Max"
+                                   value="${rangeValues[1]}" step="${step}" placeholder="Max"
                                    data-indicator-param="${param.name}" data-range-type="max">
                         </div>
                     </div>
@@ -675,7 +696,18 @@ function updateIndicatorParamsWithRanges(index, className) {
     });
     html += '</div>';
 
-    paramsContainer.innerHTML = html;
+    return html;
+}
+
+function updateIndicatorParamsWithRanges(index, className, currentParams = {}, currentRanges = {}) {
+    // Build the HTML
+    const html = buildIndicatorParamsHTML(index, className, currentParams, currentRanges);
+
+    // Update the DOM
+    const paramsContainer = document.getElementById(`indicator-params-${index}`);
+    if (paramsContainer) {
+        paramsContainer.innerHTML = html;
+    }
 }
 
 function addIndicator() {
@@ -705,7 +737,7 @@ function addIndicator() {
             classSelect.addEventListener('change', function() {
                 if (this.value === 'CDLPatternIndicator') {
                     // Auto-populate params which will set trend to 'bullish' and initialize pattern listbox
-                    updateIndicatorParamsWithRanges(index, 'CDLPatternIndicator');
+                    updateIndicatorParamsWithRanges(index, 'CDLPatternIndicator', {}, {});
 
                     // Initialize pattern listbox with bullish patterns
                     setTimeout(() => {
