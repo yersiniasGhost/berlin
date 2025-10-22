@@ -313,9 +313,12 @@ function createIndicatorCardWithRanges(indicator, index) {
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Aggregation Config</label>
-                        <input type="text" class="form-control" value="${indicator.agg_config || '1m-normal'}"
-                               data-indicator-field="agg_config" placeholder="e.g. 1m-normal, 5m-heiken">
+                        <label class="form-label">Aggregation Config
+                            ${!indicator.agg_config ? '<span class="badge bg-danger ms-1" title="Required field missing"><i class="fas fa-exclamation-circle"></i></span>' : ''}
+                        </label>
+                        <select class="form-select" data-indicator-field="agg_config">
+                            ${generateAggregatorOptions(indicator.agg_config || '')}
+                        </select>
                     </div>
                 </div>
                 <div id="indicator-params-${index}">
@@ -563,6 +566,30 @@ function generateIndicatorClassOptions(selectedClass) {
     return options;
 }
 
+function generateAggregatorOptions(selectedValue) {
+    const aggregators = [
+        '1m-normal',
+        '1m-heiken',
+        '5m-normal',
+        '5m-heiken',
+        '15m-normal',
+        '15m-heiken',
+        '30m-normal',
+        '30m-heiken',
+        '1h-normal',
+        '1h-heiken'
+    ];
+
+    let options = '<option value="">-- Select --</option>';
+
+    for (const agg of aggregators) {
+        const isSelected = agg === selectedValue ? 'selected' : '';
+        options += `<option value="${agg}" ${isSelected}>${agg}</option>`;
+    }
+
+    return options;
+}
+
 function toggleIndicatorCard(index) {
     const body = document.getElementById(`indicator-body-${index}`);
     const icon = document.getElementById(`collapse-icon-${index}`);
@@ -589,11 +616,25 @@ function buildIndicatorParamsHTML(index, className, currentParams = {}, currentR
 
     console.log(`Building HTML for parameters with ranges for ${className}:`, paramSpecs.length, 'parameters');
 
+    // Detect if this is a new indicator (empty parameters)
+    const isNewIndicator = Object.keys(currentParams).length === 0;
+
     let html = '<div class="row g-2 mt-2">';
     paramSpecs.forEach(param => {
-        // Get current value
-        const currentValue = currentParams[param.name];
-        const isMissing = currentParams[param.name] === undefined;
+        // Get current value or use default if this is a new indicator
+        let currentValue;
+        let isMissing;
+
+        if (isNewIndicator) {
+            // New indicator: use default value from schema
+            currentValue = param.default !== undefined ? param.default : undefined;
+            isMissing = false;
+        } else {
+            // Loaded from JSON: show empty with error badge if missing
+            currentValue = currentParams[param.name];
+            isMissing = currentParams[param.name] === undefined;
+        }
+
         const errorBadge = isMissing ? '<span class="badge bg-danger ms-1" title="Required field missing"><i class="fas fa-exclamation-circle"></i></span>' : '';
 
         // Map parameter_type to type for compatibility
@@ -662,13 +703,20 @@ function buildIndicatorParamsHTML(index, className, currentParams = {}, currentR
             return;
         } else {
             // Handle numeric parameters with ranges
-            // Don't fill in defaults - only use the current value, leave empty if missing
             const displayValue = currentValue !== undefined ? currentValue : '';
-            const rangeData = currentRanges[param.name] || {};
-            // Only calculate range values if we have a current value
-            const rangeValues = displayValue !== '' ? (rangeData.r || [displayValue * 0.5, displayValue * 1.5]) : ['', ''];
             const paramTypeNormalized = paramType.toUpperCase();
             const step = (paramTypeNormalized === 'FLOAT' || paramTypeNormalized === 'float') ? '0.001' : '1';
+
+            // Calculate range values based on whether it's a new indicator or loaded from JSON
+            let rangeValues;
+            if (displayValue !== '') {
+                // Has a value - use ±50% of value or schema min/max if available
+                const rangeData = currentRanges[param.name] || {};
+                rangeValues = rangeData.r || [displayValue * 0.5, displayValue * 1.5];
+            } else {
+                // No value - leave empty
+                rangeValues = ['', ''];
+            }
 
             html += `
                 <div class="col-md-6">
@@ -1165,7 +1213,7 @@ function collectConditions() {
 }
 
 function collectDataConfigData() {
-    dataConfig.ticker = document.getElementById('dataTicker').value;
+    dataConfig.ticker = document.getElementById('dataTicker').value.toUpperCase();
     dataConfig.start_date = document.getElementById('dataStartDate').value;
     dataConfig.end_date = document.getElementById('dataEndDate').value;
 }

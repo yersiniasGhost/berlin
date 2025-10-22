@@ -249,9 +249,12 @@ function createIndicatorCard(indicator, index) {
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Aggregation Config</label>
-                        <input type="text" class="form-control" value="${indicator.agg_config || '1m-normal'}"
-                               data-indicator-field="agg_config" placeholder="e.g. 1m-normal, 5m-heiken">
+                        <label class="form-label">Aggregation Config
+                            ${!indicator.agg_config ? '<span class="badge bg-danger ms-1" title="Required field missing"><i class="fas fa-exclamation-circle"></i></span>' : ''}
+                        </label>
+                        <select class="form-select" data-indicator-field="agg_config">
+                            ${generateAggregatorOptions(indicator.agg_config || '')}
+                        </select>
                     </div>
                 </div>
                 <div class="row g-2 mt-2" id="indicator-params-${index}">
@@ -268,6 +271,30 @@ function generateIndicatorClassOptions(selectedClass) {
     for (const className of Object.keys(indicatorClasses)) {
         const isSelected = className === selectedClass ? 'selected' : '';
         options += `<option value="${className}" ${isSelected}>${className}</option>`;
+    }
+
+    return options;
+}
+
+function generateAggregatorOptions(selectedValue) {
+    const aggregators = [
+        '1m-normal',
+        '1m-heiken',
+        '5m-normal',
+        '5m-heiken',
+        '15m-normal',
+        '15m-heiken',
+        '30m-normal',
+        '30m-heiken',
+        '1h-normal',
+        '1h-heiken'
+    ];
+
+    let options = '<option value="">-- Select --</option>';
+
+    for (const agg of aggregators) {
+        const isSelected = agg === selectedValue ? 'selected' : '';
+        options += `<option value="${agg}" ${isSelected}>${agg}</option>`;
     }
 
     return options;
@@ -327,11 +354,25 @@ function updateIndicatorParams(index, className, currentParams = {}) {
 
     console.log(`Rendering parameters for ${className}:`, paramSpecs.length, 'parameters');
 
+    // Detect if this is a new indicator (empty parameters)
+    const isNewIndicator = Object.keys(currentParams).length === 0;
+
     let html = '';
     paramSpecs.forEach(param => {
-        // Get the current value or empty string if missing
-        const currentValue = currentParams[param.name] !== undefined ? currentParams[param.name] : '';
-        const isMissing = currentParams[param.name] === undefined;
+        // Get the current value or use default if this is a new indicator
+        let currentValue;
+        let isMissing;
+
+        if (isNewIndicator) {
+            // New indicator: use default value from schema
+            currentValue = param.default !== undefined ? param.default : '';
+            isMissing = false;
+        } else {
+            // Loaded from JSON: show empty with error badge if missing
+            currentValue = currentParams[param.name] !== undefined ? currentParams[param.name] : '';
+            isMissing = currentParams[param.name] === undefined;
+        }
+
         const errorBadge = isMissing ? '<span class="badge bg-danger ms-1" title="Required field missing"><i class="fas fa-exclamation-circle"></i></span>' : '';
 
         // Map parameter_type to type for compatibility
@@ -800,7 +841,7 @@ function collectMonitorConfigData() {
 }
 
 function collectDataConfigData() {
-    dataConfig.ticker = document.getElementById('dataTicker').value;
+    dataConfig.ticker = document.getElementById('dataTicker').value.toUpperCase();
     dataConfig.start_date = document.getElementById('dataStartDate').value;
     dataConfig.end_date = document.getElementById('dataEndDate').value;
 }
