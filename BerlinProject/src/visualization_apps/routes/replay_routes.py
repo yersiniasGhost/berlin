@@ -354,7 +354,6 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Format component_history (MACD line, signal, histogram, SMA values) for frontend
         component_history_formatted = {}
         if component_history and tick_history:
-            # print(f"\n[COMPONENT DEBUG] Available components: {list(component_history.keys())}")
             for comp_name, comp_values in component_history.items():
                 series = []
                 for i, value in enumerate(comp_values):
@@ -362,7 +361,6 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
                         timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
                         series.append([timestamp, float(value)])
                 component_history_formatted[comp_name] = series
-                print(f"[COMPONENT DEBUG] {comp_name}: {len(series)} values formatted")
 
 
         # Merge P&L information into trade objects for frontend
@@ -387,6 +385,36 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Format P&L data for charting (timestamp, cumulative_pnl pairs)
         pnl_data = [[pnl['timestamp'], pnl['cumulative_pnl']] for pnl in pnl_history]
         
+        # Build class name to layout type mapping
+        # Maps from CLASS NAME (e.g., "MACDHistogramCrossoverIndicator") to LAYOUT TYPE
+        class_to_layout = {}
+        try:
+            # Ensure indicators are registered
+            import indicator_triggers.refactored_indicators  # This imports and registers indicators
+            from indicator_triggers.indicator_base import IndicatorRegistry
+            registry = IndicatorRegistry()
+
+            for indicator in indicators:
+                indicator_class_name = indicator.get('indicator_class', '')
+
+                if indicator_class_name and indicator_class_name not in class_to_layout:
+                    try:
+                        indicator_cls = registry.get_indicator_class(indicator_class_name)
+                        layout_type = indicator_cls.get_layout_type()
+                        class_to_layout[indicator_class_name] = layout_type
+                        logger.debug(f"📊 Class '{indicator_class_name}' → layout: {layout_type}")
+                    except ValueError as ve:
+                        class_to_layout[indicator_class_name] = 'overlay'
+                        logger.warning(f"⚠️ Class '{indicator_class_name}' not found, using default 'overlay'")
+        except Exception as e:
+            logger.warning(f"Could not build class to layout mapping: {e}")
+            # Build default mapping
+            for indicator in indicators:
+                indicator_class_name = indicator.get('indicator_class', '')
+                if indicator_class_name and indicator_class_name not in class_to_layout:
+                    layout_type = 'stacked' if 'macd' in indicator_class_name.lower() else 'overlay'
+                    class_to_layout[indicator_class_name] = layout_type
+
         chart_data = {
             'ticker': data_config['ticker'],
             'candlestick_data': candlestick_data,
@@ -398,6 +426,8 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             'raw_indicator_history': raw_indicator_history_formatted,  # Raw trigger values (0, 1)
             'indicator_history': indicator_history_formatted,  # Time-decayed values (1, 0.9, 0.8, etc.)
             'component_history': component_history_formatted,  # MACD components, SMA values, etc.
+            'class_to_layout': class_to_layout,  # Class name → layout type (stacked or overlay)
+            'indicators': indicators,  # Include indicators config for frontend
             'total_candles': len(candlestick_data),
             'total_trades': len(trades_with_pnl),
             'date_range': {
@@ -792,6 +822,7 @@ def get_indicator_schemas():
     """Get all indicator schemas with their required fields"""
     try:
         # Late import to avoid conflicts at module load time
+        import indicator_triggers.refactored_indicators  # This imports and registers indicators
         from indicator_triggers.indicator_base import IndicatorRegistry
 
         registry = IndicatorRegistry()
@@ -804,6 +835,7 @@ def get_indicator_schemas():
                 'name': schema.get('indicator_name', indicator_name),
                 'display_name': schema.get('display_name', indicator_name),
                 'description': schema.get('description', ''),
+                'layout_type': schema.get('layout_type', 'overlay'),
                 'parameter_specs': schema.get('parameter_specs', [])
             }
 

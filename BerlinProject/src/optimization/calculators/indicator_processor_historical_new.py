@@ -45,22 +45,13 @@ class IndicatorCalculator:
             trigger_values_with_lookback = result
             lookback = self.config.parameters.get('lookback', None)
             if lookback:
-                # Debug logging
-                # print(f"[CDL DECAY] {self.config.name}: Applying lookback decay with lookback={lookback}")
                 trigger_values_with_lookback = self._apply_lookback_vectorized(result, lookback)
-                # Show first 20 values to verify decay is working
-                # print(f"[CDL DECAY] First 20 raw values: {result[:20]}")
-                # print(f"[CDL DECAY] First 20 decayed values: {trigger_values_with_lookback[:20]}")
-            else:
-                print(f"[CDL DECAY] {self.config.name}: No lookback parameter found, skipping decay")
             return result, components, trigger_values_with_lookback
 
         except Exception as e:
             import traceback
             logger.error(f"Error calculating {self.indicator.name()}: {e}")
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
-            print(f"[ERROR] Failed to calculate {self.indicator.name()}: {e}")
-            print(f"[ERROR] Full traceback:\n{traceback.format_exc()}")
             raise ValueError(f"Cannot calculate: {self.indicator.name()}") from e
 
     @staticmethod
@@ -238,31 +229,6 @@ class IndicatorProcessorHistoricalNew:
         values_array = np.array(values)
         interpolated = np.interp(new_indices, old_indices, values_array)
 
-        # Debug output
-        print(f"\n[ALIGN DEBUG] {indicator_name}:")
-        print(f"  Timeframe: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m (ratio: {ratio})")
-        print(f"  Input values: {len(values)} | Output values: {len(interpolated)}")
-
-        # Show sample timestamps and values
-        history = aggregator.get_history()
-        current = aggregator.get_current_candle()
-        candles = history + ([current] if current else [])
-
-        # Show first few and last few alignments
-        sample_indices = list(range(min(3, len(candles)))) + list(range(max(0, len(candles) - 3), len(candles)))
-        sample_indices = sorted(set(sample_indices))
-
-        print(f"  Sample alignments:")
-        for i in sample_indices:
-            if i < len(candles):
-                timestamp = candles[i].timestamp
-                source_value = values[i] if i < len(values) else "N/A"
-                # Find corresponding interpolated indices
-                start_interp_idx = int(i * ratio)
-                end_interp_idx = min(int((i + 1) * ratio), len(interpolated))
-                interp_values = interpolated[start_interp_idx:end_interp_idx]
-                print(f"    [{i}] {timestamp}: source={source_value:.4f} -> interpolated[{start_interp_idx}:{end_interp_idx}]={[f'{v:.4f}' for v in interp_values]}")
-
         return interpolated
 
     def calculate_indicators(self, aggregators: Dict[str, CandleAggregator]) -> Tuple[
@@ -329,14 +295,11 @@ class IndicatorProcessorHistoricalNew:
             # Align component values as well
             if components:
                 for component_name, component_values in components.items():
-                    component_history[f"{indicator.name}_{component_name}"] = component_values.tolist() if isinstance(component_values, np.ndarray) else component_values
-
-            # logger.debug(f"Processed {indicator.name}: {len(aligned_trigger_values_with_lookback)} values")
+                    key = f"{indicator.name}_{component_name}"
+                    component_history[key] = component_values.tolist() if isinstance(component_values, np.ndarray) else component_values
 
         # Calculate bar scores for entire timeline
         bar_score_history = self._calculate_bar_scores_batch(indicator_history, self.primary_timeframe_length)
-
-        # logger.info(f"Completed batch indicator calculation")
         return indicator_history, raw_indicator_history, bar_score_history, component_history
 
 
@@ -367,11 +330,6 @@ class IndicatorProcessorHistoricalNew:
         if not hasattr(self.config, 'bars') or not self.config.bars:
             logger.debug("No bar configurations found")
             return bar_score_history
-
-        # print(f"\n[BAR CALC DEBUG] Timeline length: {timeline_length}")
-        # print(f"[BAR CALC DEBUG] Available indicators: {list(indicator_history.keys())}")
-        # for ind_name, ind_values in indicator_history.items():
-        #     print(f"[BAR CALC DEBUG]   {ind_name}: {len(ind_values)} values")
 
         # Calculate bar scores for each bar configuration
         for bar_name, bar_config in self.config.bars.items():

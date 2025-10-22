@@ -129,7 +129,12 @@ class BaseIndicator(ABC):
     def get_parameter_specs(cls) -> List[ParameterSpec]:
         """Return list of parameter specifications for this indicator."""
         pass
-    
+
+    @classmethod
+    def get_layout_type(cls) -> str:
+        """Return layout type for visualization: 'overlay' or 'stacked'."""
+        return "overlay"  # Default to overlay for most indicators
+
     @abstractmethod
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Calculate indicator values for given tick data."""
@@ -267,6 +272,7 @@ class BaseIndicator(ABC):
             'indicator_name': self.__class__.name(),
             'display_name': self.display_name,
             'description': self.description,
+            'layout_type': self.__class__.get_layout_type(),
             'parameter_groups': groups
         }
 

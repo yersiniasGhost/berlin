@@ -551,8 +551,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Create indicator charts (raw values + triggers)
-        if (data.component_history && data.raw_indicator_history && data.indicator_history && data.candlestick_data) {
-            createIndicatorCharts(data.component_history, data.raw_indicator_history, data.indicator_history, data.candlestick_data);
+        console.log('🔍 Indicator charts condition check:');
+        console.log('  component_history:', !!data.component_history);
+        console.log('  raw_indicator_history:', !!data.raw_indicator_history);
+        console.log('  indicator_history:', !!data.indicator_history);
+        console.log('  candlestick_data:', !!data.candlestick_data);
+        console.log('  class_to_layout:', data.class_to_layout, 'keys:', Object.keys(data.class_to_layout || {}).length);
+        console.log('  indicators:', data.indicators, 'count:', data.indicators?.length || 0);
+
+        if (data.component_history && data.raw_indicator_history && data.indicator_history && data.candlestick_data && data.indicators && data.indicators.length > 0) {
+            const indicatorConfigs = data.indicators;
+            console.log('✅ Creating indicator charts with configs:', indicatorConfigs);
+            createIndicatorCharts(data.component_history, data.raw_indicator_history, data.indicator_history, data.candlestick_data, indicatorConfigs, data.class_to_layout || {});
+        } else {
+            console.warn('⚠️ Skipping indicator charts - missing data or indicators');
         }
 
         // Populate trade history
@@ -845,11 +857,11 @@ document.addEventListener('DOMContentLoaded', function() {
         enableChartSynchronization(charts.pnl);
     }
     
-    function createIndicatorCharts(componentHistory, rawIndicatorHistory, indicatorHistory, candlestickData) {
+    function createIndicatorCharts(componentHistory, rawIndicatorHistory, indicatorHistory, candlestickData, indicatorConfigs, classToLayout) {
         console.log('📊 Creating indicator charts');
         console.log('Component history keys:', Object.keys(componentHistory));
         console.log('Raw indicator history keys:', Object.keys(rawIndicatorHistory));
-        console.log('Indicator history keys:', Object.keys(indicatorHistory));
+        console.log('Class to layout:', classToLayout);
 
         // Get all unique indicator names from raw_indicator_history
         const indicatorNames = Object.keys(rawIndicatorHistory);
@@ -857,6 +869,12 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('⚠️ No indicators found');
             return;
         }
+
+        // Build a map of instance name to class name from indicator configs
+        const nameToClass = {};
+        indicatorConfigs.forEach(config => {
+            nameToClass[config.name] = config.indicator_class;
+        });
 
         const tabsContainer = document.getElementById('indicatorTabs');
         const contentContainer = document.getElementById('indicatorTabContent');
@@ -902,7 +920,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Create charts after a short delay to ensure DOM is ready
             setTimeout(() => {
-                const rawChart = createRawIndicatorChart(indicatorName, componentHistory, candlestickData, rawChartId);
+                const indicatorClass = nameToClass[indicatorName];
+                const rawChart = createRawIndicatorChart(indicatorName, indicatorClass, componentHistory, candlestickData, rawChartId, classToLayout);
                 const triggerChart = createTriggerChart(indicatorName, rawIndicatorHistory, indicatorHistory, triggerChartId);
 
                 // Enable synchronization with all other charts
@@ -916,44 +935,68 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function createRawIndicatorChart(indicatorName, componentHistory, candlestickData, chartId) {
-        // Determine chart type based on indicator name
-        const indicatorLower = indicatorName.toLowerCase();
+    // Helper function to find component keys by pattern matching
+    function findComponentKeys(indicatorName, componentHistory, componentNames) {
+        const foundKeys = {};
 
-        if (indicatorLower.includes('macd')) {
+        for (const componentName of componentNames) {
+            // Look for keys that end with the component name
+            // Pattern: {indicatorName}_.._{componentName}
+            const matchingKey = Object.keys(componentHistory).find(key => {
+                return key.startsWith(indicatorName + '_') && key.endsWith('_' + componentName);
+            });
+
+            if (matchingKey) {
+                foundKeys[componentName] = matchingKey;
+            }
+        }
+
+        return foundKeys;
+    }
+
+    function createRawIndicatorChart(indicatorName, indicatorClass, componentHistory, candlestickData, chartId, classToLayout) {
+        // Get layout type from the indicator CLASS
+        const layoutType = (classToLayout && classToLayout[indicatorClass]) || 'overlay';
+
+        console.log(`📈 Creating chart for instance '${indicatorName}' (class: ${indicatorClass}) with layout: '${layoutType}'`);
+
+        // Route to appropriate chart type based on layout_type from indicator class
+        if (layoutType === 'stacked') {
             return createMACDChart(indicatorName, componentHistory, chartId);
-        } else if (indicatorLower.includes('sma') || indicatorLower.includes('ema')) {
+        } else if (layoutType === 'overlay') {
             return createSMAChart(indicatorName, componentHistory, candlestickData, chartId);
         } else {
-            // Default: line chart for unknown indicator types
+            // Default: line chart for unknown layout types
             return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
         }
     }
 
     function createMACDChart(indicatorName, componentHistory, chartId) {
-        // Find MACD components for this indicator using the naming convention: {indicator_name}_macd, {indicator_name}_signal, {indicator_name}_histogram
-        const macdKey = `${indicatorName}_macd`;
-        const signalKey = `${indicatorName}_signal`;
-        const histogramKey = `${indicatorName}_histogram`;
+        // Find MACD components by pattern matching
+        // Keys will be like: macd1m_macd_histogram_crossover_macd, macd1m_macd_histogram_crossover_signal, etc.
+        console.log(`\n🔍 [MACD CHART] Looking for components for '${indicatorName}'`);
+        console.log(`   Available keys in componentHistory:`, Object.keys(componentHistory));
+
+        const componentKeys = findComponentKeys(indicatorName, componentHistory, ['macd', 'signal', 'histogram']);
 
         const series = [];
-        if (componentHistory[macdKey]) {
-            series.push({ name: 'MACD Line', data: componentHistory[macdKey], color: '#2962FF', lineWidth: 2, marker: { enabled: false } });
+        if (componentKeys.macd && componentHistory[componentKeys.macd]) {
+            series.push({ name: 'MACD Line', data: componentHistory[componentKeys.macd], color: '#2962FF', lineWidth: 2, marker: { enabled: false } });
         }
-        if (componentHistory[signalKey]) {
-            series.push({ name: 'Signal Line', data: componentHistory[signalKey], color: '#FF6D00', lineWidth: 2, marker: { enabled: false } });
+        if (componentKeys.signal && componentHistory[componentKeys.signal]) {
+            series.push({ name: 'Signal Line', data: componentHistory[componentKeys.signal], color: '#FF6D00', lineWidth: 2, marker: { enabled: false } });
         }
-        if (componentHistory[histogramKey]) {
+        if (componentKeys.histogram && componentHistory[componentKeys.histogram]) {
             series.push({
                 name: 'Histogram',
-                data: componentHistory[histogramKey],
+                data: componentHistory[componentKeys.histogram],
                 type: 'column',
                 color: '#00897B'
             });
         }
 
         if (series.length === 0) {
-            console.warn(`⚠️ No MACD components found for ${indicatorName}`);
+            console.warn(`⚠️ No MACD components found for '${indicatorName}'.`);
         }
 
         const chartConfig = {
@@ -977,8 +1020,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function createSMAChart(indicatorName, componentHistory, candlestickData, chartId) {
-        // Find SMA component for this indicator using the naming convention: {indicator_name}_sma
-        const smaKey = `${indicatorName}_sma`;
+        // Find SMA component by pattern matching
+        // Keys will be like: sma1m_sma, sma_crossover_1m_sma, etc.
+        const componentKeys = findComponentKeys(indicatorName, componentHistory, ['sma']);
 
         const series = [
             {
@@ -990,17 +1034,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         ];
 
-        if (componentHistory[smaKey]) {
+        if (componentKeys.sma && componentHistory[componentKeys.sma]) {
             series.push({
                 name: indicatorName,
-                data: componentHistory[smaKey],
+                data: componentHistory[componentKeys.sma],
                 type: 'line',
                 color: '#2962FF',
                 lineWidth: 2,
                 marker: { enabled: false }
             });
         } else {
-            console.warn(`⚠️ No SMA component found for ${indicatorName}`);
+            console.warn(`⚠️ No SMA component found for '${indicatorName}'.`);
         }
 
         const chartConfig = {

@@ -42,7 +42,12 @@ class SMAIndicator(BaseIndicator):
                 ui_group="Basic Settings"
             )
         ]
-    
+
+    @classmethod
+    def get_layout_type(cls) -> str:
+        """SMA uses overlay layout - line drawn on top of candlesticks."""
+        return "overlay"
+
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         period = self.get_parameter("period")
 
@@ -51,7 +56,7 @@ class SMAIndicator(BaseIndicator):
 
         closes = np.array([tick.close for tick in tick_data])
         sma = ta.SMA(closes, timeperiod=period)
-        return sma, {f"{self.name}_macd": sma}
+        return sma, {f"{self.name()}_sma": sma}
 
 
 class SMACrossoverIndicator(BaseIndicator):
@@ -60,15 +65,15 @@ class SMACrossoverIndicator(BaseIndicator):
     @classmethod
     def name(cls) -> str:
         return "sma_crossover"
-    
+
     @property
     def display_name(self) -> str:
         return "SMA Crossover"
-    
+
     @property
     def description(self) -> str:
         return "Generates signals when price crosses above/below SMA with threshold"
-    
+
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
         return [
@@ -116,13 +121,18 @@ class SMACrossoverIndicator(BaseIndicator):
             )
         ]
 
+    @classmethod
+    def get_layout_type(cls) -> str:
+        """SMA Crossover uses overlay layout - line drawn on top of candlesticks."""
+        return "overlay"
+
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         period = self.get_parameter("period")
         crossover_value = self.get_parameter("crossover_value")
         trend = self.get_parameter("trend")
-        
+
         if len(tick_data) < period:
-            return np.array([math.nan] * len(tick_data)), {f"{self.name}_macd": np.array([0]*len(tick_data))}
+            return np.array([math.nan] * len(tick_data)), {f"{self.name()}_sma": np.array([0]*len(tick_data))}
 
         # Calculate SMA
         closes = np.array([tick.close for tick in tick_data])
@@ -139,7 +149,7 @@ class SMACrossoverIndicator(BaseIndicator):
         result = np.zeros(len(tick_data))
         result[1:] = np.logical_and(crossovers[1:], ~crossovers[:-1])
 
-        return result, {f"{self.name}_macd": sma}
+        return result, {f"{self.name()}_sma": sma}
 
 
 class MACDHistogramCrossoverIndicator(BaseIndicator):
@@ -226,13 +236,18 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
             )
         ]
 
+    @classmethod
+    def get_layout_type(cls) -> str:
+        """MACD uses stacked layout - candlesticks on top, MACD lines below."""
+        return "stacked"
+
     def calculate(self, tick_data: List[TickData]) -> np.ndarray:
         fast = self.get_parameter("fast")
         slow = self.get_parameter("slow")
         signal = self.get_parameter("signal")
         histogram_threshold = self.get_parameter("histogram_threshold")
         trend = self.get_parameter("trend")
-        
+
         if len(tick_data) < slow + signal:
             return np.array([math.nan] * len(tick_data))
 
