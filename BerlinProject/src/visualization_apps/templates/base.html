@@ -481,23 +481,7 @@
     <div class="main-content" id="mainContent">
         <!-- Flash Messages -->
         <div class="alert-container" id="alertContainer"></div>
-        
-        <!-- Development Updates Alert -->
-        <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
-            <h6 class="alert-heading mb-2"><i class="fas fa-info-circle me-2"></i>Development Updates</h6>
-            <ul class="mb-2 small">
-                <li>Added validation for optimizer and visualization replay. Error flags will be raised and app will not run if you are missing required fields</li>
-                <li>Added Candlestick patterns to available indicators.</li>
-                <li>Added defaults when adding a new indicator on replay and optimizer editor</li>
-                <li>Got Indicator visualization graphs working for the replay visualization</li>
 
-
-
-
-            </ul>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        
         {% block content %}{% endblock %}
     </div>
     
