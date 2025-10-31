@@ -454,6 +454,9 @@ document.addEventListener('DOMContentLoaded', function() {
         end_date: "2024-02-28"
     };
 
+    // Check if we received configs from optimizer via sessionStorage
+    checkForOptimzerData();
+
     // Setup file input listeners to enable load button
     function checkFilesSelected() {
         const monitorFile = document.getElementById('monitorFileInput').files.length > 0;
@@ -1294,6 +1297,68 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
         
         tableBody.innerHTML = rows;
+    }
+
+    // Check for data from optimizer in sessionStorage
+    async function checkForOptimzerData() {
+        const monitorConfigJson = sessionStorage.getItem('replayMonitorConfig');
+        const dataConfigJson = sessionStorage.getItem('replayDataConfig');
+
+        if (monitorConfigJson && dataConfigJson) {
+            console.log('📥 Received configs from optimizer, loading...');
+
+            try {
+                // Ensure indicator classes are loaded first
+                if (!indicatorClasses || Object.keys(indicatorClasses).length === 0) {
+                    console.log('⏳ Waiting for indicator classes to load...');
+                    await loadIndicatorClasses();
+                }
+
+                // Parse configs
+                const receivedConfig = JSON.parse(monitorConfigJson);
+                dataConfig = JSON.parse(dataConfigJson);
+
+                // Transform the flat MonitorConfiguration structure to the nested format
+                // that renderMonitorConfiguration expects
+                monitorConfig = {
+                    monitor: {
+                        name: receivedConfig.name || '',
+                        description: receivedConfig.description || '',
+                        trade_executor: receivedConfig.trade_executor || {},
+                        bars: receivedConfig.bars || {},
+                        enter_long: receivedConfig.enter_long || [],
+                        exit_long: receivedConfig.exit_long || []
+                    },
+                    indicators: receivedConfig.indicators || []
+                };
+
+                console.log('🔄 Transformed monitor config:', monitorConfig);
+                console.log('📊 Indicator count:', monitorConfig.indicators.length);
+                if (monitorConfig.indicators.length > 0) {
+                    console.log('📊 First indicator:', monitorConfig.indicators[0]);
+                    console.log('📊 First indicator_class:', monitorConfig.indicators[0].indicator_class);
+                }
+
+                // Clear sessionStorage to prevent reloading on refresh
+                sessionStorage.removeItem('replayMonitorConfig');
+                sessionStorage.removeItem('replayDataConfig');
+
+                // Render configurations
+                renderMonitorConfiguration();
+                renderDataConfiguration();
+
+                // Show editor and enable run button
+                configEditor.style.display = 'block';
+                runReplayBtn.disabled = false;
+
+                showAlert('Elite configuration loaded from optimizer!', 'success');
+
+                console.log('✅ Configurations loaded and rendered');
+            } catch (error) {
+                console.error('Error loading configs from sessionStorage:', error);
+                showAlert('Error loading configuration from optimizer', 'danger');
+            }
+        }
     }
 });
 </script>

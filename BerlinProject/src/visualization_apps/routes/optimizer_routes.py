@@ -1591,5 +1591,157 @@ def export_elite(index):
         logger.error(f"Error exporting elite {index}: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+
+@optimizer_bp.route('/api/get_elites')
+def get_elites():
+    """Get list of elites with summary metrics for selection"""
+    try:
+        elites = OptimizationState().get('elites', [])
+
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+
+        # Build summary data for each elite
+        elite_summaries = []
+        for i, elite in enumerate(elites):
+            # Extract key metrics
+            total_pnl = None
+            win_rate = None
+            total_trades = None
+
+            # IndividualStats stores metrics in additional_data dictionary
+            if hasattr(elite, 'additional_data') and elite.additional_data:
+                metrics = elite.additional_data
+
+                # Try different metric key names that might be present
+                total_pnl = metrics.get('total_pnl') or metrics.get('net_pnl') or metrics.get('pnl')
+                winning_trades = metrics.get('winning_trades', 0)
+                losing_trades = metrics.get('losing_trades', 0)
+                total_trades = metrics.get('total_trades', 0)
+
+                # Calculate win rate if we have trade counts
+                if not total_trades and (winning_trades or losing_trades):
+                    total_trades = winning_trades + losing_trades
+
+                if total_trades > 0:
+                    win_rate = (winning_trades / total_trades) * 100
+
+            # Fallback: Check if metrics stored directly in elite attributes
+            elif hasattr(elite, 'performance_metrics'):
+                metrics = elite.performance_metrics
+                total_pnl = metrics.get('total_pnl', None)
+                winning_trades = metrics.get('winning_trades', 0)
+                total_trades = metrics.get('total_trades', 0)
+
+                if total_trades > 0:
+                    win_rate = (winning_trades / total_trades) * 100
+
+            elite_summaries.append({
+                'index': i,
+                'total_pnl': total_pnl,
+                'win_rate': win_rate,
+                'total_trades': total_trades
+            })
+
+        logger.info(f"✅ Retrieved {len(elite_summaries)} elites with metrics")
+        return jsonify({
+            'success': True,
+            'elites': elite_summaries
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error getting elites: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/get_elite_config/<int:index>')
+def get_elite_config(index):
+    """Get full configuration for a specific elite"""
+    try:
+        elites = OptimizationState().get('elites', [])
+
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+
+        if index >= len(elites):
+            return jsonify({'success': False, 'error': 'Elite index out of range'})
+
+        elite = elites[index]
+
+        # Extract monitor configuration from elite
+        # IndividualStats has an 'individual' attribute which is an MlfIndividual
+        # MlfIndividual has a 'monitor_configuration' attribute
+        monitor_config = None
+
+        if hasattr(elite, 'individual') and hasattr(elite.individual, 'monitor_configuration'):
+            # MlfIndividual stores MonitorConfiguration (Pydantic BaseModel)
+            monitor_config_obj = elite.individual.monitor_configuration
+
+            # Pydantic models have model_dump() or dict() methods
+            if hasattr(monitor_config_obj, 'model_dump'):
+                # Pydantic v2
+                monitor_config = monitor_config_obj.model_dump()
+            elif hasattr(monitor_config_obj, 'dict'):
+                # Pydantic v1
+                monitor_config = monitor_config_obj.dict()
+            else:
+                # Fallback: Manual conversion
+                logger.warning("Using manual conversion for MonitorConfiguration")
+                monitor_config = {
+                    'name': getattr(monitor_config_obj, 'name', ''),
+                    'description': getattr(monitor_config_obj, 'description', ''),
+                    'trade_executor': getattr(monitor_config_obj, 'trade_executor', {}),
+                    'bars': getattr(monitor_config_obj, 'bars', {}),
+                    'enter_long': getattr(monitor_config_obj, 'enter_long', []),
+                    'exit_long': getattr(monitor_config_obj, 'exit_long', []),
+                    'indicators': []
+                }
+
+                # Convert indicators if present
+                if hasattr(monitor_config_obj, 'indicators'):
+                    for ind in monitor_config_obj.indicators:
+                        if hasattr(ind, 'model_dump'):
+                            monitor_config['indicators'].append(ind.model_dump())
+                        elif hasattr(ind, 'dict'):
+                            monitor_config['indicators'].append(ind.dict())
+                        else:
+                            monitor_config['indicators'].append({
+                                'name': getattr(ind, 'name', ''),
+                                'indicator_class': getattr(ind, 'indicator_class', ''),
+                                'agg_config': getattr(ind, 'agg_config', ''),
+                                'parameters': getattr(ind, 'parameters', {}),
+                                'ranges': getattr(ind, 'ranges', {})
+                            })
+        elif hasattr(elite, 'genotype'):
+            monitor_config = elite.genotype
+        elif hasattr(elite, 'to_config'):
+            config = elite.to_config()
+            monitor_config = config.get('monitor', {})
+
+        if not monitor_config:
+            logger.error(f"❌ Could not extract monitor configuration from elite {index}")
+            return jsonify({'success': False, 'error': 'Could not extract monitor configuration'})
+
+        # Log indicator data for debugging
+        if 'indicators' in monitor_config and monitor_config['indicators']:
+            logger.info(f"📊 Elite {index} has {len(monitor_config['indicators'])} indicators")
+            for i, ind in enumerate(monitor_config['indicators']):
+                logger.info(f"📊 Indicator {i}: name={ind.get('name')}, class={ind.get('indicator_class')}, agg={ind.get('agg_config')}")
+
+        logger.info(f"✅ Successfully extracted monitor config for elite {index}")
+        return jsonify({
+            'success': True,
+            'monitor_config': monitor_config
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error getting elite config {index}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
 # The WebSocket handlers will need to be registered in the main app.py file
 # since they need access to the socketio instance
