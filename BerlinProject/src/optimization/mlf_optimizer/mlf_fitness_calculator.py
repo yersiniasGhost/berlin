@@ -21,7 +21,7 @@ def evaluate_individual_worker(args):
     This function must be pickleable (defined at module level).
     """
     individual, source_streamer_data, objectives_data, worker_id = args
-
+    maximum_drawdown = source_streamer_data.get_maximum_drawdown()
     try:
         # Create a new BacktestDataStreamer for this worker
         backtest_streamer = BacktestDataStreamer()
@@ -34,7 +34,7 @@ def evaluate_individual_worker(args):
 
         # Calculate fitness values using the objectives
         fitness_values = np.array([
-            obj.calculate_objective(individual, portfolio)
+            obj.calculate_objective(individual, portfolio, backtest_streamer)
             for obj in objectives_data
         ])
 
@@ -75,7 +75,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     display_results: bool = False
     max_workers: Optional[int] = None
     _executor: Optional[ProcessPoolExecutor] = None
-    force_sequential: bool = False
+    force_sequential: bool = True
     selected_streamer: Optional[BacktestDataStreamer] = None
     split = None
     repeat_split: int = 0
@@ -236,10 +236,10 @@ class MlfFitnessCalculator(FitnessCalculator):
         fitness_results: List[IndividualStats] = []
 
         self.logger.debug(f"Sequential calculation of {len(population)} individuals for iteration {iteration_key}")
+        self.selected_streamer = self._select_random_streamer()
 
         for cnt, individual in enumerate(population):
             try:
-                self.selected_streamer = self._select_random_streamer()
                 self.selected_streamer.replace_monitor_config(individual.monitor_configuration)
                 portfolio = self.selected_streamer.run()
 
@@ -255,7 +255,7 @@ class MlfFitnessCalculator(FitnessCalculator):
                                 f"loss: {loss_pct:.3f}%")
 
                 # Calculate fitness
-                individual_stats = self.__calculate_individual_stats(individual, portfolio, cnt)
+                individual_stats = self.__calculate_individual_stats(individual, portfolio, cnt, self.selected_streamer)
                 fitness_results.append(individual_stats)
 
             except Exception as e:
@@ -268,11 +268,11 @@ class MlfFitnessCalculator(FitnessCalculator):
 
 
 
-    def __calculate_individual_stats(self, individual: MlfIndividual, portfolio: Portfolio, index: int):
+    def __calculate_individual_stats(self, individual: MlfIndividual, portfolio: Portfolio, index: int, bt: BacktestDataStreamer):
         """Calculate fitness values for an individual (used in sequential fallback)"""
         try:
             fitness_values = np.array([
-                objective.calculate_objective(individual, portfolio)
+                objective.calculate_objective(individual, portfolio, bt)
                 for objective in self.objectives
             ])
 

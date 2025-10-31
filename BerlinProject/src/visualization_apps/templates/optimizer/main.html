@@ -131,11 +131,12 @@
                     <div class="row align-items-center mb-3">
                         <div class="col-md-4">
                             <label for="dataFileInput" class="form-label mb-0">
-                                <i class="fas fa-database me-2"></i>Data Configuration File
+                                <i class="fas fa-database me-2"></i>Data Configuration File <span class="text-muted">(Optional)</span>
                             </label>
                         </div>
                         <div class="col-md-8">
                             <input type="file" class="form-control" id="dataFileInput" accept=".json">
+                            <small class="text-muted">If not provided, defaults to: NVDA, 01/01/2024 - 02/28/2024</small>
                         </div>
                     </div>
                     <div class="row align-items-center mb-3">
@@ -406,8 +407,11 @@
                             <button type="button" class="btn btn-danger btn-lg me-3" id="stopOptimizerBtn" disabled>
                                 <i class="fas fa-stop me-2"></i>Stop
                             </button>
-                            <button type="button" class="btn btn-primary btn-lg" id="saveOptimizedConfigsBtn" disabled style="display: none;">
+                            <button type="button" class="btn btn-primary btn-lg me-3" id="saveOptimizedConfigsBtn" disabled style="display: none;">
                                 <i class="fas fa-trophy me-2"></i>Save Optimized Configs
+                            </button>
+                            <button type="button" class="btn btn-success btn-lg" id="loadEliteToFormsBtn" disabled style="display: none;">
+                                <i class="fas fa-download me-2"></i>Load Elite to Forms
                             </button>
                         </div>
                         <div class="col-md-4">
@@ -538,6 +542,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const stopOptimizerBtn = document.getElementById('stopOptimizerBtn');
     const chartsSection = document.getElementById('chartsSection');
     const saveOptimizedConfigsBtn = document.getElementById('saveOptimizedConfigsBtn');
+    const loadEliteToFormsBtn = document.getElementById('loadEliteToFormsBtn');
     
     let charts = {};
     let optimizationRunning = false;
@@ -564,6 +569,8 @@ document.addEventListener('DOMContentLoaded', function() {
             optimizationRunning = false;
             saveOptimizedConfigsBtn.style.display = 'inline-block';
             saveOptimizedConfigsBtn.disabled = false;
+            loadEliteToFormsBtn.style.display = 'inline-block';
+            loadEliteToFormsBtn.disabled = false;
             startOptimizerBtn.disabled = false;
             pauseOptimizerBtn.disabled = true;
             stopOptimizerBtn.disabled = true;
@@ -586,6 +593,8 @@ document.addEventListener('DOMContentLoaded', function() {
             showAlert('Optimization fully stopped', 'warning');
             saveOptimizedConfigsBtn.style.display = 'inline-block';
             saveOptimizedConfigsBtn.disabled = false;
+            loadEliteToFormsBtn.style.display = 'inline-block';
+            loadEliteToFormsBtn.disabled = false;
             startOptimizerBtn.disabled = false;
             pauseOptimizerBtn.disabled = true;
             stopOptimizerBtn.disabled = true;
@@ -629,7 +638,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pauseOptimizerBtn.innerHTML = '<i class="fas fa-pause me-2"></i>Pause';
             pauseOptimizerBtn.className = 'btn btn-warning btn-lg me-3';
 
-            hideElitesButton(); // Hide save button when starting new optimization
+            hideEliteButtons(); // Hide save and load buttons when starting new optimization
             clearAllChartsAndData(); // Clear previous optimization data
 
             // IMPORTANT: Re-collect all configs from the UI to capture any edits made after loading
@@ -710,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.className = 'btn btn-warning btn-lg me-3';
                     optimizationRunning = true;
                     startOptimizerBtn.disabled = true;
-                    hideElitesButton(); // Hide save button when resuming
+                    hideEliteButtons(); // Hide save and load buttons when resuming
                     showAlert('Optimization resumed', 'info');
                     startPolling();
                 } else {
@@ -720,10 +729,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     optimizationRunning = false;
                     startOptimizerBtn.disabled = true; // Keep start disabled when paused
                     
-                    // Show save button when paused (user might want to save current elites)
+                    // Show save and load buttons when paused (user might want to save current elites or load them to forms)
                     saveOptimizedConfigsBtn.style.display = 'inline-block';
                     saveOptimizedConfigsBtn.disabled = false;
-                    
+                    loadEliteToFormsBtn.style.display = 'inline-block';
+                    loadEliteToFormsBtn.disabled = false;
+
                     showAlert('Optimization paused', 'info');
                     stopPolling();
                 }
@@ -1500,6 +1511,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Add click listener for load elite button
+    loadEliteToFormsBtn.addEventListener('click', async function() {
+        try {
+            const response = await fetch('/optimizer/api/export_optimized_configs');
+            const result = await response.json();
+
+            if (!result.success) {
+                showAlert(`Error loading elite: ${result.error}`, 'danger');
+                return;
+            }
+
+            const elitePackage = result.package;
+
+            if (!elitePackage || !elitePackage.files) {
+                showAlert('No elite configurations available', 'warning');
+                return;
+            }
+
+            // Get the first elite (best elite)
+            const eliteFiles = elitePackage.files;
+            const firstEliteKey = Object.keys(eliteFiles)[0];
+
+            if (!firstEliteKey) {
+                showAlert('No elite configuration found', 'warning');
+                return;
+            }
+
+            const bestElite = eliteFiles[firstEliteKey];
+
+            // Store in the same variables used by config loading
+            monitorConfig = bestElite;
+
+            // Render the elite configuration to the forms
+            renderMonitorConfiguration();
+
+            // Switch to Monitor tab to show loaded config
+            const monitorTab = document.querySelector('[data-bs-target="#monitor"]');
+            if (monitorTab) {
+                const tab = new bootstrap.Tab(monitorTab);
+                tab.show();
+            }
+
+            showAlert('Elite configuration loaded to forms successfully!', 'success');
+
+        } catch (error) {
+            console.error('Error loading elite to forms:', error);
+            showAlert(`Error loading elite: ${error.message}`, 'danger');
+        }
+    });
+
     // Add click listener for save button
     saveOptimizedConfigsBtn.addEventListener('click', saveOptimizedConfigs);
     
@@ -1513,9 +1574,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Hide save button when starting new optimization
-    function hideElitesButton() {
+    function hideEliteButtons() {
         saveOptimizedConfigsBtn.style.display = 'none';
         saveOptimizedConfigsBtn.disabled = true;
+        loadEliteToFormsBtn.style.display = 'none';
+        loadEliteToFormsBtn.disabled = true;
+    }
+
+    // Keep old function for backward compatibility
+    function hideElitesButton() {
+        hideEliteButtons();
     }
     
     // Clear all charts and data from previous optimization runs

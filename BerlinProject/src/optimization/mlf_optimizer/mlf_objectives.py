@@ -112,12 +112,28 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
 
         net_pnl = (total_profit - total_loss) / 100.0
         if total_profit == 0.0 and total_loss == 0.0:
-            objective_value = 100.0
+            return 100.0*self.weight
         elif net_pnl <= 0.0:
-            objective_value = 100.0  #   abs(net_pnl) + 10.0
-        else:
-            objective_value = 1.0 / net_pnl
+            return 100.0*self.weight  #   abs(net_pnl) + 10.0
 
+        mode = 'volatility'
+        mode = 'inverse'
+        
+        if mode == "inverse":
+            metric = 0
+            objective_value = 1.0 / net_pnl
+        elif mode == "volatility":
+            data_streamer = args[2]
+            primary_data = data_streamer.primary_aggregator
+
+            metric, adj_netpnl = primary_data.get_volatility(net_pnl*100.0)
+            objective_value = -adj_netpnl
+        elif mode == "maxdrawdown":
+            data_streamer = args[2]
+            primary_data = data_streamer.primary_aggregator
+            metric = primary_data.get_maximum_drawdown() / 100.0
+            objective_value = max(0.0, 3.0 - (net_pnl - metric) / abs(metric))
+        print("MaxPnL", mode, "PnL",  net_pnl*100.0, "metric:", metric, "OBJ", objective_value*self.weight)
         return objective_value * self.weight
 
 

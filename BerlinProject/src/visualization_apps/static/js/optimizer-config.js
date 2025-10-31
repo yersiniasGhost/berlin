@@ -28,6 +28,13 @@ const DEFAULT_GA_CONFIG = {
     }
 };
 
+// Default data configuration
+const DEFAULT_DATA_CONFIG = {
+    ticker: "NVDA",
+    start_date: "2024-01-01",
+    end_date: "2024-02-28"
+};
+
 const AVAILABLE_OBJECTIVES = [
     'MaximizeProfit',
     'MinimizeLosingTrades',
@@ -66,9 +73,8 @@ function setupEventListeners() {
 
 function checkFilesSelected() {
     const monitorFile = document.getElementById('monitorFileInput').files.length > 0;
-    const dataFile = document.getElementById('dataFileInput').files.length > 0;
-    // GA file is now optional
-    document.getElementById('loadConfigsBtn').disabled = !(monitorFile && dataFile);
+    // Data file and GA file are now optional - only monitor file is required
+    document.getElementById('loadConfigsBtn').disabled = !monitorFile;
 }
 
 async function loadIndicatorClasses() {
@@ -90,7 +96,7 @@ async function loadConfigurations() {
     const dataFileInput = document.getElementById('dataFileInput');
     const gaFileInput = document.getElementById('gaFileInput');
 
-    if (!monitorFileInput.files.length || !dataFileInput.files.length) return;
+    if (!monitorFileInput.files.length) return;
 
     try {
         // Load monitor config
@@ -98,10 +104,16 @@ async function loadConfigurations() {
         const monitorText = await monitorFile.text();
         monitorConfig = JSON.parse(monitorText);
 
-        // Load data config
-        const dataFile = dataFileInput.files[0];
-        const dataText = await dataFile.text();
-        dataConfig = JSON.parse(dataText);
+        // Load data config (optional - use defaults if not provided)
+        if (dataFileInput.files.length > 0) {
+            const dataFile = dataFileInput.files[0];
+            const dataText = await dataFile.text();
+            dataConfig = JSON.parse(dataText);
+        } else {
+            // Use default data config: NVDA, 2024-01-01 to 2024-02-28
+            dataConfig = JSON.parse(JSON.stringify(DEFAULT_DATA_CONFIG)); // Deep clone
+            console.log('Using default data config:', dataConfig);
+        }
 
         // Load GA config (optional - use defaults if not provided)
         if (gaFileInput.files.length > 0) {
@@ -336,12 +348,13 @@ function renderIndicatorParamsWithRanges(params, ranges, index, indicatorClass) 
         return buildIndicatorParamsHTML(index, indicatorClass, params, ranges);
     }
 
-    // Fallback: render only existing parameters
+    // Fallback: render only existing parameters (when indicator class schema not available)
     let html = '<div class="row g-2 mt-2">';
 
     for (const [key, value] of Object.entries(params)) {
         const range = ranges[key] || {};
-        const rangeValues = range.r || [value * 0.5, value * 1.5]; // Default range if not specified
+        // Use JSON ranges or ±50% fallback (no schema available in this path)
+        const rangeValues = range.r || [value * 0.5, value * 1.5];
         const rangeType = range.t || (typeof value === 'number' ? (Number.isInteger(value) ? 'int' : 'float') : 'skip');
 
         if (rangeType === 'skip') {
@@ -391,13 +404,19 @@ function renderBars(bars) {
 
 function createBarCardWithRanges(barName, barConfig) {
     const indicators = barConfig.indicators || {};
+    const weightRanges = barConfig.weight_ranges || {};
 
     let indicatorsHtml = '';
     for (const [indName, weight] of Object.entries(indicators)) {
-        // Check if weight is an object with start/range, array, or single value
         let startValue, weightRange;
-        if (weight && typeof weight === 'object' && 'start' in weight && 'range' in weight) {
-            // New format: {start: x, range: [min, max]}
+
+        // Check if we have weight_ranges defined for this indicator
+        if (weightRanges[indName] && weightRanges[indName].r) {
+            // New format: weight_ranges field with {r: [min, max], t: "float"}
+            startValue = weight;
+            weightRange = weightRanges[indName].r;
+        } else if (weight && typeof weight === 'object' && 'start' in weight && 'range' in weight) {
+            // Legacy format: {start: x, range: [min, max]}
             startValue = weight.start;
             weightRange = weight.range;
         } else if (Array.isArray(weight)) {
@@ -707,14 +726,21 @@ function buildIndicatorParamsHTML(index, className, currentParams = {}, currentR
             const paramTypeNormalized = paramType.toUpperCase();
             const step = (paramTypeNormalized === 'FLOAT' || paramTypeNormalized === 'float') ? '0.001' : '1';
 
-            // Calculate range values based on whether it's a new indicator or loaded from JSON
+            // Calculate range values: Priority is JSON ranges > schema min/max > ±50% fallback
             let rangeValues;
-            if (displayValue !== '') {
-                // Has a value - use ±50% of value or schema min/max if available
-                const rangeData = currentRanges[param.name] || {};
-                rangeValues = rangeData.r || [displayValue * 0.5, displayValue * 1.5];
+            const rangeData = currentRanges[param.name] || {};
+
+            if (rangeData.r) {
+                // Use ranges from JSON configuration
+                rangeValues = rangeData.r;
+            } else if (param.min !== undefined && param.max !== undefined) {
+                // Use min/max from indicator class schema (ParameterSpec)
+                rangeValues = [param.min, param.max];
+            } else if (displayValue !== '') {
+                // Fallback: calculate ±50% of current value
+                rangeValues = [displayValue * 0.5, displayValue * 1.5];
             } else {
-                // No value - leave empty
+                // No value and no schema - leave empty
                 rangeValues = ['', ''];
             }
 
@@ -1079,6 +1105,7 @@ function updateCurrentConfigBars() {
         const barName = nameInput ? nameInput.value : card.dataset.barName;
 
         const indicators = {};
+        const weightRanges = {};
         const indicatorSelects = card.querySelectorAll('[data-bar-indicator-name]');
 
         indicatorSelects.forEach(select => {
@@ -1090,16 +1117,25 @@ function updateCurrentConfigBars() {
 
             if (indName && startInput && minInput && maxInput) {
                 const weightStart = parseFloat(startInput.value);
-                // For the monitor config, use the start value as the actual weight
-                // The ranges are stored separately in the GA config
+                const weightMin = parseFloat(minInput.value);
+                const weightMax = parseFloat(maxInput.value);
+
+                // Store the start value as the actual weight
                 indicators[indName] = weightStart;
+
+                // Store the range for GA optimization
+                weightRanges[indName] = {
+                    r: [weightMin, weightMax],
+                    t: "float"
+                };
             }
         });
 
         bars[barName] = {
             type: typeSelect ? typeSelect.value : 'bull',
             description: descInput ? descInput.value : '',
-            indicators: indicators
+            indicators: indicators,
+            weight_ranges: weightRanges
         };
     });
 

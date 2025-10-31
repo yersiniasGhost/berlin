@@ -9,6 +9,13 @@ let currentMonitorFilename = null;
 let currentDataFilename = null;
 let indicatorClasses = {};
 
+// Default data configuration
+const DEFAULT_DATA_CONFIG = {
+    ticker: "NVDA",
+    start_date: "2024-01-01",
+    end_date: "2024-02-28"
+};
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadIndicatorClasses();
@@ -65,7 +72,17 @@ async function loadMonitorConfiguration() {
 
 async function loadDataConfiguration() {
     const fileInput = document.getElementById('dataFileInput');
-    if (!fileInput.files.length) return;
+
+    // If no file selected, use default data config
+    if (!fileInput.files.length) {
+        dataConfig = JSON.parse(JSON.stringify(DEFAULT_DATA_CONFIG)); // Deep clone
+        currentDataFilename = 'default_data_config.json';
+
+        renderDataConfiguration();
+        checkBothConfigsLoaded();
+        showAlert('Using default data configuration: NVDA, 2024-01-01 to 2024-02-28', 'info');
+        return;
+    }
 
     const file = fileInput.files[0];
     currentDataFilename = file.name;
@@ -83,7 +100,11 @@ async function loadDataConfiguration() {
 }
 
 function checkBothConfigsLoaded() {
-    if (monitorConfig && dataConfig) {
+    if (monitorConfig) {
+        // If monitor config is loaded but no data config, use defaults
+        if (!dataConfig) {
+            loadDataConfiguration(); // This will use defaults if no file selected
+        }
         document.getElementById('configEditor').style.display = 'block';
     }
 }

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional, List, Tuple
 from models.tick_data import TickData
+import numpy as np
 
 
 class CandleAggregator(ABC):
@@ -17,6 +18,9 @@ class CandleAggregator(ABC):
         self.current_candle: Optional[TickData] = None
         self.history: List[TickData] = []
         self.completed_candle: Optional[TickData] = None
+        self.maximum_drawdown: Optional[float] = None
+        self.volatility: Optional[float] = None
+        self.volatility_adjusted: Optional[float] = None
 
     @abstractmethod
     def _get_aggregator_type(self) -> str:
@@ -130,26 +134,29 @@ class CandleAggregator(ABC):
         """Prepopulate with direct historical data - filtered to recent data only"""
         if not historical_data:
             return 0
-            
+
         # FILTER: Only keep candles from last 4 hours to avoid stale data
         from datetime import datetime, timedelta
         cutoff_time = datetime.now() - timedelta(hours=4)
-        
-        recent_data = [candle for candle in historical_data 
+
+        recent_data = [candle for candle in historical_data
                       if candle.timestamp.replace(tzinfo=None) >= cutoff_time]
-        
+
         # If no recent data, fall back to last 50 candles for some context
         if not recent_data and len(historical_data) > 50:
             recent_data = historical_data[-50:]
         elif not recent_data:
             recent_data = historical_data
-            
+
         # Use the filtered recent data
         if len(recent_data) > 1:
             self.history = recent_data[:-1]
         if recent_data:
             self.current_candle = recent_data[-1]
-            
+
+        # Calculate maximum drawdown after prepopulation
+        self.calculate_maximum_drawdown()
+
         return len(recent_data)
 
     def _prepopulate_processed(self, historical_data: List[TickData]) -> int:
@@ -157,6 +164,10 @@ class CandleAggregator(ABC):
         for candle in historical_data:
             tick_data = self._convert_candle_to_tick(candle)
             self.process_tick(tick_data)
+
+        # Calculate maximum drawdown after prepopulation
+        self.calculate_maximum_drawdown()
+
         return len(historical_data)
 
     def _convert_candle_to_tick(self, candle: TickData) -> TickData:
@@ -171,3 +182,53 @@ class CandleAggregator(ABC):
             volume=candle.volume,
             time_increment="HISTORICAL"
         )
+
+    def calculate_maximum_drawdown(self) -> float:
+        """
+        Calculate maximum drawdown from candle history.
+        Maximum drawdown is the largest peak-to-trough decline in close prices.
+
+        Returns:
+            float: Maximum drawdown as a percentage (negative value), or 0.0 if insufficient data
+        """
+        if len(self.history) < 2:
+            return 0.0
+
+        # Extract close prices from history
+        close_prices = [candle.close for candle in self.history]
+
+        # Track running maximum and maximum drawdown
+        running_max = close_prices[0]
+        max_drawdown = 0.0
+
+        for price in close_prices[1:]:
+            # Update running maximum
+            running_max = max(running_max, price)
+
+            # Calculate drawdown from running maximum
+            if running_max > 0:
+                drawdown = ((price - running_max) / running_max) * 100
+                max_drawdown = min(max_drawdown, drawdown)
+
+        self.maximum_drawdown = max_drawdown
+        return max_drawdown
+
+    def get_market_return(self) -> float:
+        d = self.history[-1].close - self.history[0].close
+        return d
+
+    def get_maximum_drawdown(self) -> float:
+        if not self.maximum_drawdown:
+            self.calculate_maximum_drawdown()
+            # self.maximum_drawdown = self.get_market_return()
+        return self.maximum_drawdown
+
+    def get_volatility(self, net_profit: Optional[float] = None) -> Tuple[float, Optional[float]]:
+        if not self.volatility:
+            close_prices = [candle.close for candle in self.history]
+            price_volatility = np.array(close_prices).std()
+            self.volatility = price_volatility
+        volatility_adjusted = None
+        if net_profit:
+            volatility_adjusted = net_profit / (self.volatility)
+        return self.volatility, volatility_adjusted

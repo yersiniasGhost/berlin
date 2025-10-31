@@ -233,4 +233,4 @@ if __name__ == '__main__':
     logger.info("   - Indicator API: /api/indicators/*")
     
     # Start the Flask-SocketIO application
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000, use_reloader=False, log_output=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5003, use_reloader=False, log_output=True, allow_unsafe_werkzeug=True)

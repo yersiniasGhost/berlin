@@ -123,11 +123,12 @@
                     <div class="row align-items-center mb-3">
                         <div class="col-md-5">
                             <label for="dataFileInput" class="form-label mb-0">
-                                <i class="fas fa-database me-2"></i>Data Configuration File
+                                <i class="fas fa-database me-2"></i>Data Configuration File <span class="text-muted">(Optional)</span>
                             </label>
                         </div>
                         <div class="col-md-7">
                             <input type="file" class="form-control" id="dataFileInput" accept=".json">
+                            <small class="text-muted">If not provided, defaults to: NVDA, 01/01/2024 - 02/28/2024</small>
                         </div>
                     </div>
                     <div class="row">
@@ -446,11 +447,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let charts = {};
 
+    // Default data configuration
+    const DEFAULT_DATA_CONFIG = {
+        ticker: "NVDA",
+        start_date: "2024-01-01",
+        end_date: "2024-02-28"
+    };
+
     // Setup file input listeners to enable load button
     function checkFilesSelected() {
         const monitorFile = document.getElementById('monitorFileInput').files.length > 0;
-        const dataFile = document.getElementById('dataFileInput').files.length > 0;
-        document.getElementById('loadConfigsBtn').disabled = !(monitorFile && dataFile);
+        // Only monitor file is required - data file is optional
+        document.getElementById('loadConfigsBtn').disabled = !monitorFile;
     }
 
     document.getElementById('monitorFileInput').addEventListener('change', checkFilesSelected);
@@ -461,7 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const monitorFileInput = document.getElementById('monitorFileInput');
         const dataFileInput = document.getElementById('dataFileInput');
 
-        if (!monitorFileInput.files.length || !dataFileInput.files.length) return;
+        if (!monitorFileInput.files.length) return;
 
         try {
             // Load monitor config
@@ -469,10 +477,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const monitorText = await monitorFile.text();
             monitorConfig = JSON.parse(monitorText);
 
-            // Load data config
-            const dataFile = dataFileInput.files[0];
-            const dataText = await dataFile.text();
-            dataConfig = JSON.parse(dataText);
+            // Load data config (optional - use defaults if not provided)
+            if (dataFileInput.files.length > 0) {
+                const dataFile = dataFileInput.files[0];
+                const dataText = await dataFile.text();
+                dataConfig = JSON.parse(dataText);
+                showAlert('Configurations loaded successfully', 'success');
+            } else {
+                // Use default data config: NVDA, 2024-01-01 to 2024-02-28
+                dataConfig = JSON.parse(JSON.stringify(DEFAULT_DATA_CONFIG));
+                showAlert('Monitor configuration loaded. Using default data: NVDA, 01/01/2024 - 02/28/2024', 'info');
+            }
 
             // Render configurations
             renderMonitorConfiguration();

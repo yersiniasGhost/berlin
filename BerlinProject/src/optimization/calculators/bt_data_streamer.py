@@ -129,7 +129,8 @@ class BacktestDataStreamer:
 
         logger.info(f"BacktestDataStreamer created with {len(self.tick_history)} ticks")
 
-
+    def get_maximum_drawdown(self):
+        return self.primary_aggregator.get_maximum_drawdown()
 
     def copy_data_from(self, source_streamer: 'BacktestDataStreamer'):
         """

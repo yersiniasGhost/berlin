@@ -34,9 +34,9 @@ class SMAIndicator(BaseIndicator):
                 name="period",
                 display_name="Period",
                 parameter_type=ParameterType.INTEGER,
-                default_value=20,
-                min_value=1,
-                max_value=200,
+                default_value=10,
+                min_value=2,
+                max_value=20,
                 step=1,
                 description="Number of periods for the moving average",
                 ui_group="Basic Settings"
@@ -82,8 +82,8 @@ class SMACrossoverIndicator(BaseIndicator):
                 display_name="SMA Period",
                 parameter_type=ParameterType.INTEGER,
                 default_value=20,
-                min_value=1,
-                max_value=200,
+                min_value=2,
+                max_value=30,
                 step=1,
                 description="Period for the SMA calculation",
                 ui_group="Basic Settings"
@@ -92,10 +92,10 @@ class SMACrossoverIndicator(BaseIndicator):
                 name="crossover_value",
                 display_name="Crossover Threshold",
                 parameter_type=ParameterType.FLOAT,
-                default_value=0.01,
+                default_value=0.005,
                 min_value=0.0,
-                max_value=0.1,
-                step=0.001,
+                max_value=0.01,
+                step=0.0005,
                 description="Percentage threshold for crossover detection",
                 ui_group="Signal Settings"
             ),
@@ -112,9 +112,9 @@ class SMACrossoverIndicator(BaseIndicator):
                 name="lookback",
                 display_name="Lookback Period",
                 parameter_type=ParameterType.INTEGER,
-                default_value=10,
+                default_value=2,
                 min_value=1,
-                max_value=100,
+                max_value=20,
                 step=1,
                 description="Number of candles for trigger decay (1.0 → 0.0)",
                 ui_group="Signal Settings"
@@ -175,8 +175,8 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 display_name="Fast EMA Period",
                 parameter_type=ParameterType.INTEGER,
                 default_value=12,
-                min_value=1,
-                max_value=50,
+                min_value=2,
+                max_value=30,
                 step=1,
                 description="Fast EMA period for MACD calculation",
                 ui_group="MACD Settings"
@@ -186,8 +186,8 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 display_name="Slow EMA Period",
                 parameter_type=ParameterType.INTEGER,
                 default_value=26,
-                min_value=1,
-                max_value=100,
+                min_value=2,
+                max_value=30,
                 step=1,
                 description="Slow EMA period for MACD calculation",
                 ui_group="MACD Settings"
@@ -197,8 +197,8 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 display_name="Signal Period",
                 parameter_type=ParameterType.INTEGER,
                 default_value=9,
-                min_value=1,
-                max_value=50,
+                min_value=2,
+                max_value=30,
                 step=1,
                 description="Signal line EMA period",
                 ui_group="MACD Settings"
@@ -209,7 +209,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 parameter_type=ParameterType.FLOAT,
                 default_value=0.001,
                 min_value=0.0,
-                max_value=0.15,
+                max_value=0.05,
                 step=0.0001,
                 description="Threshold for histogram crossover detection",
                 ui_group="Signal Settings"
@@ -227,9 +227,9 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 name="lookback",
                 display_name="Lookback Period",
                 parameter_type=ParameterType.INTEGER,
-                default_value=10,
+                default_value=2,
                 min_value=1,
-                max_value=100,
+                max_value=20,
                 step=1,
                 description="Number of candles for trigger decay (1.0 → 0.0)",
                 ui_group="Signal Settings"
@@ -488,9 +488,9 @@ class CDLPatternIndicator(BaseIndicator):
                 name="lookback",
                 display_name="Lookback Period",
                 parameter_type=ParameterType.INTEGER,
-                default_value=10,
+                default_value=2,
                 min_value=1,
-                max_value=100,
+                max_value=20,
                 step=1,
                 description="Number of candles for trigger decay (1.0 → 0.0)",
                 ui_group="Signal Settings"
@@ -544,8 +544,8 @@ class CDLPatternIndicator(BaseIndicator):
                         # Detect bullish patterns (positive TA-Lib values)
                         pattern_detected = (pattern_values > 0).astype(float)
                         # Debug: Check if pattern was detected on the most recent candle
-                        if len(pattern_detected) > 0 and pattern_detected[-1] == 1.0:
-                            print(f"🔔 [CDL PATTERN DETECTED] {pattern_name} (bullish) on latest candle!")
+                        # if len(pattern_detected) > 0 and pattern_detected[-1] == 1.0:
+                        #     print(f"🔔 [CDL PATTERN DETECTED] {pattern_name} (bullish) on latest candle!")
                         result = np.maximum(result, pattern_detected)
                     else:  # bearish
                         # Detect bearish patterns (negative TA-Lib values)

@@ -22,8 +22,13 @@ class IndicatorCalculator:
         if not ind:
             raise ValueError(f"Indicator '{config.name}': Missing 'indicator_class' or 'name'")
 
+        # DIAGNOSTIC: Log parameters received by indicator
+        logger.info(f"📊 Creating indicator '{config.name}' (class: {ind})")
+        logger.info(f"   Parameters passed to indicator: {config.parameters}")
+
         try:
             self.indicator = IndicatorRegistry().get_indicator_class(ind)(self.config)
+            logger.info(f"   ✅ Indicator created successfully")
         except ValueError as val_err:
             # Re-raise with indicator name for better error messaging
             raise ValueError(f"Indicator '{config.name}': {str(val_err)}")
@@ -168,14 +173,17 @@ class IndicatorProcessorHistoricalNew:
         indicator_timeframe_minutes: int
     ) -> np.ndarray:
         """
-        Align indicator values from coarser timeframe to primary timeframe using linear interpolation.
+        Align indicator values from coarser timeframe to primary timeframe.
+
+        For raw trigger values, uses step interpolation (hold values until next trigger).
+        This method should only be used for raw trigger values, not lookback-decayed values.
 
         Args:
-            values: Indicator values from coarser timeframe
+            values: Raw indicator trigger values from coarser timeframe
             indicator_timeframe_minutes: Minutes per candle for this indicator
 
         Returns:
-            Interpolated values aligned to primary timeframe
+            Step-interpolated values aligned to primary timeframe
         """
         if values is None or len(values) == 0:
             return np.zeros(self.primary_timeframe_length)
@@ -187,18 +195,83 @@ class IndicatorProcessorHistoricalNew:
         # Calculate the ratio (e.g., 5m/1m = 5)
         ratio = indicator_timeframe_minutes / self.primary_timeframe_minutes
 
-        # Create index mappings
-        # Old indices: where each coarse value sits in the primary timeline
-        old_indices = np.arange(len(values)) * ratio
+        # Create result array
+        aligned_values = np.zeros(self.primary_timeframe_length)
 
-        # New indices: all positions in primary timeline
-        new_indices = np.arange(self.primary_timeframe_length)
+        # For each coarse timeframe value, fill the corresponding primary timeframe positions
+        for coarse_idx, value in enumerate(values):
+            # Calculate the range of primary indices this coarse value covers
+            start_primary_idx = int(coarse_idx * ratio)
+            end_primary_idx = min(int((coarse_idx + 1) * ratio), self.primary_timeframe_length)
 
-        # Linear interpolation
-        values_array = np.array(values)
-        interpolated = np.interp(new_indices, old_indices, values_array)
+            # Fill all primary positions with this value (step interpolation)
+            aligned_values[start_primary_idx:end_primary_idx] = value
 
-        return interpolated
+        return aligned_values
+
+    def _apply_lookback_at_primary_timeframe(
+        self,
+        aligned_raw_values: np.ndarray,
+        lookback_periods: int,
+        indicator_timeframe_minutes: int
+    ) -> np.ndarray:
+        """
+        Apply lookback decay at the primary (finest) timeframe resolution.
+
+        This calculates decay based on the number of primary timeframe periods since the last trigger,
+        not the number of indicator timeframe periods. For example, with a 5-minute indicator on a
+        1-minute primary timeframe and lookback=10 (10 * 5min = 50min total):
+        - If a trigger happens at 5-minute mark 0, it decays over the next 50 one-minute periods
+        - The decay is smooth: 1.0, 0.98, 0.96, ... 0.02, 0.0 over 50 periods
+
+        Args:
+            aligned_raw_values: Raw trigger values aligned to primary timeframe
+            lookback_periods: Number of indicator timeframe periods to look back
+            indicator_timeframe_minutes: Minutes per indicator candle
+
+        Returns:
+            Lookback-decayed values at primary timeframe resolution
+        """
+        if lookback_periods is None or lookback_periods == 0:
+            return aligned_raw_values
+
+        # Convert lookback from indicator periods to primary periods
+        # e.g., 10 periods * 5 minutes / 1 minute = 50 primary periods
+        lookback_in_primary_periods = int(
+            lookback_periods * indicator_timeframe_minutes / self.primary_timeframe_minutes
+        )
+
+        trigger_values_with_lookback = np.zeros(len(aligned_raw_values))
+
+        # Apply lookback scoring for each time point at primary resolution
+        for i in range(len(aligned_raw_values)):
+            # Get lookback window up to current point (in primary timeframe)
+            start_idx = max(0, i + 1 - lookback_in_primary_periods)
+            window = aligned_raw_values[start_idx:i+1]
+
+            # Find non-zero indices (triggers)
+            non_zero_mask = window != 0
+            if not np.any(non_zero_mask):
+                trigger_values_with_lookback[i] = 0.0
+                continue
+
+            # Get most recent trigger
+            non_zero_indices = np.where(non_zero_mask)[0]
+            last_trigger_idx = non_zero_indices[-1]
+            trigger_value = window[last_trigger_idx]
+
+            # Calculate decay based on PRIMARY timeframe distance from trigger
+            # This is the key change: decay happens at 1-minute resolution, not 5-minute
+            lookback_location = len(window) - last_trigger_idx - 1
+            lookback_ratio = lookback_location / float(lookback_in_primary_periods)
+
+            # Clamp lookback_ratio to [0, 1] range
+            lookback_ratio = min(1.0, max(0.0, lookback_ratio))
+
+            # Apply decay formula
+            trigger_values_with_lookback[i] = (1.0 - lookback_ratio) * np.sign(trigger_value)
+
+        return trigger_values_with_lookback
 
     def _align_to_primary_timeframe_debug(
         self,
@@ -269,7 +342,9 @@ class IndicatorProcessorHistoricalNew:
             candles = all_candle_data[aggregator_key]
 
             # Calculate raw indicator values (triggers) for entire history
-            raw_values, components, trigger_values_with_lookback = indicator.calculate_indicator_batch(candles)
+            # NOTE: We now ignore the pre-calculated lookback values from calculate_indicator_batch
+            # because we'll recalculate decay at the primary timeframe resolution
+            raw_values, components, _ = indicator.calculate_indicator_batch(candles)
 
             # Get the aggregator's timeframe in minutes
             aggregator = aggregators[aggregator_key]
@@ -279,10 +354,16 @@ class IndicatorProcessorHistoricalNew:
             # print(f"[ALIGN] {indicator.name}: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m | "
             #            f"Before: {len(raw_values)} values | After: {self.primary_timeframe_length} values")
 
-            # Align to primary timeframe if needed
-            # tmp = self._align_to_primary_timeframe_debug(raw_values, indicator_timeframe_minutes, indicator.name, candles)
+            # Step 1: Align raw trigger values to primary timeframe
             aligned_raw_values = self._align_to_primary_timeframe(raw_values, indicator_timeframe_minutes)
-            aligned_trigger_values_with_lookback = self._align_to_primary_timeframe(trigger_values_with_lookback, indicator_timeframe_minutes)
+
+            # Step 2: Apply lookback decay at primary timeframe resolution
+            lookback_periods = indicator.config.parameters.get('lookback', None)
+            aligned_trigger_values_with_lookback = self._apply_lookback_at_primary_timeframe(
+                aligned_raw_values,
+                lookback_periods,
+                indicator_timeframe_minutes
+            )
 
             # DEBUG: Verify alignment worked
             # print(f"[VERIFY] {indicator.name}: aligned_raw_values length = {len(aligned_raw_values)}, "

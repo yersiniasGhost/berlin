@@ -10,6 +10,8 @@ from models.monitor_model import Monitor
 
 def get_random_int(delta: int):
     r = 0
+    if delta == 0:
+        raise ValueError("Cannot have delta = 0 in mutation algorithm")
     while r == 0:
         r = random.randint(-delta, delta)
     return r
@@ -146,7 +148,7 @@ class MlfProblem(ProblemDomain):
                         current_weight = bar_config['indicators'][indicator_name]
                         delta = 0.15  #  percent_change * (10.0 - 0.1)  # Weight range is 0.1 to 3.0
                         new_weight = current_weight + random.uniform(-delta, delta)
-                        new_weight = max(0.01, min(new_weight, 1.0))
+                        new_weight = max(0.0, min(new_weight, 1.0))
 
                         bar_config['indicators'][indicator_name] = new_weight
 
@@ -159,7 +161,7 @@ class MlfProblem(ProblemDomain):
                     delta = 0.1  #   percent_change * (1.0 - 0.0)  # Threshold range is 0.1 to 0.9
                     new_threshold = current_threshold + random.uniform(-delta, delta)
                     # new_threshold = max(0.0, min(new_threshold, 1.0))
-                    new_threshold = max(0.4, min(new_threshold, 1.0))
+                    new_threshold = max(0.0, min(new_threshold, 1.0))
 
                     enter_condition['threshold'] = new_threshold
 
@@ -171,7 +173,7 @@ class MlfProblem(ProblemDomain):
                     current_threshold = exit_condition['threshold']
                     delta = percent_change * (0.9 - 0.1)  # Threshold range is 0.1 to 0.9
                     new_threshold = current_threshold + random.uniform(-delta, delta)
-                    new_threshold = max(0.5, min(new_threshold, 0.9))
+                    new_threshold = max(0.0, min(new_threshold, 1.0))
 
                     exit_condition['threshold'] = new_threshold
 
@@ -186,7 +188,7 @@ class MlfProblem(ProblemDomain):
                             value = indicator.parameters[name]
                             new_value = 0
                             if range['t'] == "int":
-                                delta = int(delta)
+                                delta = max(1, int(delta))
                                 new_value = value + get_random_int(delta)
                             elif range['t'] == 'float':
                                 new_value = value + random.uniform(-delta, delta)
