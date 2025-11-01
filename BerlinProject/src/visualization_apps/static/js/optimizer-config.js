@@ -24,7 +24,9 @@ const DEFAULT_GA_CONFIG = {
         elite_size: 12,
         chance_of_mutation: 0.05,
         chance_of_crossover: 0.03,
-        num_splits: 1
+        num_splits: 1,
+        random_seed: 0,
+        num_workers: 0
     }
 };
 
@@ -212,6 +214,8 @@ function renderGAConfiguration() {
     document.getElementById('chanceMutation').value = hp.chance_of_mutation || 0.05;
     document.getElementById('chanceCrossover').value = hp.chance_of_crossover || 0.03;
     document.getElementById('numSplits').value = hp.num_splits || 1;
+    document.getElementById('randomSeed').value = hp.random_seed || 0;
+    document.getElementById('numWorkers').value = hp.num_workers || 0;
 }
 
 function renderConditionsWithRanges(containerId, conditions) {
@@ -1283,7 +1287,9 @@ function collectGAConfigData() {
         elite_size: parseInt(document.getElementById('eliteSize').value),
         chance_of_mutation: parseFloat(document.getElementById('chanceMutation').value),
         chance_of_crossover: parseFloat(document.getElementById('chanceCrossover').value),
-        num_splits: parseInt(document.getElementById('numSplits').value)
+        num_splits: parseInt(document.getElementById('numSplits').value),
+        random_seed: parseInt(document.getElementById('randomSeed').value),
+        num_workers: parseInt(document.getElementById('numWorkers').value)
     };
 }
 

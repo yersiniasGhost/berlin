@@ -36,9 +36,17 @@ class GeneticAlgorithm:
     max_stalled_metric: int = 15,
     mutation_decay_factor: float = 0.93
     crossover_decay_factor: float = 0.95
+    random_seed: int = 0
 
 
     def __post_init__(self):
+        # Set random seeds for reproducibility if seed > 0
+        if self.random_seed > 0:
+            import numpy as np
+            np.random.seed(self.random_seed)
+            random.seed(self.random_seed)
+            logging.info(f"🎲 Random seed set to {self.random_seed} for reproducibility")
+
         self.propagation_size = int(self.propagation_fraction * self.population_size)
         self.statistics_observer = StatisticsObserver(objectives=self.problem_domain.fitness_calculator)
 

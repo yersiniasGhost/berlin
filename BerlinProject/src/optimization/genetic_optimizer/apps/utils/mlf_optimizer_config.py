@@ -49,8 +49,17 @@ class MlfOptimizerConfig:
             streamer.initialize(csa.get_aggregators(), split_config, self.monitor_config)
             backtest_streamers.append(streamer)
 
-        # Create fitness calculator
-        self.fitness_calculator = MlfFitnessCalculator(backtest_streamers=backtest_streamers)
+        # Create fitness calculator with worker configuration
+        # If num_workers is 0, use sequential execution (force_sequential=True)
+        # If num_workers > 0, use parallel execution with max_workers
+        force_sequential = (self.hyper_parameters.num_workers == 0)
+        max_workers = self.hyper_parameters.num_workers if self.hyper_parameters.num_workers > 0 else None
+
+        self.fitness_calculator = MlfFitnessCalculator(
+            backtest_streamers=backtest_streamers,
+            force_sequential=force_sequential,
+            max_workers=max_workers
+        )
 
         # Add objectives to fitness calculator
         for obj_name, objective in self.objectives.items():
@@ -63,7 +72,7 @@ class MlfOptimizerConfig:
             fitness_calculator=self.fitness_calculator
         )
 
-        # Create and return genetic algorithm with correct parameter name
+        # Create and return genetic algorithm with correct parameter name and random seed
         genetic_algorithm = GeneticAlgorithm(
             number_of_generations=self.hyper_parameters.number_of_iterations,
             problem_domain=problem,  # ← FIXED: Use 'problem_domain' not 'problem'
@@ -71,7 +80,8 @@ class MlfOptimizerConfig:
             propagation_fraction=self.hyper_parameters.propagation_fraction,
             elitist_size=self.hyper_parameters.elite_size,
             chance_of_mutation=self.hyper_parameters.chance_of_mutation,
-            chance_of_crossover=self.hyper_parameters.chance_of_crossover
+            chance_of_crossover=self.hyper_parameters.chance_of_crossover,
+            random_seed=self.hyper_parameters.random_seed
         )
 
         return genetic_algorithm
