@@ -85,7 +85,7 @@ class GeneticAlgorithm:
                 continue
             collect_domination_statistics(fitness_results)
             fronts = collect_fronts(fitness_results)
-
+            observer.individual_stats = fitness_results
             self.statistics_observer.collect_metrics(fronts)
             if iteration % show_step == 0 or iteration == self.number_of_generations-1:
                 observer.complete(fronts=fronts)

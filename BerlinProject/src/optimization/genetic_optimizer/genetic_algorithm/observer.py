@@ -18,6 +18,7 @@ class Observer:
 
     iteration: int
     fronts: Dict[int, List[IndividualStats]] = None
+    individual_stats: List[IndividualStats] = None
     fitness_values: np.array = None   # List[List[float]] = None
     start_time = None
     delta_time = None

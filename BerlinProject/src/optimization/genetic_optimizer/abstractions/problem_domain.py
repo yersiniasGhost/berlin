@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from optimization.genetic_optimizer.abstractions.individual_base import IndividualBase
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+from optimization.genetic_optimizer.genetic_algorithm.observer import Observer
 
 
 @dataclass

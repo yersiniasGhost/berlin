@@ -527,6 +527,23 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 3. Individual P&L Ranking Chart - Full Width -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-ranking-star me-2"></i>Individual P&L Ranking
+                                <small class="text-muted ms-2">(Sorted by Total P&L)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="individualPnLChart" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -910,7 +927,60 @@ document.addEventListener('DOMContentLoaded', function() {
             }],
             credits: { enabled: false }
         });
-        
+
+        // Initialize individual P&L ranking chart
+        charts.individualPnL = Highcharts.chart('individualPnLChart', {
+            chart: {
+                type: 'line',
+                zoomType: 'xy'
+            },
+            title: { text: null },
+            xAxis: {
+                title: { text: 'Individual Rank' },
+                min: 1,
+                tickInterval: 1,
+                labels: {
+                    formatter: function() {
+                        return '#' + this.value;
+                    }
+                }
+            },
+            yAxis: {
+                title: { text: 'Total P&L (%)' },
+                plotLines: [{
+                    value: 0,
+                    color: '#999',
+                    width: 1,
+                    zIndex: 5,
+                    dashStyle: 'Dash'
+                }]
+            },
+            tooltip: {
+                shared: true,
+                formatter: function() {
+                    return '<b>Rank #' + this.x + '</b><br/>' +
+                           'Total P&L: <b>' + Highcharts.numberFormat(this.y, 2) + '%</b>';
+                }
+            },
+            plotOptions: {
+                line: {
+                    marker: {
+                        enabled: true,
+                        radius: 4
+                    },
+                    lineWidth: 2
+                }
+            },
+            series: [{
+                name: 'Total P&L',
+                data: [],
+                color: '#3498db',
+                negativeColor: '#e74c3c'
+            }],
+            legend: { enabled: false },
+            credits: { enabled: false }
+        });
+
         charts.bestStrategy = Highcharts.chart('bestStrategyChart', {
             chart: { 
                 type: 'candlestick',
@@ -1240,8 +1310,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }, false);
             charts.losingTrades.series[0].setData(data, true);
         }
-        
-        // 4. Update Best Strategy Chart
+
+        // 5. Update Individual P&L Ranking Chart
+        if (chartData.individual_pnl_ranking && charts.individualPnL) {
+            console.log('Updating individual P&L ranking with:', chartData.individual_pnl_ranking);
+
+            const pnlData = chartData.individual_pnl_ranking;
+
+            charts.individualPnL.series[0].setData(pnlData, true);
+
+            // Update x-axis range to match data
+            if (pnlData.length > 0) {
+                charts.individualPnL.xAxis[0].update({
+                    max: pnlData.length
+                }, false);
+            }
+
+            charts.individualPnL.redraw();
+        }
+
+        // 6. Update Best Strategy Chart
         if (chartData.best_strategy && charts.bestStrategy) {
             // Update with candlestick data and trade triggers
             const candlestickData = chartData.best_strategy.candlestick_data || [];
@@ -1698,7 +1786,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 xAxis: { categories: [] }
             }, false);
         }
-        
+
+        if (charts.individualPnL) {
+            // Clear individual P&L ranking chart
+            charts.individualPnL.series[0].setData([], true);
+        }
+
         if (charts.bestStrategy) {
             // Clear best strategy chart
             charts.bestStrategy.series[0].setData([], false);
