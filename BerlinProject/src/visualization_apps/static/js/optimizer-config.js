@@ -26,7 +26,8 @@ const DEFAULT_GA_CONFIG = {
         chance_of_crossover: 0.03,
         num_splits: 1,
         random_seed: 0,
-        num_workers: 0
+        num_workers: 0,
+        split_repeats: 3
     }
 };
 
@@ -216,6 +217,7 @@ function renderGAConfiguration() {
     document.getElementById('numSplits').value = hp.num_splits || 1;
     document.getElementById('randomSeed').value = hp.random_seed || 0;
     document.getElementById('numWorkers').value = hp.num_workers || 0;
+    document.getElementById('splitRepeats').value = hp.split_repeats || 3;
 }
 
 function renderConditionsWithRanges(containerId, conditions) {
@@ -1289,7 +1291,8 @@ function collectGAConfigData() {
         chance_of_crossover: parseFloat(document.getElementById('chanceCrossover').value),
         num_splits: parseInt(document.getElementById('numSplits').value),
         random_seed: parseInt(document.getElementById('randomSeed').value),
-        num_workers: parseInt(document.getElementById('numWorkers').value)
+        num_workers: parseInt(document.getElementById('numWorkers').value),
+        split_repeats: parseInt(document.getElementById('splitRepeats').value)
     };
 }
 

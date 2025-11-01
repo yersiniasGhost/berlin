@@ -58,7 +58,8 @@ class MlfOptimizerConfig:
         self.fitness_calculator = MlfFitnessCalculator(
             backtest_streamers=backtest_streamers,
             force_sequential=force_sequential,
-            max_workers=max_workers
+            max_workers=max_workers,
+            split_repeat_count=self.hyper_parameters.split_repeats
         )
 
         # Add objectives to fitness calculator

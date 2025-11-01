@@ -76,6 +76,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     selected_streamer: Optional[BacktestDataStreamer] = None
     split = None
     repeat_split: int = 0
+    split_repeat_count: int = 3
 
     def __post_init__(self):
         # Set default number of workers to CPU count
@@ -89,7 +90,7 @@ class MlfFitnessCalculator(FitnessCalculator):
     def _select_random_streamer(self) -> BacktestDataStreamer:
         """Randomly select one of the available data streamers"""
         self.repeat_split += 1
-        if self.repeat_split >= 3 or not self.split:
+        if self.repeat_split >= self.split_repeat_count or not self.split:
             self.split = random.choice(self.backtest_streamers)
             self.repeat_split = 0
         return self.split
