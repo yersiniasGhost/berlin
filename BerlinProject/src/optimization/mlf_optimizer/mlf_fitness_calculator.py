@@ -8,10 +8,11 @@ import random
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+from optimization.genetic_optimizer.genetic_algorithm.observer import Observer
 from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
+from .mlf_individual_stats import MlfIndividualStats
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
-
 from mlf_utils.log_manager import LogManager
 
 
@@ -43,17 +44,13 @@ def evaluate_individual_worker(args):
         #     fitness_values = np.ones_like(fitness_values) * 100.0
         success = not all(fv == 100 for fv in fitness_values)
 
-        # Return success result
+        # Return success result with Portfolio and tick_history for full MlfIndividualStats creation
         return {
             'success': success,
             'fitness_values': fitness_values,
             'individual': individual,
-            'portfolio_stats': {
-                'winning_trades': portfolio.get_winning_trades_count(),
-                'losing_trades': portfolio.get_losing_trades_count(),
-                'profit_pct': portfolio.get_total_percent_profits(),
-                'loss_pct': portfolio.get_total_percent_losses()
-            }
+            'portfolio': portfolio,  # Return full Portfolio object (pickleable)
+            'tick_history': backtest_streamer.tick_history  # Return tick history for market return calculation
         }
 
     except Exception as e:
@@ -132,14 +129,14 @@ class MlfFitnessCalculator(FitnessCalculator):
 
 
 
-    def calculate_fitness_functions(self, iteration_key: int, population: List[MlfIndividual]) -> List[IndividualStats]:
+    def calculate_fitness_functions(self, iteration_key: int, population: List[MlfIndividual]) -> List[MlfIndividualStats]:
         """
         Parallel evaluation of population fitness using ProcessPoolExecutor
         """
         if self.force_sequential:
             return self._calculate_fitness_sequential(iteration_key, population)
 
-        fitness_results: List[IndividualStats] = []
+        fitness_results: List[MlfIndividualStats] = []
 
         self.logger.info(
             f"Evaluating population of {len(population)} individuals for iteration {iteration_key} using {self.max_workers} workers")
@@ -180,30 +177,27 @@ class MlfFitnessCalculator(FitnessCalculator):
 
                 try:
                     if result['success']:
-                        # Successful evaluation
-                        individual_stats = IndividualStats(
+                        # Successful evaluation - Create full MlfIndividualStats from worker results
+                        # Portfolio and tick_history are both pickleable!
+                        individual_stats = MlfIndividualStats.from_backtest(
                             index=cnt,
                             fitness_values=result['fitness_values'],
-                            individual=result['individual']
+                            individual=result['individual'],
+                            portfolio=result['portfolio'],
+                            tick_history=result['tick_history']
                         )
+
                         # Progress logging
                         if self.display_results or cnt % 50 == 0:
-                            stats = result['portfolio_stats']
-                            total_trades = stats['winning_trades'] + stats['losing_trades']
                             self.logger.info(f"Individual {cnt + 1}/{len(population)}: "
-                                        f"{total_trades} trades, "
-                                        f"profit: {stats['profit_pct']:.3f}%, "
-                                        f"loss: {stats['loss_pct']:.3f}%")
+                                        f"{individual_stats.total_trades} trades, "
+                                        f"P&L: {individual_stats.total_pnl:.3f}%, "
+                                        f"Wins: {individual_stats.winning_trades_count}, "
+                                        f"Losses: {individual_stats.losing_trades_count}")
                     else:
                         # Failed evaluation - apply penalty
                         self.logger.error(f"Error evaluating individual {cnt}: {result['error']}")
                         continue  # do not add to the fitness results
-                        # fitness_values = np.array([100.0] * len(self.objectives))
-                        # individual_stats = IndividualStats(
-                        #     index=cnt,
-                        #     fitness_values=fitness_values,
-                        #     individual=result['individual']
-                        # )
 
                     fitness_results.append(individual_stats)
 
@@ -211,13 +205,12 @@ class MlfFitnessCalculator(FitnessCalculator):
                     self.logger.error(f"Error processing result for individual {cnt}: {e}")
                     # Create penalty result
                     fitness_values = np.array([100.0] * len(self.objectives))
-                    individual_stats = IndividualStats(
+                    individual_stats = MlfIndividualStats(
                         index=cnt,
                         fitness_values=fitness_values,
                         individual=population[cnt]
                     )
                     fitness_results.append(individual_stats)
-
         except Exception as e:
             self.logger.error(f"Critical error in parallel fitness calculation: {e}")
             # Fallback to sequential processing
@@ -229,11 +222,11 @@ class MlfFitnessCalculator(FitnessCalculator):
 
 
 
-    def _calculate_fitness_sequential(self, iteration_key: int, population: List[MlfIndividual]) -> List[IndividualStats]:
+    def _calculate_fitness_sequential(self, iteration_key: int, population: List[MlfIndividual]) -> List[MlfIndividualStats]:
         """
         Fallback sequential implementation (your original code)
         """
-        fitness_results: List[IndividualStats] = []
+        fitness_results: List[MlfIndividualStats] = []
 
         self.logger.debug(f"Sequential calculation of {len(population)} individuals for iteration {iteration_key}")
         self.selected_streamer = self._select_random_streamer()
@@ -269,7 +262,13 @@ class MlfFitnessCalculator(FitnessCalculator):
 
 
     def __calculate_individual_stats(self, individual: MlfIndividual, portfolio: Portfolio, index: int, bt: BacktestDataStreamer):
-        """Calculate fitness values for an individual (used in sequential fallback)"""
+        """
+        Calculate fitness values for an individual and create MlfIndividualStats with all metrics.
+
+        This method now uses MlfIndividualStats.from_backtest() to create stats instances
+        with pre-calculated performance metrics, eliminating the need for recalculation
+        in visualization routes.
+        """
         try:
             fitness_values = np.array([
                 objective.calculate_objective(individual, portfolio, bt)
@@ -279,16 +278,20 @@ class MlfFitnessCalculator(FitnessCalculator):
             # if fitness_values[0] == 100.0:
             #     fitness_values = np.ones_like(fitness_values) * 100.0
 
-            return IndividualStats(
+            # Use MlfIndividualStats factory method to create fully populated stats
+            return MlfIndividualStats.from_backtest(
                 index=index,
                 fitness_values=fitness_values,
-                individual=individual
+                individual=individual,
+                portfolio=portfolio,
+                tick_history=bt.tick_history
             )
 
         except Exception as e:
             self.logger.error(f"Error calculating individual stats: {e}")
             fitness_values = np.array([100.0] * len(self.objectives))
-            return IndividualStats(index=index, fitness_values=fitness_values, individual=individual)
+            # Even for errors, use MlfIndividualStats for consistency
+            return MlfIndividualStats(index=index, fitness_values=fitness_values, individual=individual)
 
 
 

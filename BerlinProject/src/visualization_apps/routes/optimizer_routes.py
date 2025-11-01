@@ -18,6 +18,7 @@ from .optimization_state import OptimizationState
 from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOptimizerConfig
 from portfolios.portfolio_tool import TradeReason
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+from optimization.mlf_optimizer.mlf_individual_stats import MlfIndividualStats
 
 # Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
@@ -135,9 +136,17 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
         # 2. Trade Distribution Data - separate winning and losing trades like old app
         winning_trades_distribution = []
         losing_trades_distribution = []
-        
-        logger.info(f"📊 Processing trade distribution data... P&L entries: {len(chart_data.get('pnl_history', []))}")
-        if chart_data.get('pnl_history'):
+
+        # Check if best_individual (elites[0]) has pre-calculated distributions
+        best_individual_stats = elites[0] if elites and isinstance(elites[0], MlfIndividualStats) else None
+
+        logger.info(f"📊 Processing trade distribution data... Using MlfIndividualStats: {best_individual_stats is not None}")
+        if best_individual_stats:
+            # Use pre-calculated distributions from MlfIndividualStats
+            winning_trades_distribution = best_individual_stats.winning_trades_distribution
+            losing_trades_distribution = best_individual_stats.losing_trades_distribution
+            logger.info(f"✅ Using pre-calculated distributions: {len(winning_trades_distribution)} winning bins, {len(losing_trades_distribution)} losing bins")
+        elif chart_data.get('pnl_history'):
             # Get P&L data from completed trades
             winning_trades = []
             losing_trades = []
@@ -250,15 +259,59 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
                 except Exception as e:
                     logger.error(f"❌ Error processing elite {i+1}: {e}")
                     continue
-        
-        # 4. Performance Metrics Table Data (like old app table format)
+
+        # 4. Individual P&L Ranking Data (sorted by Total P&L)
+        individual_pnl_ranking = []
+        logger.info(f"📊 Processing individual P&L ranking... Elites: {len(elites) if elites else 0}")
+        if elites and objectives:
+            # Find which objective index corresponds to Total P&L
+            pnl_objective_index = None
+            for idx, obj_name in enumerate(objectives):
+                # Check for variations of P&L objective names
+                obj_lower = obj_name.lower()
+                if 'total_pnl' in obj_lower or 'total pnl' in obj_lower or 'pnl' in obj_lower:
+                    pnl_objective_index = idx
+                    logger.info(f"📈 Found P&L objective at index {idx}: '{obj_name}'")
+                    break
+
+            if pnl_objective_index is None:
+                logger.warning(f"⚠️ Could not find P&L objective in objectives: {objectives}")
+                logger.warning(f"⚠️ Individual P&L ranking chart will be empty")
+            else:
+                # Extract P&L from each elite (all MlfIndividualStats)
+                pnl_list = [elite.total_pnl for elite in elites]
+
+                # Sort by P&L descending (highest to lowest)
+                pnl_list_sorted = sorted(pnl_list, reverse=True)
+
+                # Convert to chart format: [[0, pnl1], [1, pnl2], [2, pnl3], ...]
+                # X-axis is index, Y-axis is sorted P&L value
+                individual_pnl_ranking = [[i, pnl] for i, pnl in enumerate(pnl_list_sorted)]
+
+                logger.info(f"📈 Generated {len(individual_pnl_ranking)} individual P&L ranking points")
+
+        # 5. Performance Metrics Table Data (like old app table format)
         performance_metrics = []
-        logger.info(f"📊 Processing performance metrics... Chart data available: {bool(chart_data)}")
+        logger.info(f"📊 Processing performance metrics... Using MlfIndividualStats: {best_individual_stats is not None}")
         if best_individuals_log:
             current_generation = best_individuals_log[-1]['generation'] if best_individuals_log else 1
-            
-            # Try to calculate metrics from chart data if available
-            if chart_data.get('pnl_history'):
+
+            # Use pre-calculated metrics from MlfIndividualStats if available
+            if best_individual_stats:
+                # Direct access to all pre-calculated metrics
+                perf_data = {
+                    'generation': current_generation,
+                    'total_pnl': best_individual_stats.total_pnl,
+                    'total_trades': best_individual_stats.total_trades,
+                    'winning_trades': best_individual_stats.winning_trades_count,
+                    'losing_trades': best_individual_stats.losing_trades_count,
+                    'avg_win': best_individual_stats.avg_win,
+                    'avg_loss': best_individual_stats.avg_loss,
+                    'market_return': best_individual_stats.market_return
+                }
+                performance_metrics = [perf_data]
+                logger.info(f"✅ Performance metrics from MlfIndividualStats: {perf_data}")
+            elif chart_data.get('pnl_history'):
                 try:
                     pnl_data = chart_data['pnl_history']
                     trade_data = chart_data.get('trade_history', [])
@@ -326,6 +379,7 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
             'objective_names': objectives,
             'performance_metrics': performance_metrics,
             'table_columns': table_columns,  # Dynamic table column definitions
+            'individual_pnl_ranking': individual_pnl_ranking,  # Individual P&L sorted by rank
             'best_strategy': {
                 'candlestick_data': chart_data.get('candlestick_data', []),
                 'triggers': chart_data.get('triggers', [])
@@ -693,10 +747,11 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
 
                 if opt_state.is_running():  # If still running after unpause
                     logger.info(f"▶️ Optimization resumed at generation {current_gen}")
-            best_individual = statsobserver.best_front[0].individual
             metrics = statsobserver.best_metric_iteration
 
-            elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)            
+            elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)
+            best_individual = elites[0].individual
+
             opt_state.update({
                 'current_generation': current_gen,
                 'last_best_individual': best_individual,
