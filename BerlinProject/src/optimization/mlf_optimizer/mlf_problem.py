@@ -51,7 +51,13 @@ class MlfProblem(ProblemDomain):
             for bar_name in mom.monitor_configuration.bars.keys():
                 moms_ind = mom.monitor_configuration.bars[bar_name]['indicators']  # e.g., {"macd1m": 1.5, "sma5m": 2.0}
                 dads_ind = dad.monitor_configuration.bars[bar_name]['indicators']
+                bar_weight_ranges = mom.monitor_configuration.bars[bar_name].get('weight_ranges', {})
                 for indicator_name in moms_ind.keys():
+                    # Check if this weight should be skipped from optimization
+                    weight_range_config = bar_weight_ranges.get(indicator_name, {})
+                    if weight_range_config.get('t') == 'skip':
+                        continue
+
                     if moms_ind[indicator_name] == dads_ind[indicator_name]:
                         continue
                     if random.random() < chance:
@@ -61,6 +67,10 @@ class MlfProblem(ProblemDomain):
 
             # indexing each name / threshold then switching values for them. FOR ENTER AND EXIT LONG THRESHOLDS
             for idx, enter_condition in enumerate(mom.monitor_configuration.enter_long):
+                # Skip if threshold_range is null (checkbox unchecked)
+                if enter_condition.get('threshold_range') is None:
+                    continue
+
                 dad_enter_condition = dad.monitor_configuration.enter_long[idx]
 
                 if enter_condition['threshold'] != dad_enter_condition['threshold']:
@@ -70,6 +80,10 @@ class MlfProblem(ProblemDomain):
                             'threshold'], enter_condition['threshold']
 
             for idx, exit_condition in enumerate(mom.monitor_configuration.exit_long):
+                # Skip if threshold_range is null (checkbox unchecked)
+                if exit_condition.get('threshold_range') is None:
+                    continue
+
                 dad_exit_condition = dad.monitor_configuration.exit_long[idx]
 
                 if exit_condition['threshold'] != dad_exit_condition['threshold']:
@@ -81,6 +95,11 @@ class MlfProblem(ProblemDomain):
             # for crossover of indicator parameters.
             for idx, indicator in enumerate(mom.monitor_configuration.indicators):
                 for key in indicator.parameters:
+                    # Check if this parameter should be skipped from optimization
+                    range_config = indicator.ranges.get(key, {})
+                    if range_config.get('t') == 'skip':
+                        continue
+
                     if random.random() < chance:
                         swap_cnt += 1
                         dad_indicator = dad.monitor_configuration.indicators[idx]
@@ -141,7 +160,13 @@ class MlfProblem(ProblemDomain):
             # 1. Mutate bar indicator weights
             for bar_name in individual.monitor_configuration.bars.keys():
                 bar_config = individual.monitor_configuration.bars[bar_name]
+                bar_weight_ranges = bar_config.get('weight_ranges', {})
                 for indicator_name in bar_config['indicators'].keys():
+                    # Check if this weight should be skipped from optimization
+                    weight_range_config = bar_weight_ranges.get(indicator_name, {})
+                    if weight_range_config.get('t') == 'skip':
+                        continue
+
                     if random.random() < mutate_probability:
                         cnt += 1
 
@@ -154,6 +179,10 @@ class MlfProblem(ProblemDomain):
 
             # 2. Mutate enter_long thresholds
             for enter_condition in individual.monitor_configuration.enter_long:
+                # Skip if threshold_range is null (checkbox unchecked)
+                if enter_condition.get('threshold_range') is None:
+                    continue
+
                 if random.random() < mutate_probability:
                     cnt += 1
 
@@ -167,6 +196,10 @@ class MlfProblem(ProblemDomain):
 
             # 3. Mutate exit_long thresholds
             for exit_condition in individual.monitor_configuration.exit_long:
+                # Skip if threshold_range is null (checkbox unchecked)
+                if exit_condition.get('threshold_range') is None:
+                    continue
+
                 if random.random() < mutate_probability:
                     cnt += 1
 

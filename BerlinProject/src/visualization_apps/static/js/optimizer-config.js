@@ -227,9 +227,17 @@ function renderConditionsWithRanges(containerId, conditions) {
     conditions.forEach((condition, index) => {
         const startThreshold = condition.threshold || 0.5;
         const thresholdRange = condition.threshold_range || DEFAULT_THRESHOLD_RANGE;
+        // Check if threshold should be optimized (default to true unless range is explicitly null)
+        const shouldOptimizeThreshold = condition.threshold_range !== null;
 
         const conditionHtml = `
             <div class="row g-2 mb-2">
+                <div class="col-md-1 d-flex align-items-end justify-content-center">
+                    <input type="checkbox" class="form-check-input"
+                           data-condition-index="${index}" data-field="optimize"
+                           ${shouldOptimizeThreshold ? 'checked' : ''}
+                           title="Optimize this threshold">
+                </div>
                 <div class="col-md-3">
                     <label class="form-label">Bar Name</label>
                     <select class="form-select form-select-sm" data-condition-index="${index}" data-field="name">
@@ -251,7 +259,7 @@ function renderConditionsWithRanges(containerId, conditions) {
                     <input type="number" class="form-control form-control-sm" value="${thresholdRange[1]}" step="0.01"
                            data-condition-index="${index}" data-field="threshold_max">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
                     <button class="btn btn-danger w-100" onclick="removeCondition('${containerId}', ${index})">
                         <i class="fas fa-trash"></i>
@@ -435,8 +443,17 @@ function createBarCardWithRanges(barName, barConfig) {
             weightRange = DEFAULT_WEIGHT_RANGE;
         }
 
+        // Check if weight should be optimized (default to true unless explicitly set to skip)
+        const shouldOptimizeWeight = !weightRanges[indName] || weightRanges[indName].t !== 'skip';
+
         indicatorsHtml += `
             <div class="row g-2 mb-2">
+                <div class="col-md-1 d-flex align-items-end justify-content-center">
+                    <input type="checkbox" class="form-check-input"
+                           data-bar-weight-optimize
+                           ${shouldOptimizeWeight ? 'checked' : ''}
+                           title="Optimize this weight">
+                </div>
                 <div class="col-md-3">
                     <select class="form-select form-select-sm" data-bar-indicator-name>
                         ${generateIndicatorNameOptions(indName)}
@@ -457,7 +474,7 @@ function createBarCardWithRanges(barName, barConfig) {
                     <input type="number" class="form-control form-control-sm" value="${weightRange[1]}"
                            data-bar-indicator-weight-max step="0.1" placeholder="Max">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <button class="btn btn-sm btn-danger w-100" onclick="removeBarIndicator(this)">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -750,9 +767,20 @@ function buildIndicatorParamsHTML(index, className, currentParams = {}, currentR
                 rangeValues = ['', ''];
             }
 
+            // Check if this parameter should be optimized (default to true)
+            const shouldOptimize = rangeData.t !== 'skip';
+
             html += `
                 <div class="col-md-6">
-                    <label class="form-label">${param.display_name}${errorBadge}</label>
+                    <div class="d-flex align-items-center mb-1">
+                        <input type="checkbox" class="form-check-input me-2"
+                               id="optimize-${index}-${param.name}"
+                               data-indicator-param-optimize="${param.name}"
+                               ${shouldOptimize ? 'checked' : ''}>
+                        <label class="form-label mb-0" for="optimize-${index}-${param.name}">
+                            ${param.display_name}${errorBadge}
+                        </label>
+                    </div>
                     <div class="row g-1">
                         <div class="col-4">
                             <input type="number" class="form-control form-control-sm ${isMissing ? 'border-danger' : ''}"
@@ -1071,14 +1099,23 @@ function updateCurrentConfigIndicators() {
         for (const [paramName, data] of Object.entries(paramData)) {
             parameters[paramName] = data.start;
 
-            // Convert min/max to correct type
-            const minValue = data.type === 'int' ? Math.round(data.min) : data.min;
-            const maxValue = data.type === 'int' ? Math.round(data.max) : data.max;
+            // Check if this parameter should be optimized (checkbox state)
+            const optimizeCheckbox = card.querySelector(`[data-indicator-param-optimize="${paramName}"]`);
+            const shouldOptimize = !optimizeCheckbox || optimizeCheckbox.checked;
 
-            ranges[paramName] = {
-                t: data.type,
-                r: [minValue, maxValue]
-            };
+            if (!shouldOptimize) {
+                // Parameter should be skipped from optimization
+                ranges[paramName] = { t: 'skip' };
+            } else {
+                // Convert min/max to correct type
+                const minValue = data.type === 'int' ? Math.round(data.min) : data.min;
+                const maxValue = data.type === 'int' ? Math.round(data.max) : data.max;
+
+                ranges[paramName] = {
+                    t: data.type,
+                    r: [minValue, maxValue]
+                };
+            }
         }
 
         if (name) {
@@ -1120,20 +1157,26 @@ function updateCurrentConfigBars() {
             const startInput = row.querySelector('[data-bar-indicator-weight-start]');
             const minInput = row.querySelector('[data-bar-indicator-weight-min]');
             const maxInput = row.querySelector('[data-bar-indicator-weight-max]');
+            const optimizeCheckbox = row.querySelector('[data-bar-weight-optimize]');
 
             if (indName && startInput && minInput && maxInput) {
                 const weightStart = parseFloat(startInput.value);
                 const weightMin = parseFloat(minInput.value);
                 const weightMax = parseFloat(maxInput.value);
+                const shouldOptimize = !optimizeCheckbox || optimizeCheckbox.checked;
 
                 // Store the start value as the actual weight
                 indicators[indName] = weightStart;
 
-                // Store the range for GA optimization
-                weightRanges[indName] = {
-                    r: [weightMin, weightMax],
-                    t: "float"
-                };
+                // Store the range for GA optimization (or skip if unchecked)
+                if (!shouldOptimize) {
+                    weightRanges[indName] = { t: 'skip' };
+                } else {
+                    weightRanges[indName] = {
+                        r: [weightMin, weightMax],
+                        t: "float"
+                    };
+                }
             }
         });
 
@@ -1189,6 +1232,8 @@ function collectConditions() {
 
         if (field === 'name') {
             enterLongByIndex[index].name = input.value;
+        } else if (field === 'optimize') {
+            enterLongByIndex[index].shouldOptimize = input.checked;
         } else if (field === 'threshold_start') {
             enterLongByIndex[index].threshold = parseFloat(input.value);
         } else if (field === 'threshold_min') {
@@ -1207,6 +1252,12 @@ function collectConditions() {
     // Convert to array
     Object.values(enterLongByIndex).forEach(condition => {
         if (condition.name) {
+            // If checkbox is unchecked, set threshold_range to null to skip optimization
+            if (condition.shouldOptimize === false) {
+                condition.threshold_range = null;
+            }
+            // Remove the shouldOptimize field before pushing (it was just for internal logic)
+            delete condition.shouldOptimize;
             enterLongConditions.push(condition);
         }
     });
@@ -1228,6 +1279,8 @@ function collectConditions() {
 
         if (field === 'name') {
             exitLongByIndex[index].name = input.value;
+        } else if (field === 'optimize') {
+            exitLongByIndex[index].shouldOptimize = input.checked;
         } else if (field === 'threshold_start') {
             exitLongByIndex[index].threshold = parseFloat(input.value);
         } else if (field === 'threshold_min') {
@@ -1246,6 +1299,12 @@ function collectConditions() {
     // Convert to array
     Object.values(exitLongByIndex).forEach(condition => {
         if (condition.name) {
+            // If checkbox is unchecked, set threshold_range to null to skip optimization
+            if (condition.shouldOptimize === false) {
+                condition.threshold_range = null;
+            }
+            // Remove the shouldOptimize field before pushing (it was just for internal logic)
+            delete condition.shouldOptimize;
             exitLongConditions.push(condition);
         }
     });
