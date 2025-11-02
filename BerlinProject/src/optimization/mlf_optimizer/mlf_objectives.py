@@ -133,7 +133,7 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
             primary_data = data_streamer.primary_aggregator
             metric = primary_data.get_maximum_drawdown() / 100.0
             objective_value = max(0.0, 3.0 - (net_pnl - metric) / abs(metric))
-        print("MaxPnL", mode, "PnL",  net_pnl*100.0, "metric:", metric, "OBJ", objective_value*self.weight)
+        # print("MaxPnL", mode, "PnL",  net_pnl*100.0, "metric:", metric, "OBJ", objective_value*self.weight)
         return objective_value * self.weight
 
 

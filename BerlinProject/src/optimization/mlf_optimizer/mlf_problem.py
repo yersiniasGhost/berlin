@@ -108,49 +108,6 @@ class MlfProblem(ProblemDomain):
 
         return [mom, dad]
 
-    # def mutation_function_old(self, individual: MlfIndividual, mutate_probability: float, iteration: int):
-    #     cnt = 0
-    #     percent_change = 0.2
-    #     while cnt == 0:
-    #         for indicator in individual.monitor_configuration.indicators:
-    #             for name, range in indicator.ranges.items():
-    #                 if range['t'] != 'skip':
-    #                     if random.random() < mutate_probability:
-    #                         cnt += 1
-    #                         low, high = range['r']
-    #                         delta = percent_change * (high - low)
-    #                         value = indicator.parameters[name]
-    #                         new_value = 0
-    #                         if range['t'] == "int":
-    #                             delta = int(delta)
-    #                             new_value = value + get_random_int(delta)
-    #                         elif range['t'] == 'float':
-    #                             new_value = value + random.uniform(-delta, delta)
-    #                         new_value = max(low, min(new_value, high))
-    #                         indicator.parameters[name] = new_value
-    #
-    #         if random.random() < mutate_probability:
-    #             cnt += 1
-    #             delta = percent_change * (0.9 - 0.5)
-    #             new_threshold = max(0.5, min(individual.monitor.threshold + random.uniform(-delta, delta), 0.9))
-    #             individual.monitor.threshold = new_threshold
-    #
-    #         if random.random() < mutate_probability:
-    #             cnt += 1
-    #             delta = percent_change * (0.9 - 0.5)
-    #             new_threshold = max(0.5, min(individual.monitor.bear_threshold + random.uniform(-delta, delta), 0.9))
-    #             individual.monitor.bear_threshold = new_threshold
-    #
-    #         for name, trigger in individual.monitor.triggers.items():
-    #             if random.random() < mutate_probability:
-    #                 cnt += 1
-    #                 individual.monitor.triggers[name] = max(1.0, trigger + get_random_int(15))
-    #
-    #         for name, trigger in individual.monitor.bear_triggers.items():
-    #             if random.random() < mutate_probability:
-    #                 cnt += 1
-    #                 individual.monitor.bear_triggers[name] = max(1.0, trigger + get_random_int(15))
-    #     individual.source += f", mutated: {cnt}, idx: {iteration}"
 
     def mutation_function(self, individual: MlfIndividual, mutate_probability: float, iteration: int):
         cnt = 0
@@ -172,8 +129,10 @@ class MlfProblem(ProblemDomain):
 
                         current_weight = bar_config['indicators'][indicator_name]
                         delta = 0.15  #  percent_change * (10.0 - 0.1)  # Weight range is 0.1 to 3.0
-                        new_weight = current_weight + random.uniform(-delta, delta)
+                        rn = random.uniform(-delta, delta)
+                        new_weight = current_weight + rn
                         new_weight = max(0.0, min(new_weight, 1.0))
+                        new_weight = min(weight_range_config.get('r')[1], new_weight)
 
                         bar_config['indicators'][indicator_name] = new_weight
 

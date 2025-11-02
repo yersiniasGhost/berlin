@@ -89,6 +89,7 @@ def handle_start_optimization(data):
     # Try to get paths from data, or use temp paths from HTTP call
     ga_config_path = data.get('ga_config_path') or OptimizationState().get('ga_config_path_temp')
     data_config_path = data.get('data_config_path') or OptimizationState().get('data_config_path_temp')
+    test_data_config_path = data.get('test_data_config_path') or OptimizationState().get('test_data_config_path_temp')
 
     if not ga_config_path or not data_config_path:
         emit('optimization_error', {'error': 'Config paths not provided. Make sure to call /api/start_optimization first.'})
@@ -101,6 +102,7 @@ def handle_start_optimization(data):
         'current_generation': 0,
         'best_individuals_log': [],
         'elites': [],
+        'test_evaluations': [],  # New: track test evaluations
         'ga_instance': None,  # Clear cached GA instance
         'io_instance': None   # Clear cached IO instance
     })
@@ -108,7 +110,7 @@ def handle_start_optimization(data):
     # Start optimization thread with NEW indicator system
     thread = threading.Thread(
         target=run_genetic_algorithm_threaded_with_new_indicators,
-        args=(ga_config_path, data_config_path, socketio, OptimizationState())
+        args=(ga_config_path, data_config_path, socketio, OptimizationState(), test_data_config_path)
     )
     OptimizationState().set('thread', thread)
     thread.start()

@@ -176,7 +176,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 parameter_type=ParameterType.INTEGER,
                 default_value=12,
                 min_value=2,
-                max_value=30,
+                max_value=15,
                 step=1,
                 description="Fast EMA period for MACD calculation",
                 ui_group="MACD Settings"
@@ -186,7 +186,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 display_name="Slow EMA Period",
                 parameter_type=ParameterType.INTEGER,
                 default_value=26,
-                min_value=2,
+                min_value=12,
                 max_value=30,
                 step=1,
                 description="Slow EMA period for MACD calculation",

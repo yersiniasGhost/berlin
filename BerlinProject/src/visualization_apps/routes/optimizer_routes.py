@@ -19,6 +19,7 @@ from optimization.genetic_optimizer.apps.utils.mlf_optimizer_config import MlfOp
 from portfolios.portfolio_tool import TradeReason
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from optimization.mlf_optimizer.mlf_individual_stats import MlfIndividualStats
+from optimization.genetic_optimizer.support.parameter_collector import ParameterCollector
 
 # Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
@@ -657,7 +658,7 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
 
 
 def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str,
-                                                       socketio, opt_state):
+                                                       socketio, opt_state, test_data_config_path: str = None):
     """Run the genetic algorithm optimization with NEW indicator system"""
 
     try:
@@ -670,11 +671,19 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         # Load data configuration to verify ticker
         with open(data_config_path) as f:
             data_config = json.load(f)
-        
+
         current_ticker = data_config.get('ticker', 'UNKNOWN')
         logger.info(f"🎯 Loading optimization for ticker: {current_ticker}")
         logger.info(f"   Data config path: {data_config_path}")
         logger.info(f"   Date range: {data_config.get('start_date')} to {data_config.get('end_date')}")
+
+        # Load test data configuration if provided
+        test_data_config = None
+        if test_data_config_path and os.path.exists(test_data_config_path):
+            with open(test_data_config_path) as f:
+                test_data_config = json.load(f)
+            logger.info(f"🧪 Test data config loaded for ticker: {test_data_config.get('ticker', 'UNKNOWN')}")
+            logger.info(f"   Test date range: {test_data_config.get('start_date')} to {test_data_config.get('end_date')}")
 
         test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
         opt_state.set('test_name', test_name)
@@ -692,6 +701,9 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         io = MlfOptimizerConfig.from_json(config_data, data_config_path)
         genetic_algorithm = io.create_project()
 
+        # Initialize parameter collector for histogram tracking
+        parameter_collector = ParameterCollector()
+
         # Store instances for state management using thread-safe methods
         opt_state.update({
             'ga_instance': genetic_algorithm,
@@ -699,7 +711,8 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             'total_generations': genetic_algorithm.number_of_generations,
             'current_generation': 0,
             'best_individuals_log': [],
-            'processed_indicators': processed_indicators
+            'processed_indicators': processed_indicators,
+            'parameter_collector': parameter_collector
         })
 
         logger.info(f"   Test: {test_name}")
@@ -752,6 +765,14 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)
             best_individual = elites[0].individual
 
+            # Collect parameters from entire population (all fronts) for histogram visualization
+            # Clear previous generation data to show only current epoch
+            parameter_collector.clear_generation_data()
+            # Extract all individuals from all Pareto fronts
+            full_population = [individual for front in observer.fronts.values() for individual in front]
+            # Pass both full population and elites for two-series histogram
+            parameter_collector.collect_generation_parameters(current_gen, full_population, elites=elites)
+
             opt_state.update({
                 'current_generation': current_gen,
                 'last_best_individual': best_individual,
@@ -787,6 +808,131 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 # Convert numpy arrays to regular Python lists for JSON serialization
                 elite_objectives = [e.fitness_values.tolist() for e in elites]
 
+                # Get parameter list for histogram dropdown
+                parameter_list = parameter_collector.get_parameter_list()
+
+                # Evaluate elites on test data if test config is provided
+                test_evaluations = []
+                if test_data_config:
+                    try:
+                        # Get number of elites to save from GA hyperparameters
+                        elites_to_save = config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+                        num_elites_to_evaluate = min(elites_to_save, len(elites))
+
+                        logger.info(f"🧪 Evaluating top {num_elites_to_evaluate} elites (out of {len(elites)}) on test data for generation {current_gen}")
+
+                        # Import required modules for test evaluation
+                        from optimization.calculators.bt_data_streamer import BacktestDataStreamer
+                        from candle_aggregator.csa_container import CSAContainer
+
+                        # Create a temporary test data config file for evaluation
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='_test_eval.json', delete=False) as test_file:
+                            json.dump(test_data_config, test_file, indent=2)
+                            temp_test_path = test_file.name
+
+                        try:
+                            # Create test data streamer WITHOUT splits (evaluate on entire test dataset)
+                            # Get aggregator configurations from monitor config
+                            aggregator_list = list(io.monitor_config.get_aggregator_configs().keys())
+
+                            # Create CSA container for test data
+                            test_csa = CSAContainer(test_data_config, aggregator_list)
+
+                            # Create and initialize BacktestDataStreamer with test data
+                            test_streamer = BacktestDataStreamer()
+                            test_streamer.initialize(test_csa.get_aggregators(), test_data_config, io.monitor_config)
+
+                            # Only evaluate the top elites that will be saved
+                            elites_to_test = elites[:num_elites_to_evaluate]
+
+                            for elite_idx, elite_stats in enumerate(elites_to_test):
+                                try:
+                                    # Evaluate elite on training data (already calculated)
+                                    train_pnl = getattr(elite_stats, 'total_pnl', None)
+                                    train_trades = getattr(elite_stats, 'number_of_trades', 0)
+                                    train_winning = getattr(elite_stats, 'number_of_winning_trades', 0)
+                                    train_win_rate = (train_winning / train_trades * 100) if train_trades > 0 else 0
+
+                                    # Evaluate elite on test data using the backtest streamer
+                                    test_streamer.replace_monitor_config(elite_stats.individual.monitor_configuration)
+                                    test_portfolio = test_streamer.run()
+
+                                    # Extract test metrics from portfolio trade history
+                                    # Calculate P&L from entry/exit pairs
+                                    cumulative_pnl = 0.0
+                                    trade_pairs = []
+
+                                    for trade in test_portfolio.trade_history:
+                                        is_entry = trade.reason in [TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT]
+                                        is_exit = trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]
+
+                                        if is_entry:
+                                            trade_pairs.append({'entry': trade, 'exit': None})
+                                        elif is_exit and trade_pairs:
+                                            for pair in reversed(trade_pairs):
+                                                if pair['exit'] is None:
+                                                    pair['exit'] = trade
+                                                    entry_price = pair['entry'].price
+                                                    exit_price = trade.price
+                                                    trade_pnl = ((exit_price - entry_price) / entry_price) * 100.0
+                                                    cumulative_pnl += trade_pnl
+                                                    break
+
+                                    # Count completed trades
+                                    completed_pairs = [p for p in trade_pairs if p['exit'] is not None]
+                                    test_pnl = cumulative_pnl
+                                    test_trades = len(completed_pairs)
+
+                                    # Count winning trades
+                                    test_winning = 0
+                                    for pair in completed_pairs:
+                                        entry_price = pair['entry'].price
+                                        exit_price = pair['exit'].price
+                                        if exit_price > entry_price:
+                                            test_winning += 1
+
+                                    test_win_rate = (test_winning / test_trades * 100) if test_trades > 0 else 0
+
+                                    # Calculate overfitting score (difference between train and test performance)
+                                    overfitting_score = train_pnl - test_pnl if (train_pnl is not None and test_pnl is not None) else None
+
+                                    test_evaluations.append({
+                                        'generation': current_gen,
+                                        'elite_index': elite_idx,
+                                        'train_pnl': train_pnl,
+                                        'test_pnl': test_pnl,
+                                        'train_trades': train_trades,
+                                        'test_trades': test_trades,
+                                        'train_win_rate': train_win_rate,
+                                        'test_win_rate': test_win_rate,
+                                        'overfitting_score': overfitting_score
+                                    })
+
+                                    logger.info(f"   Elite {elite_idx}: Train P&L={train_pnl:.2f}%, Test P&L={test_pnl:.2f}%, Overfitting={overfitting_score:.2f}%")
+
+                                except Exception as elite_eval_error:
+                                    logger.warning(f"Error evaluating elite {elite_idx} on test data: {elite_eval_error}")
+                                    import traceback
+                                    traceback.print_exc()
+
+                            # Store test evaluations in state
+                            current_test_evals = opt_state.get('test_evaluations', [])
+                            current_test_evals.extend(test_evaluations)
+                            opt_state.set('test_evaluations', current_test_evals)
+
+                            logger.info(f"✅ Evaluated {len(test_evaluations)} elites on test data")
+
+                        finally:
+                            # Clean up temporary test config file
+                            if os.path.exists(temp_test_path):
+                                os.unlink(temp_test_path)
+
+                    except Exception as test_eval_error:
+                        logger.error(f"Error during test data evaluation: {test_eval_error}")
+                        import traceback
+                        traceback.print_exc()
+
                 socketio.emit('generation_complete', {
                     'generation': current_gen,
                     'total_generations': genetic_algorithm.number_of_generations,
@@ -800,7 +946,9 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                         'total_generations': genetic_algorithm.number_of_generations,
                         'completed': False
                     },
-                    'optimizer_charts': optimizer_charts  # Specifically for optimizer frontend
+                    'optimizer_charts': optimizer_charts,  # Specifically for optimizer frontend
+                    'parameter_list': parameter_list,  # For parameter histogram dropdown
+                    'test_evaluations': test_evaluations  # Test data evaluation results
                 })
 
             except Exception as e:
@@ -1161,32 +1309,42 @@ def start_optimization():
         
         data = request.get_json()
         logger.info(f"Received start_optimization request with data keys: {list(data.keys()) if data else 'None'}")
-        
+
         # The frontend sends actual config objects, not file paths
         ga_config = data.get('ga_config')
         data_config = data.get('data_config')
+        test_data_config = data.get('test_data_config')  # Optional test data config
 
         if not ga_config or not data_config:
             return jsonify({'success': False, 'error': 'Both config objects are required'})
 
         # Create temporary files for the configs since our optimization function expects file paths
         import tempfile
-        
+
         # Create temporary files
         with tempfile.NamedTemporaryFile(mode='w', suffix='_ga_config.json', delete=False) as ga_file:
             json.dump(ga_config, ga_file, indent=2)
             ga_config_path = ga_file.name
-            
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='_data_config.json', delete=False) as data_file:
             json.dump(data_config, data_file, indent=2)
             data_config_path = data_file.name
+
+        # Create test data config file if provided
+        test_data_config_path = None
+        if test_data_config:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='_test_data_config.json', delete=False) as test_data_file:
+                json.dump(test_data_config, test_data_file, indent=2)
+                test_data_config_path = test_data_file.name
 
         # Store paths and config data globally so WebSocket handler can access them
         OptimizationState().update({
             'ga_config_path_temp': ga_config_path,
             'data_config_path_temp': data_config_path,
+            'test_data_config_path_temp': test_data_config_path,
             'ga_config_data': ga_config,
-            'data_config_data': data_config
+            'data_config_data': data_config,
+            'test_data_config_data': test_data_config
         })
 
         return jsonify({
@@ -1793,6 +1951,53 @@ def get_elite_config(index):
 
     except Exception as e:
         logger.error(f"❌ Error getting elite config {index}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/get_parameter_histogram', methods=['POST'])
+def get_parameter_histogram():
+    """
+    Get histogram data for a specific parameter
+
+    Request JSON:
+        - parameter_name: Name of the parameter to get histogram for
+        - num_bins: Number of bins for continuous parameters (optional, default: 20)
+
+    Returns:
+        JSON with histogram bins, statistics, and metadata
+    """
+    try:
+        data = request.get_json()
+        param_name = data.get('parameter_name')
+        num_bins = data.get('num_bins', 20)
+
+        if not param_name:
+            return jsonify({'success': False, 'error': 'parameter_name is required'})
+
+        # Get parameter collector from optimization state
+        parameter_collector = OptimizationState().get('parameter_collector')
+        if not parameter_collector:
+            return jsonify({'success': False, 'error': 'No parameter data available - optimization may not have started yet'})
+
+        # Generate histogram data for requested parameter
+        histogram_data = parameter_collector.get_parameter_histogram_data(param_name, num_bins)
+
+        if not histogram_data:
+            return jsonify({'success': False, 'error': f'Parameter "{param_name}" not found or has no data'})
+
+        pop_count = histogram_data['population']['total_values']
+        elite_count = histogram_data['elites']['total_values'] if histogram_data['elites'] else 0
+        logger.info(f"📊 Generated histogram for parameter '{param_name}' with {pop_count} population + {elite_count} elite values")
+
+        return jsonify({
+            'success': True,
+            'histogram': histogram_data
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error generating parameter histogram: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})

@@ -5,6 +5,7 @@
 
 let monitorConfig = null;
 let dataConfig = null;
+let testDataConfig = null;
 let gaConfig = null;
 let indicatorClasses = {};
 
@@ -129,9 +130,15 @@ async function loadConfigurations() {
             gaConfig = JSON.parse(JSON.stringify(DEFAULT_GA_CONFIG)); // Deep clone
         }
 
+        // Initialize empty test data config if not provided
+        if (!testDataConfig) {
+            testDataConfig = JSON.parse(JSON.stringify(DEFAULT_DATA_CONFIG)); // Deep clone
+        }
+
         // Render configurations
         renderMonitorConfiguration();
         renderDataConfiguration();
+        renderTestDataConfiguration();
         renderGAConfiguration();
 
         // Show editor
@@ -1321,6 +1328,22 @@ function collectDataConfigData() {
     dataConfig.start_date = document.getElementById('dataStartDate').value;
     dataConfig.end_date = document.getElementById('dataEndDate').value;
     dataConfig.include_extended_hours = document.getElementById('dataExtendedHours').checked;
+}
+
+function renderTestDataConfiguration() {
+    if (!testDataConfig) return;
+
+    document.getElementById('testDataTicker').value = testDataConfig.ticker || '';
+    document.getElementById('testDataStartDate').value = testDataConfig.start_date || '';
+    document.getElementById('testDataEndDate').value = testDataConfig.end_date || '';
+    document.getElementById('testDataExtendedHours').checked = testDataConfig.include_extended_hours !== undefined ? testDataConfig.include_extended_hours : true;
+}
+
+function collectTestDataConfigData() {
+    testDataConfig.ticker = document.getElementById('testDataTicker').value.toUpperCase();
+    testDataConfig.start_date = document.getElementById('testDataStartDate').value;
+    testDataConfig.end_date = document.getElementById('testDataEndDate').value;
+    testDataConfig.include_extended_hours = document.getElementById('testDataExtendedHours').checked;
 }
 
 function collectGAConfigData() {

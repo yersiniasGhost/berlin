@@ -19,7 +19,7 @@ def choose_weights(monitor_config: MonitorConfiguration):
                     raise ValueError("Invalid specification on bar indicator weight ranges")
                 w_min = ranges[0]
                 w_max = ranges[1]
-                monitor_config.bars[bar_name]['indicators'][indicator_name] = random.randint(w_min, w_max)
+                monitor_config.bars[bar_name]['indicators'][indicator_name] = random.uniform(w_min, w_max)
 
     # NEW: Randomize thresholds for enter_long array
     for enter_condition in monitor_config.enter_long:
