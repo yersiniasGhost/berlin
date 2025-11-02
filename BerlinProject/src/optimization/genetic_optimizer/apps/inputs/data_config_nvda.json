@@ -1,5 +1,6 @@
 {
   "ticker": "NVDA",
   "start_date": "2025-01-30",
-  "end_date": "2025-08-11"
+  "end_date": "2025-08-11",
+  "include_extended_hours": true
 }

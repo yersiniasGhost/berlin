@@ -25,10 +25,11 @@ class DataStreamer:
     DataStreamer with simple aggregator type selection
     """
 
-    def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration):
+    def __init__(self, card_id: str, symbol: str, monitor_config: MonitorConfiguration, include_extended_hours: bool = True):
         self.card_id = card_id
         self.symbol = symbol
         self.monitor_config = monitor_config
+        self.include_extended_hours = include_extended_hours
 
         aggregator_configs = monitor_config.get_aggregator_configs()
         self.aggregators: Dict[str, CandleAggregator] = {}
@@ -99,9 +100,9 @@ class DataStreamer:
         Create appropriate aggregator based on type
         """
         if agg_type == "heiken":
-            return CAHeiken(symbol, timeframe)
+            return CAHeiken(symbol, timeframe, self.include_extended_hours)
         else:  # Default to normal
-            return CANormal(symbol, timeframe)
+            return CANormal(symbol, timeframe, self.include_extended_hours)
 
     def _calculate_bar_scores(self) -> Dict[str, float]:
         """

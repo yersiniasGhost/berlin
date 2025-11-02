@@ -331,6 +331,15 @@
                                         <label for="dataEndDate" class="form-label">End Date</label>
                                         <input type="date" class="form-control" id="dataEndDate" style="max-width: 200px;">
                                     </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check mt-4">
+                                            <input class="form-check-input" type="checkbox" id="dataExtendedHours" checked>
+                                            <label class="form-check-label" for="dataExtendedHours">
+                                                Include Extended Hours
+                                            </label>
+                                            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET (regular market hours)</small>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -556,6 +565,32 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 4. Parameter Distribution Histogram - Full Width -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-sliders-h me-2"></i>Parameter Distribution Histogram
+                                        <small class="text-muted ms-2">(Across All Generations)</small>
+                                    </h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select form-select-sm" id="parameterSelector">
+                                        <option value="">Select a parameter...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="parameterHistogramChart" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -634,6 +669,11 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Generation complete:', data.generation);
             updateProgressBar(data.progress);
             updateCharts(data.optimizer_charts || data.chart_data || {});
+
+            // Update parameter selector dropdown if parameter list is provided
+            if (data.parameter_list && data.parameter_list.length > 0) {
+                updateParameterSelector(data.parameter_list);
+            }
         });
         
         window.socket.on('optimization_complete', function(data) {
@@ -1099,8 +1139,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 shared: true
             }
         });
+
+        // Initialize parameter histogram chart
+        charts.parameterHistogram = Highcharts.chart('parameterHistogramChart', {
+            chart: { type: 'column' },
+            title: {
+                text: 'Select a parameter from the dropdown above',
+                style: { fontSize: '14px', color: '#999' }
+            },
+            subtitle: { text: '' },
+            xAxis: {
+                title: { text: 'Parameter Value' },
+                categories: [],
+                labels: {
+                    rotation: -45,
+                    style: { fontSize: '10px' }
+                }
+            },
+            yAxis: {
+                title: { text: 'Frequency' },
+                min: 0
+            },
+            series: [{
+                name: 'Population',
+                data: [],
+                color: '#3498db',
+                borderWidth: 0
+            }, {
+                name: 'Elites',
+                data: [],
+                color: '#e74c3c',
+                borderWidth: 0
+            }],
+            plotOptions: {
+                column: {
+                    borderWidth: 0,
+                    groupPadding: 0.1,
+                    pointPadding: 0.05
+                }
+            },
+            legend: {
+                enabled: true,
+                align: 'right',
+                verticalAlign: 'top',
+                layout: 'vertical',
+                x: 0,
+                y: 50
+            },
+            credits: { enabled: false },
+            tooltip: {
+                formatter: function() {
+                    const total = this.series.data.reduce((sum, point) => sum + point.y, 0);
+                    const percentage = ((this.y / total) * 100).toFixed(1);
+                    return '<b>' + this.x + '</b><br/>' +
+                           this.series.name + ': <b>' + this.y + '</b><br/>' +
+                           'Percentage: <b>' + percentage + '%</b>';
+                }
+            }
+        });
     }
-    
+
     function startPolling() {
 <!--        pollInterval = setInterval(updateProgress, 2000); // Poll every 2 seconds-->
     }
@@ -1838,6 +1936,161 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('✅ All charts and data cleared');
     }
+
+    // Parameter Histogram Functions
+    function updateParameterSelector(parameterList) {
+        const selector = document.getElementById('parameterSelector');
+        const currentSelection = selector.value;
+
+        // Group parameters by source for organized dropdown
+        const groupedParams = {};
+        parameterList.forEach(param => {
+            const source = param.source.split('.')[0];
+            if (!groupedParams[source]) {
+                groupedParams[source] = [];
+            }
+            groupedParams[source].push(param);
+        });
+
+        // Rebuild selector options with groups
+        selector.innerHTML = '<option value="">Select a parameter...</option>';
+
+        Object.keys(groupedParams).sort().forEach(source => {
+            const group = document.createElement('optgroup');
+            group.label = source.charAt(0).toUpperCase() + source.slice(1) + 's';
+
+            groupedParams[source].forEach(param => {
+                const option = document.createElement('option');
+                option.value = param.name;
+                option.textContent = `${param.name} (${param.value_count} values)`;
+                group.appendChild(option);
+            });
+
+            selector.appendChild(group);
+        });
+
+        // Restore previous selection if it still exists
+        if (currentSelection && parameterList.some(p => p.name === currentSelection)) {
+            selector.value = currentSelection;
+        }
+    }
+
+    async function loadParameterHistogram(paramName) {
+        if (!paramName) return;
+
+        console.log(`📊 Loading histogram for parameter: ${paramName}`);
+
+        try {
+            const response = await fetch('/optimizer/api/get_parameter_histogram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parameter_name: paramName,
+                    num_bins: 20
+                })
+            });
+
+            const result = await response.json();
+            console.log('📊 Histogram API response:', result);
+
+            if (result.success && result.histogram) {
+                console.log('✅ Updating histogram chart with data:', result.histogram);
+                updateParameterHistogramChart(result.histogram);
+            } else {
+                console.error('❌ Error loading parameter histogram:', result.error);
+                showAlert(`Failed to load parameter histogram: ${result.error}`, 'warning');
+            }
+        } catch (error) {
+            console.error('❌ Exception loading parameter histogram:', error);
+            showAlert(`Failed to load parameter histogram: ${error.message}`, 'danger');
+        }
+    }
+
+    function updateParameterHistogramChart(histogramData) {
+        const populationData = histogramData.population;
+        const eliteData = histogramData.elites;
+        const paramType = histogramData.type;
+        const paramRange = histogramData.range;
+
+        // Get all unique categories from both population and elites
+        const populationCategories = Object.keys(populationData.bins);
+        const eliteCategories = eliteData ? Object.keys(eliteData.bins) : [];
+        let allCategories = [...new Set([...populationCategories, ...eliteCategories])];
+
+        // If parameter has a range and type is int, fill in missing values for full range display
+        if (paramRange && paramRange.length === 2 && paramType === 'int') {
+            const [minRange, maxRange] = paramRange;
+            const fullRange = [];
+            for (let i = minRange; i <= maxRange; i++) {
+                fullRange.push(String(i));
+            }
+            // Merge with existing categories to ensure we don't lose any actual data
+            allCategories = [...new Set([...fullRange, ...allCategories])];
+        }
+
+        // Sort categories numerically (handles both int and float strings)
+        allCategories.sort((a, b) => {
+            // Handle range formats like "0.5000-0.6000"
+            const aVal = parseFloat(a.split('-')[0]);
+            const bVal = parseFloat(b.split('-')[0]);
+            return aVal - bVal;
+        });
+
+        // Create data arrays aligned with categories
+        const populationValues = allCategories.map(cat => populationData.bins[cat] || 0);
+        const eliteValues = allCategories.map(cat => eliteData ? (eliteData.bins[cat] || 0) : 0);
+
+        const popStats = populationData.statistics;
+        const eliteStats = eliteData ? eliteData.statistics : null;
+
+        // Build subtitle with statistics
+        let subtitleText = `Type: ${histogramData.type} | Range: [${histogramData.range.join(', ')}]<br/>` +
+                          `Population (${populationData.total_values}): ` +
+                          `Min: ${popStats.min.toFixed(2)}, Max: ${popStats.max.toFixed(2)}, ` +
+                          `Mean: ${popStats.mean.toFixed(2)}, Median: ${popStats.median.toFixed(2)}`;
+
+        if (eliteStats) {
+            subtitleText += `<br/>Elites (${eliteData.total_values}): ` +
+                           `Min: ${eliteStats.min.toFixed(2)}, Max: ${eliteStats.max.toFixed(2)}, ` +
+                           `Mean: ${eliteStats.mean.toFixed(2)}, Median: ${eliteStats.median.toFixed(2)}`;
+        }
+
+        // Update chart with new data
+        charts.parameterHistogram.update({
+            title: {
+                text: histogramData.parameter_name,
+                style: { fontSize: '16px', fontWeight: 'bold', color: '#333' }
+            },
+            subtitle: {
+                text: subtitleText,
+                style: { fontSize: '11px', color: '#666' }
+            },
+            xAxis: { categories: allCategories }
+        }, false);
+
+        // Update both series
+        charts.parameterHistogram.series[0].setData(populationValues, false);
+        charts.parameterHistogram.series[1].setData(eliteValues, true);
+    }
+
+    // Add change listener for parameter selector
+    document.getElementById('parameterSelector').addEventListener('change', function() {
+        const paramName = this.value;
+        if (paramName) {
+            loadParameterHistogram(paramName);
+        } else {
+            // Reset chart to default state
+            charts.parameterHistogram.update({
+                title: {
+                    text: 'Select a parameter from the dropdown above',
+                    style: { fontSize: '14px', color: '#999' }
+                },
+                subtitle: { text: '' }
+            }, false);
+            charts.parameterHistogram.series[0].setData([], false);
+            charts.parameterHistogram.series[1].setData([], true);
+        }
+    });
 
     // Send to Replay functionality
     let selectedEliteIndex = null;

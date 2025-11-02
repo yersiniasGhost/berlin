@@ -14,6 +14,8 @@ class CSAContainer:
         self.ticker = data_config['ticker']
         self.start_date = data_config['start_date']
         self.end_date = data_config['end_date']
+        # Default to True for backward compatibility
+        self.include_extended_hours = data_config.get('include_extended_hours', True)
 
         self.aggregators: Dict[str, CandleAggregator] = {}
 
@@ -34,9 +36,9 @@ class CSAContainer:
             agg_type = parts[1] if len(parts) > 1 else 'normal'
 
             if agg_type == "heiken":
-                aggregator = CAHeiken(self.ticker, timeframe)
+                aggregator = CAHeiken(self.ticker, timeframe, self.include_extended_hours)
             else:
-                aggregator = CANormal(self.ticker, timeframe)
+                aggregator = CANormal(self.ticker, timeframe, self.include_extended_hours)
 
             for tick in raw_ticks:
                 aggregator.process_tick(tick)

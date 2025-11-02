@@ -11,10 +11,11 @@ class CandleAggregator(ABC):
     Handles timing and workflow, delegates calculation to subclasses.
     """
 
-    def __init__(self, symbol: str, timeframe: str):
+    def __init__(self, symbol: str, timeframe: str, include_extended_hours: bool = True):
         self.symbol = symbol
         self.timeframe = timeframe
         self.timeframe_minutes = self._calculate_timeframe_minutes()
+        self.include_extended_hours = include_extended_hours
         self.current_candle: Optional[TickData] = None
         self.history: List[TickData] = []
         self.completed_candle: Optional[TickData] = None
@@ -56,8 +57,42 @@ class CandleAggregator(ABC):
         """Get timeframe in minutes"""
         return self.timeframe_minutes
 
+    def _is_trading_hours(self, timestamp: datetime) -> bool:
+        """
+        Check if timestamp is during regular trading hours (9:30 AM - 4:00 PM ET).
+
+        Regular market hours for NYSE/NASDAQ:
+        - 9:30 AM - 4:00 PM ET (Eastern Time)
+
+        Extended hours (filtered when include_extended_hours=False):
+        - Pre-market: Before 9:30 AM ET
+        - After-hours: 4:00 PM ET and later
+
+        Args:
+            timestamp: Datetime to check (assumed to be in ET timezone)
+
+        Returns:
+            bool: True if during regular trading hours, False otherwise
+        """
+        hour = timestamp.hour
+        minute = timestamp.minute
+
+        # Before 9:30 AM = pre-market
+        if hour < 9 or (hour == 9 and minute < 30):
+            return False
+
+        # After 4:00 PM = after-hours
+        if hour >= 16:
+            return False
+
+        return True
+
     def process_tick(self, tick_data: TickData) -> Optional[TickData]:
         """Process tick and return completed candle if timeframe ended"""
+        # Filter extended hours if configured
+        if not self.include_extended_hours and not self._is_trading_hours(tick_data.timestamp):
+            return None  # Skip this tick - outside regular trading hours
+
         candle_start = self._get_candle_start_time(tick_data.timestamp)
 
         if self._should_start_new_candle(candle_start):

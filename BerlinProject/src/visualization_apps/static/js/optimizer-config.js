@@ -35,7 +35,8 @@ const DEFAULT_GA_CONFIG = {
 const DEFAULT_DATA_CONFIG = {
     ticker: "NVDA",
     start_date: "2024-01-01",
-    end_date: "2024-02-28"
+    end_date: "2024-02-28",
+    include_extended_hours: true
 };
 
 const AVAILABLE_OBJECTIVES = [
@@ -197,6 +198,8 @@ function renderDataConfiguration() {
     document.getElementById('dataTicker').value = dataConfig.ticker || '';
     document.getElementById('dataStartDate').value = dataConfig.start_date || '';
     document.getElementById('dataEndDate').value = dataConfig.end_date || '';
+    // Default to checked (true) if not specified for backward compatibility
+    document.getElementById('dataExtendedHours').checked = dataConfig.include_extended_hours !== undefined ? dataConfig.include_extended_hours : true;
 }
 
 function renderGAConfiguration() {
@@ -1317,6 +1320,7 @@ function collectDataConfigData() {
     dataConfig.ticker = document.getElementById('dataTicker').value.toUpperCase();
     dataConfig.start_date = document.getElementById('dataStartDate').value;
     dataConfig.end_date = document.getElementById('dataEndDate').value;
+    dataConfig.include_extended_hours = document.getElementById('dataExtendedHours').checked;
 }
 
 function collectGAConfigData() {
