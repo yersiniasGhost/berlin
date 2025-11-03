@@ -2003,5 +2003,52 @@ def get_parameter_histogram():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@optimizer_bp.route('/api/get_parameter_evolution', methods=['POST'])
+def get_parameter_evolution():
+    """
+    Get parameter evolution data across all generations
+
+    Request JSON:
+        - parameter_name: Name of the parameter to get evolution data for
+
+    Returns:
+        JSON with time-series data for mean, std, min, max, median across generations,
+        plus convergence detection and jump identification
+    """
+    try:
+        data = request.get_json()
+        param_name = data.get('parameter_name')
+
+        if not param_name:
+            return jsonify({'success': False, 'error': 'parameter_name is required'})
+
+        # Get parameter collector from optimization state
+        parameter_collector = OptimizationState().get('parameter_collector')
+        if not parameter_collector:
+            return jsonify({'success': False, 'error': 'No parameter data available - optimization may not have started yet'})
+
+        # Get evolution data for requested parameter
+        evolution_data = parameter_collector.get_parameter_evolution_data(param_name)
+
+        if not evolution_data:
+            return jsonify({'success': False, 'error': f'Parameter "{param_name}" not found or has no evolution data'})
+
+        gen_count = len(evolution_data['generations'])
+        convergence = "✅ Converged" if evolution_data['convergence_detected'] else "🔄 Evolving"
+        jump_count = len(evolution_data['jumps'])
+        logger.info(f"📈 Generated evolution data for parameter '{param_name}' across {gen_count} generations ({convergence}, {jump_count} jumps)")
+
+        return jsonify({
+            'success': True,
+            'evolution': evolution_data
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error generating parameter evolution data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
 # The WebSocket handlers will need to be registered in the main app.py file
 # since they need access to the socketio instance

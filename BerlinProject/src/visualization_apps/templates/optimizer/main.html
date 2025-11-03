@@ -612,7 +612,7 @@
                                 <div class="col-md-8">
                                     <h6 class="mb-0">
                                         <i class="fas fa-sliders-h me-2"></i>Parameter Distribution Histogram
-                                        <small class="text-muted ms-2">(Across All Generations)</small>
+                                        <small class="text-muted ms-2">(Current Generation)</small>
                                     </h6>
                                 </div>
                                 <div class="col-md-4">
@@ -624,6 +624,30 @@
                         </div>
                         <div class="card-body">
                             <div id="parameterHistogramChart" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Parameter Evolution Over Epochs - Full Width -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="row align-items-center">
+                                <div class="col-md-9">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-chart-line me-2"></i>Parameter Evolution Over Epochs
+                                        <small class="text-muted ms-2">(Mean, Std, Min, Max - Across All Generations)</small>
+                                    </h6>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <span id="convergenceIndicator" class="badge bg-secondary" style="display: none;"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="parameterEvolutionChart" style="height: 450px;"></div>
                         </div>
                     </div>
                 </div>
@@ -1277,6 +1301,86 @@ document.addEventListener('DOMContentLoaded', function() {
                     return '<b>' + this.x + '</b><br/>' +
                            this.series.name + ': <b>' + this.y + '</b><br/>' +
                            'Percentage: <b>' + percentage + '%</b>';
+                }
+            }
+        });
+
+        // Initialize parameter evolution chart
+        charts.parameterEvolution = Highcharts.chart('parameterEvolutionChart', {
+            chart: {
+                type: 'line',
+                zoomType: 'x'
+            },
+            title: {
+                text: 'Select a parameter from the dropdown above',
+                style: { fontSize: '14px', color: '#999' }
+            },
+            subtitle: { text: '' },
+            xAxis: {
+                title: { text: 'Generation' },
+                min: 0,
+                allowDecimals: false
+            },
+            yAxis: {
+                title: { text: 'Parameter Value' }
+            },
+            series: [{
+                name: 'Mean',
+                data: [],
+                color: '#3498db',
+                lineWidth: 2,
+                marker: { enabled: true, radius: 3 }
+            }, {
+                name: 'Elite Mean',
+                data: [],
+                color: '#e74c3c',
+                lineWidth: 2,
+                marker: { enabled: true, radius: 3 },
+                dashStyle: 'ShortDash'
+            }, {
+                name: 'Std Dev',
+                data: [],
+                color: '#95a5a6',
+                lineWidth: 1,
+                marker: { enabled: false },
+                dashStyle: 'Dot'
+            }, {
+                name: 'Min',
+                data: [],
+                color: '#27ae60',
+                lineWidth: 1,
+                marker: { enabled: false },
+                dashStyle: 'ShortDot'
+            }, {
+                name: 'Max',
+                data: [],
+                color: '#e67e22',
+                lineWidth: 1,
+                marker: { enabled: false },
+                dashStyle: 'ShortDot'
+            }],
+            plotOptions: {
+                line: {
+                    animation: true
+                }
+            },
+            legend: {
+                enabled: true,
+                align: 'right',
+                verticalAlign: 'middle',
+                layout: 'vertical'
+            },
+            credits: { enabled: false },
+            tooltip: {
+                shared: true,
+                crosshairs: true,
+                formatter: function() {
+                    let tooltip = '<b>Generation ' + this.x + '</b><br/>';
+                    this.points.forEach(point => {
+                        tooltip += '<span style="color:' + point.color + '">\u25CF</span> ' +
+                                   point.series.name + ': <b>' + point.y.toFixed(4) + '</b><br/>';
+                    });
+                    return tooltip;
                 }
             }
         });
@@ -2162,13 +2266,110 @@ document.addEventListener('DOMContentLoaded', function() {
         charts.parameterHistogram.series[1].setData(eliteValues, true);
     }
 
-    // Add change listener for parameter selector
+    // Parameter Evolution Functions
+    async function loadParameterEvolution(paramName) {
+        if (!paramName) return;
+
+        console.log(`📈 Loading evolution data for parameter: ${paramName}`);
+
+        try {
+            const response = await fetch('/optimizer/api/get_parameter_evolution', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parameter_name: paramName
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.evolution) {
+                console.log('✅ Updating evolution chart with data:', result.evolution);
+                updateParameterEvolutionChart(result.evolution);
+            } else {
+                console.error('❌ Error loading parameter evolution:', result.error);
+                showAlert(`Failed to load parameter evolution: ${result.error}`, 'warning');
+            }
+        } catch (error) {
+            console.error('❌ Exception loading parameter evolution:', error);
+            showAlert(`Failed to load parameter evolution: ${error.message}`, 'danger');
+        }
+    }
+
+    function updateParameterEvolutionChart(evolutionData) {
+        const generations = evolutionData.generations;
+        const mean = evolutionData.mean;
+        const std = evolutionData.std;
+        const min = evolutionData.min;
+        const max = evolutionData.max;
+        const eliteMean = evolutionData.elite_mean;
+        const convergence = evolutionData.convergence_detected;
+        const jumps = evolutionData.jumps;
+
+        // Prepare data series in [x, y] format
+        const meanData = generations.map((gen, i) => [gen, mean[i]]);
+        const eliteMeanData = generations.map((gen, i) => eliteMean[i] !== null ? [gen, eliteMean[i]] : null).filter(p => p !== null);
+        const stdData = generations.map((gen, i) => [gen, std[i]]);
+        const minData = generations.map((gen, i) => [gen, min[i]]);
+        const maxData = generations.map((gen, i) => [gen, max[i]]);
+
+        // Build subtitle with convergence and jump information
+        let subtitleText = `Generations: ${generations.length}`;
+        if (convergence) {
+            subtitleText += ' | Status: ✅ Converged';
+        } else {
+            subtitleText += ' | Status: 🔄 Evolving';
+        }
+        if (jumps.length > 0) {
+            subtitleText += ` | Jumps detected: ${jumps.length}`;
+        }
+
+        // Update convergence indicator badge
+        const indicator = document.getElementById('convergenceIndicator');
+        if (convergence) {
+            indicator.textContent = '✅ Converged';
+            indicator.className = 'badge bg-success';
+            indicator.style.display = 'inline-block';
+        } else {
+            indicator.textContent = '🔄 Evolving';
+            indicator.className = 'badge bg-info';
+            indicator.style.display = 'inline-block';
+        }
+
+        // Update chart
+        charts.parameterEvolution.update({
+            title: {
+                text: evolutionData.parameter_name,
+                style: { fontSize: '16px', fontWeight: 'bold', color: '#333' }
+            },
+            subtitle: {
+                text: subtitleText,
+                style: { fontSize: '11px', color: '#666' }
+            }
+        }, false);
+
+        // Update all series
+        charts.parameterEvolution.series[0].setData(meanData, false);  // Mean
+        charts.parameterEvolution.series[1].setData(eliteMeanData, false);  // Elite Mean
+        charts.parameterEvolution.series[2].setData(stdData, false);  // Std Dev
+        charts.parameterEvolution.series[3].setData(minData, false);  // Min
+        charts.parameterEvolution.series[4].setData(maxData, true);  // Max and redraw
+
+        // Add jump markers to the mean series
+        if (jumps.length > 0) {
+            console.log(`⚡ ${jumps.length} parameter jumps detected:`, jumps);
+        }
+    }
+
+    // Add change listener for parameter selector (updates BOTH charts)
     document.getElementById('parameterSelector').addEventListener('change', function() {
         const paramName = this.value;
         if (paramName) {
+            // Load both histogram and evolution data
             loadParameterHistogram(paramName);
+            loadParameterEvolution(paramName);
         } else {
-            // Reset chart to default state
+            // Reset both charts to default state
             charts.parameterHistogram.update({
                 title: {
                     text: 'Select a parameter from the dropdown above',
@@ -2178,6 +2379,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }, false);
             charts.parameterHistogram.series[0].setData([], false);
             charts.parameterHistogram.series[1].setData([], true);
+
+            charts.parameterEvolution.update({
+                title: {
+                    text: 'Select a parameter from the dropdown above',
+                    style: { fontSize: '14px', color: '#999' }
+                },
+                subtitle: { text: '' }
+            }, false);
+            charts.parameterEvolution.series[0].setData([], false);
+            charts.parameterEvolution.series[1].setData([], false);
+            charts.parameterEvolution.series[2].setData([], false);
+            charts.parameterEvolution.series[3].setData([], false);
+            charts.parameterEvolution.series[4].setData([], true);
+
+            // Hide convergence indicator
+            document.getElementById('convergenceIndicator').style.display = 'none';
         }
     });
 
