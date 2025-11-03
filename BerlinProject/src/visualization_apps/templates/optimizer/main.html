@@ -1728,6 +1728,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (chartData.performance_metrics) {
             updatePerformanceMetricsTable(chartData.performance_metrics, chartData.table_columns);
         }
+
+        // 6. Auto-update Parameter Histogram and Evolution charts if a parameter is selected
+        const parameterSelector = document.getElementById('parameterSelector');
+        const selectedParameter = parameterSelector ? parameterSelector.value : null;
+
+        if (selectedParameter) {
+            console.log(`🔄 Auto-updating parameter charts for selected parameter: ${selectedParameter}`);
+            // Reload both histogram and evolution charts with the currently selected parameter
+            loadParameterHistogram(selectedParameter);
+            loadParameterEvolution(selectedParameter);
+        }
     }
     
     function updatePerformanceMetricsTable(metricsData, tableColumns) {
