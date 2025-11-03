@@ -327,7 +327,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initializeCharts() {
+        console.log('🎬 Initializing all charts...');
+
         // Initialize empty charts
+        console.log('📊 Initializing objective chart...');
         charts.objective = Highcharts.chart('objectiveChart', {
             chart: { type: 'line' },
             title: { text: 'Objective Evolution' },
@@ -398,59 +401,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: [],
                 color: '#dc3545'
             }],
-            credits: { enabled: false }
-        });
-
-        // Initialize individual P&L ranking chart
-        charts.individualPnL = Highcharts.chart('individualPnLChart', {
-            chart: {
-                type: 'line',
-                zoomType: 'xy'
-            },
-            title: { text: null },
-            xAxis: {
-                title: { text: 'Individual Rank' },
-                min: 1,
-                tickInterval: 1,
-                labels: {
-                    formatter: function() {
-                        return '#' + this.value;
-                    }
-                }
-            },
-            yAxis: {
-                title: { text: 'Total P&L (%)' },
-                plotLines: [{
-                    value: 0,
-                    color: '#999',
-                    width: 1,
-                    zIndex: 5,
-                    dashStyle: 'Dash'
-                }]
-            },
-            tooltip: {
-                shared: true,
-                formatter: function() {
-                    return '<b>Rank #' + this.x + '</b><br/>' +
-                           'Total P&L: <b>' + Highcharts.numberFormat(this.y, 2) + '%</b>';
-                }
-            },
-            plotOptions: {
-                line: {
-                    marker: {
-                        enabled: true,
-                        radius: 4
-                    },
-                    lineWidth: 2
-                }
-            },
-            series: [{
-                name: 'Total P&L',
-                data: [],
-                color: '#3498db',
-                negativeColor: '#e74c3c'
-            }],
-            legend: { enabled: false },
             credits: { enabled: false }
         });
 
@@ -562,6 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Initialize parameter histogram chart
+        console.log('📊 Initializing parameter histogram chart...');
         charts.parameterHistogram = Highcharts.chart('parameterHistogramChart', {
             chart: { type: 'column' },
             title: {
@@ -620,6 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Initialize parameter evolution chart
+        console.log('📊 Initializing parameter evolution chart...');
         charts.parameterEvolution = Highcharts.chart('parameterEvolutionChart', {
             chart: {
                 type: 'line',
@@ -697,6 +649,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     return tooltip;
                 }
             }
+        });
+
+        console.log('✅ All charts initialized successfully!');
+        console.log('Charts object:', {
+            objective: !!charts.objective,
+            parallelCoords: !!charts.parallelCoords,
+            winningTrades: !!charts.winningTrades,
+            losingTrades: !!charts.losingTrades,
+            bestStrategy: !!charts.bestStrategy,
+            parameterHistogram: !!charts.parameterHistogram,
+            parameterEvolution: !!charts.parameterEvolution
         });
     }
 
@@ -922,25 +885,7 @@ document.addEventListener('DOMContentLoaded', function() {
             charts.losingTrades.series[0].setData(data, true);
         }
 
-        // 5. Update Individual P&L Ranking Chart
-        if (chartData.individual_pnl_ranking && charts.individualPnL) {
-            console.log('Updating individual P&L ranking with:', chartData.individual_pnl_ranking);
-
-            const pnlData = chartData.individual_pnl_ranking;
-
-            charts.individualPnL.series[0].setData(pnlData, true);
-
-            // Update x-axis range to match data
-            if (pnlData.length > 0) {
-                charts.individualPnL.xAxis[0].update({
-                    max: pnlData.length
-                }, false);
-            }
-
-            charts.individualPnL.redraw();
-        }
-
-        // 6. Update Best Strategy Chart
+        // 5. Update Best Strategy Chart
         if (chartData.best_strategy && charts.bestStrategy) {
             // Update with candlestick data and trade triggers
             const candlestickData = chartData.best_strategy.candlestick_data || [];
@@ -1415,11 +1360,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }, false);
         }
 
-        if (charts.individualPnL) {
-            // Clear individual P&L ranking chart
-            charts.individualPnL.series[0].setData([], true);
-        }
-
         if (charts.bestStrategy) {
             // Clear best strategy chart
             charts.bestStrategy.series[0].setData([], false);
@@ -1497,6 +1437,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!paramName) return;
 
         console.log(`📊 Loading histogram for parameter: ${paramName}`);
+
+        // Check if chart is initialized
+        if (!charts.parameterHistogram) {
+            console.error('❌ Parameter histogram chart not initialized');
+            showAlert('Charts not initialized. Please start an optimization first.', 'warning');
+            return;
+        }
 
         try {
             const response = await fetch('/optimizer/api/get_parameter_histogram', {
@@ -1596,6 +1543,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!paramName) return;
 
         console.log(`📈 Loading evolution data for parameter: ${paramName}`);
+
+        // Check if chart is initialized
+        if (!charts.parameterEvolution) {
+            console.error('❌ Parameter evolution chart not initialized');
+            showAlert('Charts not initialized. Please start an optimization first.', 'warning');
+            return;
+        }
 
         try {
             const response = await fetch('/optimizer/api/get_parameter_evolution', {
