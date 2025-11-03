@@ -1,0 +1,99 @@
+/* Optimizer Visualization Custom Styles */
+
+/* Indicator and Bar Cards */
+.indicator-card, .bar-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 0;
+    margin-bottom: 1rem;
+    background: #f8f9fa;
+    transition: all 0.3s;
+}
+
+.indicator-card:hover, .bar-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.indicator-card-header, .bar-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    cursor: pointer;
+    border-radius: 0.5rem 0.5rem 0 0;
+    transition: background 0.3s;
+}
+
+.indicator-card-header:hover, .bar-card-header:hover {
+    background: #e9ecef;
+}
+
+.indicator-card-title {
+    font-weight: 600;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.indicator-card-body, .bar-card-body {
+    padding: 1rem;
+    display: none;
+    border-top: 1px solid #dee2e6;
+}
+
+.indicator-card-body.show, .bar-card-body.show {
+    display: block;
+}
+
+.collapse-icon {
+    transition: transform 0.3s;
+    color: #6c757d;
+}
+
+.collapse-icon.expanded {
+    transform: rotate(90deg);
+}
+
+.btn-remove {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.3s;
+}
+
+.btn-remove:hover {
+    background: #c0392b;
+}
+
+/* Compact parameter inputs */
+.indicator-card-body .form-control,
+.indicator-card-body .form-select,
+.bar-card-body .form-control,
+.bar-card-body .form-select {
+    max-width: 150px;
+    font-size: 0.875rem;
+}
+
+.indicator-card-body .form-label,
+.bar-card-body .form-label {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.indicator-card-body .row.g-2,
+.bar-card-body .row.g-2 {
+    row-gap: 0.5rem !important;
+}
+
+.objective-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: #fff;
+}

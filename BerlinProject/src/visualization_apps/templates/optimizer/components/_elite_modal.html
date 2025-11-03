@@ -1,0 +1,40 @@
+{# Elite Selection Modal Component #}
+<div class="modal fade" id="eliteSelectionModal" tabindex="-1" aria-labelledby="eliteSelectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eliteSelectionModalLabel">
+                    <i class="fas fa-trophy me-2"></i>Select Elite to Send to Replay
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Select an elite configuration to visualize in the Replay tab:</p>
+                <div class="table-responsive" style="max-height: 400px;">
+                    <table class="table table-hover table-sm">
+                        <thead class="sticky-top bg-white">
+                            <tr>
+                                <th style="width: 40px;"></th>
+                                <th>Elite</th>
+                                <th>Total P&L</th>
+                                <th>Win Rate</th>
+                                <th>Total Trades</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eliteSelectionTable">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Loading elites...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmSendToReplayBtn" disabled>
+                    <i class="fas fa-paper-plane me-2"></i>Send to Replay
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -3,104 +3,7 @@
 {% block title %}Optimizer Visualization{% endblock %}
 
 {% block extra_head %}
-<style>
-    .indicator-card, .bar-card {
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
-        padding: 0;
-        margin-bottom: 1rem;
-        background: #f8f9fa;
-        transition: all 0.3s;
-    }
-
-    .indicator-card:hover, .bar-card:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .indicator-card-header, .bar-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-        cursor: pointer;
-        border-radius: 0.5rem 0.5rem 0 0;
-        transition: background 0.3s;
-    }
-
-    .indicator-card-header:hover, .bar-card-header:hover {
-        background: #e9ecef;
-    }
-
-    .indicator-card-title {
-        font-weight: 600;
-        color: #2c3e50;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .indicator-card-body, .bar-card-body {
-        padding: 1rem;
-        display: none;
-        border-top: 1px solid #dee2e6;
-    }
-
-    .indicator-card-body.show, .bar-card-body.show {
-        display: block;
-    }
-
-    .collapse-icon {
-        transition: transform 0.3s;
-        color: #6c757d;
-    }
-
-    .collapse-icon.expanded {
-        transform: rotate(90deg);
-    }
-
-    .btn-remove {
-        background: #e74c3c;
-        color: white;
-        border: none;
-        padding: 0.25rem 0.75rem;
-        border-radius: 0.25rem;
-        cursor: pointer;
-        font-size: 0.875rem;
-        transition: all 0.3s;
-    }
-
-    .btn-remove:hover {
-        background: #c0392b;
-    }
-
-    /* Compact parameter inputs */
-    .indicator-card-body .form-control,
-    .indicator-card-body .form-select,
-    .bar-card-body .form-control,
-    .bar-card-body .form-select {
-        max-width: 150px;
-        font-size: 0.875rem;
-    }
-
-    .indicator-card-body .form-label,
-    .bar-card-body .form-label {
-        font-size: 0.875rem;
-        margin-bottom: 0.25rem;
-    }
-
-    .indicator-card-body .row.g-2,
-    .bar-card-body .row.g-2 {
-        row-gap: 0.5rem !important;
-    }
-
-    .objective-card {
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        background: #fff;
-    }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/optimizer.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -113,626 +16,23 @@
         </div>
     </div>
 
-    <!-- File Selector -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card mb-4">
-                <div class="card-body">
-                    <div class="row align-items-center mb-3">
-                        <div class="col-md-4">
-                            <label for="monitorFileInput" class="form-label mb-0">
-                                <i class="fas fa-file me-2"></i>Monitor Configuration File
-                            </label>
-                        </div>
-                        <div class="col-md-8">
-                            <input type="file" class="form-control" id="monitorFileInput" accept=".json">
-                        </div>
-                    </div>
-                    <div class="row align-items-center mb-3">
-                        <div class="col-md-4">
-                            <label for="dataFileInput" class="form-label mb-0">
-                                <i class="fas fa-database me-2"></i>Data Configuration File <span class="text-muted">(Optional)</span>
-                            </label>
-                        </div>
-                        <div class="col-md-8">
-                            <input type="file" class="form-control" id="dataFileInput" accept=".json">
-                            <small class="text-muted">If not provided, defaults to: NVDA, 01/01/2024 - 02/28/2024</small>
-                        </div>
-                    </div>
-                    <div class="row align-items-center mb-3">
-                        <div class="col-md-4">
-                            <label for="gaFileInput" class="form-label mb-0">
-                                <i class="fas fa-dna me-2"></i>GA Configuration File <span class="text-muted">(Optional)</span>
-                            </label>
-                        </div>
-                        <div class="col-md-8">
-                            <input type="file" class="form-control" id="gaFileInput" accept=".json">
-                            <small class="form-text text-muted">If not provided, default GA parameters will be used</small>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-12 text-center">
-                            <button class="btn btn-primary btn-lg" id="loadConfigsBtn" disabled>
-                                <i class="fas fa-upload me-2"></i>Load Configurations
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    {# File Selector Component #}
+    {% include 'optimizer/components/_file_selector.html' %}
 
-    <!-- Configuration Editor -->
-    <div class="row" id="configEditor" style="display: none;">
-        <div class="col-12">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-edit me-2"></i>Edit Configuration
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <!-- Tabs -->
-                    <ul class="nav nav-tabs mb-3" id="configTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="monitor-tab" data-bs-toggle="tab"
-                                    data-bs-target="#monitor-pane" type="button" role="tab">
-                                <i class="fas fa-info-circle me-2"></i>Monitor
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
-                                    data-bs-target="#indicators-pane" type="button" role="tab">
-                                <i class="fas fa-chart-line me-2"></i>Indicators
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="bars-tab" data-bs-toggle="tab"
-                                    data-bs-target="#bars-pane" type="button" role="tab">
-                                <i class="fas fa-bars me-2"></i>Bars
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="trade-executor-tab" data-bs-toggle="tab"
-                                    data-bs-target="#trade-executor-pane" type="button" role="tab">
-                                <i class="fas fa-exchange-alt me-2"></i>Trade Executor
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="data-config-tab" data-bs-toggle="tab"
-                                    data-bs-target="#data-config-pane" type="button" role="tab">
-                                <i class="fas fa-database me-2"></i>Data Config
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="test-data-config-tab" data-bs-toggle="tab"
-                                    data-bs-target="#test-data-config-pane" type="button" role="tab">
-                                <i class="fas fa-flask me-2"></i>Test Data Config
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="ga-config-tab" data-bs-toggle="tab"
-                                    data-bs-target="#ga-config-pane" type="button" role="tab">
-                                <i class="fas fa-dna me-2"></i>GA Config
-                            </button>
-                        </li>
-                    </ul>
+    {# Configuration Editor Component #}
+    {% include 'optimizer/components/_config_editor.html' %}
 
-                    <!-- Tab Content -->
-                    <div class="tab-content" id="configTabContent">
-                        <!-- Monitor Tab -->
-                        <div class="tab-pane fade show active" id="monitor-pane" role="tabpanel">
-                            <div class="mb-3">
-                                <h6>Basic Information</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label for="monitorName" class="form-label">Name</label>
-                                        <input type="text" class="form-control" id="monitorName" style="max-width: 300px;">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="monitorDescription" class="form-label">Description</label>
-                                        <input type="text" class="form-control" id="monitorDescription" style="max-width: 300px;">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    {# Control Panel Component #}
+    {% include 'optimizer/components/_control_panel.html' %}
 
-                        <!-- Indicators Tab -->
-                        <div class="tab-pane fade" id="indicators-pane" role="tabpanel">
-                            <div class="mb-3">
-                                <button class="btn btn-success" id="addIndicatorBtn">
-                                    <i class="fas fa-plus me-2"></i>Add Indicator
-                                </button>
-                            </div>
-                            <div id="indicatorsContainer"></div>
-                        </div>
+    {# Charts Section Component #}
+    {% include 'optimizer/components/_charts_section.html' %}
 
-                        <!-- Bars Tab -->
-                        <div class="tab-pane fade" id="bars-pane" role="tabpanel">
-                            <div class="mb-3">
-                                <button class="btn btn-success" id="addBarBtn">
-                                    <i class="fas fa-plus me-2"></i>Add Bar
-                                </button>
-                            </div>
-                            <div id="barsContainer"></div>
-                        </div>
+    {# Test Evaluations Component #}
+    {% include 'optimizer/components/_test_evaluations.html' %}
 
-                        <!-- Trade Executor Tab -->
-                        <div class="tab-pane fade" id="trade-executor-pane" role="tabpanel">
-                            <div class="mb-3">
-                                <h6>Position Settings</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="positionSize" class="form-label">Position Size</label>
-                                        <input type="number" class="form-control" id="positionSize" step="0.01" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="stopLoss" class="form-label">Stop Loss %</label>
-                                        <input type="number" class="form-control" id="stopLoss" step="0.001" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="takeProfit" class="form-label">Take Profit %</label>
-                                        <input type="number" class="form-control" id="takeProfit" step="0.001" style="max-width: 200px;">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <h6>Trailing Stop Loss</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="trailingStopEnabled">
-                                            <label class="form-check-label" for="trailingStopEnabled">
-                                                Enable Trailing Stop
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="trailingDistance" class="form-label">Distance %</label>
-                                        <input type="number" class="form-control" id="trailingDistance" step="0.001" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="trailingActivation" class="form-label">Activation %</label>
-                                        <input type="number" class="form-control" id="trailingActivation" step="0.001" style="max-width: 200px;">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <h6>Entry Conditions</h6>
-                                <div id="enterLongContainer"></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <h6>Exit Conditions</h6>
-                                <div id="exitLongContainer"></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <h6>Behavior</h6>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="ignoreBearSignals">
-                                    <label class="form-check-label" for="ignoreBearSignals">
-                                        Ignore Bear Signals
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Data Config Tab -->
-                        <div class="tab-pane fade" id="data-config-pane" role="tabpanel">
-                            <div class="mb-3">
-                                <h6>Data Configuration</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="dataTicker" class="form-label">Ticker Symbol</label>
-                                        <input type="text" class="form-control" id="dataTicker" placeholder="e.g., NVDA" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="dataStartDate" class="form-label">Start Date</label>
-                                        <input type="date" class="form-control" id="dataStartDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="dataEndDate" class="form-label">End Date</label>
-                                        <input type="date" class="form-control" id="dataEndDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check mt-4">
-                                            <input class="form-check-input" type="checkbox" id="dataExtendedHours" checked>
-                                            <label class="form-check-label" for="dataExtendedHours">
-                                                Include Extended Hours
-                                            </label>
-                                            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET (regular market hours)</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Test Data Config Tab -->
-                        <div class="tab-pane fade" id="test-data-config-pane" role="tabpanel">
-                            <div class="mb-3">
-                                <h6>Test Data Configuration</h6>
-                                <p class="text-muted small">Configure the test dataset for evaluating elite individuals after each epoch</p>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="testDataTicker" class="form-label">Ticker Symbol</label>
-                                        <input type="text" class="form-control" id="testDataTicker" placeholder="e.g., NVDA" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="testDataStartDate" class="form-label">Start Date</label>
-                                        <input type="date" class="form-control" id="testDataStartDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="testDataEndDate" class="form-label">End Date</label>
-                                        <input type="date" class="form-control" id="testDataEndDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check mt-4">
-                                            <input class="form-check-input" type="checkbox" id="testDataExtendedHours" checked>
-                                            <label class="form-check-label" for="testDataExtendedHours">
-                                                Include Extended Hours
-                                            </label>
-                                            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET (regular market hours)</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- GA Config Tab -->
-                        <div class="tab-pane fade" id="ga-config-pane" role="tabpanel">
-                            <div class="mb-4">
-                                <h6>Objectives</h6>
-                                <div class="mb-3">
-                                    <button class="btn btn-success btn-sm" id="addObjectiveBtn">
-                                        <i class="fas fa-plus me-2"></i>Add Objective
-                                    </button>
-                                </div>
-                                <div id="objectivesContainer"></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <h6>GA Hyperparameters</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="numIterations" class="form-label">Number of Iterations</label>
-                                        <input type="number" class="form-control" id="numIterations" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="populationSize" class="form-label">Population Size</label>
-                                        <input type="number" class="form-control" id="populationSize" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="propagationFraction" class="form-label">Propagation Fraction</label>
-                                        <input type="number" class="form-control" id="propagationFraction" step="0.01" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="elitesToSave" class="form-label">Elites to Save</label>
-                                        <input type="number" class="form-control" id="elitesToSave" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="eliteSize" class="form-label">Elite Size</label>
-                                        <input type="number" class="form-control" id="eliteSize" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="chanceMutation" class="form-label">Chance of Mutation</label>
-                                        <input type="number" class="form-control" id="chanceMutation" step="0.01" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="chanceCrossover" class="form-label">Chance of Crossover</label>
-                                        <input type="number" class="form-control" id="chanceCrossover" step="0.01" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="numSplits" class="form-label">Number of Splits</label>
-                                        <input type="number" class="form-control" id="numSplits" style="max-width: 150px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="randomSeed" class="form-label">Random Number Seed</label>
-                                        <input type="number" class="form-control" id="randomSeed" style="max-width: 150px;" title="Set to 0 for random, or any positive integer for reproducible results">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="numWorkers" class="form-label">Number of Workers (0=sequential)</label>
-                                        <input type="number" class="form-control" id="numWorkers" style="max-width: 150px;" title="0 = sequential execution, >0 = parallel with N workers">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="splitRepeats" class="form-label">Split Repeats</label>
-                                        <input type="number" class="form-control" id="splitRepeats" style="max-width: 150px;" title="Number of times to repeat the same data split before selecting a new one">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Control Panel -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <button type="button" class="btn btn-success btn-lg me-3" id="startOptimizerBtn" disabled>
-                                <i class="fas fa-play me-2"></i>Start Optimization
-                            </button>
-                            <button type="button" class="btn btn-warning btn-lg me-3" id="pauseOptimizerBtn" disabled>
-                                <i class="fas fa-pause me-2"></i>Pause
-                            </button>
-                            <button type="button" class="btn btn-danger btn-lg me-3" id="stopOptimizerBtn" disabled>
-                                <i class="fas fa-stop me-2"></i>Stop
-                            </button>
-                            <button type="button" class="btn btn-primary btn-lg me-3" id="saveOptimizedConfigsBtn" disabled style="display: none;">
-                                <i class="fas fa-trophy me-2"></i>Save Optimized Configs
-                            </button>
-                            <button type="button" class="btn btn-success btn-lg" id="loadEliteToFormsBtn" disabled style="display: none;">
-                                <i class="fas fa-download me-2"></i>Load Elite to Forms
-                            </button>
-                            <button type="button" class="btn btn-info btn-lg" id="sendToReplayBtn" disabled style="display: none;">
-                                <i class="fas fa-paper-plane me-2"></i>Send to Replay
-                            </button>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="progress mb-2" style="height: 25px;">
-                                <div class="progress-bar" id="optimizationProgress" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                                    <span id="progressText">Ready</span>
-                                </div>
-                            </div>
-                            <small class="text-muted" id="optimizationStatus">Generation: 0 / 0</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Charts Section - Modular 2x3 Grid -->
-    <div class="row" id="chartsSection" style="display: none;">
-        <!-- Chart Grid Container -->
-        <div class="col-12">
-            <!-- Fixed Layout: Objective Evolution, Generation Performance Metrics, Candlestick Chart, Winning/Losing Trades -->
-            
-            <!-- 1. Objective Evolution and Parallel Coordinates - Side by Side -->
-            <div class="row mb-4">
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h6 class="mb-0">Objective Evolution</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="objectiveChart" style="height: 400px; width: 100%;"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h6 class="mb-0">Elite Population - Parallel Coordinates</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="parallelCoordsChart" style="height: 400px; width: 100%;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 2. Generation Performance Metrics and Candlestick Chart - Side by Side -->
-            <div class="row mb-4">
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h6 class="mb-0">Generation Performance Metrics</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                <table class="table table-striped table-sm">
-                                    <thead class="sticky-top bg-white">
-                                        <tr>
-                                            <th>Gen</th>
-                                            <th>Total Trades</th>
-                                            <th>Winning</th>
-                                            <th>Losing</th>
-                                            <th>Total P&L (%)</th>
-                                            <th>Avg Win (%)</th>
-                                            <th>Avg Loss (%)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="metricsTable">
-                                        <tr>
-                                            <td colspan="7" class="text-center text-muted">No performance data yet</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h6 class="mb-0">Current Best Strategy</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="bestStrategyChart" style="height: 400px; width: 100%;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 5. Winning and Losing Trades Distribution - Side by Side -->
-            <div class="row mb-4">
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h6 class="mb-0 text-success">Winning Trades Distribution</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="winningTradesChart" style="height: 400px;"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h6 class="mb-0 text-danger">Losing Trades Distribution</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="losingTradesChart" style="height: 400px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 3. Individual P&L Ranking Chart - Full Width -->
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h6 class="mb-0">
-                                <i class="fas fa-ranking-star me-2"></i>Individual P&L Ranking
-                                <small class="text-muted ms-2">(Sorted by Total P&L)</small>
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="individualPnLChart" style="height: 400px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 4. Parameter Distribution Histogram - Full Width -->
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="row align-items-center">
-                                <div class="col-md-8">
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-sliders-h me-2"></i>Parameter Distribution Histogram
-                                        <small class="text-muted ms-2">(Current Generation)</small>
-                                    </h6>
-                                </div>
-                                <div class="col-md-4">
-                                    <select class="form-select form-select-sm" id="parameterSelector">
-                                        <option value="">Select a parameter...</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="parameterHistogramChart" style="height: 400px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 5. Parameter Evolution Over Epochs - Full Width -->
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="row align-items-center">
-                                <div class="col-md-9">
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-chart-line me-2"></i>Parameter Evolution Over Epochs
-                                        <small class="text-muted ms-2">(Mean, Std, Min, Max - Across All Generations)</small>
-                                    </h6>
-                                </div>
-                                <div class="col-md-3 text-end">
-                                    <span id="convergenceIndicator" class="badge bg-secondary" style="display: none;"></span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="parameterEvolutionChart" style="height: 450px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Test Evaluations Section -->
-    <div class="row mt-4" id="testEvaluationsSection" style="display: none;">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-flask me-2"></i>Test Evaluations
-                        <small class="text-muted ms-2">(Elite Performance on Test Data)</small>
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                        <table class="table table-striped table-sm">
-                            <thead class="sticky-top bg-white">
-                                <tr>
-                                    <th>Generation</th>
-                                    <th>Elite #</th>
-                                    <th>Train P&L (%)</th>
-                                    <th>Test P&L (%)</th>
-                                    <th>Train Trades</th>
-                                    <th>Test Trades</th>
-                                    <th>Train Win Rate (%)</th>
-                                    <th>Test Win Rate (%)</th>
-                                    <th>Overfitting</th>
-                                </tr>
-                            </thead>
-                            <tbody id="testEvaluationsTable">
-                                <tr>
-                                    <td colspan="9" class="text-center text-muted">No test evaluation data yet</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Elite Selection Modal -->
-    <div class="modal fade" id="eliteSelectionModal" tabindex="-1" aria-labelledby="eliteSelectionModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="eliteSelectionModalLabel">
-                        <i class="fas fa-trophy me-2"></i>Select Elite to Send to Replay
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted mb-3">Select an elite configuration to visualize in the Replay tab:</p>
-                    <div class="table-responsive" style="max-height: 400px;">
-                        <table class="table table-hover table-sm">
-                            <thead class="sticky-top bg-white">
-                                <tr>
-                                    <th style="width: 40px;"></th>
-                                    <th>Elite</th>
-                                    <th>Total P&L</th>
-                                    <th>Win Rate</th>
-                                    <th>Total Trades</th>
-                                </tr>
-                            </thead>
-                            <tbody id="eliteSelectionTable">
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted">Loading elites...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="confirmSendToReplayBtn" disabled>
-                        <i class="fas fa-paper-plane me-2"></i>Send to Replay
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+    {# Elite Selection Modal Component #}
+    {% include 'optimizer/components/_elite_modal.html' %}
 
 </div>
 {% endblock %}
@@ -741,6 +41,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/optimizer-config.js') }}"></script>
+
+{# TODO: Split the massive inline script into modular files #}
+{# Recommended structure:
+   - static/js/optimizer/websocket.js - WebSocket connection and event handlers
+   - static/js/optimizer/charts.js - Chart initialization and updates
+   - static/js/optimizer/controls.js - Button handlers and UI controls
+   - static/js/optimizer/parameters.js - Parameter histogram and evolution
+   - static/js/optimizer/test-eval.js - Test evaluations table updates
+   - static/js/optimizer/replay.js - Send to replay functionality
+   - static/js/optimizer/main.js - Main initialization and coordination
+#}
+
+{# TEMPORARY: Include the original inline script until JavaScript refactoring is complete #}
+{# TODO: Split this into modular files as documented in claudedocs/20251103_optimizer_template_refactoring.md #}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const startOptimizerBtn = document.getElementById('startOptimizerBtn');
@@ -749,21 +63,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const chartsSection = document.getElementById('chartsSection');
     const saveOptimizedConfigsBtn = document.getElementById('saveOptimizedConfigsBtn');
     const loadEliteToFormsBtn = document.getElementById('loadEliteToFormsBtn');
-    
+
     let charts = {};
     let optimizationRunning = false;
     let pollInterval = null;
     let addedGenerations = new Set(); // Track which generations have been added to the table
-    
+
     // Initialize WebSocket connection
     function initializeWebSocket() {
         window.socket = io();
-        
+
         window.socket.on('optimization_started', function(data) {
             showAlert('Optimization started successfully!', 'success');
             console.log('Optimization started:', data);
         });
-        
+
         window.socket.on('generation_complete', function(data) {
             console.log('Generation complete:', data.generation);
             updateProgressBar(data.progress);
@@ -779,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateTestEvaluations(data.test_evaluations);
             }
         });
-        
+
         window.socket.on('optimization_complete', function(data) {
             showAlert('Optimization completed!', 'success');
             optimizationRunning = false;
@@ -793,20 +107,20 @@ document.addEventListener('DOMContentLoaded', function() {
             pauseOptimizerBtn.disabled = true;
             stopOptimizerBtn.disabled = true;
         });
-        
+
         window.socket.on('optimization_error', function(data) {
             showAlert(`Optimization error: ${data.error}`, 'danger');
             resetButtons();
         });
-        
+
         window.socket.on('optimization_paused', function(data) {
             showAlert('Optimization paused', 'info');
         });
-        
+
         window.socket.on('optimization_resumed', function(data) {
             showAlert('Optimization resumed', 'info');
         });
-        
+
         window.socket.on('optimization_stopped', function(data) {
             showAlert('Optimization fully stopped', 'warning');
             saveOptimizedConfigsBtn.style.display = 'inline-block';
@@ -820,10 +134,10 @@ document.addEventListener('DOMContentLoaded', function() {
             stopOptimizerBtn.disabled = true;
         });
     }
-    
+
     // Initialize WebSocket on page load
     initializeWebSocket();
-    
+
     // Listen for config changes to enable/disable start button
     document.addEventListener('configurationsLoaded', function(e) {
         console.log('🔧 configurationsLoaded event triggered');
@@ -831,17 +145,17 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('🔧 window.currentConfigs:', window.currentConfigs);
         console.log('🔧 Button element:', startOptimizerBtn);
         console.log('🔧 Button disabled before:', startOptimizerBtn.disabled);
-        
+
         startOptimizerBtn.disabled = false;
         console.log('🔧 Button disabled after:', startOptimizerBtn.disabled);
         console.log('🔧 Button classes:', startOptimizerBtn.className);
     });
-    
+
     // Add debug logging for page load
     console.log('🔧 Optimizer page JavaScript loaded');
     console.log('🔧 Start button element:', startOptimizerBtn);
     console.log('🔧 Start button initially disabled:', startOptimizerBtn.disabled);
-    
+
     // Start optimization
     startOptimizerBtn.addEventListener('click', async function() {
         if (!window.currentConfigs || !window.currentConfigs.ga_config || !window.currentConfigs.data_config) {
@@ -878,13 +192,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     test_data_config: testDataConfig
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 optimizationRunning = true;
                 showAlert('Configurations prepared, starting optimization...', 'info');
-                
+
                 // Now trigger the WebSocket to actually start the optimization
                 if (window.socket) {
                     window.socket.emit('start_optimization', {
@@ -901,23 +215,23 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     }, 100);
                 }
-                
+
                 startPolling();
                 showCharts();
             } else {
                 throw new Error(result.error || 'Failed to start optimization');
             }
-            
+
         } catch (error) {
             showAlert(`Failed to start optimization: ${error.message}`, 'danger');
             resetButtons();
         }
     });
-    
+
     // Pause/Resume optimization
     pauseOptimizerBtn.addEventListener('click', async function() {
         const isPaused = this.innerHTML.includes('Resume');
-        
+
         try {
             let response;
             if (isPaused) {
@@ -931,9 +245,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST'
                 });
             }
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 if (isPaused) {
                     // Changed from Resume back to Pause
@@ -950,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.className = 'btn btn-success btn-lg me-3';
                     optimizationRunning = false;
                     startOptimizerBtn.disabled = true; // Keep start disabled when paused
-                    
+
                     // Show save and load buttons when paused (user might want to save current elites or load them to forms)
                     saveOptimizedConfigsBtn.style.display = 'inline-block';
                     saveOptimizedConfigsBtn.disabled = false;
@@ -963,21 +277,21 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 throw new Error(result.error || `Failed to ${isPaused ? 'resume' : 'pause'} optimization`);
             }
-            
+
         } catch (error) {
             showAlert(`Failed to ${isPaused ? 'resume' : 'pause'} optimization: ${error.message}`, 'danger');
         }
     });
-    
+
     // Stop optimization
     stopOptimizerBtn.addEventListener('click', async function() {
         try {
             const response = await fetch('/optimizer/api/stop_optimization', {
                 method: 'POST'
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 showAlert('Optimization stopped', 'warning');
                 resetButtons(); // This will reset pause button to "Pause" state
@@ -986,32 +300,32 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 throw new Error(result.error || 'Failed to stop optimization');
             }
-            
+
         } catch (error) {
             showAlert(`Failed to stop optimization: ${error.message}`, 'danger');
         }
     });
-    
+
     function resetButtons() {
         startOptimizerBtn.disabled = false;
         pauseOptimizerBtn.disabled = true;
         stopOptimizerBtn.disabled = true;
         optimizationRunning = false;
-        
+
         // Reset pause button to original state
         pauseOptimizerBtn.innerHTML = '<i class="fas fa-pause me-2"></i>Pause';
         pauseOptimizerBtn.className = 'btn btn-warning btn-lg me-3';
-        
+
         // Clear all data when stopping/resetting
         clearAllChartsAndData();
     }
-    
+
     function showCharts() {
         chartsSection.style.display = 'block';
         document.getElementById('testEvaluationsSection').style.display = 'block';
         initializeCharts();
     }
-    
+
     function initializeCharts() {
         // Initialize empty charts
         charts.objective = Highcharts.chart('objectiveChart', {
@@ -1023,7 +337,7 @@ document.addEventListener('DOMContentLoaded', function() {
             credits: { enabled: false },
             legend: { enabled: true }
         });
-        
+
         // Initialize parallel coordinates chart (like old app)
         charts.parallelCoords = Highcharts.chart('parallelCoordsChart', {
             chart: {
@@ -1046,18 +360,18 @@ document.addEventListener('DOMContentLoaded', function() {
             legend: { enabled: false },
             credits: { enabled: false }
         });
-        
+
         // Initialize winning trades distribution chart
         charts.winningTrades = Highcharts.chart('winningTradesChart', {
             chart: { type: 'column' },
             title: { text: 'Winning Trades Distribution' },
-            xAxis: { 
+            xAxis: {
                 title: { text: 'Percentage Gain (%)' },
                 categories: []
             },
-            yAxis: { 
+            yAxis: {
                 title: { text: 'Number of Trades' },
-                min: 0 
+                min: 0
             },
             series: [{
                 name: 'Winning Trades',
@@ -1071,13 +385,13 @@ document.addEventListener('DOMContentLoaded', function() {
         charts.losingTrades = Highcharts.chart('losingTradesChart', {
             chart: { type: 'column' },
             title: { text: 'Losing Trades Distribution' },
-            xAxis: { 
+            xAxis: {
                 title: { text: 'Percentage Loss (%)' },
                 categories: []
             },
-            yAxis: { 
+            yAxis: {
                 title: { text: 'Number of Trades' },
-                min: 0 
+                min: 0
             },
             series: [{
                 name: 'Losing Trades',
@@ -1141,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         charts.bestStrategy = Highcharts.chart('bestStrategyChart', {
-            chart: { 
+            chart: {
                 type: 'candlestick',
                 zoomType: 'xy',
                 panKey: 'shift',
@@ -1153,31 +467,31 @@ document.addEventListener('DOMContentLoaded', function() {
                     load: function() {
                         // Add mouse wheel zoom support
                         const chartContainer = this.container;
-                        
+
                         chartContainer.addEventListener('wheel', function(e) {
                             // Only zoom on wheel over chart area
                             if (e.target.closest('.highcharts-container')) {
                                 e.preventDefault();
-                                
+
                                 const chart = chartContainer.chart || chartContainer.hcChart;
                                 if (chart && chart.xAxis && chart.xAxis[0] && chart.yAxis && chart.yAxis[0]) {
                                     const xAxis = chart.xAxis[0];
                                     const yAxis = chart.yAxis[0];
-                                    
+
                                     // Get current extremes
                                     const currentXMin = xAxis.min;
                                     const currentXMax = xAxis.max;
                                     const currentYMin = yAxis.min;
                                     const currentYMax = yAxis.max;
-                                    
+
                                     const xRange = currentXMax - currentXMin;
                                     const yRange = currentYMax - currentYMin;
-                                    
+
                                     // Zoom factor
                                     const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
                                     const newXRange = xRange * zoomFactor;
                                     const newYRange = yRange * zoomFactor;
-                                    
+
                                     // Get mouse position for zoom center
                                     const rect = chartContainer.getBoundingClientRect();
                                     const mouseX = e.clientX - rect.left;
@@ -1186,27 +500,27 @@ document.addEventListener('DOMContentLoaded', function() {
                                     const plotTop = chart.plotTop;
                                     const plotWidth = chart.plotWidth;
                                     const plotHeight = chart.plotHeight;
-                                    
+
                                     // Calculate zoom centers
                                     let xCenterRatio = 0.5;
                                     let yCenterRatio = 0.5;
-                                    
+
                                     if (mouseX >= plotLeft && mouseX <= plotLeft + plotWidth) {
                                         xCenterRatio = (mouseX - plotLeft) / plotWidth;
                                     }
                                     if (mouseY >= plotTop && mouseY <= plotTop + plotHeight) {
                                         yCenterRatio = 1 - ((mouseY - plotTop) / plotHeight); // Invert Y
                                     }
-                                    
+
                                     // Calculate new extremes
                                     const xCenter = currentXMin + (xRange * xCenterRatio);
                                     const yCenter = currentYMin + (yRange * yCenterRatio);
-                                    
+
                                     const newXMin = xCenter - (newXRange * xCenterRatio);
                                     const newXMax = xCenter + (newXRange * (1 - xCenterRatio));
                                     const newYMin = yCenter - (newYRange * yCenterRatio);
                                     const newYMax = yCenter + (newYRange * (1 - yCenterRatio));
-                                    
+
                                     // Apply zoom
                                     xAxis.setExtremes(newXMin, newXMax, false);
                                     yAxis.setExtremes(newYMin, newYMax, true);
@@ -1217,13 +531,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             title: { text: 'Best Strategy Performance' },
-            xAxis: { 
+            xAxis: {
                 type: 'datetime',
                 ordinal: true, // Use ordinal axis to remove all gaps
                 breaks: [], // Clear any default breaks
                 crosshair: true
             },
-            yAxis: { 
+            yAxis: {
                 title: { text: 'Price' },
                 crosshair: true
             },
@@ -1389,29 +703,29 @@ document.addEventListener('DOMContentLoaded', function() {
     function startPolling() {
 <!--        pollInterval = setInterval(updateProgress, 2000); // Poll every 2 seconds-->
     }
-    
+
     function stopPolling() {
         if (pollInterval) {
             clearInterval(pollInterval);
             pollInterval = null;
         }
     }
-    
+
     async function updateProgress() {
         try {
             const response = await fetch('/optimizer/api/get_progress');
             const data = await response.json();
-            
+
             if (data.success) {
                 updateProgressBar(data.progress);
                 updateCharts(data.charts);
-                
+
                 // Show save button if we have elites
                 if (data.elites && data.elites.length > 0) {
                     saveOptimizedConfigsBtn.style.display = 'inline-block';
                     saveOptimizedConfigsBtn.disabled = false;
                 }
-                
+
                 if (data.progress.completed) {
                     showAlert('Optimization completed!', 'success');
                     // Show completion popup for saving elites
@@ -1420,32 +734,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     stopPolling();
                 }
             }
-            
+
         } catch (error) {
             console.error('Failed to update progress:', error);
         }
     }
-    
+
     function updateProgressBar(progress) {
         const progressBar = document.getElementById('optimizationProgress');
         const progressText = document.getElementById('progressText');
         const statusText = document.getElementById('optimizationStatus');
-        
+
         const percentage = Math.round((progress.current_generation / progress.total_generations) * 100);
-        
+
         progressBar.style.width = `${percentage}%`;
         progressBar.setAttribute('aria-valuenow', percentage);
         progressText.textContent = `${percentage}%`;
         statusText.textContent = `Generation: ${progress.current_generation} / ${progress.total_generations}`;
     }
-    
+
     function updateCharts(chartData) {
         console.log('Updating charts with data:', chartData);
-        
+
         // 1. Update Objective Evolution Chart - Multiple objectives as separate lines
         if (chartData.objective_evolution && charts.objective) {
             console.log('Updating objective evolution with:', chartData.objective_evolution);
-            
+
             // Colors for different objectives
             const objectiveColors = {
                 'MaximizeProfit': '#28a745',
@@ -1454,17 +768,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 'MaximizeWinRate': '#ffc107',
                 'MinimizeDrawdown': '#6f42c1'
             };
-            
+
             // Clear existing series
             while(charts.objective.series.length > 0) {
                 charts.objective.series[0].remove(false);
             }
-            
+
             // Add series for each objective
             Object.keys(chartData.objective_evolution).forEach((objectiveName, index) => {
                 const data = chartData.objective_evolution[objectiveName];
                 const color = objectiveColors[objectiveName] || Highcharts.getOptions().colors[index];
-                
+
                 charts.objective.addSeries({
                     name: objectiveName,
                     data: data,
@@ -1472,23 +786,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     lineWidth: 2
                 }, false);
             });
-            
+
             charts.objective.redraw();
         }
-        
+
         // 2. Update Parallel Coordinates Chart (like old app)
         if (chartData.elite_population_data && chartData.objective_names && charts.parallelCoords) {
             console.log('Updating parallel coordinates with:', chartData.elite_population_data);
-            
+
             const eliteData = chartData.elite_population_data;
             const objectiveNames = chartData.objective_names;
-            
+
             if (eliteData.length > 0 && objectiveNames.length > 0) {
                 // Destroy and recreate chart with proper configuration (like old app)
                 if (charts.parallelCoords) {
                     charts.parallelCoords.destroy();
                 }
-                
+
                 const colors = Highcharts.getOptions().colors;
                 const colorCount = colors.length;
 
@@ -1496,7 +810,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const normalizedData = [];
                 const originalData = [];
                 const objectiveRanges = [];
-                
+
                 // Calculate ranges for each objective
                 objectiveNames.forEach((objName, objIndex) => {
                     const values = eliteData.map(elite => elite[objIndex]);
@@ -1504,7 +818,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const max = Math.max(...values);
                     objectiveRanges.push({ min, max, range: max - min || 1 });
                 });
-                
+
                 // Normalize each elite's data to [0,1] range
                 eliteData.forEach((elite, eliteIndex) => {
                     const normalizedElite = elite.map((value, objIndex) => {
@@ -1585,23 +899,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 charts.parallelCoords = Highcharts.chart('parallelCoordsChart', chartConfig);
             }
         }
-        
+
         // 3. Update Winning Trades Distribution Chart
         if (chartData.winning_trades_distribution && charts.winningTrades) {
             const categories = chartData.winning_trades_distribution.map(item => item[0]);
             const data = chartData.winning_trades_distribution.map(item => item[1]);
-            
+
             charts.winningTrades.update({
                 xAxis: { categories: categories }
             }, false);
             charts.winningTrades.series[0].setData(data, true);
         }
-        
-        // 4. Update Losing Trades Distribution Chart  
+
+        // 4. Update Losing Trades Distribution Chart
         if (chartData.losing_trades_distribution && charts.losingTrades) {
             const categories = chartData.losing_trades_distribution.map(item => item[0]);
             const data = chartData.losing_trades_distribution.map(item => item[1]);
-            
+
             charts.losingTrades.update({
                 xAxis: { categories: categories }
             }, false);
@@ -1632,14 +946,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const candlestickData = chartData.best_strategy.candlestick_data || [];
             const triggers = chartData.best_strategy.triggers || [];
             const trades = chartData.best_strategy.trades || [];
-            
+
             charts.bestStrategy.series[0].setData(candlestickData, false);
-            
+
             // Remove old signal series if they exist (we're replacing triangles with background bands)
             while (charts.bestStrategy.series.length > 1) {
                 charts.bestStrategy.series[charts.bestStrategy.series.length - 1].remove(false);
             }
-            
+
             // Clear existing plot bands
             if (charts.bestStrategy.xAxis[0].plotLinesAndBands) {
                 charts.bestStrategy.xAxis[0].plotLinesAndBands.slice().forEach(band => {
@@ -1648,14 +962,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             }
-            
+
             // Add background shading bands for complete trades
             if (trades && trades.length > 0) {
                 trades.forEach((trade, index) => {
                     if (trade.entry_time && trade.exit_time) {
                         const isProfit = trade.pnl > 0;
                         const bandColor = isProfit ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)'; // Green or red with transparency
-                        
+
                         charts.bestStrategy.xAxis[0].addPlotBand({
                             from: new Date(trade.entry_time).getTime(),
                             to: new Date(trade.exit_time).getTime(),
@@ -1679,21 +993,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Fallback: If no complete trades, try to pair buy/sell signals
                 const buySignals = triggers.filter(t => t.type === 'buy').sort((a, b) => a.timestamp - b.timestamp);
                 const sellSignals = triggers.filter(t => t.type === 'sell').sort((a, b) => a.timestamp - b.timestamp);
-                
+
                 // Pair buy and sell signals to create trade bands
                 let buyIndex = 0, sellIndex = 0;
                 let tradeCount = 0;
-                
+
                 while (buyIndex < buySignals.length && sellIndex < sellSignals.length) {
                     const buySignal = buySignals[buyIndex];
                     const sellSignal = sellSignals[sellIndex];
-                    
+
                     if (buySignal.timestamp < sellSignal.timestamp) {
                         // Found a valid trade pair
                         const estimatedPnl = ((sellSignal.price - buySignal.price) / buySignal.price) * 100;
                         const isProfit = estimatedPnl > 0;
                         const bandColor = isProfit ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)';
-                        
+
                         charts.bestStrategy.xAxis[0].addPlotBand({
                             from: buySignal.timestamp,
                             to: sellSignal.timestamp,
@@ -1711,7 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                         });
-                        
+
                         buyIndex++;
                         sellIndex++;
                         tradeCount++;
@@ -1720,10 +1034,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             }
-            
+
             charts.bestStrategy.redraw();
         }
-        
+
         // 5. Update Performance Metrics Table
         if (chartData.performance_metrics) {
             updatePerformanceMetricsTable(chartData.performance_metrics, chartData.table_columns);
@@ -1740,7 +1054,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadParameterEvolution(selectedParameter);
         }
     }
-    
+
     function updatePerformanceMetricsTable(metricsData, tableColumns) {
         const tableBody = document.getElementById('metricsTable');
         const tableHead = tableBody.closest('table').querySelector('thead tr');
@@ -1849,34 +1163,34 @@ document.addEventListener('DOMContentLoaded', function() {
         // No layout management needed for fixed layout
         console.log('Optimizer visualization page loaded with fixed layout');
     });
-    
-    
+
+
     // Show completion popup for saving optimized configs
     function showCompletionSavePopup() {
         if (confirm('🏆 Optimization completed!\n\nWould you like to save the optimized configurations and results?')) {
             saveOptimizedConfigs();
         }
     }
-    
+
     // Save Optimized Configs function
     async function saveOptimizedConfigs() {
         const saveBtn = document.getElementById('saveOptimizedConfigsBtn');
         const originalText = saveBtn.innerHTML;
-        
+
         try {
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
-            
+
             // Get complete optimization package (like old system)
             const response = await fetch('/optimizer/api/export_optimized_configs');
             const result = await response.json();
-            
+
             if (result.success) {
                 const package = result.package;
                 const folderName = package.folder_name;
-                
+
                 console.log('🏆 Received optimization package:', package);
-                
+
                 // Download all files organized with folder prefix in filenames
                 const confirmDownload = confirm(
                     `Save optimization results to Downloads folder?\n\n` +
@@ -1885,12 +1199,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     `Total files: ${Object.keys(package.files).length + 3}\n\n` +
                     `Files will be saved with folder prefix for easy organization.`
                 );
-                
+
                 if (!confirmDownload) return;
-                
+
                 // Download all files with folder prefix for easy organization
                 const allFiles = [];
-                
+
                 // Add elite configs
                 for (const [filename, config] of Object.entries(package.files)) {
                     allFiles.push({
@@ -1899,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         type: 'application/json'
                     });
                 }
-                
+
                 // Add objectives CSV
                 if (package.objectives_csv) {
                     allFiles.push({
@@ -1908,21 +1222,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         type: 'text/csv'
                     });
                 }
-                
+
                 // Add GA config
                 allFiles.push({
                     filename: `${folderName}/${package.ga_config_filename}`,
                     content: JSON.stringify(package.ga_config, null, 2),
                     type: 'application/json'
                 });
-                
+
                 // Add summary
                 allFiles.push({
                     filename: `${folderName}/${package.summary_filename}`,
                     content: package.summary,
                     type: 'text/plain'
                 });
-                
+
                 // Download all files with folder structure in filename
                 for (const file of allFiles) {
                     const blob = new Blob([file.content], { type: file.type });
@@ -1934,18 +1248,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     URL.revokeObjectURL(url);
                     await new Promise(resolve => setTimeout(resolve, 150)); // Small delay between downloads
                 }
-                
+
                 showAlert(
                     `🏆 Optimization results downloaded!\n\n` +
                     `${allFiles.length} files saved to Downloads folder.\n` +
                     `Files are prefixed with "${folderName}/" for easy organization.\n\n` +
-                    `Elite configs: ${package.elites_count} (top performers)`, 
+                    `Elite configs: ${package.elites_count} (top performers)`,
                     'success'
                 );
             } else {
                 showAlert(`Failed to get elite configurations: ${result.error || 'Unknown error'}`, 'danger');
             }
-            
+
         } catch (error) {
             showAlert(`Failed to save best elite: ${error.message}`, 'danger');
         } finally {
@@ -1953,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', function() {
             saveBtn.innerHTML = originalText;
         }
     }
-    
+
     // Add click listener for load elite button
     loadEliteToFormsBtn.addEventListener('click', async function() {
         try {
@@ -2006,7 +1320,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add click listener for save button
     saveOptimizedConfigsBtn.addEventListener('click', saveOptimizedConfigs);
-    
+
     // Reset buttons state
     function resetButtons() {
         startOptimizerBtn.disabled = false;
@@ -2015,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', function() {
         optimizationRunning = false;
         // Keep save button visible if it was shown (user might still want to save)
     }
-    
+
     // Hide save button when starting new optimization
     function hideEliteButtons() {
         saveOptimizedConfigsBtn.style.display = 'none';
@@ -2030,14 +1344,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function hideElitesButton() {
         hideEliteButtons();
     }
-    
+
     // Clear all charts and data from previous optimization runs
     function clearAllChartsAndData() {
         console.log('🧹 Clearing all charts and data from previous run');
-        
+
         // Clear the generations tracking set
         addedGenerations.clear();
-        
+
         // Clear the performance metrics table
         const tableBody = document.getElementById('metricsTable');
         if (tableBody) {
@@ -2049,7 +1363,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (testEvaluationsTableBody) {
             testEvaluationsTableBody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No test evaluation data yet</td></tr>';
         }
-        
+
         // Clear all chart data if charts exist
         if (charts.objective) {
             // Clear objective evolution chart
@@ -2058,7 +1372,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             charts.objective.redraw();
         }
-        
+
         if (charts.parallelCoords) {
             // Clear parallel coordinates chart
             charts.parallelCoords.destroy();
@@ -2084,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 credits: { enabled: false }
             });
         }
-        
+
         if (charts.winningTrades) {
             // Clear winning trades chart
             charts.winningTrades.series[0].setData([], true);
@@ -2092,7 +1406,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 xAxis: { categories: [] }
             }, false);
         }
-        
+
         if (charts.losingTrades) {
             // Clear losing trades chart
             charts.losingTrades.series[0].setData([], true);
@@ -2109,7 +1423,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (charts.bestStrategy) {
             // Clear best strategy chart
             charts.bestStrategy.series[0].setData([], false);
-            
+
             // Clear any existing plot bands
             if (charts.bestStrategy.xAxis[0].plotLinesAndBands) {
                 charts.bestStrategy.xAxis[0].plotLinesAndBands.slice().forEach(band => {
@@ -2118,15 +1432,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             }
-            
+
             charts.bestStrategy.redraw();
         }
-        
+
         // Reset progress bar
         const progressBar = document.getElementById('optimizationProgress');
         const progressText = document.getElementById('progressText');
         const statusText = document.getElementById('optimizationStatus');
-        
+
         if (progressBar) {
             progressBar.style.width = '0%';
             progressBar.setAttribute('aria-valuenow', 0);
@@ -2137,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (statusText) {
             statusText.textContent = 'Generation: 0 / 0';
         }
-        
+
         console.log('✅ All charts and data cleared');
     }
 
