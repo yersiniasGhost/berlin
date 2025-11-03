@@ -92,68 +92,46 @@
             </div>
         </div>
 
-        {# 4. Individual P&L Ranking Chart - Full Width #}
+        {# 4. Parameter Distribution and Evolution - Side by Side with shared selector #}
         <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
+            <div class="col-12 mb-2">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="mb-0">
+                            <i class="fas fa-sliders-h me-2"></i>Parameter Analysis
+                        </h6>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select form-select-sm" id="parameterSelector">
+                            <option value="">Select a parameter...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
                     <div class="card-header">
                         <h6 class="mb-0">
-                            <i class="fas fa-ranking-star me-2"></i>Individual P&L Ranking
-                            <small class="text-muted ms-2">(Sorted by Total P&L)</small>
+                            Parameter Evolution Over Epochs
+                            <small class="text-muted ms-2">(Mean, Std, Min, Max)</small>
+                            <span id="convergenceIndicator" class="badge bg-secondary ms-2" style="display: none;"></span>
                         </h6>
                     </div>
                     <div class="card-body">
-                        <div id="individualPnLChart" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {# 5. Parameter Distribution Histogram - Full Width #}
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col-md-8">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-sliders-h me-2"></i>Parameter Distribution Histogram
-                                    <small class="text-muted ms-2">(Current Generation)</small>
-                                </h6>
-                            </div>
-                            <div class="col-md-4">
-                                <select class="form-select form-select-sm" id="parameterSelector">
-                                    <option value="">Select a parameter...</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div id="parameterHistogramChart" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {# 6. Parameter Evolution Over Epochs - Full Width #}
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col-md-9">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-chart-line me-2"></i>Parameter Evolution Over Epochs
-                                    <small class="text-muted ms-2">(Mean, Std, Min, Max - Across All Generations)</small>
-                                </h6>
-                            </div>
-                            <div class="col-md-3 text-end">
-                                <span id="convergenceIndicator" class="badge bg-secondary" style="display: none;"></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body">
                         <div id="parameterEvolutionChart" style="height: 450px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            Parameter Distribution Histogram
+                            <small class="text-muted ms-2">(Current Generation)</small>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="parameterHistogramChart" style="height: 450px;"></div>
                     </div>
                 </div>
             </div>
