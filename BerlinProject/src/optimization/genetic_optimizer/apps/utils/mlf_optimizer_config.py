@@ -16,6 +16,13 @@ from models.indicator_definition import IndicatorDefinition
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
 from models.data_container import DataContainer
 from candle_aggregator.csa_container import CSAContainer
+from models.validation.parameter_constraints import (
+    validate_and_constrain_monitor_config_parameters,
+    format_constraint_warning_message
+)
+import logging
+
+logger = logging.getLogger('MlfOptimizerConfig')
 
 
 @dataclass
@@ -122,6 +129,17 @@ class MlfOptimizerConfig:
                     for ind_def in resources['indicators']:
                         indicators.append(IndicatorDefinition(**ind_def))
 
+                # Validate and constrain indicator parameters to their defined limits
+                constrained_indicators, constraint_results = validate_and_constrain_monitor_config_parameters(
+                    indicators
+                )
+
+                # Log warnings for any constrained parameters
+                if constraint_results:
+                    warning_message = format_constraint_warning_message(constraint_results)
+                    logger.warning(warning_message)
+                    print(warning_message)  # Also print to console for immediate visibility
+
                 # Build monitor config dict with all required fields
                 monitor_data = {
                     'name': value.get('name', 'GA Monitor'),
@@ -129,7 +147,7 @@ class MlfOptimizerConfig:
                     'enter_long': value.get('enter_long', []),
                     'exit_long': value.get('exit_long', []),
                     'bars': value.get('bars', {}),
-                    'indicators': indicators,
+                    'indicators': constrained_indicators,  # Use constrained indicators
                     'trade_executor': value.get('trade_executor', {})  # This will be validated as required
                 }
 
