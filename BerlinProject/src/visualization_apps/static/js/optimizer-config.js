@@ -18,17 +18,17 @@ const DEFAULT_GA_CONFIG = {
         { objective: "MaximizeNetPnL", weight: 1.0, parameters: {} }
     ],
     ga_hyperparameters: {
-        number_of_iterations: 500,
+        number_of_iterations: 50,
         population_size: 200,
-        propagation_fraction: 0.4,
+        propagation_fraction: 0.26,
         elites_to_save: 2,
         elite_size: 12,
         chance_of_mutation: 0.05,
         chance_of_crossover: 0.03,
         num_splits: 1,
         random_seed: 0,
-        num_workers: 0,
-        split_repeats: 3
+        num_workers: navigator.hardwareConcurrency || 4,
+        split_repeats: 2
     }
 };
 
@@ -217,17 +217,17 @@ function renderGAConfiguration() {
 
     // Render GA hyperparameters
     const hp = gaConfig.ga_hyperparameters || {};
-    document.getElementById('numIterations').value = hp.number_of_iterations || 500;
+    document.getElementById('numIterations').value = hp.number_of_iterations || 50;
     document.getElementById('populationSize').value = hp.population_size || 200;
-    document.getElementById('propagationFraction').value = hp.propagation_fraction || 0.4;
+    document.getElementById('propagationFraction').value = hp.propagation_fraction || 0.26;
     document.getElementById('elitesToSave').value = hp.elites_to_save || 2;
     document.getElementById('eliteSize').value = hp.elite_size || 12;
     document.getElementById('chanceMutation').value = hp.chance_of_mutation || 0.05;
     document.getElementById('chanceCrossover').value = hp.chance_of_crossover || 0.03;
     document.getElementById('numSplits').value = hp.num_splits || 1;
     document.getElementById('randomSeed').value = hp.random_seed || 0;
-    document.getElementById('numWorkers').value = hp.num_workers || 0;
-    document.getElementById('splitRepeats').value = hp.split_repeats || 3;
+    document.getElementById('numWorkers').value = hp.num_workers || (navigator.hardwareConcurrency || 4);
+    document.getElementById('splitRepeats').value = hp.split_repeats || 2;
 }
 
 function renderConditionsWithRanges(containerId, conditions) {
