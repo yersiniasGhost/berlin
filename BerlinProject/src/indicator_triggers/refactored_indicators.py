@@ -209,7 +209,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
                 parameter_type=ParameterType.FLOAT,
                 default_value=0.001,
                 min_value=0.0,
-                max_value=0.05,
+                max_value=0.5,
                 step=0.0001,
                 description="Threshold for histogram crossover detection",
                 ui_group="Signal Settings"
@@ -253,6 +253,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
 
         closes = np.array([tick.close for tick in tick_data], dtype=np.float64)
         macd, signal_line, histogram = ta.MACD(closes, fastperiod=fast, slowperiod=slow, signalperiod=signal)
+
 
         component_data = {
             f"{self.name()}_macd": macd.tolist(),

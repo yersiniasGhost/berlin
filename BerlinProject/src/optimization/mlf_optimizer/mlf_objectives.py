@@ -67,7 +67,6 @@ class MinimizeLosingTrades(ObjectiveFunctionBase):
         self.name = "Minimize Losing Trades (ratio)"
 
     def calculate_objective(self, *args) -> float:
-        individual: MlfIndividual = args[0]
         portfolio: Portfolio = args[1]
 
         losing_trades = portfolio.get_losing_trades_count()
@@ -79,7 +78,7 @@ class MinimizeLosingTrades(ObjectiveFunctionBase):
 
         losing_ratio = losing_trades / total_trades
 
-        return losing_ratio * self.weight + 0.2
+        return losing_ratio * self.weight
 
 
 @dataclass
@@ -125,9 +124,9 @@ class MaximizeNetPnL(ObjectiveFunctionBase):
         elif mode == "volatility":
             data_streamer = args[2]
             primary_data = data_streamer.primary_aggregator
-
-            metric, adj_netpnl = primary_data.get_volatility(net_pnl*100.0)
-            objective_value = -adj_netpnl
+            metric, adj_netpnl = primary_data.get_volatility(net_pnl)
+            objective_value = 1.0 - adj_netpnl
+            print(metric, adj_netpnl, net_pnl, objective_value)
         elif mode == "maxdrawdown":
             data_streamer = args[2]
             primary_data = data_streamer.primary_aggregator
