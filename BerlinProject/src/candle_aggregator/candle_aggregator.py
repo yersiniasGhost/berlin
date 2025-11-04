@@ -261,9 +261,14 @@ class CandleAggregator(ABC):
     def get_volatility(self, net_profit: Optional[float] = None) -> Tuple[float, Optional[float]]:
         if not self.volatility:
             close_prices = [candle.close for candle in self.history]
-            price_volatility = np.array(close_prices).std()
-            self.volatility = price_volatility
+            clses = np.array(close_prices)
+            price_volatility = clses.std()
+            minimum, maximum = clses.min(), clses.max()
+            if minimum == maximum:
+                print("WTF - volatility error")
+            else:
+                self.volatility = price_volatility / (maximum-minimum)
         volatility_adjusted = None
         if net_profit:
-            volatility_adjusted = net_profit / (self.volatility)
+            volatility_adjusted = net_profit / self.volatility
         return self.volatility, volatility_adjusted
