@@ -779,6 +779,102 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 'elites': elites
             })
 
+            # Save elites every epoch if flag is enabled
+            if config_data.get('ga_hyperparameters', {}).get('save_elites_every_epoch', False):
+                try:
+                    # Create output directory: outputs/monitor_name_timestamp/
+                    output_dir = Path('outputs') / f"{test_name}_{optimization_timestamp}"
+                    output_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Get number of elites to save
+                    elites_to_save = config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+                    num_elites_to_save = min(elites_to_save, len(elites))
+
+                    # Helper function to serialize complex objects
+                    def serialize_object(obj):
+                        if hasattr(obj, '__dict__'):
+                            result = {}
+                            for key, value in obj.__dict__.items():
+                                if hasattr(value, '__dict__'):
+                                    result[key] = serialize_object(value)
+                                elif isinstance(value, list):
+                                    result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
+                                elif isinstance(value, dict):
+                                    result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
+                                else:
+                                    result[key] = value
+                            return result
+                        else:
+                            return obj
+
+                    # Save each elite configuration
+                    for elite_idx in range(num_elites_to_save):
+                        elite = elites[elite_idx]
+                        if not hasattr(elite, 'individual') or not hasattr(elite.individual, 'monitor_configuration'):
+                            logger.warning(f"Elite #{elite_idx+1} missing individual.monitor_configuration, skipping")
+                            continue
+
+                        elite_config = elite.individual.monitor_configuration
+
+                        # Extract trade executor config
+                        elite_trade_executor = {}
+                        if hasattr(elite_config, 'trade_executor'):
+                            te = elite_config.trade_executor
+                            elite_trade_executor = {
+                                'default_position_size': getattr(te, 'default_position_size', 100.0),
+                                'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
+                                'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
+                                'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
+                                'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
+                                'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
+                                'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
+                            }
+
+                        # Convert indicators to proper dict format
+                        elite_indicators_list = []
+                        if hasattr(elite_config, 'indicators') and elite_config.indicators:
+                            for indicator in elite_config.indicators:
+                                indicator_dict = {
+                                    'name': indicator.name,
+                                    'type': indicator.type,
+                                    'indicator_class': indicator.indicator_class,
+                                    'agg_config': indicator.agg_config,
+                                    'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
+                                    'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}
+                                }
+                                elite_indicators_list.append(indicator_dict)
+
+                        # Create elite config with serialized enter_long, exit_long, and bars
+                        elite_dict = {
+                            'monitor': {
+                                'name': getattr(elite_config, 'name', f"Elite {elite_idx+1}"),
+                                'description': getattr(elite_config, 'description', f"Elite monitor #{elite_idx+1} - Epoch {current_gen}"),
+                                'trade_executor': elite_trade_executor,
+                                'enter_long': serialize_object(getattr(elite_config, 'enter_long', [])),
+                                'exit_long': serialize_object(getattr(elite_config, 'exit_long', [])),
+                                'bars': serialize_object(getattr(elite_config, 'bars', {})),
+                            },
+                            'indicators': elite_indicators_list,
+                            'epoch': current_gen,
+                            'fitness_values': elite.fitness_values.tolist() if hasattr(elite, 'fitness_values') else []
+                        }
+
+                        # Save to file: outputs/monitor_name_timestamp/epoch{gen}_elite{idx}.json
+                        elite_filename = f"epoch{current_gen}_elite{elite_idx+1}.json"
+                        elite_filepath = output_dir / elite_filename
+
+                        with open(elite_filepath, 'w') as f:
+                            json.dump(elite_dict, f, indent=2)
+
+                        logger.info(f"💾 Saved elite {elite_idx+1} for epoch {current_gen}: {elite_filepath}")
+
+                    logger.info(f"✅ Saved {num_elites_to_save} elites for epoch {current_gen} to {output_dir}")
+
+                except Exception as save_error:
+                    logger.error(f"❌ Error saving elites for epoch {current_gen}: {save_error}")
+                    import traceback
+                    traceback.print_exc()
+
             # Log the best individual for this generation
             objectives = [o.name for o in io.fitness_calculator.objectives]
             fitness_log = {

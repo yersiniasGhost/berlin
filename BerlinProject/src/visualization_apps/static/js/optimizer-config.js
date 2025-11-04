@@ -225,9 +225,10 @@ function renderGAConfiguration() {
     document.getElementById('chanceMutation').value = hp.chance_of_mutation || 0.05;
     document.getElementById('chanceCrossover').value = hp.chance_of_crossover || 0.03;
     document.getElementById('numSplits').value = hp.num_splits || 1;
-    document.getElementById('randomSeed').value = hp.random_seed || 0;
+    document.getElementById('randomSeed').value = hp.random_seed || 69;
     document.getElementById('numWorkers').value = hp.num_workers || (navigator.hardwareConcurrency || 4);
     document.getElementById('splitRepeats').value = hp.split_repeats || 2;
+    document.getElementById('saveElitesEveryEpoch').checked = hp.save_elites_every_epoch || false;
 }
 
 function renderConditionsWithRanges(containerId, conditions) {
@@ -1378,7 +1379,8 @@ function collectGAConfigData() {
         num_splits: parseInt(document.getElementById('numSplits').value),
         random_seed: parseInt(document.getElementById('randomSeed').value),
         num_workers: parseInt(document.getElementById('numWorkers').value),
-        split_repeats: parseInt(document.getElementById('splitRepeats').value)
+        split_repeats: parseInt(document.getElementById('splitRepeats').value),
+        save_elites_every_epoch: document.getElementById('saveElitesEveryEpoch').checked
     };
 }
 
