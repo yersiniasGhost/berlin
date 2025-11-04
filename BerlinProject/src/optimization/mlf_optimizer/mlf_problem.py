@@ -139,17 +139,16 @@ class MlfProblem(ProblemDomain):
             # 2. Mutate enter_long thresholds
             for enter_condition in individual.monitor_configuration.enter_long:
                 # Skip if threshold_range is null (checkbox unchecked)
-                if enter_condition.get('threshold_range') is None:
+                range = enter_condition.get('threshold_range')
+                if range is None:
                     continue
 
                 if random.random() < mutate_probability:
                     cnt += 1
-
                     current_threshold = enter_condition['threshold']
                     delta = 0.1  #   percent_change * (1.0 - 0.0)  # Threshold range is 0.1 to 0.9
                     new_threshold = current_threshold + random.uniform(-delta, delta)
-                    # new_threshold = max(0.0, min(new_threshold, 1.0))
-                    new_threshold = max(0.0, min(new_threshold, 1.0))
+                    new_threshold = max(range[0], min(new_threshold, range[1]))
 
                     enter_condition['threshold'] = new_threshold
 
