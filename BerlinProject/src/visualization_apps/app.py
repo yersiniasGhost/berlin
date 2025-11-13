@@ -123,7 +123,7 @@ def handle_start_optimization(data):
 
 
 @socketio.on('pause_optimization')
-def handle_pause_optimization():
+def handle_pause_optimization(data=None):
     """Pause the optimization"""
 
     if OptimizationState().is_running():
@@ -136,7 +136,7 @@ def handle_pause_optimization():
 
 
 @socketio.on('resume_optimization')
-def handle_resume_optimization():
+def handle_resume_optimization(data=None):
     """Resume the optimization"""
 
     if OptimizationState().is_running() and OptimizationState().is_paused():
@@ -148,44 +148,30 @@ def handle_resume_optimization():
         logger.info("Optimization resumed by user")
 
 @socketio.on('stop_optimization')
-def handle_stop_optimization():
+def handle_stop_optimization(data=None):
     """Stop the optimization"""
 
+    # Stop the optimization immediately
     OptimizationState().update({
         'running': False,
         'paused': False
     })
 
-    logger.info("🛑 Stopping optimization threads via WebSocket...")
+    logger.info("🛑 Stop signal sent to optimization threads")
 
-    # Stop main optimization thread
-    thread = OptimizationState().get('thread')
-    if thread and thread.is_alive():
-        logger.info("Waiting for main optimization thread to stop...")
-        thread.join(timeout=10)  # Increased timeout for better cleanup
-        if thread.is_alive():
-            logger.warning("Optimization thread did not terminate gracefully within timeout")
-        else:
-            logger.info("✅ Main optimization thread stopped")
-
-    # Stop heartbeat thread
-    heartbeat_thread = OptimizationState().get('heartbeat_thread')
-    if heartbeat_thread and heartbeat_thread.is_alive():
-        logger.info("💓 Waiting for heartbeat thread to stop...")
-        heartbeat_thread.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
-        if heartbeat_thread.is_alive():
-            logger.warning("💓 Heartbeat thread did not stop gracefully within timeout")
-        else:
-            logger.info("💓 Heartbeat thread stopped")
-
+    # Emit stop event immediately to update UI
     emit('optimization_stopped', {
         'generation': OptimizationState().get('current_generation'),
         'total_generations': OptimizationState().get('total_generations')
     })
-    logger.info("✅ Optimization stopped by user")
+    logger.info("✅ Optimization stop signal sent to user")
+
+    # Clean up threads in background (non-blocking)
+    # The finally block in the main optimization thread will handle the cleanup
+    # We don't block the WebSocket handler waiting for threads
 
 @socketio.on('save_current_best')
-def handle_save_current_best():
+def handle_save_current_best(data=None):
     """Save the current best results without stopping the optimization"""
 
     logger.info("📁 Saving current best results with NEW indicator system...")
@@ -235,7 +221,7 @@ def handle_save_current_best():
 
 
 @socketio.on('request_state_recovery')
-def handle_state_recovery():
+def handle_state_recovery(data=None):
     """Handle client request for state recovery after reconnection"""
     logger.info("🔄 Client requesting state recovery")
 
