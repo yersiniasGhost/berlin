@@ -41,6 +41,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/optimizer-config.js') }}"></script>
+<script src="{{ url_for('static', filename='js/optimizer-websocket.js') }}"></script>
+<script src="{{ url_for('static', filename='js/optimizer-ui-integration.js') }}"></script>
 
 {# TODO: Split the massive inline script into modular files #}
 {# Recommended structure:
@@ -69,74 +71,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let pollInterval = null;
     let addedGenerations = new Set(); // Track which generations have been added to the table
 
-    // Initialize WebSocket connection
-    function initializeWebSocket() {
-        window.socket = io();
-
-        window.socket.on('optimization_started', function(data) {
-            showAlert('Optimization started successfully!', 'success');
-            console.log('Optimization started:', data);
-        });
-
-        window.socket.on('generation_complete', function(data) {
-            console.log('Generation complete:', data.generation);
-            updateProgressBar(data.progress);
-            updateCharts(data.optimizer_charts || data.chart_data || {});
-
-            // Update parameter selector dropdown if parameter list is provided
-            if (data.parameter_list && data.parameter_list.length > 0) {
-                updateParameterSelector(data.parameter_list);
-            }
-
-            // Update test evaluations if test data is provided
-            if (data.test_evaluations && data.test_evaluations.length > 0) {
-                updateTestEvaluations(data.test_evaluations);
-            }
-        });
-
-        window.socket.on('optimization_complete', function(data) {
-            showAlert('Optimization completed!', 'success');
-            optimizationRunning = false;
-            saveOptimizedConfigsBtn.style.display = 'inline-block';
-            saveOptimizedConfigsBtn.disabled = false;
-            loadEliteToFormsBtn.style.display = 'inline-block';
-            loadEliteToFormsBtn.disabled = false;
-            document.getElementById('sendToReplayBtn').style.display = 'inline-block';
-            document.getElementById('sendToReplayBtn').disabled = false;
-            startOptimizerBtn.disabled = false;
-            pauseOptimizerBtn.disabled = true;
-            stopOptimizerBtn.disabled = true;
-        });
-
-        window.socket.on('optimization_error', function(data) {
-            showAlert(`Optimization error: ${data.error}`, 'danger');
-            resetButtons();
-        });
-
-        window.socket.on('optimization_paused', function(data) {
-            showAlert('Optimization paused', 'info');
-        });
-
-        window.socket.on('optimization_resumed', function(data) {
-            showAlert('Optimization resumed', 'info');
-        });
-
-        window.socket.on('optimization_stopped', function(data) {
-            showAlert('Optimization fully stopped', 'warning');
-            saveOptimizedConfigsBtn.style.display = 'inline-block';
-            saveOptimizedConfigsBtn.disabled = false;
-            loadEliteToFormsBtn.style.display = 'inline-block';
-            loadEliteToFormsBtn.disabled = false;
-            document.getElementById('sendToReplayBtn').style.display = 'inline-block';
-            document.getElementById('sendToReplayBtn').disabled = false;
-            startOptimizerBtn.disabled = false;
-            pauseOptimizerBtn.disabled = true;
-            stopOptimizerBtn.disabled = true;
-        });
-    }
-
-    // Initialize WebSocket on page load
-    initializeWebSocket();
+    // NOTE: WebSocket initialization moved to optimizer-websocket.js and optimizer-ui-integration.js
+    // The old initializeWebSocket() function has been replaced with a robust connection manager
+    // that handles reconnection, heartbeats, and connection monitoring
 
     // Listen for config changes to enable/disable start button
     document.addEventListener('configurationsLoaded', function(e) {
@@ -156,6 +93,10 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🔧 Start button element:', startOptimizerBtn);
     console.log('🔧 Start button initially disabled:', startOptimizerBtn.disabled);
 
+    // NOTE: Button event handlers moved to optimizer-ui-integration.js
+    // Old start/pause/stop button handlers are now in OptimizerUIIntegration class
+
+    /* OLD CODE - Replaced by optimizer-ui-integration.js
     // Start optimization
     startOptimizerBtn.addEventListener('click', async function() {
         if (!window.currentConfigs || !window.currentConfigs.ga_config || !window.currentConfigs.data_config) {
@@ -305,6 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showAlert(`Failed to stop optimization: ${error.message}`, 'danger');
         }
     });
+    END OF OLD CODE BEING REPLACED */
 
     function resetButtons() {
         startOptimizerBtn.disabled = false;
@@ -717,45 +659,67 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateCharts(chartData) {
-        console.log('Updating charts with data:', chartData);
+        console.log('📊 updateCharts called with data:', chartData);
+        console.log('📊 Charts object state:', {
+            objective: !!charts.objective,
+            parallelCoords: !!charts.parallelCoords,
+            bestStrategy: !!charts.bestStrategy
+        });
+
+        // Check if charts are initialized
+        if (!charts.objective || !charts.parallelCoords) {
+            console.warn('⚠️ Charts not initialized! Calling initializeCharts()...');
+            initializeCharts();
+        }
 
         // 1. Update Objective Evolution Chart - Multiple objectives as separate lines
-        if (chartData.objective_evolution && charts.objective) {
-            console.log('Updating objective evolution with:', chartData.objective_evolution);
+        if (chartData.objective_evolution) {
+            if (!charts.objective) {
+                console.error('❌ charts.objective is not initialized!');
+            } else {
+                console.log('📈 Updating objective evolution chart');
+                console.log('📈 Data keys:', Object.keys(chartData.objective_evolution));
+                console.log('📈 Data sample:', chartData.objective_evolution);
 
-            // Colors for different objectives
-            const objectiveColors = {
-                'MaximizeProfit': '#28a745',
-                'MinimizeLoss': '#dc3545',
-                'MaximizeNetPnL': '#007bff',
-                'MaximizeWinRate': '#ffc107',
-                'MinimizeDrawdown': '#6f42c1'
-            };
+                // Colors for different objectives
+                const objectiveColors = {
+                    'MaximizeProfit': '#28a745',
+                    'MinimizeLoss': '#dc3545',
+                    'MaximizeNetPnL': '#007bff',
+                    'MaximizeWinRate': '#ffc107',
+                    'MinimizeDrawdown': '#6f42c1'
+                };
 
-            // Clear existing series
-            while(charts.objective.series.length > 0) {
-                charts.objective.series[0].remove(false);
+                // Clear existing series
+                while(charts.objective.series.length > 0) {
+                    charts.objective.series[0].remove(false);
+                }
+
+                // Add series for each objective
+                Object.keys(chartData.objective_evolution).forEach((objectiveName, index) => {
+                    const data = chartData.objective_evolution[objectiveName];
+                    const color = objectiveColors[objectiveName] || Highcharts.getOptions().colors[index];
+
+                    charts.objective.addSeries({
+                        name: objectiveName,
+                        data: data,
+                        color: color,
+                        lineWidth: 2
+                    }, false);
+                });
+
+                charts.objective.redraw();
+                console.log('✅ Objective evolution chart updated');
             }
-
-            // Add series for each objective
-            Object.keys(chartData.objective_evolution).forEach((objectiveName, index) => {
-                const data = chartData.objective_evolution[objectiveName];
-                const color = objectiveColors[objectiveName] || Highcharts.getOptions().colors[index];
-
-                charts.objective.addSeries({
-                    name: objectiveName,
-                    data: data,
-                    color: color,
-                    lineWidth: 2
-                }, false);
-            });
-
-            charts.objective.redraw();
+        } else {
+            console.log('⏭️ No objective_evolution data in chartData');
         }
 
         // 2. Update Parallel Coordinates Chart (like old app)
         if (chartData.elite_population_data && chartData.objective_names && charts.parallelCoords) {
-            console.log('Updating parallel coordinates with:', chartData.elite_population_data);
+            console.log('📊 Updating parallel coordinates chart');
+            console.log('📊 Elite data count:', chartData.elite_population_data.length);
+            console.log('📊 Objectives:', chartData.objective_names);
 
             const eliteData = chartData.elite_population_data;
             const objectiveNames = chartData.objective_names;
@@ -860,6 +824,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
 
                 charts.parallelCoords = Highcharts.chart('parallelCoordsChart', chartConfig);
+                console.log('✅ Parallel coordinates chart updated');
             }
         }
 
@@ -1744,6 +1709,32 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // ========================================
+    // GLOBAL FUNCTION EXPORTS
+    // Make these functions accessible from external modules (optimizer-ui-integration.js)
+    // ========================================
+    window.updateProgressBar = updateProgressBar;
+    window.updateCharts = updateCharts;
+    window.updateParameterSelector = updateParameterSelector;
+    window.updateTestEvaluations = updateTestEvaluations;
+    window.showAlert = showAlert;  // Also expose the alert function
+    window.initializeCharts = initializeCharts;  // Expose chart initialization
+    window.showCharts = showCharts;  // Expose showCharts for initialization
+
+    // Make charts object accessible globally for debugging and updates
+    window.optimizerCharts = charts;
+
+    console.log('✅ Global functions exported:', {
+        updateProgressBar: typeof window.updateProgressBar,
+        updateCharts: typeof window.updateCharts,
+        updateParameterSelector: typeof window.updateParameterSelector,
+        updateTestEvaluations: typeof window.updateTestEvaluations,
+        showAlert: typeof window.showAlert,
+        initializeCharts: typeof window.initializeCharts,
+        showCharts: typeof window.showCharts,
+        chartsObject: typeof window.optimizerCharts
+    });
 
     // Send to Replay functionality
     let selectedEliteIndex = null;

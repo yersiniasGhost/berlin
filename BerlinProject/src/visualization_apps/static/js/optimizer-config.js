@@ -396,17 +396,20 @@ function renderIndicatorParamsWithRanges(params, ranges, index, indicatorClass) 
                     <div class="col-4">
                         <input type="number" class="form-control form-control-sm"
                                value="${value}" step="${step}" placeholder="Start"
-                               data-indicator-param="${key}" data-range-type="start">
+                               data-indicator-param="${key}" data-range-type="start"
+                               data-param-type="${rangeType}">
                     </div>
                     <div class="col-4">
                         <input type="number" class="form-control form-control-sm"
                                value="${rangeValues[0]}" step="${step}" placeholder="Min"
-                               data-indicator-param="${key}" data-range-type="min">
+                               data-indicator-param="${key}" data-range-type="min"
+                               data-param-type="${rangeType}">
                     </div>
                     <div class="col-4">
                         <input type="number" class="form-control form-control-sm"
                                value="${rangeValues[1]}" step="${step}" placeholder="Max"
-                               data-indicator-param="${key}" data-range-type="max">
+                               data-indicator-param="${key}" data-range-type="max"
+                               data-param-type="${rangeType}">
                     </div>
                 </div>
             </div>
@@ -796,17 +799,20 @@ function buildIndicatorParamsHTML(index, className, currentParams = {}, currentR
                         <div class="col-4">
                             <input type="number" class="form-control form-control-sm ${isMissing ? 'border-danger' : ''}"
                                    value="${displayValue}" step="${step}" placeholder="Start"
-                                   data-indicator-param="${param.name}" data-range-type="start">
+                                   data-indicator-param="${param.name}" data-range-type="start"
+                                   data-param-type="${paramType}">
                         </div>
                         <div class="col-4">
                             <input type="number" class="form-control form-control-sm"
                                    value="${rangeValues[0]}" step="${step}" placeholder="Min"
-                                   data-indicator-param="${param.name}" data-range-type="min">
+                                   data-indicator-param="${param.name}" data-range-type="min"
+                                   data-param-type="${paramType}">
                         </div>
                         <div class="col-4">
                             <input type="number" class="form-control form-control-sm"
                                    value="${rangeValues[1]}" step="${step}" placeholder="Max"
-                                   data-indicator-param="${param.name}" data-range-type="max">
+                                   data-indicator-param="${param.name}" data-range-type="max"
+                                   data-param-type="${paramType}">
                         </div>
                     </div>
                 </div>
@@ -1095,10 +1101,20 @@ function updateCurrentConfigIndicators() {
             }
 
             if (rangeType === 'start') {
-                // Determine type based on start value
-                const isInteger = Number.isInteger(paramValue);
-                paramData[paramName].start = isInteger ? Math.round(paramValue) : paramValue;
-                paramData[paramName].type = isInteger ? 'int' : 'float';
+                // Determine type from data-param-type attribute if available, otherwise infer from value
+                let parameterType = 'float';
+                if (paramType) {
+                    // Use explicit type from parameter specification (data-param-type attribute)
+                    const typeNormalized = paramType.toLowerCase();
+                    parameterType = (typeNormalized === 'integer' || typeNormalized === 'int') ? 'int' : 'float';
+                } else {
+                    // Fallback: infer type based on start value
+                    const isInteger = Number.isInteger(paramValue);
+                    parameterType = isInteger ? 'int' : 'float';
+                }
+
+                paramData[paramName].start = (parameterType === 'int') ? Math.round(paramValue) : paramValue;
+                paramData[paramName].type = parameterType;
             } else if (rangeType === 'min') {
                 paramData[paramName].min = paramValue;
             } else if (rangeType === 'max') {

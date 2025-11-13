@@ -24,7 +24,13 @@ logger = lm.get_logger("visualization-app")
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'visualization-apps-secret-key'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    ping_timeout=10,
+    ping_interval=25,
+    async_mode='threading'
+)
 
 # Register the new indicator API blueprint
 app.register_blueprint(indicator_api)
@@ -150,43 +156,59 @@ def handle_stop_optimization():
         'paused': False
     })
 
+    logger.info("🛑 Stopping optimization threads via WebSocket...")
+
+    # Stop main optimization thread
     thread = OptimizationState().get('thread')
     if thread and thread.is_alive():
+        logger.info("Waiting for main optimization thread to stop...")
         thread.join(timeout=10)  # Increased timeout for better cleanup
         if thread.is_alive():
             logger.warning("Optimization thread did not terminate gracefully within timeout")
+        else:
+            logger.info("✅ Main optimization thread stopped")
+
+    # Stop heartbeat thread
+    heartbeat_thread = OptimizationState().get('heartbeat_thread')
+    if heartbeat_thread and heartbeat_thread.is_alive():
+        logger.info("💓 Waiting for heartbeat thread to stop...")
+        heartbeat_thread.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
+        if heartbeat_thread.is_alive():
+            logger.warning("💓 Heartbeat thread did not stop gracefully within timeout")
+        else:
+            logger.info("💓 Heartbeat thread stopped")
 
     emit('optimization_stopped', {
         'generation': OptimizationState().get('current_generation'),
         'total_generations': OptimizationState().get('total_generations')
     })
-    logger.info("Optimization stopped by user")
+    logger.info("✅ Optimization stopped by user")
 
 @socketio.on('save_current_best')
 def handle_save_current_best():
     """Save the current best results without stopping the optimization"""
-    
+
     logger.info("📁 Saving current best results with NEW indicator system...")
-    
+
     # Check if we have current results to save
     if not OptimizationState().get('last_best_individual') or not OptimizationState().get('best_individuals_log'):
         emit('save_current_error', {
             'error': 'No optimization results available to save yet'
         })
         return
-    
+
     try:
         # Generate timestamp for this save
         save_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        
+
         # Get the current GA config path and test name (thread-safe)
         ga_config_path = OptimizationState().get('ga_config_path', 'unknown_config.json')
         test_name = OptimizationState().get('test_name', 'unknown_test')
         current_gen = OptimizationState().get('current_generation', 0)
-        
+
         # Save current results with timestamp indicating it's a partial save
         test_name_with_partial = f"{test_name}_partial_gen_{current_gen}"
-        
+
         results_info = save_optimization_results_with_new_indicators(
             OptimizationState().get('best_individuals_log', []),
             OptimizationState().get('last_best_individual'),
@@ -196,20 +218,38 @@ def handle_save_current_best():
             save_timestamp,
             OptimizationState().get('processed_indicators', [])
         )
-        
+
         emit('save_current_success', {
             'generation': current_gen,
             'total_generations': OptimizationState().get('total_generations', 0),
             'results_info': results_info
         })
-        
+
         logger.info(f"✅ Successfully saved current best results at generation {current_gen}")
-        
+
     except Exception as e:
         logger.error(f"❌ Error saving current best: {e}")
         emit('save_current_error', {
             'error': str(e)
         })
+
+
+@socketio.on('request_state_recovery')
+def handle_state_recovery():
+    """Handle client request for state recovery after reconnection"""
+    logger.info("🔄 Client requesting state recovery")
+
+    state = OptimizationState()
+    current_state = {
+        'running': state.is_running(),
+        'paused': state.is_paused(),
+        'current_generation': state.get('current_generation', 0),
+        'total_generations': state.get('total_generations', 0),
+        'test_name': state.get('test_name', 'Unknown')
+    }
+
+    logger.info(f"📤 Sending state recovery: {current_state}")
+    emit('state_recovery', current_state)
 
 
 @app.errorhandler(404)

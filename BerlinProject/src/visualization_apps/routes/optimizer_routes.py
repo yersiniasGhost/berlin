@@ -8,6 +8,7 @@ import os
 import json
 import logging
 import time
+import threading
 import math
 import numpy as np
 from datetime import datetime
@@ -657,10 +658,41 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
     }
 
 
+def heartbeat_thread(socketio, opt_state):
+    """Background thread to send heartbeats during optimization"""
+    logger.info("💓 Heartbeat thread started")
+
+    while opt_state.is_running():
+        try:
+            # Send heartbeat with current optimization state
+            heartbeat_data = {
+                'timestamp': datetime.now().isoformat(),
+                'optimization_state': {
+                    'running': opt_state.is_running(),
+                    'paused': opt_state.is_paused(),
+                    'current_generation': opt_state.get('current_generation', 0),
+                    'total_generations': opt_state.get('total_generations', 0),
+                    'test_name': opt_state.get('test_name', 'Unknown')
+                }
+            }
+
+            socketio.emit('heartbeat', heartbeat_data)
+            logger.debug(f"💓 Heartbeat sent: gen {heartbeat_data['optimization_state']['current_generation']}")
+
+        except Exception as e:
+            logger.error(f"❌ Error sending heartbeat: {e}")
+
+        # Send heartbeat every 10 seconds
+        time.sleep(10)
+
+    logger.info("💓 Heartbeat thread stopped")
+
+
 def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str,
                                                        socketio, opt_state, test_data_config_path: str = None):
     """Run the genetic algorithm optimization with NEW indicator system"""
 
+    heartbeat_worker = None
     try:
         logger.info("🚀 Starting threaded optimization with NEW indicator system")
 
@@ -724,6 +756,16 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         # Store timestamp for later use
         optimization_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         opt_state.set('timestamp', optimization_timestamp)
+
+        # Start heartbeat thread
+        heartbeat_worker = threading.Thread(
+            target=heartbeat_thread,
+            args=(socketio, opt_state),
+            daemon=True
+        )
+        heartbeat_worker.start()
+        opt_state.set('heartbeat_thread', heartbeat_worker)
+        logger.info("💓 Heartbeat thread started")
 
         # Emit initial status
         socketio.emit('optimization_started', {
@@ -1071,6 +1113,23 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         socketio.emit('optimization_error', {'error': str(e)})
 
     finally:
+        # Stop the heartbeat thread first
+        logger.info("🛑 Stopping heartbeat thread...")
+        opt_state.update({
+            'running': False,
+            'paused': False
+        })
+
+        # Wait for heartbeat thread to stop (it checks is_running() every 10 seconds)
+        heartbeat_thread_ref = opt_state.get('heartbeat_thread')
+        if heartbeat_thread_ref and heartbeat_thread_ref.is_alive():
+            logger.info("💓 Waiting for heartbeat thread to stop...")
+            heartbeat_thread_ref.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
+            if heartbeat_thread_ref.is_alive():
+                logger.warning("💓 Heartbeat thread did not stop gracefully within timeout")
+            else:
+                logger.info("💓 Heartbeat thread stopped cleanly")
+
         # Clean up temporary files if they exist
         try:
             ga_config_path_temp = opt_state.get('ga_config_path_temp')
@@ -1090,6 +1149,7 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
             'running': False,
             'paused': False,
             'thread': None,
+            'heartbeat_thread': None,
             'ga_config_path_temp': None,
             'data_config_path_temp': None
         })
@@ -1469,14 +1529,29 @@ def api_stop_optimization():
             'paused': False
         })
 
-        # Try to gracefully stop the thread
+        logger.info("🛑 Stopping optimization threads...")
+
+        # Try to gracefully stop the main optimization thread
         thread = OptimizationState().get('thread')
         if thread and thread.is_alive():
+            logger.info("Waiting for main optimization thread to stop...")
             thread.join(timeout=5)
             if thread.is_alive():
                 logger.warning("Optimization thread did not terminate gracefully within timeout")
+            else:
+                logger.info("✅ Main optimization thread stopped")
 
-        logger.info("Optimization stopped via REST API")
+        # Try to gracefully stop the heartbeat thread
+        heartbeat_thread = OptimizationState().get('heartbeat_thread')
+        if heartbeat_thread and heartbeat_thread.is_alive():
+            logger.info("💓 Waiting for heartbeat thread to stop...")
+            heartbeat_thread.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
+            if heartbeat_thread.is_alive():
+                logger.warning("💓 Heartbeat thread did not stop gracefully within timeout")
+            else:
+                logger.info("💓 Heartbeat thread stopped")
+
+        logger.info("✅ Optimization stopped via REST API")
 
         # Also emit WebSocket event for real-time UI updates
         try:
