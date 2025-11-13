@@ -466,11 +466,16 @@ class OptimizerUIIntegration {
         });
         this.charts = {};
 
-        // Clear tables
+        // Clear test evaluations table
         const testEvalsTable = document.getElementById('testEvaluationsTable');
         if (testEvalsTable) {
-            const tbody = testEvalsTable.querySelector('tbody');
-            if (tbody) tbody.innerHTML = '';
+            testEvalsTable.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No test evaluation data yet</td></tr>';
+        }
+
+        // Clear performance metrics table
+        const metricsTable = document.getElementById('metricsTable');
+        if (metricsTable) {
+            metricsTable.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No performance data yet</td></tr>';
         }
 
         console.log('🧹 Cleared all charts and data');
