@@ -458,6 +458,13 @@ class OptimizerUIIntegration {
     clearAllChartsAndData() {
         this.addedGenerations.clear();
 
+        // Also clear the global addedGenerations set from main.html
+        // This is used by updatePerformanceMetricsTable to track which generations have been added
+        if (window.addedGenerations && typeof window.addedGenerations.clear === 'function') {
+            window.addedGenerations.clear();
+            console.log('🧹 Cleared global addedGenerations set');
+        }
+
         // Clear charts if they exist
         Object.values(this.charts).forEach(chart => {
             if (chart && chart.destroy) {

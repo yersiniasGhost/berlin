@@ -1725,6 +1725,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make charts object accessible globally for debugging and updates
     window.optimizerCharts = charts;
 
+    // Expose the addedGenerations set so external modules can clear it
+    window.addedGenerations = addedGenerations;
+
     console.log('✅ Global functions exported:', {
         updateProgressBar: typeof window.updateProgressBar,
         updateCharts: typeof window.updateCharts,
