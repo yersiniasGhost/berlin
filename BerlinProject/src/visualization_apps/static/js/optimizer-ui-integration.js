@@ -212,8 +212,26 @@ class OptimizerUIIntegration {
 
                 // FIX: Update Performance Metrics Table (MUST be outside chart manager conditional)
                 // This needs to run regardless of chart manager availability
+                console.log('🔍 DEBUG: Performance Metrics Check:', {
+                    hasPerformanceMetrics: !!chartData.performance_metrics,
+                    performanceMetricsData: chartData.performance_metrics,
+                    functionExists: typeof window.updatePerformanceMetricsTable === 'function',
+                    tableColumnsData: chartData.table_columns
+                });
+
                 if (chartData.performance_metrics && typeof window.updatePerformanceMetricsTable === 'function') {
-                    window.updatePerformanceMetricsTable(chartData.performance_metrics, chartData.table_columns);
+                    console.log('✅ Calling updatePerformanceMetricsTable with:', chartData.performance_metrics);
+                    try {
+                        window.updatePerformanceMetricsTable(chartData.performance_metrics, chartData.table_columns);
+                        console.log('✅ updatePerformanceMetricsTable completed successfully');
+                    } catch (error) {
+                        console.error('❌ Error in updatePerformanceMetricsTable:', error);
+                    }
+                } else {
+                    console.warn('⚠️ Performance metrics table NOT updated. Reason:', {
+                        noData: !chartData.performance_metrics,
+                        noFunction: typeof window.updatePerformanceMetricsTable !== 'function'
+                    });
                 }
 
                 // FIX: Auto-update Parameter charts if a parameter is selected
