@@ -328,15 +328,71 @@ class ChartUpdateManager {
         window.perfMonitor?.measure('update_best_strategy', () => {
             const candlestickData = data.best_strategy.candlestick_data || [];
             const trades = data.best_strategy.trades || [];
+            const triggers = data.best_strategy.triggers || [];
 
             // Update candlestick data
             chart.series[0].setData(candlestickData, false);
 
-            // Update plot bands efficiently
-            this.updatePlotBandsEfficient(chart, trades);
+            // Remove old signal series (we use plot bands instead)
+            while (chart.series.length > 1) {
+                chart.series[chart.series.length - 1].remove(false);
+            }
+
+            // FIX: Handle both trades array and triggers fallback
+            if (trades && trades.length > 0) {
+                // Method 1: Direct trades array (preferred)
+                this.updatePlotBandsEfficient(chart, trades);
+            } else if (triggers && triggers.length > 0) {
+                // Method 2: Fallback to pairing buy/sell triggers
+                const pairedTrades = this.pairTriggersToTrades(triggers, candlestickData);
+                this.updatePlotBandsEfficient(chart, pairedTrades);
+            }
 
             if (redraw) chart.redraw();
         });
+    }
+
+    /**
+     * Pair buy/sell triggers into trade objects for plot band rendering
+     * Fallback method when direct trades array is not available
+     */
+    pairTriggersToTrades(triggers, candlestickData) {
+        const buySignals = triggers.filter(t => t.type === 'buy').sort((a, b) => a.timestamp - b.timestamp);
+        const sellSignals = triggers.filter(t => t.type === 'sell').sort((a, b) => a.timestamp - b.timestamp);
+
+        const pairedTrades = [];
+        let buyIndex = 0, sellIndex = 0;
+
+        while (buyIndex < buySignals.length && sellIndex < sellSignals.length) {
+            const buySignal = buySignals[buyIndex];
+            const sellSignal = sellSignals[sellIndex];
+
+            // Only pair if sell comes after buy
+            if (sellSignal.timestamp > buySignal.timestamp) {
+                // Find buy and sell prices from candlestick data
+                const buyCandle = candlestickData.find(c => c[0] === buySignal.timestamp);
+                const sellCandle = candlestickData.find(c => c[0] === sellSignal.timestamp);
+
+                if (buyCandle && sellCandle) {
+                    const buyPrice = buyCandle[4]; // Close price
+                    const sellPrice = sellCandle[4];
+                    const estimatedPnl = ((sellPrice - buyPrice) / buyPrice) * 100;
+
+                    pairedTrades.push({
+                        entry_time: new Date(buySignal.timestamp).toISOString(),
+                        exit_time: new Date(sellSignal.timestamp).toISOString(),
+                        pnl: estimatedPnl
+                    });
+                }
+
+                buyIndex++;
+                sellIndex++;
+            } else {
+                sellIndex++; // Skip this sell signal
+            }
+        }
+
+        return pairedTrades;
     }
 
     /**

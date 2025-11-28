@@ -204,6 +204,24 @@ class OptimizerUIIntegration {
                     if (chartData.best_strategy) {
                         window.chartUpdateManager.scheduleUpdate('bestStrategy', chartData);
                     }
+
+                    // FIX: Update Performance Metrics Table (was missing in chart manager flow)
+                    if (chartData.performance_metrics && typeof window.updatePerformanceMetricsTable === 'function') {
+                        window.updatePerformanceMetricsTable(chartData.performance_metrics, chartData.table_columns);
+                    }
+
+                    // FIX: Auto-update Parameter charts if a parameter is selected
+                    const parameterSelector = document.getElementById('parameterSelector');
+                    const selectedParameter = parameterSelector ? parameterSelector.value : null;
+                    if (selectedParameter) {
+                        console.log(`🔄 Auto-updating parameter charts for selected parameter: ${selectedParameter}`);
+                        if (typeof window.loadParameterHistogram === 'function') {
+                            window.loadParameterHistogram(selectedParameter);
+                        }
+                        if (typeof window.loadParameterEvolution === 'function') {
+                            window.loadParameterEvolution(selectedParameter);
+                        }
+                    }
                 } else if (typeof window.updateCharts === 'function') {
                     // Fallback to legacy update method
                     console.warn('⚠️ Using legacy updateCharts - chart update manager not available');
