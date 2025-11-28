@@ -1745,6 +1745,15 @@ document.addEventListener('DOMContentLoaded', function() {
     window.initializeCharts = initializeCharts;  // Expose chart initialization
     window.showCharts = showCharts;  // Expose showCharts for initialization
 
+    // FIX: Expose Performance Metrics Table functions (critical for chart manager integration)
+    window.updatePerformanceMetricsTable = updatePerformanceMetricsTable;
+    window.formatTableValue = formatTableValue;
+    window.getTableCellClass = getTableCellClass;
+
+    // FIX: Expose Parameter Chart functions (critical for auto-update)
+    window.loadParameterHistogram = loadParameterHistogram;
+    window.loadParameterEvolution = loadParameterEvolution;
+
     // Make charts object accessible globally for debugging and updates
     window.optimizerCharts = charts;
 
