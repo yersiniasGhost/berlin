@@ -124,7 +124,11 @@ class OptimizerUIIntegration {
             console.log('💓 Optimization heartbeat:', state);
             // Update progress indicator from heartbeat
             if (state.current_generation && state.total_generations) {
-                const progress = (state.current_generation / state.total_generations) * 100;
+                // FIX: Pass object with current_generation and total_generations, not percentage
+                const progress = {
+                    current_generation: state.current_generation,
+                    total_generations: state.total_generations
+                };
                 if (typeof window.updateProgressBar === 'function') {
                     window.updateProgressBar(progress);
                 }
@@ -144,7 +148,11 @@ class OptimizerUIIntegration {
 
                 // Update progress
                 if (state.current_generation && state.total_generations) {
-                    const progress = (state.current_generation / state.total_generations) * 100;
+                    // FIX: Pass object with current_generation and total_generations, not percentage
+                    const progress = {
+                        current_generation: state.current_generation,
+                        total_generations: state.total_generations
+                    };
                     if (typeof window.updateProgressBar === 'function') {
                         window.updateProgressBar(progress);
                     }
