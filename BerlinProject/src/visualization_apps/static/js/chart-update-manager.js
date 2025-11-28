@@ -419,7 +419,7 @@ class ChartUpdateManager {
                 const oldBand = xAxis.plotLinesAndBands?.find(b => b.id === bandId);
                 if (oldBand) oldBand.destroy();
 
-                // Add new band
+                // Add new band with P&L label
                 const isProfit = trade.pnl > 0;
                 xAxis.addPlotBand({
                     id: bandId,
@@ -427,7 +427,16 @@ class ChartUpdateManager {
                     to: new Date(trade.exit_time).getTime(),
                     color: isProfit ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
                     className: 'trade-band',
-                    zIndex: 0
+                    zIndex: 0,
+                    label: {
+                        text: `${isProfit ? '+' : ''}${trade.pnl.toFixed(2)}%`,
+                        align: 'center',
+                        style: {
+                            color: isProfit ? '#28a745' : '#dc3545',
+                            fontWeight: 'bold',
+                            fontSize: '10px'
+                        }
+                    }
                 });
 
                 this.existingPlotBands.set(bandId, {
