@@ -13,6 +13,7 @@ class ChartUpdateManager {
         this.minUpdateInterval = 100; // Minimum 100ms between updates
         this.existingPlotBands = new Map();
         this.dataCache = new Map();
+        this.animationsEnabled = false; // Disable animations for performance
     }
 
     /**
@@ -69,27 +70,54 @@ class ChartUpdateManager {
         this.pendingUpdates.clear();
 
         try {
-            // Measure total update time
-            window.perfMonitor?.measure('batch_chart_update', () => {
-                // Process all updates without redraw
+            // Process all updates without redraw (fast)
+            window.perfMonitor?.measure('batch_chart_update_data', () => {
                 updates.forEach((data, chartName) => {
                     this.updateChartInternal(chartName, data, false);
                 });
-
-                // Single redraw for all charts
-                Object.values(this.charts).forEach(chart => {
-                    if (chart && typeof chart.redraw === 'function') {
-                        chart.redraw();
-                    }
-                });
             });
+
+            // Stagger redraws across multiple frames to avoid UI freeze
+            this.staggeredRedraw();
 
             this.lastUpdateTime = performance.now();
         } catch (error) {
             console.error('❌ Error in batch update:', error);
-        } finally {
             this.updateInProgress = false;
         }
+    }
+
+    /**
+     * Stagger chart redraws across multiple animation frames
+     * This prevents the 1.4s UI freeze from synchronous redraws
+     */
+    staggeredRedraw() {
+        const charts = Object.values(this.charts).filter(c => c && typeof c.redraw === 'function');
+        let index = 0;
+
+        const redrawNext = () => {
+            if (index >= charts.length) {
+                this.updateInProgress = false;
+                return;
+            }
+
+            window.perfMonitor?.measure(`redraw_${index}`, () => {
+                // Redraw without animation for speed
+                charts[index].redraw(false);
+            });
+
+            index++;
+
+            // Schedule next redraw in next frame
+            if (index < charts.length) {
+                requestAnimationFrame(redrawNext);
+            } else {
+                this.updateInProgress = false;
+            }
+        };
+
+        // Start the staggered redraw
+        requestAnimationFrame(redrawNext);
     }
 
     /**
