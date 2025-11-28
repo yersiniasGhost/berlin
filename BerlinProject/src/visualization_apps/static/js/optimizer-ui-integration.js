@@ -177,47 +177,52 @@ class OptimizerUIIntegration {
 
         ws.on('generation_complete', (data) => {
             console.log('📊 Generation complete:', data.generation);
-            console.log('📊 Generation data:', data);
 
-            // Update progress bar
-            if (typeof window.updateProgressBar === 'function' && data.progress) {
-                console.log('📊 Updating progress bar with:', data.progress);
-                window.updateProgressBar(data.progress);
-            } else {
-                console.error('❌ updateProgressBar not available or no progress data', {
-                    functionExists: typeof window.updateProgressBar,
-                    hasProgress: !!data.progress
-                });
-            }
+            // Measure performance
+            window.perfMonitor?.measure('generation_complete_handler', () => {
+                // Update progress bar
+                if (typeof window.updateProgressBar === 'function' && data.progress) {
+                    window.updateProgressBar(data.progress);
+                }
 
-            // Update charts
-            const chartData = data.optimizer_charts || data.chart_data || {};
-            if (typeof window.updateCharts === 'function') {
-                console.log('📊 Updating charts with:', Object.keys(chartData));
-                window.updateCharts(chartData);
-            } else {
-                console.error('❌ updateCharts not available');
-            }
+                // Schedule chart updates via optimized manager
+                const chartData = data.optimizer_charts || data.chart_data || {};
+                if (window.chartUpdateManager && Object.keys(chartData).length > 0) {
+                    // Schedule debounced batch updates for each chart type
+                    if (chartData.objective_evolution) {
+                        window.chartUpdateManager.scheduleUpdate('objective', chartData);
+                    }
+                    if (chartData.elite_population_data) {
+                        window.chartUpdateManager.scheduleUpdate('parallelCoords', chartData);
+                    }
+                    if (chartData.winning_trades_distribution) {
+                        window.chartUpdateManager.scheduleUpdate('winningTrades', chartData.winning_trades_distribution);
+                    }
+                    if (chartData.losing_trades_distribution) {
+                        window.chartUpdateManager.scheduleUpdate('losingTrades', chartData.losing_trades_distribution);
+                    }
+                    if (chartData.best_strategy) {
+                        window.chartUpdateManager.scheduleUpdate('bestStrategy', chartData);
+                    }
+                } else if (typeof window.updateCharts === 'function') {
+                    // Fallback to legacy update method
+                    console.warn('⚠️ Using legacy updateCharts - chart update manager not available');
+                    window.updateCharts(chartData);
+                }
 
-            // Update parameter selector
-            if (data.parameter_list && data.parameter_list.length > 0) {
-                if (typeof window.updateParameterSelector === 'function') {
-                    console.log('📊 Updating parameter selector with', data.parameter_list.length, 'parameters');
+                // Update parameter selector
+                if (data.parameter_list && data.parameter_list.length > 0 && typeof window.updateParameterSelector === 'function') {
                     window.updateParameterSelector(data.parameter_list);
-                } else {
-                    console.error('❌ updateParameterSelector not available');
                 }
-            }
 
-            // Update test evaluations
-            if (data.test_evaluations && data.test_evaluations.length > 0) {
-                if (typeof window.updateTestEvaluations === 'function') {
-                    console.log('📊 Updating test evaluations with', data.test_evaluations.length, 'results');
+                // Update test evaluations
+                if (data.test_evaluations && data.test_evaluations.length > 0 && typeof window.updateTestEvaluations === 'function') {
                     window.updateTestEvaluations(data.test_evaluations);
-                } else {
-                    console.error('❌ updateTestEvaluations not available');
                 }
-            }
+            });
+
+            // Check frame rate
+            window.perfMonitor?.checkFrameRate();
         });
 
         ws.on('optimization_complete', (data) => {

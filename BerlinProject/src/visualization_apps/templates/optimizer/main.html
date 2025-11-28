@@ -41,6 +41,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/optimizer-config.js') }}"></script>
+{# Performance optimization modules - load BEFORE WebSocket and UI integration #}
+<script src="{{ url_for('static', filename='js/performance-monitor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-update-manager.js') }}"></script>
 <script src="{{ url_for('static', filename='js/optimizer-websocket.js') }}"></script>
 <script src="{{ url_for('static', filename='js/optimizer-ui-integration.js') }}"></script>
 
@@ -603,6 +606,26 @@ document.addEventListener('DOMContentLoaded', function() {
             parameterHistogram: !!charts.parameterHistogram,
             parameterEvolution: !!charts.parameterEvolution
         });
+
+        // Register all charts with the performance-optimized chart update manager
+        if (window.chartUpdateManager) {
+            console.log('📊 Registering charts with performance-optimized update manager...');
+            window.chartUpdateManager.registerChart('objective', charts.objective);
+            window.chartUpdateManager.registerChart('parallelCoords', charts.parallelCoords);
+            window.chartUpdateManager.registerChart('winningTrades', charts.winningTrades);
+            window.chartUpdateManager.registerChart('losingTrades', charts.losingTrades);
+            window.chartUpdateManager.registerChart('bestStrategy', charts.bestStrategy);
+            window.chartUpdateManager.registerChart('parameterHistogram', charts.parameterHistogram);
+            window.chartUpdateManager.registerChart('parameterEvolution', charts.parameterEvolution);
+            console.log('✅ All charts registered with update manager');
+        } else {
+            console.warn('⚠️ Chart update manager not available - performance optimizations disabled');
+        }
+
+        // Enable performance monitoring HUD for development
+        if (window.perfMonitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            console.log('💡 Performance monitoring available. Call perfMonitor.showHUD() to display metrics.');
+        }
     }
 
     function startPolling() {
