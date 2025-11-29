@@ -847,6 +847,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
 
                 charts.parallelCoords = Highcharts.chart('parallelCoordsChart', chartConfig);
+
+                // Re-register with chartUpdateManager after recreation
+                if (window.chartUpdateManager) {
+                    window.chartUpdateManager.registerChart('parallelCoords', charts.parallelCoords);
+                    console.log('✅ Parallel coordinates chart re-registered with update manager');
+                }
+
                 console.log('✅ Parallel coordinates chart updated');
             }
         }
@@ -1330,6 +1337,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 legend: { enabled: false },
                 credits: { enabled: false }
             });
+
+            // Re-register with chartUpdateManager after recreation
+            if (window.chartUpdateManager) {
+                window.chartUpdateManager.registerChart('parallelCoords', charts.parallelCoords);
+            }
         }
 
         if (charts.winningTrades) {
