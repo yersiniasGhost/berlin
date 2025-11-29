@@ -54,7 +54,27 @@ class MlfOptimizerConfig:
             csa = CSAContainer(split_config, aggregator_list)
             streamer = BacktestDataStreamer()
             streamer.initialize(csa.get_aggregators(), split_config, self.monitor_config)
-            backtest_streamers.append(streamer)
+
+            # Only add streamer if it has non-empty TICK data
+            if streamer.tick_history and len(streamer.tick_history) > 0:
+                backtest_streamers.append(streamer)
+            else:
+                error_msg = (
+                    f"ERROR: Skipping data streamer for {split_config['ticker']} "
+                    f"({split_config['start_date']} to {split_config['end_date']}) - "
+                    f"TICK data is empty. This split will not be used for training."
+                )
+                logger.error(error_msg)
+                print(f"⚠️  {error_msg}")
+
+        # Validate we have at least one valid streamer
+        if not backtest_streamers:
+            raise ValueError(
+                f"ERROR: No valid data streamers created. All {len(dc.split_configs)} splits had empty TICK data. "
+                f"Cannot proceed with optimization without training data."
+            )
+
+        logger.info(f"Created {len(backtest_streamers)} valid data streamers out of {len(dc.split_configs)} splits")
 
         # Create fitness calculator with worker configuration
         # If num_workers is 0, use sequential execution (force_sequential=True)
