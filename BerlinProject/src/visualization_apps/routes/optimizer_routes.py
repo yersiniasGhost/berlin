@@ -24,9 +24,25 @@ from optimization.genetic_optimizer.support.parameter_collector import Parameter
 # Import mlf_utils
 from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
 
-# Remove new indicator system imports that are causing backend conflicts
-# from indicator_triggers.indicator_base import IndicatorRegistry
-# from indicator_triggers.refactored_indicators import *  # Import to register indicators
+# Import optimizer module functions (extracted for modularity)
+from .optimizer import (
+    # Constants
+    PERFORMANCE_TABLE_COLUMNS,
+    get_table_columns_from_data,
+    # Elite selection
+    balance_fronts,
+    select_winning_population,
+    # Chart generation
+    generate_optimizer_chart_data,
+    load_raw_candle_data,
+    extract_trade_history_and_pnl_from_portfolio,
+    generate_chart_data_for_individual_with_new_indicators,
+    # Genetic algorithm
+    heartbeat_thread,
+    run_genetic_algorithm_threaded_with_new_indicators,
+    # Results management
+    save_optimization_results_with_new_indicators
+)
 
 logger = logging.getLogger('OptimizerVisualization')
 
@@ -38,1238 +54,10 @@ upload_handler = FileUploadHandler(upload_dir='uploads')
 config_loader = ConfigLoader(config_dir='inputs')
 
 
-# Column metadata for custom display names and formatting
-PERFORMANCE_TABLE_COLUMNS = {
-    'generation': {'title': 'Gen', 'type': 'number'},
-    'total_trades': {'title': 'Total Trades', 'type': 'number'},
-    'winning_trades': {'title': 'Winning', 'type': 'number'},
-    'losing_trades': {'title': 'Losing', 'type': 'number'},
-    'total_pnl': {'title': 'Total P&L (%)', 'type': 'percentage'},
-    'avg_win': {'title': 'Avg Win (%)', 'type': 'percentage'},
-    'avg_loss': {'title': 'Avg Loss (%)', 'type': 'percentage'},
-    'market_return': {'title': 'Market Return (%)', 'type': 'percentage'}
-}
-
-
-def get_table_columns_from_data(performance_metrics):
-    """Auto-detect table columns from performance data"""
-    if not performance_metrics:
-        return []
-
-    # Get all keys from the first data row
-    sample_data = performance_metrics[0]
-    columns = []
-
-    for key in sample_data.keys():
-        # Use custom metadata if available, otherwise create default
-        column_info = PERFORMANCE_TABLE_COLUMNS.get(key, {
-            'title': key.replace('_', ' ').title(),
-            'type': 'number'  # default type
-        })
-
-        columns.append({
-            'key': key,
-            'title': column_info['title'],
-            'type': column_info['type']
-        })
-
-    return columns
-
-
-def balance_fronts(front: List[IndividualStats]) -> List[IndividualStats]:
-    ideal_point = np.min([ind.fitness_values for ind in front], axis=0)
-    balanced_front = sorted(front, key=lambda ind: np.linalg.norm(ind.fitness_values - ideal_point))
-    return balanced_front
-
-
-def select_winning_population(number_of_elites: int, fronts: Dict[int, List]) -> List[IndividualStats]:
-    elitists: List[IndividualStats] = []
-    for front in fronts.values():
-        sorted_front = balance_fronts(front)
-        for stat in sorted_front:
-            if len(elitists) < number_of_elites:
-                elitists.append(stat)
-    return elitists
-
-
-def generate_optimizer_chart_data(best_individual, elites, io, data_config_path, best_individuals_log, objectives):
-    """Generate chart data specifically for optimizer visualization"""
-    logger.info("🎯 Generating optimizer chart data...")
-    
-    try:
-        # Get basic chart data from individual
-        logger.info(f"🎯 Generating chart data for best individual in generation...")
-        chart_data = generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path)
-        logger.info(f"📊 Chart data generated: {list(chart_data.keys()) if chart_data else 'EMPTY'}")
-        
-        # 1. Objective Evolution Data - separate line for each objective
-        objective_evolution = {}
-        
-        if best_individuals_log and objectives:
-            # Initialize data structure for each objective
-            for obj_name in objectives:
-                objective_evolution[obj_name] = []
-            
-            for entry in best_individuals_log:
-                generation = entry['generation']
-                metrics = entry['metrics']
-                
-                # Add data point for each objective
-                for obj_name in objectives:
-                    if obj_name in metrics:
-                        objective_evolution[obj_name].append([generation, metrics[obj_name]])
-        
-        logger.info(f"📈 Objective evolution data: {list(objective_evolution.keys())}")
-        
-        # 2. Trade Distribution Data - separate winning and losing trades like old app
-        winning_trades_distribution = []
-        losing_trades_distribution = []
-
-        # Check if best_individual (elites[0]) has pre-calculated distributions
-        best_individual_stats = elites[0] if elites and isinstance(elites[0], MlfIndividualStats) else None
-
-        logger.info(f"📊 Processing trade distribution data... Using MlfIndividualStats: {best_individual_stats is not None}")
-        if best_individual_stats:
-            # Use pre-calculated distributions from MlfIndividualStats
-            winning_trades_distribution = best_individual_stats.winning_trades_distribution
-            losing_trades_distribution = best_individual_stats.losing_trades_distribution
-            logger.info(f"✅ Using pre-calculated distributions: {len(winning_trades_distribution)} winning bins, {len(losing_trades_distribution)} losing bins")
-        elif chart_data.get('pnl_history'):
-            # Get P&L data from completed trades
-            winning_trades = []
-            losing_trades = []
-            
-            for pnl_entry in chart_data['pnl_history']:
-                trade_pnl = pnl_entry['trade_pnl']
-                if trade_pnl > 0:
-                    winning_trades.append(trade_pnl)
-                elif trade_pnl < 0:
-                    losing_trades.append(trade_pnl)
-            
-            # Create winning trades histogram bins
-            if winning_trades:
-                min_val = min(winning_trades)
-                max_val = max(winning_trades)
-                range_val = max_val - min_val
-                
-                # Dynamic bin size based on range (like old app)
-                if range_val <= 5:
-                    bin_size = 0.25
-                elif range_val <= 10:
-                    bin_size = 0.5
-                elif range_val <= 20:
-                    bin_size = 1.0
-                else:
-                    bin_size = 2.0
-                
-                bin_start = math.floor(min_val / bin_size) * bin_size
-                bin_end = math.ceil(max_val / bin_size) * bin_size
-                
-                # Create bins and count trades
-                winning_bins = {}
-                for i in range(int((bin_end - bin_start) / bin_size) + 1):
-                    bin_low = bin_start + (i * bin_size)
-                    bin_high = bin_low + bin_size
-                    bin_key = f"{bin_low:.1f}% to {bin_high:.1f}%"
-                    winning_bins[bin_key] = 0
-                
-                # Count trades in bins
-                for trade_pnl in winning_trades:
-                    bin_index = int((trade_pnl - bin_start) / bin_size)
-                    bin_low = bin_start + (bin_index * bin_size)
-                    bin_high = bin_low + bin_size
-                    bin_key = f"{bin_low:.1f}% to {bin_high:.1f}%"
-                    if bin_key in winning_bins:
-                        winning_bins[bin_key] += 1
-                
-                winning_trades_distribution = list(winning_bins.items())
-            
-            # Create losing trades histogram bins (similar logic)
-            if losing_trades:
-                min_val = min(losing_trades)
-                max_val = max(losing_trades)
-                range_val = max_val - min_val
-                
-                # Dynamic bin size
-                if range_val <= 5:
-                    bin_size = 0.25
-                elif range_val <= 10:
-                    bin_size = 0.5
-                elif range_val <= 20:
-                    bin_size = 1.0
-                else:
-                    bin_size = 2.0
-                
-                bin_start = math.floor(min_val / bin_size) * bin_size
-                bin_end = math.ceil(max_val / bin_size) * bin_size
-                
-                # Create bins and count trades
-                losing_bins = {}
-                for i in range(int((bin_end - bin_start) / bin_size) + 1):
-                    bin_low = bin_start + (i * bin_size)
-                    bin_high = bin_low + bin_size
-                    bin_key = f"{bin_low:.1f}% to {bin_high:.1f}%"
-                    losing_bins[bin_key] = 0
-                
-                # Count trades in bins
-                for trade_pnl in losing_trades:
-                    bin_index = int((trade_pnl - bin_start) / bin_size)
-                    bin_low = bin_start + (bin_index * bin_size)
-                    bin_high = bin_low + bin_size
-                    bin_key = f"{bin_low:.1f}% to {bin_high:.1f}%"
-                    if bin_key in losing_bins:
-                        losing_bins[bin_key] += 1
-                
-                losing_trades_distribution = list(losing_bins.items())
-        
-        # 3. Elite Population Data (for parallel coordinates like old app)
-        elite_population_data = []
-        logger.info(f"📊 Processing elite population data... Elites: {len(elites) if elites else 0}")
-        if elites and objectives:
-            for i, elite in enumerate(elites[:20]):  # Top 20 elites
-                try:
-                    # Check different possible fitness attribute names
-                    fitness_values = None
-                    if hasattr(elite, 'fitness_values') and elite.fitness_values is not None:
-                        fitness_values = elite.fitness_values
-                    elif hasattr(elite, 'fitness') and elite.fitness is not None:
-                        fitness_values = elite.fitness
-                    elif hasattr(elite, 'individual') and hasattr(elite.individual, 'fitness_values'):
-                        fitness_values = elite.individual.fitness_values
-                    
-                    if fitness_values is not None and len(fitness_values) >= len(objectives):
-                        # Each elite is an array of objective values [obj1, obj2, obj3, ...]
-                        elite_values = [float(val) for val in fitness_values]
-                        elite_population_data.append(elite_values)
-                        logger.info(f"✅ Elite {i+1}: {elite_values}")
-                    else:
-                        logger.warning(f"⚠️ Elite {i+1} missing fitness values: {type(elite)}")
-                except Exception as e:
-                    logger.error(f"❌ Error processing elite {i+1}: {e}")
-                    continue
-
-        # 4. Individual P&L Ranking Data (sorted by Total P&L)
-        individual_pnl_ranking = []
-        logger.info(f"📊 Processing individual P&L ranking... Elites: {len(elites) if elites else 0}")
-        if elites and objectives:
-            # Find which objective index corresponds to Total P&L
-            pnl_objective_index = None
-            for idx, obj_name in enumerate(objectives):
-                # Check for variations of P&L objective names
-                obj_lower = obj_name.lower()
-                if 'total_pnl' in obj_lower or 'total pnl' in obj_lower or 'pnl' in obj_lower:
-                    pnl_objective_index = idx
-                    logger.info(f"📈 Found P&L objective at index {idx}: '{obj_name}'")
-                    break
-
-            if pnl_objective_index is None:
-                logger.warning(f"⚠️ Could not find P&L objective in objectives: {objectives}")
-                logger.warning(f"⚠️ Individual P&L ranking chart will be empty")
-            else:
-                # Extract P&L from each elite (all MlfIndividualStats)
-                pnl_list = [elite.total_pnl for elite in elites]
-
-                # Sort by P&L descending (highest to lowest)
-                pnl_list_sorted = sorted(pnl_list, reverse=True)
-
-                # Convert to chart format: [[0, pnl1], [1, pnl2], [2, pnl3], ...]
-                # X-axis is index, Y-axis is sorted P&L value
-                individual_pnl_ranking = [[i, pnl] for i, pnl in enumerate(pnl_list_sorted)]
-
-                logger.info(f"📈 Generated {len(individual_pnl_ranking)} individual P&L ranking points")
-
-        # 5. Performance Metrics Table Data (like old app table format)
-        performance_metrics = []
-        logger.info(f"📊 Processing performance metrics... Using MlfIndividualStats: {best_individual_stats is not None}")
-        if best_individuals_log:
-            current_generation = best_individuals_log[-1]['generation'] if best_individuals_log else 1
-
-            # Use pre-calculated metrics from MlfIndividualStats if available
-            if best_individual_stats:
-                # Direct access to all pre-calculated metrics
-                perf_data = {
-                    'generation': current_generation,
-                    'total_pnl': best_individual_stats.total_pnl,
-                    'total_trades': best_individual_stats.total_trades,
-                    'winning_trades': best_individual_stats.winning_trades_count,
-                    'losing_trades': best_individual_stats.losing_trades_count,
-                    'avg_win': best_individual_stats.avg_win,
-                    'avg_loss': best_individual_stats.avg_loss,
-                    'market_return': best_individual_stats.market_return
-                }
-                performance_metrics = [perf_data]
-                logger.info(f"✅ Performance metrics from MlfIndividualStats: {perf_data}")
-            elif chart_data.get('pnl_history'):
-                try:
-                    pnl_data = chart_data['pnl_history']
-                    trade_data = chart_data.get('trade_history', [])
-                    
-                    # Calculate performance metrics from trade data
-                    total_trades = len([t for t in trade_data if t['type'] == 'sell'])  # Only count exit trades
-                    
-                    winning_trades = [p for p in pnl_data if p['trade_pnl'] > 0]
-                    losing_trades = [p for p in pnl_data if p['trade_pnl'] < 0]
-                    
-                    total_pnl = pnl_data[-1]['cumulative_pnl'] if pnl_data else 0.0
-                    avg_win = sum(p['trade_pnl'] for p in winning_trades) / len(winning_trades) if winning_trades else 0.0
-                    avg_loss = sum(p['trade_pnl'] for p in losing_trades) / len(losing_trades) if losing_trades else 0.0
-
-                    # Calculate market return (first close to last close)
-                    market_return = -6969.0  # Default error value
-                    candlestick_data = chart_data.get('candlestick_data', [])
-                    if candlestick_data and len(candlestick_data) >= 2:
-                        first_close = candlestick_data[0][4]  # [timestamp, open, high, low, close]
-                        last_close = candlestick_data[-1][4]
-                        market_return = ((last_close - first_close) / first_close) * 100.0
-
-                    # THIS IS WHERE YOU ADD NEW FUNCTIONS TO BE DISPLAYED IN THE PERFORMANCE METRIC TABLE
-                    perf_data = {
-                        'generation': current_generation,
-                        'total_pnl': total_pnl,
-                        'total_trades': total_trades,
-                        'winning_trades': len(winning_trades),
-                        'losing_trades': len(losing_trades),
-                        'avg_win': avg_win,
-                        'avg_loss': avg_loss,
-                        'market_return': market_return
-                    }
-                    performance_metrics = [perf_data]
-                    logger.info(f"✅ Performance metrics calculated: {perf_data}")
-                except Exception as e:
-                    logger.error(f"❌ Error calculating performance metrics: {e}")
-            else:
-                # Fallback: Use basic metrics from objectives if no trade data
-                try:
-                    final_metrics = best_individuals_log[-1]['metrics']
-                    perf_data = {
-                        'generation': current_generation,
-                        'total_pnl': list(final_metrics.values())[0] if final_metrics else 0.0,
-                        'total_trades': 0,
-                        'winning_trades': 0,
-                        'losing_trades': 0,
-                        'avg_win': 0.0,
-                        'avg_loss': 0.0
-                    }
-                    performance_metrics = [perf_data]
-                    logger.info(f"⚠️ Using fallback performance metrics: {perf_data}")
-                except Exception as e:
-                    logger.error(f"❌ Error creating fallback performance metrics: {e}")
-        
-        # Auto-detect table columns from performance metrics
-        table_columns = get_table_columns_from_data(performance_metrics)
-
-        # Combine all chart data (matching old app format)
-        optimizer_charts = {
-            'objective_evolution': objective_evolution,
-            'winning_trades_distribution': winning_trades_distribution,
-            'losing_trades_distribution': losing_trades_distribution,
-            'elite_population_data': elite_population_data,
-            'objective_names': objectives,
-            'performance_metrics': performance_metrics,
-            'table_columns': table_columns,  # Dynamic table column definitions
-            'individual_pnl_ranking': individual_pnl_ranking,  # Individual P&L sorted by rank
-            'best_strategy': {
-                'candlestick_data': chart_data.get('candlestick_data', []),
-                'triggers': chart_data.get('triggers', [])
-            }
-        }
-        
-        # Log success with proper objective evolution structure
-        total_points = sum(len(values) for values in objective_evolution.values()) if objective_evolution else 0
-        logger.info(f"📊 Generated optimizer charts with {total_points} objective points across {len(objective_evolution)} objectives")
-        return optimizer_charts
-        
-    except Exception as e:
-        logger.error(f"❌ Error generating optimizer chart data: {e}")
-        import traceback
-        traceback.print_exc()
-        return {}
-
-
-def load_raw_candle_data(data_config_path: str, io):
-    """Load raw candlestick data from Yahoo Finance using the same data as trade execution"""
-    logger.info("📊 Loading raw candle data for visualization")
-
-    try:
-        # Load data config
-        with open(data_config_path) as f:
-            data_config = json.load(f)
-
-        ticker = data_config['ticker']
-        start_date = data_config['start_date']
-        end_date = data_config['end_date']
-
-        logger.info(f"📈 Chart data generation for ticker: {ticker}")
-        logger.info(f"   Date Range: {start_date} to {end_date}")
-        logger.info(f"   Data config path: {data_config_path}")
-
-        # Use the SAME data source as trade execution to ensure consistency
-        backtest_streamer = io.fitness_calculator.selected_streamer
-        
-        # Debug: Check what ticker is actually loaded in the streamer
-        actual_ticker = getattr(backtest_streamer, 'ticker', 'UNKNOWN')
-        logger.info(f"🔍 Backtest streamer ticker: {actual_ticker}")
-        if actual_ticker != ticker:
-            logger.warning(f"⚠️  TICKER MISMATCH! Config: {ticker}, Streamer: {actual_ticker}")
-        
-        tick_history = backtest_streamer.tick_history
-
-        # Format candlestick data for Highcharts
-        candlestick_data = []
-        for tick in tick_history:
-            timestamp = int(tick.timestamp.timestamp() * 1000)
-            candlestick_data.append([
-                timestamp,
-                tick.open,
-                tick.high,
-                tick.low,
-                tick.close
-            ])
-
-        logger.info(f"📈 Loaded {len(candlestick_data)} candles")
-        return candlestick_data, data_config
-
-    except Exception as e:
-        logger.error(f"❌ Error loading candle data: {e}")
-        raise
-
-
-def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
-    """Extract trade history, triggers, P&L history, and bar scores from portfolio"""
-    logger.info("💼 Extracting trade history and P&L from portfolio")
-
-    trade_history = []
-    triggers = []
-    pnl_history = []
-    bar_scores_history = []
-
-    try:
-        # Generate bar scores history from the stored calculation
-        try:
-            if (hasattr(backtest_streamer, 'bar_score_history_dict') and
-                    backtest_streamer.bar_score_history_dict and
-                    backtest_streamer.tick_history):
-
-                bar_score_history_dict = backtest_streamer.bar_score_history_dict
-                tick_history = backtest_streamer.tick_history
-
-                logger.info(f"📊 Found bar scores history with {len(bar_score_history_dict)} bars")
-
-                # Create timeline of bar scores
-                timeline_length = len(tick_history)
-                for i in range(timeline_length):
-                    if i < len(tick_history):
-                        tick = tick_history[i]
-                        timestamp = int(tick.timestamp.timestamp() * 1000)
-
-                        scores = {}
-                        for bar_name, bar_values in bar_score_history_dict.items():
-                            if i < len(bar_values):
-                                scores[bar_name] = bar_values[i]
-                            else:
-                                scores[bar_name] = 0.0
-
-                        bar_scores_history.append({
-                            'timestamp': timestamp,
-                            'scores': scores
-                        })
-
-                logger.info(f"📈 Generated {len(bar_scores_history)} bar score history entries")
-            else:
-                logger.warning("⚠️  No bar score history data available from backtest streamer")
-
-        except Exception as bar_error:
-            logger.warning(f"⚠️  Could not generate bar scores history: {bar_error}")
-            import traceback
-            traceback.print_exc()
-
-        if portfolio and hasattr(portfolio, 'trade_history') and portfolio.trade_history:
-            logger.info(f"📊 Found {len(portfolio.trade_history)} trades in portfolio")
-
-            # Calculate cumulative P&L over time
-            cumulative_pnl = 0.0
-            trade_pairs = []  # Store entry/exit pairs for P&L calculation
-
-            # Process trades to build P&L history
-            for i, trade in enumerate(portfolio.trade_history):
-                # Determine trade type based on TradeReason
-                trade_type = 'buy'
-                if trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]:
-                    trade_type = 'sell'
-
-                # Convert timestamp to milliseconds for JavaScript
-                timestamp_ms = int(trade.time.timestamp() * 1000) if hasattr(trade.time, 'timestamp') else trade.time
-
-                trade_entry = {
-                    'timestamp': timestamp_ms,
-                    'type': trade_type,
-                    'price': trade.price,
-                    'quantity': trade.size,
-                    'reason': trade.reason.value if hasattr(trade.reason, 'value') else str(trade.reason)
-                }
-                trade_history.append(trade_entry)
-
-                # Add to triggers for chart display
-                triggers.append({
-                    'timestamp': timestamp_ms,
-                    'type': trade_type,
-                    'price': trade.price,
-                    'reason': trade_entry['reason']
-                })
-
-                # Calculate P&L for completed trades (entry -> exit pairs)
-                if trade_type == 'buy':
-                    trade_pairs.append({'entry': trade, 'exit': None})
-                elif trade_type == 'sell' and trade_pairs:
-                    for pair in reversed(trade_pairs):
-                        if pair['exit'] is None:
-                            pair['exit'] = trade
-                            entry_price = pair['entry'].price
-                            exit_price = trade.price
-                            trade_pnl = ((exit_price - entry_price) / entry_price) * 100.0
-                            cumulative_pnl += trade_pnl
-
-                            pnl_history.append({
-                                'timestamp': timestamp_ms,
-                                'cumulative_pnl': cumulative_pnl,
-                                'trade_pnl': trade_pnl
-                            })
-                            break
-
-            logger.info(
-                f"📈 Processed {len(trade_history)} trades, {len(triggers)} signals, {len(pnl_history)} P&L points")
-        else:
-            logger.warning("⚠️  No trade history found in portfolio")
-
-    except Exception as e:
-        logger.error(f"❌ Error extracting trade history: {e}")
-        import traceback
-        traceback.print_exc()
-
-    return trade_history, triggers, pnl_history, bar_scores_history
-
-
-def generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path):
-    """Generate chart data for the given the best individual using NEW indicator system"""
-    # Load candle data
-    candlestick_data, data_config = load_raw_candle_data(data_config_path, io)
-
-    # IMPORTANT: Run backtest for this specific individual to get trades and bar scores
-    backtest_streamer = io.fitness_calculator.selected_streamer
-    backtest_streamer.replace_monitor_config(best_individual.monitor_configuration)
-
-    # Process indicators using NEW SYSTEM for this individual
-    monitor_config = best_individual.monitor_configuration
-    tick_history = backtest_streamer.tick_history
-    
-    # Process indicators using old system for now (new system disabled)
-    new_indicator_results = {}
-    # TODO: Re-enable new indicator system when fully integrated
-    # if hasattr(monitor_config, 'indicators') and monitor_config.indicators:
-    #     registry = IndicatorRegistry()
-    #     ... (new system code commented out)
-
-    # Still use old system for compatibility
-    from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
-
-    indicator_processor = IndicatorProcessorHistoricalNew(best_individual.monitor_configuration)
-    indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
-        indicator_processor.calculate_indicators(backtest_streamer.aggregators)
-    )
-
-    # Store the bar score history for later access
-    backtest_streamer.bar_score_history_dict = bar_score_history_dict
-
-    # Run the backtest to get trades
-    portfolio = backtest_streamer.run()
-
-    # Extract trade history and P&L from the fresh portfolio
-    trade_history, triggers, pnl_history, bar_scores_history = extract_trade_history_and_pnl_from_portfolio(portfolio,
-                                                                                                        backtest_streamer)
-
-    # Get threshold config
-    threshold_config = {}
-    if hasattr(best_individual, 'monitor_configuration'):
-        monitor_config = best_individual.monitor_configuration
-        threshold_config = {
-            'enter_long': getattr(monitor_config, 'enter_long', []),
-            'exit_long': getattr(monitor_config, 'exit_long', [])
-        }
-
-    # Format component data for charts (MACD, SMA components)
-    component_data_formatted = {}
-    if component_history:
-        for comp_name, comp_values in component_history.items():
-            # Convert to Highcharts format with timestamps
-            comp_series = []
-            for i, value in enumerate(comp_values):
-                if i < len(tick_history) and value is not None:
-                    timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
-                    comp_series.append([timestamp, float(value)])
-            
-            component_data_formatted[comp_name] = {
-                'data': comp_series,
-                'name': comp_name
-            }
-    
-    # Add NEW indicator results to chart data (currently disabled)
-    for indicator_name, values in new_indicator_results.items():
-        comp_series = []
-        for i, value in enumerate(values):
-            if i < len(tick_history) and value is not None:
-                timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
-                comp_series.append([timestamp, float(value)])
-        
-        component_data_formatted[f"new_{indicator_name}"] = {
-            'data': comp_series,
-            'name': f"New {indicator_name}"
-        }
-
-    return {
-        'ticker': data_config['ticker'],
-        'candlestick_data': candlestick_data,
-        'triggers': triggers,
-        'trade_history': trade_history,
-        'pnl_history': pnl_history,
-        'bar_scores_history': bar_scores_history,
-        'threshold_config': threshold_config,
-        'component_data': component_data_formatted,  # NEW indicators included
-        'total_candles': len(candlestick_data),
-        'total_trades': len(trade_history),
-        'date_range': {
-            'start': data_config['start_date'],
-            'end': data_config['end_date']
-        },
-        'new_indicators_used': list(new_indicator_results.keys())
-    }
-
-
-def heartbeat_thread(socketio, opt_state):
-    """Background thread to send heartbeats during optimization"""
-    logger.info("💓 Heartbeat thread started")
-
-    while opt_state.is_running():
-        try:
-            # Send heartbeat with current optimization state
-            heartbeat_data = {
-                'timestamp': datetime.now().isoformat(),
-                'optimization_state': {
-                    'running': opt_state.is_running(),
-                    'paused': opt_state.is_paused(),
-                    'current_generation': opt_state.get('current_generation', 0),
-                    'total_generations': opt_state.get('total_generations', 0),
-                    'test_name': opt_state.get('test_name', 'Unknown')
-                }
-            }
-
-            socketio.emit('heartbeat', heartbeat_data)
-            logger.debug(f"💓 Heartbeat sent: gen {heartbeat_data['optimization_state']['current_generation']}")
-
-        except Exception as e:
-            logger.error(f"❌ Error sending heartbeat: {e}")
-
-        # Send heartbeat every 10 seconds
-        time.sleep(10)
-
-    logger.info("💓 Heartbeat thread stopped")
-
-
-def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data_config_path: str,
-                                                       socketio, opt_state, test_data_config_path: str = None):
-    """Run the genetic algorithm optimization with NEW indicator system"""
-
-    heartbeat_worker = None
-    try:
-        logger.info("🚀 Starting threaded optimization with NEW indicator system")
-
-        # Load configuration
-        with open(ga_config_path) as f:
-            config_data = json.load(f)
-
-        # Load data configuration to verify ticker
-        with open(data_config_path) as f:
-            data_config = json.load(f)
-
-        current_ticker = data_config.get('ticker', 'UNKNOWN')
-        logger.info(f"🎯 Loading optimization for ticker: {current_ticker}")
-        logger.info(f"   Data config path: {data_config_path}")
-        logger.info(f"   Date range: {data_config.get('start_date')} to {data_config.get('end_date')}")
-
-        # Load test data configuration if provided
-        test_data_config = None
-        if test_data_config_path and os.path.exists(test_data_config_path):
-            with open(test_data_config_path) as f:
-                test_data_config = json.load(f)
-            logger.info(f"🧪 Test data config loaded for ticker: {test_data_config.get('ticker', 'UNKNOWN')}")
-            logger.info(f"   Test date range: {test_data_config.get('start_date')} to {test_data_config.get('end_date')}")
-
-        test_name = config_data.get('test_name', config_data.get('monitor', {}).get('name', 'NoNAME'))
-        opt_state.set('test_name', test_name)
-        opt_state.set('ga_config_path', ga_config_path)
-
-        # Process indicators using old system for now (new system disabled)
-        processed_indicators = []
-        # TODO: Re-enable new indicator system when fully integrated
-        # if 'indicators' in config_data:
-        #     registry = IndicatorRegistry()
-        #     ... (new system code commented out)
-        logger.info("Using NEW indicator system for compatibility")
-
-        # Create optimizer config with processed indicators
-        io = MlfOptimizerConfig.from_json(config_data, data_config_path)
-        genetic_algorithm = io.create_project()
-
-        # Initialize parameter collector for histogram tracking
-        parameter_collector = ParameterCollector()
-
-        # Store instances for state management using thread-safe methods
-        opt_state.update({
-            'ga_instance': genetic_algorithm,
-            'io_instance': io,
-            'total_generations': genetic_algorithm.number_of_generations,
-            'current_generation': 0,
-            'best_individuals_log': [],
-            'processed_indicators': processed_indicators,
-            'parameter_collector': parameter_collector
-        })
-
-        logger.info(f"   Test: {test_name}")
-        logger.info(f"   Generations: {genetic_algorithm.number_of_generations}")
-        logger.info(f"   Population Size: {genetic_algorithm.population_size}")
-        logger.info(f"   Elitist Size: {genetic_algorithm.elitist_size}")
-        logger.info(f"   New Indicators: {len(processed_indicators)}")
-
-        # Store timestamp for later use
-        optimization_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        opt_state.set('timestamp', optimization_timestamp)
-
-        # Start heartbeat thread
-        heartbeat_worker = threading.Thread(
-            target=heartbeat_thread,
-            args=(socketio, opt_state),
-            daemon=True
-        )
-        heartbeat_worker.start()
-        opt_state.set('heartbeat_thread', heartbeat_worker)
-        logger.info("💓 Heartbeat thread started")
-
-        # Emit initial status
-        socketio.emit('optimization_started', {
-            'test_name': test_name,
-            'total_generations': genetic_algorithm.number_of_generations,
-            'population_size': genetic_algorithm.population_size,
-            'timestamp': optimization_timestamp,
-            'new_indicators_count': len(processed_indicators)
-        })
-
-        # Run optimization with generation-by-generation updates
-        for observer, statsobserver in genetic_algorithm.run_ga_iterations(1):
-            if not observer.success:
-                print("NOT SUCCESSFUL... trying again with next epoch")
-                continue
-
-            # Fix generation numbering first - stats returns 0-based, we want 1-based display
-            current_gen = observer.iteration + 1  # Convert from 0-based to 1-based
-
-            # Check if stopped using thread-safe methods
-            if not opt_state.is_running():
-                logger.info(f"🛑 Optimization stopped by user at generation {current_gen}")
-                socketio.emit('optimization_stopped', {
-                    'generation': current_gen,
-                    'total_generations': genetic_algorithm.number_of_generations
-                })
-                break
-
-            # Wait while paused using thread-safe methods - pause after finishing current generation
-            if opt_state.is_paused() and opt_state.is_running():
-                logger.info(f"⏸️ Optimization paused after completing generation {current_gen}")
-                while opt_state.is_paused() and opt_state.is_running():
-                    time.sleep(0.1)
-
-                if opt_state.is_running():  # If still running after unpause
-                    logger.info(f"▶️ Optimization resumed at generation {current_gen}")
-            metrics = statsobserver.best_metric_iteration
-
-            elites = select_winning_population(genetic_algorithm.elitist_size, observer.fronts)
-            best_individual = elites[0].individual
-
-            # Collect parameters from entire population (all fronts) for histogram visualization
-            # Clear previous generation data to show only current epoch
-            parameter_collector.clear_generation_data()
-            # Extract all individuals from all Pareto fronts
-            full_population = [individual for front in observer.fronts.values() for individual in front]
-            # Pass both full population and elites for two-series histogram
-            parameter_collector.collect_generation_parameters(current_gen, full_population, elites=elites)
-
-            opt_state.update({
-                'current_generation': current_gen,
-                'last_best_individual': best_individual,
-                'elites': elites
-            })
-
-            # Save elites every epoch if flag is enabled
-            if config_data.get('ga_hyperparameters', {}).get('save_elites_every_epoch', False):
-                try:
-                    # Create output directory: outputs/monitor_name_timestamp/
-                    output_dir = Path('outputs') / f"{test_name}_{optimization_timestamp}"
-                    output_dir.mkdir(parents=True, exist_ok=True)
-
-                    # Get number of elites to save
-                    elites_to_save = config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
-                    num_elites_to_save = min(elites_to_save, len(elites))
-
-                    # Helper function to serialize complex objects
-                    def serialize_object(obj):
-                        if hasattr(obj, '__dict__'):
-                            result = {}
-                            for key, value in obj.__dict__.items():
-                                if hasattr(value, '__dict__'):
-                                    result[key] = serialize_object(value)
-                                elif isinstance(value, list):
-                                    result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
-                                elif isinstance(value, dict):
-                                    result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
-                                else:
-                                    result[key] = value
-                            return result
-                        else:
-                            return obj
-
-                    # Save each elite configuration
-                    for elite_idx in range(num_elites_to_save):
-                        elite = elites[elite_idx]
-                        if not hasattr(elite, 'individual') or not hasattr(elite.individual, 'monitor_configuration'):
-                            logger.warning(f"Elite #{elite_idx+1} missing individual.monitor_configuration, skipping")
-                            continue
-
-                        elite_config = elite.individual.monitor_configuration
-
-                        # Extract trade executor config
-                        elite_trade_executor = {}
-                        if hasattr(elite_config, 'trade_executor'):
-                            te = elite_config.trade_executor
-                            elite_trade_executor = {
-                                'default_position_size': getattr(te, 'default_position_size', 100.0),
-                                'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
-                                'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
-                                'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
-                                'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
-                                'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
-                                'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
-                            }
-
-                        # Convert indicators to proper dict format
-                        elite_indicators_list = []
-                        if hasattr(elite_config, 'indicators') and elite_config.indicators:
-                            for indicator in elite_config.indicators:
-                                indicator_dict = {
-                                    'name': indicator.name,
-                                    'type': indicator.type,
-                                    'indicator_class': indicator.indicator_class,
-                                    'agg_config': indicator.agg_config,
-                                    'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
-                                    'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}
-                                }
-                                elite_indicators_list.append(indicator_dict)
-
-                        # Create elite config with serialized enter_long, exit_long, and bars
-                        elite_dict = {
-                            'monitor': {
-                                'name': getattr(elite_config, 'name', f"Elite {elite_idx+1}"),
-                                'description': getattr(elite_config, 'description', f"Elite monitor #{elite_idx+1} - Epoch {current_gen}"),
-                                'trade_executor': elite_trade_executor,
-                                'enter_long': serialize_object(getattr(elite_config, 'enter_long', [])),
-                                'exit_long': serialize_object(getattr(elite_config, 'exit_long', [])),
-                                'bars': serialize_object(getattr(elite_config, 'bars', {})),
-                            },
-                            'indicators': elite_indicators_list,
-                            'epoch': current_gen,
-                            'fitness_values': elite.fitness_values.tolist() if hasattr(elite, 'fitness_values') else []
-                        }
-
-                        # Save to file: outputs/monitor_name_timestamp/epoch{gen}_elite{idx}.json
-                        elite_filename = f"epoch{current_gen}_elite{elite_idx+1}.json"
-                        elite_filepath = output_dir / elite_filename
-
-                        with open(elite_filepath, 'w') as f:
-                            json.dump(elite_dict, f, indent=2)
-
-                        logger.info(f"💾 Saved elite {elite_idx+1} for epoch {current_gen}: {elite_filepath}")
-
-                    logger.info(f"✅ Saved {num_elites_to_save} elites for epoch {current_gen} to {output_dir}")
-
-                except Exception as save_error:
-                    logger.error(f"❌ Error saving elites for epoch {current_gen}: {save_error}")
-                    import traceback
-                    traceback.print_exc()
-
-            # Log the best individual for this generation
-            objectives = [o.name for o in io.fitness_calculator.objectives]
-            fitness_log = {
-                'generation': current_gen,
-                'metrics': dict(zip(objectives, metrics))
-            }
-            current_log = opt_state.get('best_individuals_log', [])
-            current_log.append(fitness_log)
-            opt_state.set('best_individuals_log', current_log)
-
-            # Log progress
-            metric_out = [f"{obj}={metric:.4f}" for obj, metric in zip(objectives, metrics)]
-            out_str = f"{test_name}, {current_gen}/{genetic_algorithm.number_of_generations}, {metric_out}"
-            logger.info(out_str)
-
-            # Get chart data for optimizer visualization
-            try:
-                # Get objective names dynamically
-                objectives = [o.name for o in io.fitness_calculator.objectives]
-                
-                # Generate optimizer-specific chart data
-                optimizer_charts = generate_optimizer_chart_data(
-                    best_individual, elites, io, data_config_path, 
-                    opt_state.get('best_individuals_log', []), objectives
-                )
-
-                # Convert numpy arrays to regular Python lists for JSON serialization
-                elite_objectives = [e.fitness_values.tolist() for e in elites]
-
-                # Get parameter list for histogram dropdown
-                parameter_list = parameter_collector.get_parameter_list()
-
-                # Evaluate elites on test data if test config is provided
-                test_evaluations = []
-                if test_data_config:
-                    try:
-                        # Get number of elites to save from GA hyperparameters
-                        elites_to_save = config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
-                        num_elites_to_evaluate = min(elites_to_save, len(elites))
-
-                        logger.info(f"🧪 Evaluating top {num_elites_to_evaluate} elites (out of {len(elites)}) on test data for generation {current_gen}")
-
-                        # Import required modules for test evaluation
-                        from optimization.calculators.bt_data_streamer import BacktestDataStreamer
-                        from candle_aggregator.csa_container import CSAContainer
-
-                        # Create a temporary test data config file for evaluation
-                        import tempfile
-                        with tempfile.NamedTemporaryFile(mode='w', suffix='_test_eval.json', delete=False) as test_file:
-                            json.dump(test_data_config, test_file, indent=2)
-                            temp_test_path = test_file.name
-
-                        try:
-                            # Create test data streamer WITHOUT splits (evaluate on entire test dataset)
-                            # Get aggregator configurations from monitor config
-                            aggregator_list = list(io.monitor_config.get_aggregator_configs().keys())
-
-                            # Create CSA container for test data
-                            test_csa = CSAContainer(test_data_config, aggregator_list)
-
-                            # Create and initialize BacktestDataStreamer with test data
-                            test_streamer = BacktestDataStreamer()
-                            test_streamer.initialize(test_csa.get_aggregators(), test_data_config, io.monitor_config)
-
-                            # Only evaluate the top elites that will be saved
-                            elites_to_test = elites[:num_elites_to_evaluate]
-
-                            for elite_idx, elite_stats in enumerate(elites_to_test):
-                                try:
-                                    # Evaluate elite on training data (already calculated)
-                                    train_pnl = getattr(elite_stats, 'total_pnl', None)
-                                    train_trades = getattr(elite_stats, 'number_of_trades', 0)
-                                    train_winning = getattr(elite_stats, 'number_of_winning_trades', 0)
-                                    train_win_rate = (train_winning / train_trades * 100) if train_trades > 0 else 0
-
-                                    # Evaluate elite on test data using the backtest streamer
-                                    test_streamer.replace_monitor_config(elite_stats.individual.monitor_configuration)
-                                    test_portfolio = test_streamer.run()
-
-                                    # Extract test metrics from portfolio trade history
-                                    # Calculate P&L from entry/exit pairs
-                                    cumulative_pnl = 0.0
-                                    trade_pairs = []
-
-                                    for trade in test_portfolio.trade_history:
-                                        is_entry = trade.reason in [TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT]
-                                        is_exit = trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]
-
-                                        if is_entry:
-                                            trade_pairs.append({'entry': trade, 'exit': None})
-                                        elif is_exit and trade_pairs:
-                                            for pair in reversed(trade_pairs):
-                                                if pair['exit'] is None:
-                                                    pair['exit'] = trade
-                                                    entry_price = pair['entry'].price
-                                                    exit_price = trade.price
-                                                    trade_pnl = ((exit_price - entry_price) / entry_price) * 100.0
-                                                    cumulative_pnl += trade_pnl
-                                                    break
-
-                                    # Count completed trades
-                                    completed_pairs = [p for p in trade_pairs if p['exit'] is not None]
-                                    test_pnl = cumulative_pnl
-                                    test_trades = len(completed_pairs)
-
-                                    # Count winning trades
-                                    test_winning = 0
-                                    for pair in completed_pairs:
-                                        entry_price = pair['entry'].price
-                                        exit_price = pair['exit'].price
-                                        if exit_price > entry_price:
-                                            test_winning += 1
-
-                                    test_win_rate = (test_winning / test_trades * 100) if test_trades > 0 else 0
-
-                                    # Calculate overfitting score (difference between train and test performance)
-                                    overfitting_score = train_pnl - test_pnl if (train_pnl is not None and test_pnl is not None) else None
-
-                                    test_evaluations.append({
-                                        'generation': current_gen,
-                                        'elite_index': elite_idx,
-                                        'train_pnl': train_pnl,
-                                        'test_pnl': test_pnl,
-                                        'train_trades': train_trades,
-                                        'test_trades': test_trades,
-                                        'train_win_rate': train_win_rate,
-                                        'test_win_rate': test_win_rate,
-                                        'overfitting_score': overfitting_score
-                                    })
-
-                                    logger.info(f"   Elite {elite_idx}: Train P&L={train_pnl:.2f}%, Test P&L={test_pnl:.2f}%, Overfitting={overfitting_score:.2f}%")
-
-                                except Exception as elite_eval_error:
-                                    logger.warning(f"Error evaluating elite {elite_idx} on test data: {elite_eval_error}")
-                                    import traceback
-                                    traceback.print_exc()
-
-                            # Store test evaluations in state
-                            current_test_evals = opt_state.get('test_evaluations', [])
-                            current_test_evals.extend(test_evaluations)
-                            opt_state.set('test_evaluations', current_test_evals)
-
-                            logger.info(f"✅ Evaluated {len(test_evaluations)} elites on test data")
-
-                        finally:
-                            # Clean up temporary test config file
-                            if os.path.exists(temp_test_path):
-                                os.unlink(temp_test_path)
-
-                    except Exception as test_eval_error:
-                        logger.error(f"Error during test data evaluation: {test_eval_error}")
-                        import traceback
-                        traceback.print_exc()
-
-                socketio.emit('generation_complete', {
-                    'generation': current_gen,
-                    'total_generations': genetic_algorithm.number_of_generations,
-                    'fitness_metrics': dict(zip(objectives, metrics)),
-                    'chart_data': optimizer_charts,
-                    'best_individuals_log': opt_state.get('best_individuals_log', []),
-                    'elite_objective_values': elite_objectives,
-                    'objective_names': objectives,
-                    'progress': {
-                        'current_generation': current_gen,
-                        'total_generations': genetic_algorithm.number_of_generations,
-                        'completed': False
-                    },
-                    'optimizer_charts': optimizer_charts,  # Specifically for optimizer frontend
-                    'parameter_list': parameter_list,  # For parameter histogram dropdown
-                    'test_evaluations': test_evaluations  # Test data evaluation results
-                })
-
-            except Exception as e:
-                logger.error(f"Error generating chart data: {e}")
-                socketio.emit('optimization_error', {'error': str(e)})
-                break
-
-        # Optimization completed
-        if opt_state.is_running():
-            logger.info("⏱️  Optimization completed successfully with NEW indicator system")
-            # Auto-saving disabled - user will manually save best elites via UI button
-            logger.info("✅ Optimization completed - elites available for manual saving via UI")
-            # Emit completion event without automatic saving
-            socketio.emit('optimization_complete', {
-                'total_generations': opt_state.get('current_generation'),
-                'best_individuals_log': opt_state.get('best_individuals_log', []),
-                'manual_save_available': True
-            })
-
-    except Exception as e:
-        logger.error(f"❌ Error in threaded optimization: {e}")
-        import traceback
-        traceback.print_exc()
-        socketio.emit('optimization_error', {'error': str(e)})
-
-    finally:
-        # Stop the heartbeat thread first
-        logger.info("🛑 Stopping heartbeat thread...")
-        opt_state.update({
-            'running': False,
-            'paused': False
-        })
-
-        # Wait for heartbeat thread to stop (it checks is_running() every 10 seconds)
-        heartbeat_thread_ref = opt_state.get('heartbeat_thread')
-        if heartbeat_thread_ref and heartbeat_thread_ref.is_alive():
-            logger.info("💓 Waiting for heartbeat thread to stop...")
-            heartbeat_thread_ref.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
-            if heartbeat_thread_ref.is_alive():
-                logger.warning("💓 Heartbeat thread did not stop gracefully within timeout")
-            else:
-                logger.info("💓 Heartbeat thread stopped cleanly")
-
-        # Clean up temporary files if they exist
-        try:
-            ga_config_path_temp = opt_state.get('ga_config_path_temp')
-            data_config_path_temp = opt_state.get('data_config_path_temp')
-
-            if ga_config_path_temp and Path(ga_config_path_temp).exists():
-                Path(ga_config_path_temp).unlink()
-
-            if data_config_path_temp and Path(data_config_path_temp).exists():
-                Path(data_config_path_temp).unlink()
-
-        except Exception:
-            pass
-
-        # Reset optimization state
-        opt_state.update({
-            'running': False,
-            'paused': False,
-            'thread': None,
-            'heartbeat_thread': None,
-            'ga_config_path_temp': None,
-            'data_config_path_temp': None
-        })
-
-
-def save_optimization_results_with_new_indicators(best_individuals_log, best_individual, elites, ga_config_path, test_name, timestamp=None, processed_indicators=None):
-    """Save optimization results including NEW indicator information"""
-    logger.info("💾 Saving optimization results with NEW indicator system...")
-
-    if not timestamp:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-
-    results_dir = Path('results') / f"{timestamp}_{test_name}"
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    results_info = {
-        'results_dir': str(results_dir),
-        'timestamp': timestamp,
-        'files_created': []
-    }
-
-    try:
-        # Save information about new indicators used
-        if processed_indicators:
-            indicators_info_file = results_dir / f"{timestamp}_{test_name}_new_indicators_used.json"
-            
-            indicators_info = {
-                'count': len(processed_indicators),
-                'indicators': []
-            }
-            
-            for indicator in processed_indicators:
-                indicators_info['indicators'].append({
-                    'name': indicator.name,
-                    'display_name': getattr(indicator, 'display_name', indicator.name),
-                    'parameters': indicator.config.parameters,
-                    'enabled': indicator.config.enabled
-                })
-            
-            with open(indicators_info_file, 'w') as f:
-                json.dump(indicators_info, f, indent=2)
-            
-            results_info['files_created'].append(str(indicators_info_file))
-            logger.info(f"✅ Saved new indicators info: {indicators_info_file}")
-
-        # Save other results following the same pattern as original
-        # (elite monitors, objectives CSV, etc.)
-        
-        # Load GA config to get elites_to_save parameter
-        elites_to_save = 5  # Default value
-        try:
-            with open(ga_config_path) as f:
-                ga_config = json.load(f)
-                elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elites_to_save', 5)
-        except Exception as e:
-            logger.warning(f"Could not read elites_to_save from GA config: {e}")
-        
-        if elites and len(elites) >= 1 and elites_to_save >= 1:
-            # Save elite monitors with NEW indicator information
-            elites_to_process = elites[:elites_to_save]
-            logger.info(f"💫 Saving top {len(elites_to_process)} elite monitors with NEW indicators...")
-            
-            for i, elite in enumerate(elites_to_process):
-                if not hasattr(elite, 'individual') or not hasattr(elite.individual, 'monitor_configuration'):
-                    logger.warning(f"Elite #{i+1} missing individual.monitor_configuration, skipping")
-                    continue
-                    
-                elite_file = results_dir / f"{timestamp}_{test_name}_elite_{i+1}.json"
-                elite_config = elite.individual.monitor_configuration
-                
-                # Extract and save elite configuration with NEW indicator format
-                elite_trade_executor = {}
-                if hasattr(elite_config, 'trade_executor'):
-                    te = elite_config.trade_executor
-                    elite_trade_executor = {
-                        'default_position_size': getattr(te, 'default_position_size', 100.0),
-                        'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
-                        'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
-                        'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
-                        'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
-                        'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
-                        'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
-                    }
-                
-                # Convert elite indicators to new format
-                elite_indicators_list = []
-                if hasattr(elite_config, 'indicators') and elite_config.indicators:
-                    for indicator in elite_config.indicators:
-                        indicator_dict = {
-                            'name': getattr(indicator, 'name', 'unknown'),
-                            'display_name': getattr(indicator, 'display_name', getattr(indicator, 'name', 'unknown')),
-                            'type': getattr(indicator, 'type', 'unknown'),
-                            'indicator_class': getattr(indicator, 'indicator_class', 'unknown'),
-                            'agg_config': getattr(indicator, 'agg_config', '1m-normal'),
-                            'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
-                            'parameters': dict(getattr(indicator, 'parameters', {})),
-                            'enabled': getattr(indicator, 'enabled', True),
-                            'new_system': True  # Mark as using new system
-                        }
-                        elite_indicators_list.append(indicator_dict)
-                
-                elite_dict = {
-                    'monitor': {
-                        'name': getattr(elite_config, 'name', f"Elite {i+1}"),
-                        'description': getattr(elite_config, 'description', f"Elite monitor #{i+1} with NEW indicators"),
-                        'trade_executor': elite_trade_executor,
-                        'enter_long': getattr(elite_config, 'enter_long', []),
-                        'exit_long': getattr(elite_config, 'exit_long', []),
-                        'bars': getattr(elite_config, 'bars', {}),
-                    },
-                    'indicators': elite_indicators_list,
-                    'system_version': 'new_indicator_system_v1.0',
-                    'fitness_values': elite.fitness_values.tolist() if hasattr(elite, 'fitness_values') else []
-                }
-                
-                try:
-                    with open(elite_file, 'w') as f:
-                        json.dump(elite_dict, f, indent=2)
-                    
-                    results_info['files_created'].append(str(elite_file))
-                    logger.info(f"✅ Saved NEW elite #{i+1} config: {elite_file}")
-                except Exception as save_error:
-                    logger.error(f"❌ Failed to save elite #{i+1}: {save_error}")
-                    continue
-
-        logger.info(f"💾 Successfully saved optimization results with NEW indicator system")
-
-    except Exception as e:
-        logger.error(f"❌ Error saving results: {e}")
-        raise
-
-    return results_info
-
-# ===== ROUTES =====
+# =============================================================================
+# Flask Route Handlers
+# All utility functions have been extracted to the optimizer module
+# =============================================================================
 
 
 @optimizer_bp.route('/')
@@ -1286,22 +74,20 @@ def upload_file():
             return jsonify({'success': False, 'error': 'No file provided'})
 
         file = request.files['file']
-        file_type = request.form.get('config_type', 'unknown')
-
         if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'})
+            return jsonify({'success': False, 'error': 'Empty filename'})
 
-        if not file.filename.endswith('.json'):
-            return jsonify({'success': False, 'error': 'Only JSON files are allowed'})
+        # Determine file type
+        file_type = request.form.get('type', 'unknown')
 
-        # Create uploads directory
-        uploads_dir = Path('uploads')
-        uploads_dir.mkdir(exist_ok=True)
-
-        # Save file with type prefix
+        # Generate safe filename with type prefix
         filename = f"{file_type}_{file.filename}"
-        filepath = uploads_dir / filename
+        filepath = Path('uploads') / filename
 
+        # Ensure uploads directory exists
+        filepath.parent.mkdir(exist_ok=True)
+
+        # Save file
         file.save(filepath)
 
         return jsonify({
@@ -1321,7 +107,7 @@ def load_examples():
     """Load example configurations for form initialization"""
     try:
         examples = {}
-        
+
         # Load example GA config
         example_ga_path = Path('inputs/dan_fuck_around1.json')
         if example_ga_path.exists():
@@ -1392,17 +178,13 @@ def load_examples():
         return jsonify({'success': False, 'error': str(e)})
 
 
-# WebSocket events need to be registered with the main socketio instance
-# This will be handled in the main app.py file
-
-
 @optimizer_bp.route('/api/load_configs', methods=['POST'])
 def load_configs():
     """Load and validate the uploaded configuration files"""
     try:
         data = request.get_json()
         logger.info(f"Received load_configs request with data: {data}")
-        
+
         # The file upload component sends keys like 'ga_config' and 'data_config'
         ga_config_path = data.get('ga_config')
         data_config_path = data.get('data_config')
@@ -1438,6 +220,7 @@ def load_configs():
         logger.error(f"Error loading configs: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+
 @optimizer_bp.route('/api/start_optimization', methods=['POST'])
 def start_optimization():
     """HTTP endpoint to start optimization - creates temp files and triggers WebSocket"""
@@ -1445,10 +228,10 @@ def start_optimization():
         # Check if optimization is already running
         if OptimizationState().is_running():
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'An optimization is already running. Please stop or pause the current optimization before starting a new one.'
             })
-        
+
         data = request.get_json()
         logger.info(f"Received start_optimization request with data keys: {list(data.keys()) if data else 'None'}")
 
@@ -1528,11 +311,11 @@ def api_stop_optimization():
                 logger.info("✅ Main optimization thread stopped")
 
         # Try to gracefully stop the heartbeat thread
-        heartbeat_thread = OptimizationState().get('heartbeat_thread')
-        if heartbeat_thread and heartbeat_thread.is_alive():
+        heartbeat_thread_obj = OptimizationState().get('heartbeat_thread')
+        if heartbeat_thread_obj and heartbeat_thread_obj.is_alive():
             logger.info("💓 Waiting for heartbeat thread to stop...")
-            heartbeat_thread.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
-            if heartbeat_thread.is_alive():
+            heartbeat_thread_obj.join(timeout=15)  # Wait up to 15 seconds (heartbeat checks every 10s)
+            if heartbeat_thread_obj.is_alive():
                 logger.warning("💓 Heartbeat thread did not stop gracefully within timeout")
             else:
                 logger.info("💓 Heartbeat thread stopped")
@@ -1563,289 +346,6 @@ def api_stop_optimization():
             'error': str(e)
         })
 
-
-@optimizer_bp.route('/api/save_config', methods=['POST'])
-def save_config():
-    """Save configuration changes back to files"""
-    try:
-        data = request.get_json()
-        config_type = data.get('config_type')
-        config_data = data.get('config_data')
-        
-        if not config_type or not config_data:
-            return jsonify({'success': False, 'error': 'Missing config_type or config_data'})
-        
-        # Create saved_configs directory if it doesn't exist
-        saved_configs_dir = Path('saved_configs')
-        saved_configs_dir.mkdir(exist_ok=True)
-        
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{timestamp}_{config_type}.json"
-        filepath = saved_configs_dir / filename
-        
-        # Save the config
-        with open(filepath, 'w') as f:
-            json.dump(config_data, f, indent=2)
-        
-        logger.info(f"Saved {config_type} configuration to {filepath}")
-        
-        return jsonify({
-            'success': True,
-            'message': f'Configuration saved successfully to {filename}',
-            'filepath': str(filepath.absolute()),
-            'filename': filename
-        })
-        
-    except Exception as e:
-        logger.error(f"Error saving config: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-
-@optimizer_bp.route('/api/export_optimized_configs')
-def export_optimized_configs():
-    """Export complete optimization results package like the old system"""
-    try:
-        print("EXPORT", OptimizationState().get('elites'))
-        elites = OptimizationState().get('elites', [])
-        best_individuals_log = OptimizationState().get('best_individuals_log', [])
-        ga_config_data = OptimizationState().get('ga_config_data', {})
-        test_name = OptimizationState().get('test_name', 'optimization')
-        
-        if not elites:
-            return jsonify({'success': False, 'error': 'No elite configurations available'})
-        
-        # Generate timestamp for folder name
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        
-        # Get number of elites to save from GA hyperparameters (specifically "elites_to_save")
-        elites_to_save = 5  # Default
-        try:
-            # First try from stored ga_config_data
-            if ga_config_data and 'ga_hyperparameters' in ga_config_data:
-                elites_to_save = ga_config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
-                logger.info(f"📊 Found elites_to_save in stored config: {elites_to_save}")
-            else:
-                # Try to read from the config paths used during optimization start
-                ga_config_path = OptimizationState().get('ga_config_path')
-                if ga_config_path and os.path.exists(ga_config_path):
-                    with open(ga_config_path, 'r') as f:
-                        ga_config = json.load(f)
-                        elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elites_to_save', 5)
-                        logger.info(f"📊 Found elites_to_save in config file: {elites_to_save}")
-                else:
-                    logger.warning(f"📊 Could not find GA config, using default elites_to_save: {elites_to_save}")
-            
-        except Exception as e:
-            logger.warning(f"Could not read elites_to_save from config, using default {elites_to_save}: {e}")
-            pass
-        
-        # Limit to available elites
-        elites_to_export = min(elites_to_save, len(elites))
-        
-        def serialize_object(obj):
-            """Convert objects to JSON-serializable format"""
-            if hasattr(obj, '__dict__'):
-                result = {}
-                for key, value in obj.__dict__.items():
-                    if hasattr(value, '__dict__'):
-                        result[key] = serialize_object(value)
-                    elif isinstance(value, list):
-                        result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
-                    elif isinstance(value, dict):
-                        result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
-                    else:
-                        result[key] = value
-                return result
-            else:
-                return obj
-        
-        # Prepare optimization results package
-        optimization_package = {
-            'folder_name': f"{timestamp}_{test_name}",
-            'timestamp': timestamp,
-            'test_name': test_name,
-            'files': {}
-        }
-        
-        # 1. Elite configurations (same format as old system)
-        elite_files = {}
-        for i in range(elites_to_export):
-            elite = elites[i]
-            
-            if hasattr(elite, 'individual') and hasattr(elite.individual, 'monitor_configuration'):
-                monitor_config = elite.individual.monitor_configuration
-                
-                # Extract trade executor config
-                elite_trade_executor = {}
-                if hasattr(monitor_config, 'trade_executor'):
-                    te = monitor_config.trade_executor
-                    elite_trade_executor = {
-                        'default_position_size': getattr(te, 'default_position_size', 100.0),
-                        'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
-                        'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
-                        'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
-                        'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
-                        'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
-                        'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
-                    }
-                else:
-                    elite_trade_executor = {
-                        'default_position_size': 100.0,
-                        'stop_loss_pct': 0.01,
-                        'take_profit_pct': 0.02,
-                        'ignore_bear_signals': False,
-                        'trailing_stop_loss': False,
-                        'trailing_stop_distance_pct': 0.01,
-                        'trailing_stop_activation_pct': 0.005
-                    }
-                
-                # Convert indicators to proper dict format
-                elite_indicators_list = []
-                if hasattr(monitor_config, 'indicators') and monitor_config.indicators:
-                    for indicator in monitor_config.indicators:
-                        indicator_dict = {
-                            'name': indicator.name,
-                            'type': indicator.type,
-                            'indicator_class': indicator.indicator_class,
-                            'agg_config': indicator.agg_config,
-                            'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
-                            'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}
-                        }
-                        elite_indicators_list.append(indicator_dict)
-                
-                # Create elite config in the same format as old system
-                elite_config = {
-                    'monitor': {
-                        'name': getattr(monitor_config, 'name', f"Elite {i+1}"),
-                        'description': getattr(monitor_config, 'description', f"Elite monitor #{i+1}"),
-                        'trade_executor': elite_trade_executor,
-                        'enter_long': serialize_object(getattr(monitor_config, 'enter_long', [])),
-                        'exit_long': serialize_object(getattr(monitor_config, 'exit_long', [])),
-                        'bars': serialize_object(getattr(monitor_config, 'bars', {})),
-                    },
-                    'indicators': elite_indicators_list
-                }
-                
-                elite_filename = f"{timestamp}_{test_name}_elite_{i+1}.json"
-                elite_files[elite_filename] = elite_config
-        
-        # 2. Objectives evolution CSV
-        objectives_csv = ""
-        if best_individuals_log:
-            # Get all unique objective names
-            all_objectives = set()
-            for entry in best_individuals_log:
-                all_objectives.update(entry['metrics'].keys())
-            
-            # CSV header
-            header = ['Generation'] + sorted(list(all_objectives))
-            objectives_csv = ','.join(header) + '\n'
-            
-            # CSV data rows
-            for entry in best_individuals_log:
-                row = [str(entry['generation'])]
-                for obj_name in sorted(list(all_objectives)):
-                    row.append(str(entry['metrics'].get(obj_name, '')))
-                objectives_csv += ','.join(row) + '\n'
-        
-        # 3. Original GA config with metadata
-        ga_config_with_metadata = dict(ga_config_data)
-        ga_config_with_metadata['optimization_metadata'] = {
-            'timestamp': timestamp,
-            'results_directory': f"{timestamp}_{test_name}",
-            'elites_exported': elites_to_export,
-            'total_generations': len(best_individuals_log) if best_individuals_log else 0
-        }
-        
-        # 4. Summary report
-        summary_text = f"""Genetic Algorithm Optimization Results
-=====================================
-
-Test Name: {test_name}
-Timestamp: {timestamp}
-Total Generations: {len(best_individuals_log) if best_individuals_log else 0}
-Elites Saved: {elites_to_export}
-
-"""
-        
-        if best_individuals_log:
-            summary_text += "Final Best Metrics:\n"
-            final_metrics = best_individuals_log[-1]['metrics']
-            for metric_name, metric_value in final_metrics.items():
-                summary_text += f"  {metric_name}: {metric_value}\n"
-            summary_text += "\n"
-        
-        if elites:
-            summary_text += "Elite Performance Summary:\n"
-            for i in range(elites_to_export):
-                elite = elites[i]
-                if hasattr(elite, 'fitness_values'):
-                    fitness_str = ", ".join([f"{val:.6f}" for val in elite.fitness_values])
-                    summary_text += f"  Elite {i+1}: [{fitness_str}]\n"
-            summary_text += "\n"
-        
-        summary_text += f"Files created:\n"
-        for filename in elite_files.keys():
-            summary_text += f"  - {filename}\n"
-        summary_text += f"  - {timestamp}_{test_name}_objectives.csv\n"
-        summary_text += f"  - {timestamp}_{test_name}_original_ga_config.json\n"
-        summary_text += f"  - {timestamp}_{test_name}_summary.txt\n"
-        
-        # Package everything for frontend
-        optimization_package['files'] = elite_files
-        optimization_package['objectives_csv'] = objectives_csv
-        optimization_package['objectives_filename'] = f"{timestamp}_{test_name}_objectives.csv"
-        optimization_package['ga_config'] = ga_config_with_metadata
-        optimization_package['ga_config_filename'] = f"{timestamp}_{test_name}_original_ga_config.json"
-        optimization_package['summary'] = summary_text
-        optimization_package['summary_filename'] = f"{timestamp}_{test_name}_summary.txt"
-        optimization_package['elites_count'] = elites_to_export
-        
-        logger.info(f"✅ Prepared optimization package with {elites_to_export} elites")
-        
-        return jsonify({
-            'success': True,
-            'package': optimization_package,
-            'message': f'Optimization package prepared with {elites_to_export} elite configurations'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error exporting elites: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
-
-
-@optimizer_bp.route('/api/get_elite/<int:index>')
-def get_elite(index):
-    """Get a specific elite by index"""
-    try:
-        elites = OptimizationState().get('elites', [])
-        
-        if not elites:
-            return jsonify({'success': False, 'error': 'No elites available'})
-        
-        if index >= len(elites):
-            return jsonify({'success': False, 'error': 'Elite index out of range'})
-        
-        elite = elites[index]
-        
-        # Convert to format suitable for replay visualization
-        elite_data = {
-            'index': index,
-            'fitness': getattr(elite, 'fitness', 0),
-            'config': elite.to_config() if hasattr(elite, 'to_config') else elite.genotype if hasattr(elite, 'genotype') else {}
-        }
-        
-        return jsonify({
-            'success': True,
-            'elite': elite_data
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting elite {index}: {e}")
-        return jsonify({'success': False, 'error': str(e)})
 
 @optimizer_bp.route('/api/pause_optimization', methods=['POST'])
 def api_pause_optimization():
@@ -1927,38 +427,287 @@ def api_resume_optimization():
         })
 
 
-@optimizer_bp.route('/api/export_elite/<int:index>')
-def export_elite(index):
-    """Export a specific elite configuration"""
+@optimizer_bp.route('/api/save_config', methods=['POST'])
+def save_config():
+    """Save configuration changes back to files"""
     try:
+        data = request.get_json()
+        config_type = data.get('config_type')
+        config_data = data.get('config_data')
 
-        elites = OptimizationState().get('elites', [])
-        
-        if not elites:
-            return jsonify({'success': False, 'error': 'No elites available'})
-        
-        if index >= len(elites):
-            return jsonify({'success': False, 'error': 'Elite index out of range'})
-        
-        elite = elites[index]
-        
-        # Convert to configuration format
-        if hasattr(elite, 'to_config'):
-            elite_config = elite.to_config()
-        else:
-            elite_config = {
-                'test_name': f'Elite_{index + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-                'monitor': elite.genotype if hasattr(elite, 'genotype') else {},
-                'elite_fitness': getattr(elite, 'fitness', 0)
-            }
-        
+        if not config_type or not config_data:
+            return jsonify({'success': False, 'error': 'Missing config_type or config_data'})
+
+        # Create saved_configs directory if it doesn't exist
+        saved_configs_dir = Path('saved_configs')
+        saved_configs_dir.mkdir(exist_ok=True)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{config_type}.json"
+        filepath = saved_configs_dir / filename
+
+        # Save the config
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        logger.info(f"Saved {config_type} configuration to {filepath}")
+
         return jsonify({
             'success': True,
-            'config': elite_config
+            'message': f'Configuration saved successfully to {filename}',
+            'filepath': str(filepath.absolute()),
+            'filename': filename
         })
-        
+
     except Exception as e:
-        logger.error(f"Error exporting elite {index}: {e}")
+        logger.error(f"Error saving config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/export_optimized_configs')
+def export_optimized_configs():
+    """Export complete optimization results package like the old system"""
+    try:
+        print("EXPORT", OptimizationState().get('elites'))
+        elites = OptimizationState().get('elites', [])
+        best_individuals_log = OptimizationState().get('best_individuals_log', [])
+        ga_config_data = OptimizationState().get('ga_config_data', {})
+        test_name = OptimizationState().get('test_name', 'optimization')
+
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elite configurations available'})
+
+        # Generate timestamp for folder name
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+
+        # Get number of elites to save from GA hyperparameters (specifically "elites_to_save")
+        elites_to_save = 5  # Default
+        try:
+            # First try from stored ga_config_data
+            if ga_config_data and 'ga_hyperparameters' in ga_config_data:
+                elites_to_save = ga_config_data.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+                logger.info(f"📊 Found elites_to_save in stored config: {elites_to_save}")
+            else:
+                # Try to read from the config paths used during optimization start
+                ga_config_path = OptimizationState().get('ga_config_path')
+                if ga_config_path and os.path.exists(ga_config_path):
+                    with open(ga_config_path, 'r') as f:
+                        ga_config = json.load(f)
+                        elites_to_save = ga_config.get('ga_hyperparameters', {}).get('elites_to_save', 5)
+                        logger.info(f"📊 Found elites_to_save in config file: {elites_to_save}")
+                else:
+                    logger.warning(f"📊 Could not find GA config, using default elites_to_save: {elites_to_save}")
+
+        except Exception as e:
+            logger.warning(f"Could not read elites_to_save from config, using default {elites_to_save}: {e}")
+            pass
+
+        # Limit to available elites
+        elites_to_export = min(elites_to_save, len(elites))
+
+        def serialize_object(obj):
+            """Convert objects to JSON-serializable format"""
+            if hasattr(obj, '__dict__'):
+                result = {}
+                for key, value in obj.__dict__.items():
+                    if hasattr(value, '__dict__'):
+                        result[key] = serialize_object(value)
+                    elif isinstance(value, list):
+                        result[key] = [serialize_object(item) if hasattr(item, '__dict__') else item for item in value]
+                    elif isinstance(value, dict):
+                        result[key] = {k: serialize_object(v) if hasattr(v, '__dict__') else v for k, v in value.items()}
+                    else:
+                        result[key] = value
+                return result
+            else:
+                return obj
+
+        # Prepare optimization results package
+        optimization_package = {
+            'folder_name': f"{timestamp}_{test_name}",
+            'timestamp': timestamp,
+            'test_name': test_name,
+            'files': {}
+        }
+
+        # 1. Elite configurations (same format as old system)
+        elite_files = {}
+        for i in range(elites_to_export):
+            elite = elites[i]
+
+            if hasattr(elite, 'individual') and hasattr(elite.individual, 'monitor_configuration'):
+                monitor_config = elite.individual.monitor_configuration
+
+                # Extract trade executor config
+                elite_trade_executor = {}
+                if hasattr(monitor_config, 'trade_executor'):
+                    te = monitor_config.trade_executor
+                    elite_trade_executor = {
+                        'default_position_size': getattr(te, 'default_position_size', 100.0),
+                        'stop_loss_pct': getattr(te, 'stop_loss_pct', 0.01),
+                        'take_profit_pct': getattr(te, 'take_profit_pct', 0.02),
+                        'ignore_bear_signals': getattr(te, 'ignore_bear_signals', False),
+                        'trailing_stop_loss': getattr(te, 'trailing_stop_loss', False),
+                        'trailing_stop_distance_pct': getattr(te, 'trailing_stop_distance_pct', 0.01),
+                        'trailing_stop_activation_pct': getattr(te, 'trailing_stop_activation_pct', 0.005)
+                    }
+                else:
+                    elite_trade_executor = {
+                        'default_position_size': 100.0,
+                        'stop_loss_pct': 0.01,
+                        'take_profit_pct': 0.02,
+                        'ignore_bear_signals': False,
+                        'trailing_stop_loss': False,
+                        'trailing_stop_distance_pct': 0.01,
+                        'trailing_stop_activation_pct': 0.005
+                    }
+
+                # Convert indicators to proper dict format
+                elite_indicators_list = []
+                if hasattr(monitor_config, 'indicators') and monitor_config.indicators:
+                    for indicator in monitor_config.indicators:
+                        indicator_dict = {
+                            'name': indicator.name,
+                            'type': indicator.type,
+                            'indicator_class': indicator.indicator_class,
+                            'agg_config': indicator.agg_config,
+                            'calc_on_pip': getattr(indicator, 'calc_on_pip', False),
+                            'parameters': dict(indicator.parameters) if hasattr(indicator, 'parameters') else {}
+                        }
+                        elite_indicators_list.append(indicator_dict)
+
+                # Create elite config in the same format as old system
+                elite_config = {
+                    'monitor': {
+                        'name': getattr(monitor_config, 'name', f"Elite {i+1}"),
+                        'description': getattr(monitor_config, 'description', f"Elite monitor #{i+1}"),
+                        'trade_executor': elite_trade_executor,
+                        'enter_long': serialize_object(getattr(monitor_config, 'enter_long', [])),
+                        'exit_long': serialize_object(getattr(monitor_config, 'exit_long', [])),
+                        'bars': serialize_object(getattr(monitor_config, 'bars', {})),
+                    },
+                    'indicators': elite_indicators_list
+                }
+
+                elite_filename = f"{timestamp}_{test_name}_elite_{i+1}.json"
+                elite_files[elite_filename] = elite_config
+
+        # 2. Objectives evolution CSV
+        objectives_csv = ""
+        if best_individuals_log:
+            # Get all unique objective names
+            all_objectives = set()
+            for entry in best_individuals_log:
+                all_objectives.update(entry['metrics'].keys())
+
+            # CSV header
+            header = ['Generation'] + sorted(list(all_objectives))
+            objectives_csv = ','.join(header) + '\n'
+
+            # CSV data rows
+            for entry in best_individuals_log:
+                row = [str(entry['generation'])]
+                for obj_name in sorted(list(all_objectives)):
+                    row.append(str(entry['metrics'].get(obj_name, '')))
+                objectives_csv += ','.join(row) + '\n'
+
+        # 3. Original GA config with metadata
+        ga_config_with_metadata = dict(ga_config_data)
+        ga_config_with_metadata['optimization_metadata'] = {
+            'timestamp': timestamp,
+            'results_directory': f"{timestamp}_{test_name}",
+            'elites_exported': elites_to_export,
+            'total_generations': len(best_individuals_log) if best_individuals_log else 0
+        }
+
+        # 4. Summary report
+        summary_text = f"""Genetic Algorithm Optimization Results
+=====================================
+
+Test Name: {test_name}
+Timestamp: {timestamp}
+Total Generations: {len(best_individuals_log) if best_individuals_log else 0}
+Elites Saved: {elites_to_export}
+
+"""
+
+        if best_individuals_log:
+            summary_text += "Final Best Metrics:\n"
+            final_metrics = best_individuals_log[-1]['metrics']
+            for metric_name, metric_value in final_metrics.items():
+                summary_text += f"  {metric_name}: {metric_value}\n"
+            summary_text += "\n"
+
+        if elites:
+            summary_text += "Elite Performance Summary:\n"
+            for i in range(elites_to_export):
+                elite = elites[i]
+                if hasattr(elite, 'fitness_values'):
+                    fitness_str = ", ".join([f"{val:.6f}" for val in elite.fitness_values])
+                    summary_text += f"  Elite {i+1}: [{fitness_str}]\n"
+            summary_text += "\n"
+
+        summary_text += f"Files created:\n"
+        for filename in elite_files.keys():
+            summary_text += f"  - {filename}\n"
+        summary_text += f"  - {timestamp}_{test_name}_objectives.csv\n"
+        summary_text += f"  - {timestamp}_{test_name}_original_ga_config.json\n"
+        summary_text += f"  - {timestamp}_{test_name}_summary.txt\n"
+
+        # Package everything for frontend
+        optimization_package['files'] = elite_files
+        optimization_package['objectives_csv'] = objectives_csv
+        optimization_package['objectives_filename'] = f"{timestamp}_{test_name}_objectives.csv"
+        optimization_package['ga_config'] = ga_config_with_metadata
+        optimization_package['ga_config_filename'] = f"{timestamp}_{test_name}_original_ga_config.json"
+        optimization_package['summary'] = summary_text
+        optimization_package['summary_filename'] = f"{timestamp}_{test_name}_summary.txt"
+        optimization_package['elites_count'] = elites_to_export
+
+        logger.info(f"✅ Prepared optimization package with {elites_to_export} elites")
+
+        return jsonify({
+            'success': True,
+            'package': optimization_package,
+            'message': f'Optimization package prepared with {elites_to_export} elite configurations'
+        })
+
+    except Exception as e:
+        logger.error(f"Error exporting elites: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/get_elite/<int:index>')
+def get_elite(index):
+    """Get a specific elite by index"""
+    try:
+        elites = OptimizationState().get('elites', [])
+
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+
+        if index >= len(elites):
+            return jsonify({'success': False, 'error': 'Elite index out of range'})
+
+        elite = elites[index]
+
+        # Convert to format suitable for replay visualization
+        elite_data = {
+            'index': index,
+            'fitness': getattr(elite, 'fitness', 0),
+            'config': elite.to_config() if hasattr(elite, 'to_config') else elite.genotype if hasattr(elite, 'genotype') else {}
+        }
+
+        return jsonify({
+            'success': True,
+            'elite': elite_data
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting elite {index}: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -2113,6 +862,41 @@ def get_elite_config(index):
         return jsonify({'success': False, 'error': str(e)})
 
 
+@optimizer_bp.route('/api/export_elite/<int:index>')
+def export_elite(index):
+    """Export a specific elite configuration"""
+    try:
+
+        elites = OptimizationState().get('elites', [])
+
+        if not elites:
+            return jsonify({'success': False, 'error': 'No elites available'})
+
+        if index >= len(elites):
+            return jsonify({'success': False, 'error': 'Elite index out of range'})
+
+        elite = elites[index]
+
+        # Convert to configuration format
+        if hasattr(elite, 'to_config'):
+            elite_config = elite.to_config()
+        else:
+            elite_config = {
+                'test_name': f'Elite_{index + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                'monitor': elite.genotype if hasattr(elite, 'genotype') else {},
+                'elite_fitness': getattr(elite, 'fitness', 0)
+            }
+
+        return jsonify({
+            'success': True,
+            'config': elite_config
+        })
+
+    except Exception as e:
+        logger.error(f"Error exporting elite {index}: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @optimizer_bp.route('/api/get_parameter_histogram', methods=['POST'])
 def get_parameter_histogram():
     """
@@ -2207,5 +991,7 @@ def get_parameter_evolution():
         return jsonify({'success': False, 'error': str(e)})
 
 
-# The WebSocket handlers will need to be registered in the main app.py file
-# since they need access to the socketio instance
+# =============================================================================
+# WebSocket Event Handlers
+# These need to be registered in the main app.py file with the socketio instance
+# =============================================================================
