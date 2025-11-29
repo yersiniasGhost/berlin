@@ -1,7 +1,6 @@
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 import os
-import math
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +14,7 @@ from routes.indicator_route import indicator_api
 from routes.monitor_config_routes import monitor_config_bp
 
 from mlf_utils.log_manager import LogManager
+from mlf_utils import sanitize_nan_values, FileUploadHandler
 # Configure logging
 lm = LogManager('mlf-app.log')
 lm.configure_library_loggers()
@@ -39,34 +39,10 @@ app.register_blueprint(optimizer_bp)
 app.register_blueprint(indicator_bp)
 app.register_blueprint(monitor_config_bp)
 
-# Create upload folders
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-
-# Utility functions from your existing apps
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
-
-
-def sanitize_nan_values(obj):
-    """
-    Recursively sanitize NaN values in a data structure for JSON compatibility.
-    Converts NaN to None (null in JSON), and handles nested lists/dicts.
-    """
-    if isinstance(obj, dict):
-        return {key: sanitize_nan_values(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_nan_values(item) for item in obj]
-    elif isinstance(obj, float):
-        if math.isnan(obj):
-            return None
-        elif math.isinf(obj):
-            return None  # Convert infinity to null as well
-        else:
-            return obj
-    else:
-        return obj
+# Create upload handler with visualization_apps/uploads directory
+upload_handler = FileUploadHandler(
+    upload_dir=os.path.join(os.path.dirname(__file__), 'uploads')
+)
 
 # Import optimizer utility functions from routes to avoid duplication
 

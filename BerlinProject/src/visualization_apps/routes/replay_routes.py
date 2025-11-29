@@ -8,7 +8,6 @@ import os
 import sys
 import json
 import logging
-import math
 from datetime import datetime
 from pathlib import Path
 
@@ -22,7 +21,10 @@ from mongo_tools.mongo_db_connect import MongoDBConnect
 from portfolios.portfolio_tool import TradeReason
 from models.monitor_configuration import MonitorConfiguration, TradeExecutorConfig
 
-# Remove new indicator system imports that are causing backend conflicts  
+# Import mlf_utils
+from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
+
+# Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
 # from indicator_triggers.refactored_indicators import *  # Import to register indicators
 
@@ -31,24 +33,8 @@ logger = logging.getLogger('ReplayVisualization')
 # Create Blueprint
 replay_bp = Blueprint('replay', __name__, url_prefix='/replay')
 
-def sanitize_nan_values(obj):
-    """
-    Recursively sanitize NaN values in a data structure for JSON compatibility.
-    Converts NaN to None (null in JSON), and handles nested lists/dicts.
-    """
-    if isinstance(obj, dict):
-        return {key: sanitize_nan_values(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_nan_values(item) for item in obj]
-    elif isinstance(obj, float):
-        if math.isnan(obj):
-            return None
-        elif math.isinf(obj):
-            return None  # Convert infinity to null as well
-        else:
-            return obj
-    else:
-        return obj
+# Create upload handler for replay routes
+upload_handler = FileUploadHandler(upload_dir='uploads')
 
 def load_raw_candle_data(data_config_path: str, io):
     """Load raw candlestick data from Yahoo Finance using the same data as trade execution"""
@@ -483,34 +469,16 @@ def replay_main():
 def upload_file():
     """Handle file uploads and save them temporarily"""
     try:
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file provided'})
-
-        file = request.files['file']
+        file = request.files.get('file')
         file_type = request.form.get('config_type', 'unknown')
 
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'})
+        # Use FileUploadHandler for validation and saving
+        result = upload_handler.save_file(file, prefix=file_type)
 
-        if not file.filename.endswith('.json'):
-            return jsonify({'success': False, 'error': 'Only JSON files are allowed'})
+        if result['success']:
+            result['type'] = file_type  # Add type to response
 
-        # Create uploads directory
-        uploads_dir = Path('uploads')
-        uploads_dir.mkdir(exist_ok=True)
-
-        # Save file with type prefix
-        filename = f"{file_type}_{file.filename}"
-        filepath = uploads_dir / filename
-
-        file.save(filepath)
-
-        return jsonify({
-            'success': True,
-            'filename': filename,
-            'filepath': str(filepath.absolute()),
-            'type': file_type
-        })
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"Error uploading file: {e}")

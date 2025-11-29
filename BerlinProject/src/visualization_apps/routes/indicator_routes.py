@@ -19,6 +19,9 @@ sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 # Import necessary modules for indicator visualization
 from mongo_tools.mongo_db_connect import MongoDBConnect
 
+# Import mlf_utils
+from mlf_utils import FileUploadHandler, ConfigLoader
+
 # Import new indicator system - this is the key integration
 from indicator_triggers.indicator_base import IndicatorRegistry, IndicatorConfiguration
 from indicator_triggers.refactored_indicators import *  # Import to register indicators
@@ -28,6 +31,10 @@ logger = logging.getLogger('IndicatorVisualization')
 
 # Create Blueprint
 indicator_bp = Blueprint('indicator', __name__, url_prefix='/indicator')
+
+# Create upload handler and config loader for indicator routes
+upload_handler = FileUploadHandler(upload_dir='uploads', allowed_extensions={'.json', '.csv'})
+config_loader = ConfigLoader(config_dir='inputs')
 
 class NewIndicatorVisualizer:
     """Visualizer using the NEW refactored indicator system"""
@@ -278,32 +285,16 @@ def load_examples():
 def upload_file():
     """Handle configuration file uploads"""
     try:
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file provided'})
+        file = request.files.get('file')
 
-        file = request.files['file']
-        
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'})
+        # Use FileUploadHandler for validation and saving
+        result = upload_handler.save_file(file)
 
-        if not (file.filename.endswith('.json') or file.filename.endswith('.csv')):
-            return jsonify({'success': False, 'error': 'Only JSON and CSV files allowed'})
+        if result['success']:
+            # Add file_path for backward compatibility
+            result['file_path'] = result['filepath']
 
-        # Create uploads directory
-        uploads_dir = Path('uploads')
-        uploads_dir.mkdir(exist_ok=True)
-
-        # Save file
-        from werkzeug.utils import secure_filename
-        filename = secure_filename(file.filename)
-        filepath = uploads_dir / filename
-        file.save(filepath)
-
-        return jsonify({
-            'success': True,
-            'file_path': str(filepath.absolute()),
-            'filename': filename
-        })
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"Error uploading file: {e}")

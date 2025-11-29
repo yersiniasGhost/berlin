@@ -9,7 +9,6 @@ import json
 import logging
 import time
 import threading
-import math
 import numpy as np
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +21,9 @@ from optimization.genetic_optimizer.abstractions.individual_stats import Individ
 from optimization.mlf_optimizer.mlf_individual_stats import MlfIndividualStats
 from optimization.genetic_optimizer.support.parameter_collector import ParameterCollector
 
+# Import mlf_utils
+from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
+
 # Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
 # from indicator_triggers.refactored_indicators import *  # Import to register indicators
@@ -31,25 +33,9 @@ logger = logging.getLogger('OptimizerVisualization')
 # Create Blueprint
 optimizer_bp = Blueprint('optimizer', __name__, url_prefix='/optimizer')
 
-
-def sanitize_nan_values(obj):
-    """
-    Recursively sanitize NaN values in a data structure for JSON compatibility.
-    Converts NaN to None (null in JSON), and handles nested lists/dicts.
-    """
-    if isinstance(obj, dict):
-        return {key: sanitize_nan_values(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_nan_values(item) for item in obj]
-    elif isinstance(obj, float):
-        if math.isnan(obj):
-            return None
-        elif math.isinf(obj):
-            return None
-        else:
-            return obj
-    else:
-        return obj
+# Create upload handler for optimizer routes
+upload_handler = FileUploadHandler(upload_dir='uploads')
+config_loader = ConfigLoader(config_dir='inputs')
 
 
 # Column metadata for custom display names and formatting

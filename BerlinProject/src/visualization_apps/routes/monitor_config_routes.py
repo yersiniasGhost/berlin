@@ -8,9 +8,15 @@ import os
 import json
 import logging
 
+# Import mlf_utils
+from mlf_utils import ConfigLoader, indicator_schema_cache
+
 logger = logging.getLogger('MonitorConfigRoutes')
 
 monitor_config_bp = Blueprint('monitor_config', __name__, url_prefix='/monitor_config')
+
+# Create config loader for monitor config routes
+config_loader = ConfigLoader(config_dir='inputs')
 
 
 @monitor_config_bp.route('/')
@@ -51,14 +57,11 @@ def load_monitor_config():
         if not filename:
             return jsonify({'success': False, 'error': 'No filename provided'})
 
-        inputs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'inputs')
-        file_path = os.path.join(inputs_dir, filename)
+        # Use ConfigLoader for consistent config loading
+        success, config, error = config_loader.load_config(filename)
 
-        if not os.path.exists(file_path):
-            return jsonify({'success': False, 'error': 'File not found'})
-
-        with open(file_path, 'r') as f:
-            config = json.load(f)
+        if not success:
+            return jsonify({'success': False, 'error': error})
 
         return jsonify({
             'success': True,
@@ -81,11 +84,11 @@ def save_monitor_config():
         if not filename or not config:
             return jsonify({'success': False, 'error': 'Missing filename or config'})
 
-        inputs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'inputs')
-        file_path = os.path.join(inputs_dir, filename)
+        # Use ConfigLoader for consistent config saving
+        success, error = config_loader.save_config(filename, config)
 
-        with open(file_path, 'w') as f:
-            json.dump(config, f, indent=2)
+        if not success:
+            return jsonify({'success': False, 'error': error})
 
         return jsonify({
             'success': True,
@@ -99,8 +102,17 @@ def save_monitor_config():
 
 @monitor_config_bp.route('/api/get_indicator_classes', methods=['GET'])
 def get_indicator_classes():
-    """Get available indicator classes from the registry"""
+    """Get available indicator classes from the registry with caching"""
     try:
+        # Check cache first
+        cached_schemas = indicator_schema_cache.get('indicator_schemas')
+        if cached_schemas:
+            logger.info(f"Retrieved {len(cached_schemas)} indicator classes from cache")
+            return jsonify({
+                'success': True,
+                'indicators': cached_schemas
+            })
+
         # Import refactored_indicators to ensure registration happens
         import indicator_triggers.refactored_indicators
         from indicator_triggers.indicator_base import IndicatorRegistry
@@ -108,7 +120,10 @@ def get_indicator_classes():
         registry = IndicatorRegistry()
         schemas = registry.get_ui_schemas()
 
-        logger.info(f"Retrieved {len(schemas)} indicator classes")
+        # Cache the schemas for 10 minutes
+        indicator_schema_cache.set('indicator_schemas', schemas)
+
+        logger.info(f"Retrieved {len(schemas)} indicator classes and cached them")
 
         return jsonify({
             'success': True,
