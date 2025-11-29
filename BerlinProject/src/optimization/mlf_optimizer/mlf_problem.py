@@ -131,8 +131,10 @@ class MlfProblem(ProblemDomain):
                         delta = 0.15
                         rn = random.uniform(-delta, delta)
                         new_weight = current_weight + rn
-                        new_weight = max(0.0, min(new_weight, 1.0))
-                        new_weight = min(weight_range_config.get('r')[1], new_weight)
+                        # Apply configured min/max range from weight_ranges
+                        weight_min = weight_range_config.get('r')[0]
+                        weight_max = weight_range_config.get('r')[1]
+                        new_weight = max(weight_min, min(new_weight, weight_max))
 
                         bar_config['indicators'][indicator_name] = new_weight
 
@@ -155,16 +157,18 @@ class MlfProblem(ProblemDomain):
             # 3. Mutate exit_long thresholds
             for exit_condition in individual.monitor_configuration.exit_long:
                 # Skip if threshold_range is null (checkbox unchecked)
-                if exit_condition.get('threshold_range') is None:
+                threshold_range = exit_condition.get('threshold_range')
+                if threshold_range is None:
                     continue
 
                 if random.random() < mutate_probability:
                     cnt += 1
 
                     current_threshold = exit_condition['threshold']
-                    delta = percent_change * (0.9 - 0.1)  # Threshold range is 0.1 to 0.9
+                    delta = percent_change * (threshold_range[1] - threshold_range[0])
                     new_threshold = current_threshold + random.uniform(-delta, delta)
-                    new_threshold = max(0.0, min(new_threshold, 1.0))
+                    # Apply configured min/max range from threshold_range
+                    new_threshold = max(threshold_range[0], min(new_threshold, threshold_range[1]))
 
                     exit_condition['threshold'] = new_threshold
 
