@@ -1699,24 +1699,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const trainPnL = evaluation.train_pnl;
             const testPnL = evaluation.test_pnl;
-            const overfittingScore = evaluation.overfitting_score || 0;
-
-            // Calculate overfitting indicator (positive = overfitting, negative = generalizing well)
-            let overfittingClass = '';
-            let overfittingText = 'N/A';
-            if (trainPnL !== null && testPnL !== null) {
-                const diff = trainPnL - testPnL;
-                overfittingText = diff.toFixed(2) + '%';
-                if (diff > 5) {
-                    overfittingClass = 'text-danger fw-bold';
-                } else if (diff > 2) {
-                    overfittingClass = 'text-warning';
-                } else if (diff < -2) {
-                    overfittingClass = 'text-success';
-                } else {
-                    overfittingClass = 'text-muted';
-                }
-            }
 
             const trainPnLClass = trainPnL >= 0 ? 'text-success' : 'text-danger';
             const testPnLClass = testPnL >= 0 ? 'text-success' : 'text-danger';
@@ -1727,11 +1709,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>Elite ${eliteIndex + 1}</td>
                     <td class="${trainPnLClass}">${trainPnL !== null ? trainPnL.toFixed(2) + '%' : 'N/A'}</td>
                     <td class="${testPnLClass}">${testPnL !== null ? testPnL.toFixed(2) + '%' : 'N/A'}</td>
-                    <td>${evaluation.train_trades || 'N/A'}</td>
                     <td>${evaluation.test_trades || 'N/A'}</td>
-                    <td class="text-success">${evaluation.train_win_rate !== null ? evaluation.train_win_rate.toFixed(2) + '%' : 'N/A'}</td>
                     <td class="text-success">${evaluation.test_win_rate !== null ? evaluation.test_win_rate.toFixed(2) + '%' : 'N/A'}</td>
-                    <td class="${overfittingClass}">${overfittingText}</td>
                 </tr>
             `;
 
