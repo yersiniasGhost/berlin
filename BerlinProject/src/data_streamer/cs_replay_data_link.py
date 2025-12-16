@@ -1,14 +1,14 @@
 import json
 import threading
 import time
-import logging
 from typing import Set, Dict, List, Optional
 from datetime import datetime
 
 from data_streamer.data_link import DataLink
 from models.tick_data import TickData
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('CSReplayDataLink')
+logger = LogManager().get_logger("CSReplayDataLink")
 
 
 class CSReplayDataLink(DataLink):

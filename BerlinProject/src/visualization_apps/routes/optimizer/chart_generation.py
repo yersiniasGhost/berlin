@@ -4,7 +4,6 @@ Functions for generating chart data for optimizer visualization
 """
 
 import json
-import logging
 import math
 from typing import List, Dict
 from pathlib import Path
@@ -13,8 +12,9 @@ from optimization.mlf_optimizer.mlf_individual_stats import MlfIndividualStats
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from portfolios.portfolio_tool import TradeReason
 from .constants import get_table_columns_from_data
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('OptimizerVisualization')
+logger = LogManager().get_logger("OptimizerVisualization")
 
 
 def generate_optimizer_chart_data(best_individual, elites, io, data_config_path, best_individuals_log, objectives):

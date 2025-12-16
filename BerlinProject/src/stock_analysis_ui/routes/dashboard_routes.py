@@ -2,10 +2,10 @@
 Dashboard routes for the main UI pages
 """
 
-import logging
 from flask import Blueprint, render_template, current_app, redirect, session
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('DashboardRoutes')
+logger = LogManager().get_logger("DashboardRoutes")
 
 dashboard_bp = Blueprint('dashboard', __name__)
 

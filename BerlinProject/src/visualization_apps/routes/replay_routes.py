@@ -7,7 +7,6 @@ from flask import Blueprint, render_template, request, jsonify
 import os
 import sys
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -23,12 +22,13 @@ from models.monitor_configuration import MonitorConfiguration, TradeExecutorConf
 
 # Import mlf_utils
 from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
+from mlf_utils.log_manager import LogManager
 
 # Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
 # from indicator_triggers.refactored_indicators import *  # Import to register indicators
 
-logger = logging.getLogger('ReplayVisualization')
+logger = LogManager().get_logger("ReplayVisualization")
 
 # Create Blueprint
 replay_bp = Blueprint('replay', __name__, url_prefix='/replay')

@@ -1,4 +1,3 @@
-import logging
 import threading
 import numpy as np
 from typing import Dict, Optional, Any
@@ -7,6 +6,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 
 from data_streamer.external_tool import ExternalTool
 from models.tick_data import TickData
+from mlf_utils.log_manager import LogManager
 
 
 class UIExternalTool(ExternalTool):
@@ -23,8 +23,7 @@ class UIExternalTool(ExternalTool):
             host: Host to run the Flask server on
             port: Port to run the Flask server on
         """
-        self.logger = logging.getLogger('UIExternalTool')
-        self.logger.setLevel(logging.INFO)
+        self.logger = LogManager().get_logger("UIExternalToolOld")
 
         # Set up data storage
         self.symbols_data = {}  # To store data for each symbol

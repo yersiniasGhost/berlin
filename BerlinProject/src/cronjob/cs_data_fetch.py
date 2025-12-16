@@ -5,23 +5,17 @@ from datetime import datetime, timedelta
 import pytz
 import sys
 import time
-import logging
 import json
 import os
 import requests
 import base64
 from urllib.parse import urlparse, parse_qs
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('schwab_weekly_fetch.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+from mlf_utils.log_manager import LogManager
+
+# Initialize LogManager with log file (must be called first in main apps)
+LogManager(log_file='schwab_weekly_fetch.log')
+logger = LogManager().get_logger("SchwabDataFetch")
 
 
 class StandaloneSchwabFetcher:

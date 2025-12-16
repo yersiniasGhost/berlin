@@ -2,7 +2,6 @@
 Complete Historical Indicator Processor - Batch processing for genetic algorithms
 """
 
-import logging
 from typing import Tuple
 
 from candle_aggregator.candle_aggregator import CandleAggregator
@@ -10,7 +9,9 @@ from models.monitor_configuration import MonitorConfiguration
 from features.indicators import *
 from indicator_triggers.indicator_base import IndicatorRegistry
 from models.indicator_definition import IndicatorDefinition
-logger = logging.getLogger('IndicatorProcessorHistoricalNew')
+from mlf_utils.log_manager import LogManager
+
+logger = LogManager().get_logger("IndicatorProcessorHistoricalNew")
 
 
 class IndicatorCalculator:

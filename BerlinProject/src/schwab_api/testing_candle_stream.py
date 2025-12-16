@@ -8,12 +8,9 @@ import time
 import webbrowser
 import urllib.parse
 from datetime import datetime
+from mlf_utils.log_manager import LogManager
 
-# Configure logging
-import logging
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('SchwabDemo')
+logger = LogManager().get_logger("SchwabDemo")
 
 
 class SimpleSchwabDemo:

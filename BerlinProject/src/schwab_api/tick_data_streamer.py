@@ -1,18 +1,13 @@
 import os
 import time
 import json
-import logging
 import pandas as pd
 from datetime import datetime
 from schwab_api.streamer_client import SchwabStreamerClient
 from typing import Dict, List, Any, Optional
+from mlf_utils.log_manager import LogManager
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger('TickStreamer')
+logger = LogManager().get_logger("TickStreamer")
 
 
 class TickDataProcessor:

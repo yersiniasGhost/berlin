@@ -7,7 +7,6 @@ from flask import Blueprint, render_template, request, jsonify
 import os
 import sys
 import json
-import logging
 import numpy as np
 from datetime import datetime
 from pathlib import Path
@@ -21,13 +20,14 @@ from mongo_tools.mongo_db_connect import MongoDBConnect
 
 # Import mlf_utils
 from mlf_utils import FileUploadHandler, ConfigLoader
+from mlf_utils.log_manager import LogManager
 
 # Import new indicator system - this is the key integration
 from indicator_triggers.indicator_base import IndicatorRegistry, IndicatorConfiguration
 from indicator_triggers.refactored_indicators import *  # Import to register indicators
 from indicator_triggers.indicator_api import config_manager
 
-logger = logging.getLogger('IndicatorVisualization')
+logger = LogManager().get_logger("IndicatorVisualization")
 
 # Create Blueprint
 indicator_bp = Blueprint('indicator', __name__, url_prefix='/indicator')

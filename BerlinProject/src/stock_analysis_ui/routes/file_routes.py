@@ -4,11 +4,11 @@ File browser and config file handling routes
 
 import os
 import json
-import logging
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('FileRoutes')
+logger = LogManager().get_logger("FileRoutes")
 file_bp = Blueprint('files', __name__)
 
 ALLOWED_EXTENSIONS = {'json'}

@@ -1,9 +1,9 @@
-import logging
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('DataProcessor')
+logger = LogManager().get_logger("DataProcessor")
 
 
 class DataProcessor:

@@ -2,7 +2,6 @@
 Enhanced IndicatorProcessor with proper history tracking - Refactored to use IndicatorRegistry
 """
 
-import logging
 from typing import Tuple, Dict, List
 from datetime import datetime
 import numpy as np
@@ -14,8 +13,9 @@ from indicator_triggers.indicator_base import IndicatorRegistry
 from features.indicators import *
 # Import refactored indicators to ensure they are registered
 import indicator_triggers.refactored_indicators
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('IndicatorProcessor')
+logger = LogManager().get_logger("IndicatorProcessor")
 
 
 class IndicatorProcessor:

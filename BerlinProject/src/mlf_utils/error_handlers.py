@@ -5,9 +5,9 @@ Provides consistent error response formatting and custom exception classes.
 
 from typing import Dict, Any, List, Optional, Tuple
 from flask import jsonify
-import logging
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger(__name__)
+logger = LogManager().get_logger("ErrorHandlers")
 
 
 class APIError(Exception):

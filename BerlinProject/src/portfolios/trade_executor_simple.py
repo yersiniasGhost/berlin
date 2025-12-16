@@ -1,6 +1,5 @@
 from typing import Dict
 from collections import defaultdict
-import logging
 
 from models.tick_data import TickData
 
@@ -10,8 +9,9 @@ sys.path.append(os.path.dirname(__file__))
 
 from trade_executor import TradeExecutor
 from portfolio_tool import TradeReason
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('TradeExecutorSimple')
+logger = LogManager().get_logger("TradeExecutorSimple")
 
 
 class TradeExecutorSimple(TradeExecutor):

@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Dict
-import logging
 
 from models.tick_data import TickData
 from models.monitor_configuration import MonitorConfiguration
 from portfolios.portfolio_tool import Portfolio
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('TradeExecutor')
+logger = LogManager().get_logger("TradeExecutor")
 
 
 class TradeExecutor(ABC):

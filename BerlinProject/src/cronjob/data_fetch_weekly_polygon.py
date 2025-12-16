@@ -15,7 +15,8 @@ from polygon import RESTClient
 from pymongo import MongoClient
 from collections import defaultdict
 from typing import List, Dict, Any, Optional, Tuple
-import logging
+
+from mlf_utils.log_manager import LogManager
 
 # Same ticker list as original script
 MAJOR_STOCKS = [
@@ -44,17 +45,10 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 EMAIL_ADDRESS = "warnd114@gmail.com"  # Your email for notifications
 
-# Logging configuration
-LOG_FILE = os.path.expanduser("~/stock_updater.log")  # Changed to home directory
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Initialize LogManager with log file (must be called first in main apps)
+LOG_FILE = os.path.expanduser("~/stock_updater.log")
+LogManager(log_file=LOG_FILE)
+logger = LogManager().get_logger("PolygonDataFetch")
 
 
 class RateLimiter:

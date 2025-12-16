@@ -7,7 +7,6 @@ import os
 import json
 import time
 import threading
-import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -17,11 +16,12 @@ from optimization.genetic_optimizer.support.parameter_collector import Parameter
 from portfolios.portfolio_tool import TradeReason
 from candle_aggregator.csa_container import CSAContainer
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
+from mlf_utils.log_manager import LogManager
 
 from .elite_selection import select_winning_population
 from .chart_generation import generate_optimizer_chart_data
 
-logger = logging.getLogger('OptimizerVisualization')
+logger = LogManager().get_logger("OptimizerVisualization")
 
 
 def heartbeat_thread(socketio, opt_state):

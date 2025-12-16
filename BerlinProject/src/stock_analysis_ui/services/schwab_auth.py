@@ -2,13 +2,13 @@
 import os
 import base64
 import requests
-import logging
 import json
 import webbrowser
 from typing import Dict, Optional
 from urllib.parse import urlparse, parse_qs
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('SchwabAuth')
+logger = LogManager().get_logger("SchwabAuth")
 
 
 class SchwabAuthManager:

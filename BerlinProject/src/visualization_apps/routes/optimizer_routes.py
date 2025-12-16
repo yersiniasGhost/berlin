@@ -6,7 +6,6 @@ Handles genetic algorithm optimization with real-time WebSocket updates
 from flask import Blueprint, render_template, request, jsonify
 import os
 import json
-import logging
 import time
 import threading
 import numpy as np
@@ -23,6 +22,7 @@ from optimization.genetic_optimizer.support.parameter_collector import Parameter
 
 # Import mlf_utils
 from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
+from mlf_utils.log_manager import LogManager
 
 # Import optimizer module functions (extracted for modularity)
 from .optimizer import (
@@ -44,7 +44,7 @@ from .optimizer import (
     save_optimization_results_with_new_indicators
 )
 
-logger = logging.getLogger('OptimizerVisualization')
+logger = LogManager().get_logger("OptimizerVisualization")
 
 # Create Blueprint
 optimizer_bp = Blueprint('optimizer', __name__, url_prefix='/optimizer')

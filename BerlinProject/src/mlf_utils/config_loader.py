@@ -6,9 +6,9 @@ Provides centralized configuration file loading with validation and error handli
 import json
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, Union
-import logging
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger(__name__)
+logger = LogManager().get_logger("ConfigLoader")
 
 
 class ConfigLoader:

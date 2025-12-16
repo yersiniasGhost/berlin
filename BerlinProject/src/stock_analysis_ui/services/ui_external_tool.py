@@ -2,7 +2,6 @@
 Enhanced UIExternalTool with candlestick chart support and minimal logging
 """
 
-import logging
 import time
 from typing import Dict, Optional, Any, List
 from datetime import datetime
@@ -13,8 +12,9 @@ from flask_socketio import SocketIO
 
 from data_streamer import ExternalTool
 from models.tick_data import TickData
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('UIExternalTool')
+logger = LogManager().get_logger("UIExternalTool")
 
 
 class UIExternalTool(ExternalTool):

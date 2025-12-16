@@ -4,7 +4,6 @@ API routes for AppService with session-based support - ENHANCED WITH CANDLESTICK
 """
 
 import json
-import logging
 import time
 import uuid
 from datetime import datetime
@@ -16,8 +15,9 @@ from flask import Blueprint, request, jsonify, current_app, session
 # Import the services we need
 from stock_analysis_ui.services.app_service import AppService
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('APIRoutes')
+logger = LogManager().get_logger("APIRoutes")
 api_bp = Blueprint('api', __name__)
 
 

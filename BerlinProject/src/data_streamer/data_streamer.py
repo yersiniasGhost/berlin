@@ -3,7 +3,6 @@
 DataStreamer with simple aggregator selection logic - MINIMAL CHANGE VERSION
 """
 
-import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -16,8 +15,9 @@ from models.monitor_configuration import MonitorConfiguration
 from data_streamer.external_tool import ExternalTool
 # ONLY CHANGE: Import unified trade executor instead of simple
 from portfolios.trade_executor_unified import TradeExecutorUnified
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('DataStreamer')
+logger = LogManager().get_logger("DataStreamer")
 
 
 class DataStreamer:

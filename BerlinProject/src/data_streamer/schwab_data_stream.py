@@ -1,11 +1,11 @@
 from typing import Dict, Optional, List
 import numpy as np
-import logging
 from datetime import datetime
 from data_streamer.external_tool import ExternalTool
 from models.tick_data import TickData
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('SchwabAdapter')
+logger = LogManager().get_logger("SchwabAdapter")
 
 
 class SchwabDataStreamAdapter(ExternalTool):
@@ -30,14 +30,6 @@ class SchwabDataStreamAdapter(ExternalTool):
         self.feature_callbacks = []
         self.indicator_callbacks = []
         self.sample_callbacks = []
-
-        # Setup logging
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
 
     def feature_vector(self, fv: np.array, tick: TickData) -> None:
         """

@@ -6,9 +6,9 @@ Provides time-based caching for frequently accessed data.
 import time
 from typing import Any, Dict, Optional, Tuple
 from functools import wraps
-import logging
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger(__name__)
+logger = LogManager().get_logger("CacheManager")
 
 
 class CacheManager:

@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 import numpy as np
 from typing import List, Optional
-import logging
 
 from optimization.genetic_optimizer.abstractions.fitness_calculator import FitnessCalculator, ObjectiveFunctionBase
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
 from portfolios.portfolio_tool import Portfolio
 from .mlf_individual import MlfIndividual
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('MlfFitnessCalculator')
+logger = LogManager().get_logger("MlfFitnessCalculator")
 
 
 @dataclass

@@ -6,12 +6,12 @@ Provides UI for creating and editing monitor configurations
 from flask import Blueprint, render_template, request, jsonify
 import os
 import json
-import logging
 
 # Import mlf_utils
 from mlf_utils import ConfigLoader, indicator_schema_cache
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('MonitorConfigRoutes')
+logger = LogManager().get_logger("MonitorConfigRoutes")
 
 monitor_config_bp = Blueprint('monitor_config', __name__, url_prefix='/monitor_config')
 

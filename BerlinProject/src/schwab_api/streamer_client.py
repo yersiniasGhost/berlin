@@ -2,9 +2,9 @@ import websocket
 import json
 import threading
 import time
-import logging
 from typing import Dict, List, Optional, Callable, Any
 from datetime import datetime
+from mlf_utils.log_manager import LogManager
 
 
 class SchwabStreamerClient:
@@ -41,14 +41,8 @@ class SchwabStreamerClient:
             'ACCT_ACTIVITY': []
         }
 
-        # Setup logging
-        self.logger = logging.getLogger('SchwabStreamer')
-        self.logger.setLevel(logging.INFO)
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+        # Setup logging using LogManager
+        self.logger = LogManager().get_logger("SchwabStreamer")
 
     def _get_next_request_id(self) -> str:
         """Get the next request ID as a string."""

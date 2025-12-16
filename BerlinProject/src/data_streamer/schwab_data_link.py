@@ -3,16 +3,14 @@ import websocket
 import json
 import threading
 import time
-import logging
 from typing import Set, Dict, List
 from datetime import datetime
 
 from data_streamer.data_link import DataLink
 from models.tick_data import TickData
+from mlf_utils.log_manager import LogManager
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('SchwabDataLink')
+logger = LogManager().get_logger("SchwabDataLink")
 
 
 class SchwabDataLink(DataLink):

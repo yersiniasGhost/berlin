@@ -1,8 +1,8 @@
 from typing import Optional, List, Dict, Tuple
 from models.tick_data import TickData
-import logging
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('DataPreprocessor')
+logger = LogManager().get_logger("DataPreprocessor")
 
 
 class DataPreprocessor:

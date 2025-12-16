@@ -1,6 +1,5 @@
 # optimization/calculators/bt_data_streamer.py - Parallel processing compatible version
 
-import logging
 import json
 from typing import Dict, List, Optional, Any
 
@@ -11,8 +10,9 @@ from optimization.calculators.indicator_processor_historical_new import Indicato
 from portfolios.portfolio_tool import Portfolio
 from portfolios.trade_executor_unified import TradeExecutorUnified
 from models.tick_data import TickData
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('BacktestDataStreamer')
+logger = LogManager().get_logger("BacktestDataStreamer")
 
 
 class BacktestDataStreamer:

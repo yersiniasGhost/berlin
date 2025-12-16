@@ -2,12 +2,12 @@
 WebSocket event handlers for real-time communication with session-based routing
 """
 
-import logging
 from datetime import datetime
 from flask import current_app
 from flask_socketio import emit, join_room, leave_room
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('WebSocketRoutes')
+logger = LogManager().get_logger("WebSocketRoutes")
 
 
 def get_session_from_websocket():

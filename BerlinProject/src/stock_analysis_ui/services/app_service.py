@@ -4,7 +4,6 @@ Updated application service for both live Schwab and CSReplayDataLink support
 
 import os
 import json
-import logging
 from typing import Dict, List, Optional, Any, Union
 
 from socket import SocketIO
@@ -15,6 +14,7 @@ from data_streamer.data_streamer import DataStreamer
 from models.monitor_configuration import MonitorConfiguration, load_monitor_config
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+from mlf_utils.log_manager import LogManager
 
 
 class AppService:
@@ -45,7 +45,7 @@ class AppService:
         self.combinations: Dict[str, Dict[str, Any]] = {}
         self.card_counter: int = 0
         self.subscribed_symbols: set = set()
-        self.logger = logging.getLogger(f'AppService-{session_id or "global"}')
+        self.logger = LogManager().get_logger(f"AppService-{session_id or 'global'}")
 
         # Determine mode for logging
         mode = "CS Replay" if auth_manager is None else "Live Schwab"

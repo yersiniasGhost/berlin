@@ -1,6 +1,5 @@
 import threading
 import time
-import logging
 from typing import Set, Dict, List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -14,9 +13,9 @@ from ibapi.ticktype import TickType
 from data_streamer.data_link import DataLink
 from models.tick_data import TickData
 from config.env_vars import EnvVars
+from mlf_utils.log_manager import LogManager
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('IBKRDataLink')
+logger = LogManager().get_logger("IBKRDataLink")
 
 
 

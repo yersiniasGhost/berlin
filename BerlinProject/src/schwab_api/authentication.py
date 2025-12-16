@@ -4,17 +4,15 @@ import requests
 import webbrowser
 import websocket
 import json
-import logging
 import time
 import threading
 from typing import Dict, List, Any, Optional, Callable
 from urllib.parse import urlparse, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import socket
+from mlf_utils.log_manager import LogManager
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('SchwabClient')
+logger = LogManager().get_logger("SchwabClient")
 
 
 class CallbackHandler(BaseHTTPRequestHandler):

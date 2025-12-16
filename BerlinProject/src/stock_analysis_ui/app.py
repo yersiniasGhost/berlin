@@ -1,8 +1,6 @@
 import os
 import sys
-import logging
 import argparse
-import uuid
 from flask import Flask
 from flask_socketio import SocketIO
 
@@ -15,8 +13,8 @@ from services.app_service import AppService
 from data_streamer.cs_replay_data_link import CSReplayDataLink
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('TradingApp')
+from mlf_utils.log_manager import LogManager
+logger = LogManager("mlf").get_logger("app")
 
 # Flask app setup
 app = Flask(__name__)

@@ -1,6 +1,5 @@
 from typing import Iterable, NamedTuple
 import time
-import logging
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional
 import random
@@ -11,6 +10,9 @@ from optimization.genetic_optimizer.abstractions.individual_stats import Individ
 from optimization.genetic_optimizer.abstractions import ProblemDomain, IndividualBase
 from optimization.genetic_optimizer.genetic_algorithm import collect_fronts, crowd_sort, collect_domination_statistics
 from optimization.genetic_optimizer.support.types import Json
+from mlf_utils.log_manager import LogManager
+
+logger = LogManager().get_logger("GeneticAlgorithm")
 
 
 class IterationStats(NamedTuple):
@@ -45,7 +47,7 @@ class GeneticAlgorithm:
             import numpy as np
             np.random.seed(self.random_seed)
             random.seed(self.random_seed)
-            logging.info(f"🎲 Random seed set to {self.random_seed} for reproducibility")
+            logger.info(f"🎲 Random seed set to {self.random_seed} for reproducibility")
 
         self.propagation_size = int(self.propagation_fraction * self.population_size)
         self.statistics_observer = StatisticsObserver(objectives=self.problem_domain.fitness_calculator)
@@ -70,7 +72,7 @@ class GeneticAlgorithm:
             out_str = f"GA: {stats[0].iteration}/{self.number_of_generations}, {stalled_metric}/{self.max_stalled_metric}, " \
                       f"{dt:.2f}s, eta: {eta / 60:.2f}"
             s = e
-            logging.info(out_str)
+            logger.info(out_str)
 
             best = stats[1].best_front[0]
 

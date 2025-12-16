@@ -1,6 +1,5 @@
 # portfolios/trade_executor_unified.py
 
-import logging
 from typing import Dict, Optional
 from datetime import datetime
 from collections import defaultdict
@@ -8,8 +7,9 @@ from collections import defaultdict
 from models.monitor_configuration import MonitorConfiguration
 from models.tick_data import TickData
 from portfolios.portfolio_tool import Portfolio, TradeReason
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('TradeExecutorUnified')
+logger = LogManager().get_logger("TradeExecutorUnified")
 
 
 class TradeExecutorUnified:

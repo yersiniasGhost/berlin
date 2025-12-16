@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import json
 import threading
-import logging
 import time
 from datetime import datetime, timedelta
 import pandas as pd
@@ -11,11 +10,9 @@ import os
 from schwab_api.data_processor import DataProcessor
 from schwab_api.authentication import SchwabClient, easy_client
 from data_streamer.schwab_data_stream import SchwabDataStreamAdapter
+from mlf_utils.log_manager import LogManager
 
-# Configure logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('StockApp')
+logger = LogManager().get_logger("StockApp")
 
 app = Flask(__name__)
 

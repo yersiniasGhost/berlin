@@ -20,9 +20,9 @@ from models.validation.parameter_constraints import (
     validate_and_constrain_monitor_config_parameters,
     format_constraint_warning_message
 )
-import logging
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('MlfOptimizerConfig')
+logger = LogManager().get_logger("MlfOptimizerConfig")
 
 
 @dataclass

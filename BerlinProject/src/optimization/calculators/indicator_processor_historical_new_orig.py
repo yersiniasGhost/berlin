@@ -2,7 +2,6 @@
 Complete Historical Indicator Processor - Batch processing for genetic algorithms
 """
 
-import logging
 from typing import Dict, List, Tuple
 import numpy as np
 
@@ -11,8 +10,9 @@ from models.monitor_configuration import MonitorConfiguration
 from models.tick_data import TickData
 from features.indicators import *
 from features.indicators2 import support_level, resistance_level
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('IndicatorProcessorHistoricalNew')
+logger = LogManager().get_logger("IndicatorProcessorHistoricalNew")
 
 
 class IndicatorProcessorHistoricalNew:

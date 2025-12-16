@@ -4,11 +4,11 @@ Saving and exporting optimization results with elite configurations
 """
 
 import json
-import logging
 from pathlib import Path
 from datetime import datetime
+from mlf_utils.log_manager import LogManager
 
-logger = logging.getLogger('OptimizerVisualization')
+logger = LogManager().get_logger("OptimizerVisualization")
 
 
 def save_optimization_results_with_new_indicators(best_individuals_log, best_individual, elites, ga_config_path, test_name, timestamp=None, processed_indicators=None):
