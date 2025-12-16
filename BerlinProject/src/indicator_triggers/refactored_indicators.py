@@ -3,7 +3,7 @@ Refactored technical indicators using the new configurable base system.
 """
 
 import math
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 import numpy as np
 import talib as ta
 from scipy.signal import argrelextrema
@@ -241,7 +241,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
         """MACD uses stacked layout - candlesticks on top, MACD lines below."""
         return "stacked"
 
-    def calculate(self, tick_data: List[TickData]) -> np.ndarray:
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         fast = self.get_parameter("fast")
         slow = self.get_parameter("slow")
         signal = self.get_parameter("signal")
@@ -249,7 +249,7 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
         trend = self.get_parameter("trend")
 
         if len(tick_data) < slow + signal:
-            return np.array([math.nan] * len(tick_data))
+            return np.array([math.nan] * len(tick_data)), {}
 
         closes = np.array([tick.close for tick in tick_data], dtype=np.float64)
         macd, signal_line, histogram = ta.MACD(closes, fastperiod=fast, slowperiod=slow, signalperiod=signal)
@@ -346,15 +346,15 @@ class BollingerBandsLowerBandBounceIndicator(BaseIndicator):
             )
         ]
     
-    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, List[np.ndarray]]:
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         period = self.get_parameter("period")
         sd = self.get_parameter("sd")
         candle_bounce_number = int(self.get_parameter("candle_bounce_number"))
         bounce_trigger = self.get_parameter("bounce_trigger")
         trend = self.get_parameter("trend")
-        
+
         if len(tick_data) < period:
-            return np.array([math.nan] * len(tick_data))
+            return np.array([math.nan] * len(tick_data)), {}
 
         closes = np.array([tick.close for tick in tick_data])
         upper, middle, lower = ta.BBANDS(closes, period, sd, sd)
@@ -387,7 +387,12 @@ class BollingerBandsLowerBandBounceIndicator(BaseIndicator):
                              (upper[i - 1] - closes[i - 1]) / (upper[i - 1] - middle[i - 1]) < bounce_trigger)):
                         signals[i] = 1
 
-        return signals
+        component_data = {
+            f"{self.name()}_upper": upper.tolist(),
+            f"{self.name()}_middle": middle.tolist(),
+            f"{self.name()}_lower": lower.tolist()
+        }
+        return signals, component_data
 
 
 class SupportResistanceIndicator(BaseIndicator):
@@ -432,22 +437,31 @@ class SupportResistanceIndicator(BaseIndicator):
             )
         ]
     
-    def calculate(self, tick_data: List[TickData]) -> np.ndarray:
+    def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         sensitivity = self.get_parameter("sensitivity")
         level_type = self.get_parameter("level_type")
-        
+
         closes = np.array([tick.close for tick in tick_data])
         result = np.zeros(len(closes))
-        
+
+        support_levels = []
+        resistance_levels = []
+
         if level_type in ["support", "both"]:
             support_indices = argrelextrema(closes, np.less_equal, order=sensitivity)[0]
             result[support_indices] = 1
-        
+            support_levels = closes[support_indices].tolist() if len(support_indices) > 0 else []
+
         if level_type in ["resistance", "both"]:
             resistance_indices = argrelextrema(closes, np.greater_equal, order=sensitivity)[0]
             result[resistance_indices] = -1 if level_type == "both" else 1
-        
-        return result
+            resistance_levels = closes[resistance_indices].tolist() if len(resistance_indices) > 0 else []
+
+        component_data = {
+            f"{self.name()}_support_levels": support_levels,
+            f"{self.name()}_resistance_levels": resistance_levels
+        }
+        return result, component_data
 
 
 class CDLPatternIndicator(BaseIndicator):
