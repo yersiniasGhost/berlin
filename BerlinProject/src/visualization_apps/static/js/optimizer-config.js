@@ -974,10 +974,16 @@ function removeObjective(index) {
 function addCondition(containerId) {
     const container = document.getElementById(containerId);
     const conditions = container.querySelectorAll('[data-condition-index]');
-    const newIndex = conditions.length / 4; // 4 inputs per condition (name, start, min, max)
+    const newIndex = conditions.length / 5; // 5 inputs per condition (checkbox, name, start, min, max)
 
     const conditionHtml = `
         <div class="row g-2 mb-2">
+            <div class="col-md-1 d-flex align-items-end justify-content-center">
+                <input type="checkbox" class="form-check-input"
+                       data-condition-index="${newIndex}" data-field="optimize"
+                       checked
+                       title="Optimize this threshold">
+            </div>
             <div class="col-md-3">
                 <label class="form-label">Bar Name</label>
                 <select class="form-select form-select-sm" data-condition-index="${newIndex}" data-field="name">
@@ -999,7 +1005,7 @@ function addCondition(containerId) {
                 <input type="number" class="form-control form-control-sm" value="${DEFAULT_THRESHOLD_RANGE[1]}" step="0.01"
                        data-condition-index="${newIndex}" data-field="threshold_max">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">&nbsp;</label>
                 <button class="btn btn-danger w-100" onclick="removeCondition('${containerId}', ${newIndex})">
                     <i class="fas fa-trash"></i>

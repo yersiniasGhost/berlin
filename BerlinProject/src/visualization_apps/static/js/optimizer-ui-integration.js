@@ -527,7 +527,7 @@ class OptimizerUIIntegration {
         // Clear test evaluations table
         const testEvalsTable = document.getElementById('testEvaluationsTable');
         if (testEvalsTable) {
-            testEvalsTable.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No test evaluation data yet</td></tr>';
+            testEvalsTable.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No test evaluation data yet</td></tr>';
         }
 
         // Clear performance metrics table
