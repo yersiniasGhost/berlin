@@ -37,7 +37,7 @@ replay_bp = Blueprint('replay', __name__, url_prefix='/replay')
 upload_handler = FileUploadHandler(upload_dir='uploads')
 
 def load_raw_candle_data(data_config_path: str, io):
-    """Load raw candlestick data from Yahoo Finance using the same data as trade execution"""
+    """Load raw candlestick data from MongoDB using the same data as trade execution"""
     logger.info("📊 Loading raw candle data for visualization")
 
     try:
@@ -77,13 +77,18 @@ def load_raw_candle_data(data_config_path: str, io):
         raise
 
 def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
-    """Extract trade history, triggers, P&L history, and bar scores from portfolio"""
+    """Extract trade history, triggers, P&L history, bar scores, and trade details from portfolio"""
     logger.info("💼 Extracting trade history and P&L from portfolio")
 
     trade_history = []
     triggers = []
     pnl_history = []
     bar_scores_history = []
+    trade_details = {}  # Detailed trade info for UI popup
+
+    # Get trade details from the executor if available
+    if hasattr(backtest_streamer, 'trade_executor') and backtest_streamer.trade_executor:
+        trade_details = backtest_streamer.trade_executor.trade_details_history or {}
 
     try:
         # Generate bar scores history from the stored calculation
@@ -192,7 +197,7 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
         import traceback
         traceback.print_exc()
 
-    return trade_history, triggers, pnl_history, bar_scores_history
+    return trade_history, triggers, pnl_history, bar_scores_history, trade_details
 
 def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
     """Run backtest with the provided monitor configuration using the old working method"""
@@ -266,7 +271,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         try:
             indicator_processor = IndicatorProcessorHistoricalNew(monitor_obj)
-            indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
+            indicator_history, raw_indicator_history, bar_score_history_dict, component_history, indicator_agg_mapping = (
                 indicator_processor.calculate_indicators(backtest_streamer.aggregators)
             )
         except ValueError as val_err:
@@ -290,7 +295,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Run the backtest to get trades
         portfolio = backtest_streamer.run()
 
-        # Load raw candle data for visualization
+        # Load raw candle data for visualization (primary 1m timeframe for trade overlay)
         candlestick_data = []
         tick_history = backtest_streamer.tick_history
         for tick in tick_history:
@@ -303,10 +308,15 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
                 tick.close
             ])
 
-        logger.info(f"📈 Loaded {len(candlestick_data)} candles")
+        logger.info(f"📈 Loaded {len(candlestick_data)} candles (primary timeframe)")
+
+        # Get per-aggregator candlestick data for indicator charts
+        # Each indicator chart needs candles from its own timeframe/type (e.g., 5m-heiken)
+        per_aggregator_candles = backtest_streamer.get_all_candlestick_data()
+        logger.info(f"📊 Prepared candles for {len(per_aggregator_candles)} aggregators: {list(per_aggregator_candles.keys())}")
 
         # Extract trade history and P&L from the fresh portfolio
-        trade_history, triggers, pnl_history, bar_scores_history = extract_trade_history_and_pnl_from_portfolio(
+        trade_history, triggers, pnl_history, bar_scores_history, trade_details = extract_trade_history_and_pnl_from_portfolio(
             portfolio, backtest_streamer)
 
         # Get threshold config for bar charts
@@ -316,37 +326,76 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         }
 
         # Format raw_indicator_history (trigger values: 0, 1) for frontend
+        # Uses native aggregator timestamps for each indicator
         raw_indicator_history_formatted = {}
-        if raw_indicator_history and tick_history:
+        if raw_indicator_history:
             for ind_name, ind_values in raw_indicator_history.items():
+                # Get the aggregator key for this indicator
+                agg_key = indicator_agg_mapping.get(ind_name)
+                if agg_key:
+                    timestamps = backtest_streamer.get_aggregator_timestamps(agg_key)
+                else:
+                    # Fallback to primary timeframe
+                    timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
+
                 series = []
                 for i, value in enumerate(ind_values):
-                    if i < len(tick_history) and value is not None:
-                        timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
-                        series.append([timestamp, float(value)])
+                    if i < len(timestamps) and value is not None:
+                        series.append([timestamps[i], float(value)])
                 raw_indicator_history_formatted[ind_name] = series
+                logger.debug(f"📈 Raw indicator '{ind_name}' formatted with {len(series)} points from {agg_key or 'primary'}")
 
         # Format indicator_history (time-decayed values: 1, 0.9, 0.8, etc.) for frontend
+        # Uses native aggregator timestamps for each indicator
         indicator_history_formatted = {}
-        if indicator_history and tick_history:
+        if indicator_history:
             for ind_name, ind_values in indicator_history.items():
+                # Get the aggregator key for this indicator
+                agg_key = indicator_agg_mapping.get(ind_name)
+                if agg_key:
+                    timestamps = backtest_streamer.get_aggregator_timestamps(agg_key)
+                else:
+                    # Fallback to primary timeframe
+                    timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
+
                 series = []
                 for i, value in enumerate(ind_values):
-                    if i < len(tick_history) and value is not None:
-                        timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
-                        series.append([timestamp, float(value)])
+                    if i < len(timestamps) and value is not None:
+                        series.append([timestamps[i], float(value)])
                 indicator_history_formatted[ind_name] = series
+                logger.debug(f"📈 Indicator '{ind_name}' formatted with {len(series)} points from {agg_key or 'primary'}")
 
         # Format component_history (MACD line, signal, histogram, SMA values) for frontend
+        # Use the indicator's native aggregator timestamps (not primary 1m timeframe)
         component_history_formatted = {}
-        if component_history and tick_history:
+        if component_history:
             for comp_name, comp_values in component_history.items():
+                # Extract indicator name from component name (e.g., "macd5m_macd" -> "macd5m")
+                indicator_name = comp_name.rsplit('_', 1)[0] if '_' in comp_name else comp_name
+
+                # Get the aggregator key for this indicator
+                agg_key = indicator_agg_mapping.get(indicator_name)
+                if not agg_key:
+                    # Fallback: try to find matching indicator name
+                    for ind_name, key in indicator_agg_mapping.items():
+                        if ind_name in comp_name or comp_name.startswith(ind_name):
+                            agg_key = key
+                            break
+
+                # Get timestamps from the correct aggregator
+                if agg_key:
+                    timestamps = backtest_streamer.get_aggregator_timestamps(agg_key)
+                else:
+                    # Fallback to primary timeframe if no mapping found
+                    timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
+                    logger.warning(f"⚠️ No aggregator mapping for component '{comp_name}', using primary timeframe")
+
                 series = []
                 for i, value in enumerate(comp_values):
-                    if i < len(tick_history) and value is not None:
-                        timestamp = int(tick_history[i].timestamp.timestamp() * 1000)
-                        series.append([timestamp, float(value)])
+                    if i < len(timestamps) and value is not None:
+                        series.append([timestamps[i], float(value)])
                 component_history_formatted[comp_name] = series
+                logger.debug(f"📈 Component '{comp_name}' formatted with {len(series)} points from {agg_key}")
 
 
         # Merge P&L information into trade objects for frontend
@@ -403,10 +452,13 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         chart_data = {
             'ticker': data_config['ticker'],
-            'candlestick_data': candlestick_data,
+            'candlestick_data': candlestick_data,  # Primary timeframe (1m) for trade overlay
+            'per_aggregator_candles': per_aggregator_candles,  # All timeframes for indicator charts
+            'indicator_agg_mapping': indicator_agg_mapping,  # indicator_name -> agg_config
             'triggers': triggers,
             'trades': trades_with_pnl,  # Frontend expects 'trades' with pnl property
             'trade_history': trade_history,  # Keep for backwards compatibility
+            'trade_details': trade_details,  # Detailed trade info for popup (timestamp -> details dict)
             'pnl_history': pnl_history,
             'pnl_data': pnl_data,  # Frontend expects 'pnl_data' for charting
             'raw_indicator_history': raw_indicator_history_formatted,  # Raw trigger values (0, 1)

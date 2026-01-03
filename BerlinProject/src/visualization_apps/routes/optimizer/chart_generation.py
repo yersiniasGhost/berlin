@@ -312,7 +312,7 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
 
 
 def load_raw_candle_data(data_config_path: str, io):
-    """Load raw candlestick data from Yahoo Finance using the same data as trade execution"""
+    """Load raw candlestick data from MongoDB using the same data as trade execution"""
     logger.info("📊 Loading raw candle data for visualization")
 
     try:
@@ -360,13 +360,18 @@ def load_raw_candle_data(data_config_path: str, io):
 
 
 def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
-    """Extract trade history, triggers, P&L history, and bar scores from portfolio"""
+    """Extract trade history, triggers, P&L history, bar scores, and trade details from portfolio"""
     logger.info("💼 Extracting trade history and P&L from portfolio")
 
     trade_history = []
     triggers = []
     pnl_history = []
     bar_scores_history = []
+    trade_details = {}  # Detailed trade info for UI popup
+
+    # Get trade details from the executor if available
+    if hasattr(backtest_streamer, 'trade_executor') and backtest_streamer.trade_executor:
+        trade_details = backtest_streamer.trade_executor.trade_details_history or {}
 
     try:
         # Generate bar scores history from the stored calculation
@@ -471,7 +476,7 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
         import traceback
         traceback.print_exc()
 
-    return trade_history, triggers, pnl_history, bar_scores_history
+    return trade_history, triggers, pnl_history, bar_scores_history, trade_details
 
 
 def generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path):
@@ -498,7 +503,7 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
     from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
 
     indicator_processor = IndicatorProcessorHistoricalNew(best_individual.monitor_configuration)
-    indicator_history, raw_indicator_history, bar_score_history_dict, component_history = (
+    indicator_history, raw_indicator_history, bar_score_history_dict, component_history, _ = (
         indicator_processor.calculate_indicators(backtest_streamer.aggregators)
     )
 
@@ -509,7 +514,7 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
     portfolio = backtest_streamer.run()
 
     # Extract trade history and P&L from the fresh portfolio
-    trade_history, triggers, pnl_history, bar_scores_history = extract_trade_history_and_pnl_from_portfolio(portfolio,
+    trade_history, triggers, pnl_history, bar_scores_history, trade_details = extract_trade_history_and_pnl_from_portfolio(portfolio,
                                                                                                         backtest_streamer)
 
     # Get threshold config
@@ -555,6 +560,7 @@ def generate_chart_data_for_individual_with_new_indicators(best_individual, io, 
         'candlestick_data': candlestick_data,
         'triggers': triggers,
         'trade_history': trade_history,
+        'trade_details': trade_details,  # Detailed trade info for popup (timestamp -> details dict)
         'pnl_history': pnl_history,
         'bar_scores_history': bar_scores_history,
         'threshold_config': threshold_config,
