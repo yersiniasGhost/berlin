@@ -16,7 +16,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..', '..'))
 
 # Import necessary modules for indicator visualization
-from mongo_tools.mongo_db_connect import MongoDBConnect
+from candle_aggregator.csa_container import CSAContainer
 
 # Import mlf_utils
 from mlf_utils import FileUploadHandler, ConfigLoader
@@ -37,15 +37,18 @@ upload_handler = FileUploadHandler(upload_dir='uploads', allowed_extensions={'.j
 config_loader = ConfigLoader(config_dir='inputs')
 
 class NewIndicatorVisualizer:
-    """Visualizer using the NEW refactored indicator system"""
-    
-    def __init__(self):
-        self.mongo_db = MongoDBConnect()
-        self.registry = IndicatorRegistry()
+    """Visualizer using the NEW refactored indicator system with CSAContainer data pipeline"""
 
-    def load_and_process_data_with_new_system(self, ticker: str, start_date: str, end_date: str, indicator_configs: list):
-        """Load data and process using the NEW refactored indicator system"""
-        logger.info(f"Loading data for {ticker} from {start_date} to {end_date} with NEW indicator system")
+    def __init__(self):
+        self.registry = IndicatorRegistry()
+        # Default aggregator for indicator visualization (1-minute normal candles)
+        self.default_aggregator_list = ["1m-normal"]
+
+    def load_and_process_data_with_new_system(self, ticker: str, start_date: str, end_date: str,
+                                              indicator_configs: list, include_extended_hours: bool = True):
+        """Load data and process using CSAContainer (same pattern as optimizer)"""
+        hours_mode = "including extended hours" if include_extended_hours else "regular hours only"
+        logger.info(f"Loading data for {ticker} from {start_date} to {end_date} ({hours_mode}) with NEW indicator system")
 
         try:
             # Create indicator instances using NEW system
@@ -59,12 +62,12 @@ class NewIndicatorVisualizer:
                         parameters=config.get('parameters', {}),
                         enabled=config.get('enabled', True)
                     )
-                    
+
                     # Create indicator instance
                     indicator_instance = self.registry.create_indicator(indicator_config)
                     indicator_instances.append(indicator_instance)
                     logger.info(f"✅ Created NEW indicator: {config['name']}")
-                    
+
                 except Exception as e:
                     logger.error(f"❌ Error creating indicator {config['name']}: {e}")
                     continue
@@ -73,33 +76,20 @@ class NewIndicatorVisualizer:
                 logger.error("No valid indicators created")
                 return None, None, None
 
-            # Load historical data (same as before)
-            # Create a temporary monitor config just for data loading
-            from models.monitor_configuration import MonitorConfiguration
-            
-            temp_monitor = MonitorConfiguration(
-                name="temp_indicator_viz",
-                description="Temporary for indicator visualization",
-                indicators=[],  # We'll use the new system instead
-                trade_executor={
-                    "default_position_size": 100.0,
-                    "stop_loss_pct": 0.01,
-                    "take_profit_pct": 0.02,
-                    "ignore_bear_signals": False,
-                    "trailing_stop_loss": False,
-                    "trailing_stop_distance_pct": 0.01,
-                    "trailing_stop_activation_pct": 0.005
-                }
-            )
+            # Use CSAContainer to load data (same pattern as optimizer)
+            data_config = {
+                'ticker': ticker,
+                'start_date': start_date,
+                'end_date': end_date,
+                'include_extended_hours': include_extended_hours
+            }
 
-            # Process data using YahooFinanceHistorical
-            success = self.mongo_db.process_historical_data(ticker, start_date, end_date, temp_monitor)
+            csa_container = CSAContainer(data_config, self.default_aggregator_list)
+            aggregators = csa_container.get_aggregators()
 
-            if not success:
+            if not aggregators:
+                logger.error(f"No aggregators created for {ticker} - check data availability")
                 return None, None, None
-
-            # Get aggregators
-            aggregators = self.mongo_db.aggregators
 
             # Get the main aggregator key for timestamps
             main_key = None
@@ -111,7 +101,11 @@ class NewIndicatorVisualizer:
                 main_key = list(aggregators.keys())[0]
 
             # Get candles from aggregator history
-            candles = aggregators[main_key].history
+            candles = aggregators[main_key].get_history()
+
+            if not candles:
+                logger.error(f"No candles in aggregator history for {main_key}")
+                return None, None, None
 
             # Process indicators using NEW SYSTEM
             indicator_data = self.process_indicators_with_new_system(indicator_instances, candles)
@@ -300,35 +294,31 @@ def upload_file():
         logger.error(f"Error uploading file: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@indicator_bp.route('/api/fetch_yahoo', methods=['POST'])
-def fetch_yahoo_data():
-    """Fetch data from Yahoo Finance for indicator testing"""
+@indicator_bp.route('/api/check_data', methods=['POST'])
+def check_data_availability():
+    """Test data availability from MongoDB"""
     try:
         data = request.get_json()
         ticker = data.get('ticker', 'AAPL').upper()
         start_date = data.get('start_date', '2024-01-01')
         end_date = data.get('end_date', '2024-12-31')
+        include_extended_hours = data.get('include_extended_hours', True)
 
-        # Test data availability by creating a temporary load
-        mongo_source = MongoDBConnect()
-        
-        # Create minimal monitor for testing
-        from models.monitor_configuration import MonitorConfiguration
-        test_monitor = MonitorConfiguration(
-            name="test_data_fetch",
-            description="Test data availability",
-            indicators=[],
-            trade_executor={'default_position_size': 100.0}
-        )
+        # Test data availability using CSAContainer (same pattern as visualizer)
+        data_config = {
+            'ticker': ticker,
+            'start_date': start_date,
+            'end_date': end_date,
+            'include_extended_hours': include_extended_hours
+        }
 
-        success = mongo_source.process_historical_data(ticker, start_date, end_date, test_monitor)
-        
-        if success:
-            # Get sample data info
-            aggregators = mongo_source.aggregators
+        csa_container = CSAContainer(data_config, ["1m-normal"])
+        aggregators = csa_container.get_aggregators()
+
+        if aggregators:
             main_key = list(aggregators.keys())[0]
-            candles = aggregators[main_key].history
-            
+            candles = aggregators[main_key].get_history()
+
             return jsonify({
                 'success': True,
                 'ticker': ticker,
@@ -344,7 +334,7 @@ def fetch_yahoo_data():
             })
 
     except Exception as e:
-        logger.error(f"Error fetching Yahoo data: {e}")
+        logger.error(f"Error fetching data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -359,6 +349,7 @@ def visualize_indicators():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         indicator_configs = data.get('indicators', [])
+        include_extended_hours = data.get('include_extended_hours', True)
 
         if not all([ticker, start_date, end_date]):
             return jsonify({"success": False, "error": "Missing required parameters: ticker, start_date, end_date"}), 400
@@ -366,11 +357,12 @@ def visualize_indicators():
         if not indicator_configs:
             return jsonify({"success": False, "error": "No indicators specified"}), 400
 
-        logger.info(f"📊 Visualizing {len(indicator_configs)} NEW indicators for {ticker}")
+        hours_mode = "including extended hours" if include_extended_hours else "regular hours only"
+        logger.info(f"📊 Visualizing {len(indicator_configs)} NEW indicators for {ticker} ({hours_mode})")
 
         # Load data using NEW indicator system
         candles, indicator_data, indicator_instances = new_visualizer.load_and_process_data_with_new_system(
-            ticker, start_date, end_date, indicator_configs
+            ticker, start_date, end_date, indicator_configs, include_extended_hours
         )
 
         if not candles:

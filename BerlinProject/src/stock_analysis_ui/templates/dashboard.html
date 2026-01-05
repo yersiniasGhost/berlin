@@ -365,6 +365,18 @@
             box-shadow: 0 0 20px rgba(35, 134, 54, 0.3);
         }
 
+        /* Data Warning */
+        .data-warning {
+            background-color: rgba(255, 193, 7, 0.15);
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            color: #ffc107;
+            font-size: 0.75rem;
+            padding: 0.35rem 0.5rem;
+            margin: 0.25rem 0;
+            text-align: center;
+        }
+
         /* Card Size Modes */
         .trading-card.size-big {
             width: 350px;
@@ -547,58 +559,17 @@
             transition: all 0.3s ease;
         }
 
-        .portfolio-header {
+        .portfolio-header-static {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 0.75rem;
-            cursor: pointer;
-            user-select: none;
-            transition: all 0.2s ease;
-        }
-
-        .portfolio-header:hover {
-            background: rgba(125, 133, 144, 0.05);
-            border-radius: 6px;
-            padding: 0.25rem 0.5rem;
-            margin: -0.25rem -0.5rem 0.75rem -0.5rem;
-        }
-
-        .portfolio-title-section {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
         }
 
         .portfolio-title {
             font-size: 0.875rem;
             font-weight: 600;
             color: #f0f6fc;
-        }
-
-        .portfolio-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 20px;
-            height: 20px;
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            color: #7d8590;
-            font-size: 0.75rem;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-
-        .portfolio-toggle:hover {
-            background: #30363d;
-            color: #e6edf3;
-            border-color: #7d8590;
-        }
-
-        .portfolio-toggle.collapsed {
-            transform: rotate(-90deg);
         }
 
         .position-status {
@@ -624,17 +595,6 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.75rem;
-            overflow: hidden;
-            transition: all 0.3s ease;
-            opacity: 1;
-            max-height: 500px;
-        }
-
-        .portfolio-metrics.collapsed {
-            max-height: 0;
-            opacity: 0;
-            margin-top: 0;
-            padding-top: 0;
         }
 
         .metric-item {
@@ -1044,10 +1004,8 @@
             // Make card clickable
             card.style.cursor = 'pointer';
             card.addEventListener('click', function(e) {
-                // Don't trigger on close button, portfolio toggle, or collapsible headers
-                if (!e.target.classList.contains('card-close') && 
-                    !e.target.classList.contains('portfolio-toggle') && 
-                    !e.target.closest('.portfolio-header') &&
+                // Don't trigger on close button or collapsible headers
+                if (!e.target.classList.contains('card-close') &&
                     !e.target.closest('.collapsible-header')) {
                     openCardDetails(cardId);
                 }
@@ -1067,6 +1025,7 @@
                     </div>
                     <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
                 </div>
+                <div class="data-warning" style="display: none;"></div>
                 <div class="collapsible-header" data-target="price-display">
                     Price <span class="toggle-icon">⌄</span>
                 </div>
@@ -1112,17 +1071,6 @@
             // Remove existing size classes
             card.classList.remove('size-big', 'size-medium', 'size-small');
             card.classList.add(`size-${globalCardSize}`);
-            
-            // Handle medium size - auto-minimize portfolio
-            if (globalCardSize === 'medium') {
-                const portfolioSection = card.querySelector('.portfolio-section');
-                if (portfolioSection) {
-                    const portfolioHeader = card.querySelector('.portfolio-header');
-                    if (portfolioHeader && !portfolioSection.classList.contains('collapsed')) {
-                        portfolioHeader.click(); // Auto-minimize portfolio
-                    }
-                }
-            }
         }
 
         // Set global card size for all cards
@@ -1213,9 +1161,8 @@
             
             const cardId = card.id;
 
-            // Preserve expanded states before updating
+            // Preserve expanded state for price display before updating
             const priceExpanded = card.querySelector('.price-display')?.classList.contains('expanded');
-            const portfolioExpanded = card.querySelector('.portfolio-section')?.classList.contains('expanded');
 
             // Update price with timestamp
             const priceDisplay = card.querySelector('.price-display');
@@ -1238,17 +1185,6 @@
             const portfolioContainer = card.querySelector('.portfolio-container');
             if (portfolioContainer) {
                 portfolioContainer.innerHTML = renderPortfolioSection(data.portfolio, cardId);
-
-                // Restore collapsed state from localStorage
-                restorePortfolioState(cardId);
-                
-                // Preserve expanded state for small mode
-                if (portfolioExpanded) {
-                    const portfolioSection = card.querySelector('.portfolio-section');
-                    if (portfolioSection) {
-                        portfolioSection.classList.add('expanded');
-                    }
-                }
             }
 
             // Update bar scores
@@ -1265,6 +1201,18 @@
                 indicatorsSummary.textContent = `${count} Active Indicator${count !== 1 ? 's' : ''}`;
             }
 
+            // Update data warning for insufficient ticks
+            const warningDiv = card.querySelector('.data-warning');
+            if (warningDiv && data.data_status) {
+                const warnings = data.data_status.warnings || [];
+                if (warnings.length > 0 && !data.data_status.has_sufficient_data) {
+                    warningDiv.textContent = `⚠️ ${warnings.join(', ')}`;
+                    warningDiv.style.display = 'block';
+                } else {
+                    warningDiv.style.display = 'none';
+                }
+            }
+
             // Restore expanded states for small mode elements
             restoreExpandedStates(card, cardId);
 
@@ -1276,19 +1224,16 @@
             cards[card.id] = data;
         }
 
-        // ENHANCED: Portfolio section with collapsible feature
+        // Portfolio section - always visible (no collapsible)
         function renderPortfolioSection(portfolio, cardId) {
             if (!portfolio) {
                 return `
                     <div class="portfolio-section">
-                        <div class="portfolio-header" onclick="togglePortfolio('${cardId}')">
-                            <div class="portfolio-title-section">
-                                <span class="portfolio-toggle" id="toggle-${cardId}">⌄</span>
-                                <span class="portfolio-title">Portfolio</span>
-                            </div>
+                        <div class="portfolio-header-static">
+                            <span class="portfolio-title">Portfolio</span>
                             <span class="position-status no-position">NO DATA</span>
                         </div>
-                        <div class="portfolio-metrics" id="metrics-${cardId}">
+                        <div class="portfolio-metrics">
                             <div class="metric-item" style="grid-column: 1 / -1;">
                                 <div class="metric-label">No Portfolio Data</div>
                                 <div class="metric-value neutral">--</div>
@@ -1316,14 +1261,11 @@
 
             return `
                 <div class="portfolio-section">
-                    <div class="portfolio-header" onclick="togglePortfolio('${cardId}')">
-                        <div class="portfolio-title-section">
-                            <span class="portfolio-toggle" id="toggle-${cardId}">⌄</span>
-                            <span class="portfolio-title">Portfolio</span>
-                        </div>
+                    <div class="portfolio-header-static">
+                        <span class="portfolio-title">Portfolio</span>
                         <span class="position-status ${statusClass}">${statusText}</span>
                     </div>
-                    <div class="portfolio-metrics" id="metrics-${cardId}">
+                    <div class="portfolio-metrics">
                         <div class="metric-item">
                             <div class="metric-label">Entry Price</div>
                             <div class="metric-value neutral">${entryPrice.toFixed(2)}</div>
@@ -1347,53 +1289,6 @@
                     </div>
                 </div>
             `;
-        }
-
-        // Portfolio toggle function
-        function togglePortfolio(cardId) {
-            const metricsElement = document.getElementById(`metrics-${cardId}`);
-            const toggleElement = document.getElementById(`toggle-${cardId}`);
-
-            if (!metricsElement || !toggleElement) {
-                return;
-            }
-
-            // Toggle the collapsed class
-            const isCollapsed = metricsElement.classList.contains('collapsed');
-
-            if (isCollapsed) {
-                // Expand
-                metricsElement.classList.remove('collapsed');
-                toggleElement.classList.remove('collapsed');
-                toggleElement.textContent = '⌄'; // Down arrow
-
-                // Store preference
-                localStorage.setItem(`portfolio-${cardId}`, 'expanded');
-            } else {
-                // Collapse
-                metricsElement.classList.add('collapsed');
-                toggleElement.classList.add('collapsed');
-                toggleElement.textContent = '⌃'; // Up arrow
-
-                // Store preference
-                localStorage.setItem(`portfolio-${cardId}`, 'collapsed');
-            }
-        }
-
-        // Restore portfolio state from localStorage
-        function restorePortfolioState(cardId) {
-            const savedState = localStorage.getItem(`portfolio-${cardId}`);
-
-            if (savedState === 'collapsed') {
-                const metricsElement = document.getElementById(`metrics-${cardId}`);
-                const toggleElement = document.getElementById(`toggle-${cardId}`);
-
-                if (metricsElement && toggleElement) {
-                    metricsElement.classList.add('collapsed');
-                    toggleElement.classList.add('collapsed');
-                    toggleElement.textContent = '⌃'; // Up arrow
-                }
-            }
         }
 
         function renderBarScores(barScores) {

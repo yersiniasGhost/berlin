@@ -4,7 +4,7 @@ import threading
 
 class Singleton(type):
     _instances = {}
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
     def __call__(cls, *args, **kwargs):
         # Use class name instead of class object to handle import path variations

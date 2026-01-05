@@ -4,7 +4,7 @@ import pymongo.errors
 from pymongo import MongoClient
 from mlf_utils.singleton import Singleton
 from mlf_utils.log_manager import LogManager
-from config.env_vars import EnvVars
+from mlf_utils.env_vars import EnvVars
 
 
 def get_info_from_url(url: str) -> Tuple[str, str, str]:

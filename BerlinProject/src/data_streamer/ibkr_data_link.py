@@ -1,18 +1,16 @@
 import threading
 import time
-from typing import Set, Dict, List, Optional
+from typing import Set, Dict
 from datetime import datetime, timedelta
-from decimal import Decimal
 
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 from ibapi.contract import Contract
 from ibapi.common import TickerId, BarData
-from ibapi.ticktype import TickType
 
 from data_streamer.data_link import DataLink
 from models.tick_data import TickData
-from config.env_vars import EnvVars
+from mlf_utils.env_vars import EnvVars
 from mlf_utils.log_manager import LogManager
 
 logger = LogManager().get_logger("IBKRDataLink")

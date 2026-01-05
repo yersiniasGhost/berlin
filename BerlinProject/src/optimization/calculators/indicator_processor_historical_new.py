@@ -309,7 +309,8 @@ class IndicatorProcessorHistoricalNew:
         Dict[str, List[float]],  # indicator_history (time-decayed)
         Dict[str, List[float]],  # raw_indicator_history (trigger values)
         Dict[str, List[float]],  # bar_score_history
-        Dict[str, List[float]]   # component_history (MACD components, SMA values, etc.)
+        Dict[str, List[float]],  # component_history (MACD components, SMA values, etc.)
+        Dict[str, str]           # indicator_agg_mapping: indicator_name -> agg_config
     ]:
         """
         Calculate indicators for entire historical timeline using batch operations
@@ -318,7 +319,8 @@ class IndicatorProcessorHistoricalNew:
             - indicator_history: {indicator_name: [time_decayed_value_at_tick_0, ...]}
             - raw_indicator_history: {indicator_name: [trigger_value_at_tick_0, ...]}
             - bar_score_history: {bar_name: [score_at_tick_0, score_at_tick_1, ...]}
-            - component_history: {component_name: [component_value_at_tick_0, ...]}  # Not aligned to min timeframe
+            - component_history: {component_name: [component_value_at_tick_0, ...]}  # At native timeframe resolution
+            - indicator_agg_mapping: {indicator_name: agg_config}  # Maps indicators to their aggregator
         """
         # logger.info("Starting batch historical indicator calculation...")
 
@@ -328,14 +330,15 @@ class IndicatorProcessorHistoricalNew:
         # Extract all candle data from aggregators
         all_candle_data = self._extract_all_candle_data(aggregators)
         if not all_candle_data:
-            return {}, {}, {}, {}
+            return {}, {}, {}, {}, {}
 
         # logger.info(f"Processing timeline of {self.primary_timeframe_length} data points")
 
         # Process each indicator
         raw_indicator_history = {}
         indicator_history: Dict[str, List[float]] = {}
-        component_history = {}  # NEW: Store component data (MACD, SMA values, etc.)
+        component_history = {}  # Store component data (MACD, SMA values, etc.) at native resolution
+        indicator_agg_mapping = {}  # Maps indicator_name -> agg_config for timestamp lookup
 
         for indicator in self.indicator_calculators:
             # Get the correct aggregator key for this indicator
@@ -374,7 +377,10 @@ class IndicatorProcessorHistoricalNew:
             raw_indicator_history[indicator.name] = aligned_raw_values.tolist()
             indicator_history[indicator.name] = aligned_trigger_values_with_lookback.tolist()
 
-            # Align component values as well
+            # Store indicator -> aggregator mapping for timestamp lookup
+            indicator_agg_mapping[indicator.name] = aggregator_key
+
+            # Store component values at native resolution (NOT aligned to primary timeframe)
             if components:
                 for component_name, component_values in components.items():
                     key = f"{indicator.name}_{component_name}"
@@ -382,7 +388,7 @@ class IndicatorProcessorHistoricalNew:
 
         # Calculate bar scores for entire timeline
         bar_score_history = self._calculate_bar_scores_batch(indicator_history, self.primary_timeframe_length)
-        return indicator_history, raw_indicator_history, bar_score_history, component_history
+        return indicator_history, raw_indicator_history, bar_score_history, component_history, indicator_agg_mapping
 
 
     @staticmethod

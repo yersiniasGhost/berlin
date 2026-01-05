@@ -451,7 +451,10 @@ class SchwabDataLink(DataLink):
 
     def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
         """
-        Load historical data and convert to TickData objects with type="TICK"
+        Load historical data for the current trading session only.
+
+        For intraday trading, we only need today's data from market open (9:30 AM ET)
+        to now. Previous day data is not relevant when starting a new card mid-session.
 
         Args:
             symbol: Stock symbol
@@ -461,22 +464,38 @@ class SchwabDataLink(DataLink):
             List of TickData objects sorted by timestamp
         """
         try:
-            # FIXED: Calculate time range properly (last 5 trading days instead of hours)
             from datetime import datetime, timedelta
             import pytz
 
             # Get current time in Eastern timezone (market timezone)
             eastern = pytz.timezone('US/Eastern')
-            end_time = datetime.now(eastern)
+            now_et = datetime.now(eastern)
 
-            # FIXED: Go back 5 trading days instead of 5 hours
-            start_time = end_time - timedelta(days=5)
+            # Check if today is a weekday (potential trading day)
+            if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
+                logger.info(f"Weekend - no intraday history to load for {symbol}")
+                return []
 
-            # Make sure we're not trying to get future data
-            if start_time > end_time:
-                start_time = end_time - timedelta(days=1)
+            # Calculate today's market open (9:30 AM ET)
+            market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+            market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
 
-            logger.info(f"Loading {timeframe} data for {symbol} from {start_time} to {end_time}")
+            # Determine time range for current session
+            if now_et < market_open:
+                # Before market open - no data yet for today
+                logger.info(f"Before market open - no intraday history to load for {symbol}")
+                return []
+
+            # Start from market open, end at current time (or market close if after hours)
+            start_time = market_open
+            end_time = min(now_et, market_close)
+
+            # Convert to milliseconds for Schwab API
+            start_ms = int(start_time.timestamp() * 1000)
+            end_ms = int(end_time.timestamp() * 1000)
+
+            logger.info(f"Loading {timeframe} data for {symbol} - today's session: "
+                       f"{start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')} ET")
 
             # API endpoint and auth
             url = "https://api.schwabapi.com/marketdata/v1/pricehistory"
@@ -493,20 +512,20 @@ class SchwabDataLink(DataLink):
             elif timeframe == "30m":
                 frequency = 30
             elif timeframe == "1h":
-                frequency_type = "minute"  # Keep as minute for 1h
+                frequency_type = "minute"
                 frequency = 60
 
-            # FIXED: API parameters with proper period handling
+            # Use startDate/endDate for precise control over today's session only
             params = {
                 'symbol': symbol,
                 'periodType': 'day',
-                'period': 5,  # Last 5 days
                 'frequencyType': frequency_type,
                 'frequency': frequency,
-                'needExtendedHoursData': False  # Only regular market hours
+                'startDate': start_ms,
+                'endDate': end_ms,
+                'needExtendedHoursData': False
             }
 
-            # Don't specify start/end dates, let the API handle the period
             logger.info(f"API params: {params}")
 
             # Make request
@@ -536,7 +555,16 @@ class SchwabDataLink(DataLink):
                 )
                 result.append(tick)
 
-            logger.info(f"Loaded {len(result)} {timeframe} candles for {symbol}")
+            # Enhanced logging for debugging historical data issues
+            if result:
+                first_candle = result[0]
+                last_candle = result[-1]
+                logger.info(f"Loaded {len(result)} {timeframe} candles for {symbol}: "
+                           f"{first_candle.timestamp.strftime('%Y-%m-%d %H:%M')} to "
+                           f"{last_candle.timestamp.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                logger.warning(f"No historical candles returned from Schwab API for {symbol} ({timeframe})")
+
             return result
 
         except Exception as e:

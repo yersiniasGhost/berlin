@@ -132,6 +132,44 @@ class BacktestDataStreamer:
     def get_maximum_drawdown(self):
         return self.primary_aggregator.get_maximum_drawdown()
 
+    def get_all_candlestick_data(self) -> Dict[str, List[List]]:
+        """
+        Get candlestick data for all aggregators in chart-ready format.
+
+        Returns:
+            Dict mapping aggregator key to list of [timestamp_ms, open, high, low, close]
+        """
+        all_candles = {}
+        if not self.aggregators:
+            return all_candles
+
+        for agg_key, aggregator in self.aggregators.items():
+            candles = []
+            history = aggregator.get_history()
+            for candle in history:
+                timestamp_ms = int(candle.timestamp.timestamp() * 1000)
+                candles.append([timestamp_ms, candle.open, candle.high, candle.low, candle.close])
+            all_candles[agg_key] = candles
+            logger.debug(f"Prepared {len(candles)} candles for {agg_key}")
+
+        return all_candles
+
+    def get_aggregator_timestamps(self, agg_key: str) -> List[int]:
+        """
+        Get timestamps (in milliseconds) for a specific aggregator.
+
+        Args:
+            agg_key: Aggregator key like "5m-heiken"
+
+        Returns:
+            List of timestamps in milliseconds
+        """
+        if not self.aggregators or agg_key not in self.aggregators:
+            return []
+
+        history = self.aggregators[agg_key].get_history()
+        return [int(candle.timestamp.timestamp() * 1000) for candle in history]
+
     def copy_data_from(self, source_streamer: 'BacktestDataStreamer'):
         """
         Copy precomputed data from a source streamer (for parallel processing).
@@ -166,7 +204,7 @@ class BacktestDataStreamer:
 
         # STEP 1: Calculate ALL indicators for entire timeline at once (batch processing)
         indicator_processor = IndicatorProcessorHistoricalNew(self.monitor_config)
-        indicator_history, raw_indicator_history, bar_score_history, component_history = indicator_processor.calculate_indicators(self.aggregators)
+        indicator_history, raw_indicator_history, bar_score_history, component_history, indicator_agg_mapping = indicator_processor.calculate_indicators(self.aggregators)
 
         # STEP 2: Execute trades using pre-calculated indicators
         for i, tick_data in enumerate(self.tick_history):

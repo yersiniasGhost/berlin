@@ -11,55 +11,51 @@
             </h2>
         </div>
     </div>
-    
+
     <!-- Configuration Panel -->
     <div class="row mb-4">
         <div class="col-md-4">
+            <!-- Data Configuration Card -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-database me-2"></i>Data Configuration</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="dataTicker" class="form-label">Ticker Symbol</label>
+                            <input type="text" class="form-control" id="dataTicker" placeholder="e.g., NVDA" value="NVDA">
+                        </div>
+                        <div class="col-6">
+                            <label for="dataStartDate" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="dataStartDate" value="2024-01-01">
+                        </div>
+                        <div class="col-6">
+                            <label for="dataEndDate" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="dataEndDate" value="2024-02-28">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="dataExtendedHours" checked>
+                                <label class="form-check-label" for="dataExtendedHours">
+                                    Include Extended Hours
+                                </label>
+                                <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indicator Selection Card -->
             <div class="card">
                 <div class="card-header">
-                    <h6 class="mb-0">Configuration</h6>
+                    <h6 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Indicators</h6>
                 </div>
                 <div class="card-body">
                     <form id="indicatorForm">
                         <div class="mb-3">
-                            <label class="form-label">Data Source</label>
-                            <select class="form-select" id="dataSource">
-                                <option value="upload">Upload Data File</option>
-                                <option value="yahoo">Yahoo Finance</option>
-                                <option value="example">Example Data</option>
-                            </select>
-                        </div>
-                        
-                        <div id="uploadSection">
-                            <div class="mb-3">
-                                <label class="form-label">Data Configuration File</label>
-                                <input type="file" class="form-control" id="dataConfigFile" accept=".json">
-                            </div>
-                        </div>
-                        
-                        <div id="yahooSection" style="display: none;">
-                            <div class="mb-3">
-                                <label class="form-label">Ticker Symbol</label>
-                                <input type="text" class="form-control" id="tickerSymbol" placeholder="e.g., AAPL">
-                            </div>
-                            <div class="row">
-                                <div class="col-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Start Date</label>
-                                        <input type="date" class="form-control" id="startDate">
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">End Date</label>
-                                        <input type="date" class="form-control" id="endDate">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Indicators to Calculate</label>
+                            <label class="form-label">Select Indicators</label>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="macdIndicator" checked>
                                 <label class="form-check-label" for="macdIndicator">MACD</label>
@@ -81,7 +77,7 @@
                                 <label class="form-check-label" for="bollinger">Bollinger Bands</label>
                             </div>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label class="form-label">Trigger Detection</label>
                             <div class="form-check">
@@ -89,19 +85,16 @@
                                 <label class="form-check-label" for="showTriggers">Show Trigger Events</label>
                             </div>
                         </div>
-                        
+
                         <div class="d-grid gap-2">
                             <button type="button" class="btn btn-primary" id="calculateIndicators">
                                 <i class="fas fa-calculator me-2"></i>Calculate Indicators
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" id="loadExampleData">
-                                <i class="fas fa-star me-2"></i>Load Example
                             </button>
                         </div>
                     </form>
                 </div>
             </div>
-            
+
             <!-- Indicator Parameters -->
             <div class="card mt-3" id="parametersCard" style="display: none;">
                 <div class="card-header">
@@ -114,7 +107,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Charts Column -->
         <div class="col-md-8">
             <div class="card">
@@ -128,17 +121,17 @@
                             <p>Configure and calculate indicators to see charts</p>
                         </div>
                     </div>
-                    
+
                     <!-- Main candlestick chart -->
                     <div id="candlestickChart" style="height: 400px; margin-bottom: 20px; display: none;"></div>
-                    
+
                     <!-- Indicator charts container -->
                     <div id="indicatorChartsContainer" style="display: none;"></div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Trigger Events Table -->
     <div class="row" id="triggersSection" style="display: none;">
         <div class="col-12">
@@ -175,63 +168,142 @@
 
 {% block extra_scripts %}
 <script>
+// Default data configuration (matching optimizer pattern)
+const DEFAULT_DATA_CONFIG = {
+    ticker: "NVDA",
+    start_date: "2024-01-01",
+    end_date: "2024-02-28",
+    include_extended_hours: true
+};
+
 document.addEventListener('DOMContentLoaded', function() {
-    const dataSource = document.getElementById('dataSource');
-    const uploadSection = document.getElementById('uploadSection');
-    const yahooSection = document.getElementById('yahooSection');
     const calculateBtn = document.getElementById('calculateIndicators');
-    const loadExampleBtn = document.getElementById('loadExampleData');
     const parametersCard = document.getElementById('parametersCard');
     const chartsContainer = document.getElementById('chartsContainer');
     const triggersSection = document.getElementById('triggersSection');
-    
+
     let charts = {};
     let currentData = null;
-    
-    // Data source selection
-    dataSource.addEventListener('change', function() {
-        if (this.value === 'upload') {
-            uploadSection.style.display = 'block';
-            yahooSection.style.display = 'none';
-        } else if (this.value === 'yahoo') {
-            uploadSection.style.display = 'none';
-            yahooSection.style.display = 'block';
-        } else {
-            uploadSection.style.display = 'none';
-            yahooSection.style.display = 'none';
+
+    // Collect data configuration (matching optimizer pattern)
+    function collectDataConfig() {
+        return {
+            ticker: document.getElementById('dataTicker').value.toUpperCase().trim(),
+            start_date: document.getElementById('dataStartDate').value,
+            end_date: document.getElementById('dataEndDate').value,
+            include_extended_hours: document.getElementById('dataExtendedHours').checked
+        };
+    }
+
+    // Gather selected indicators
+    function gatherSelectedIndicators() {
+        const selectedIndicators = [];
+
+        if (document.getElementById('macdIndicator').checked) {
+            selectedIndicators.push({
+                name: 'MACDIndicator',
+                display_name: 'MACD',
+                parameters: { fast_period: 12, slow_period: 26, signal_period: 9 }
+            });
         }
-    });
-    
+        if (document.getElementById('smaIndicator').checked) {
+            selectedIndicators.push({
+                name: 'SMAIndicator',
+                display_name: 'SMA',
+                parameters: { period: 20 }
+            });
+        }
+        if (document.getElementById('emaIndicator').checked) {
+            selectedIndicators.push({
+                name: 'EMAIndicator',
+                display_name: 'EMA',
+                parameters: { period: 20 }
+            });
+        }
+        if (document.getElementById('rsiIndicator').checked) {
+            selectedIndicators.push({
+                name: 'RSIIndicator',
+                display_name: 'RSI',
+                parameters: { period: 14 }
+            });
+        }
+        if (document.getElementById('bollinger').checked) {
+            selectedIndicators.push({
+                name: 'BollingerBandsIndicator',
+                display_name: 'Bollinger Bands',
+                parameters: { period: 20, std_dev: 2.0 }
+            });
+        }
+
+        return selectedIndicators;
+    }
+
+    // Validate form data
+    function validateFormData(dataConfig, indicators) {
+        if (indicators.length === 0) {
+            showAlert('Please select at least one indicator to calculate', 'warning');
+            return false;
+        }
+
+        if (!dataConfig.ticker) {
+            showAlert('Please enter a ticker symbol', 'warning');
+            return false;
+        }
+
+        if (!dataConfig.start_date || !dataConfig.end_date) {
+            showAlert('Please select start and end dates', 'warning');
+            return false;
+        }
+
+        // Validate date order
+        if (new Date(dataConfig.start_date) >= new Date(dataConfig.end_date)) {
+            showAlert('Start date must be before end date', 'warning');
+            return false;
+        }
+
+        return true;
+    }
+
     // Calculate indicators
     calculateBtn.addEventListener('click', async function() {
-        const formData = gatherFormData();
-        
-        if (!validateFormData(formData)) {
+        const dataConfig = collectDataConfig();
+        const indicators = gatherSelectedIndicators();
+
+        if (!validateFormData(dataConfig, indicators)) {
             return;
         }
-        
+
         try {
             this.disabled = true;
             this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Calculating...';
-            
-            const response = await fetch('/indicator/api/calculate_indicators', {
+
+            const requestBody = {
+                ticker: dataConfig.ticker,
+                start_date: dataConfig.start_date,
+                end_date: dataConfig.end_date,
+                include_extended_hours: dataConfig.include_extended_hours,
+                indicators: indicators,
+                show_triggers: document.getElementById('showTriggers').checked
+            };
+
+            const response = await fetch('/indicator/api/visualize', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(requestBody)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 currentData = result.data;
                 displayResults(result.data);
-                showAlert('Indicators calculated successfully', 'success');
+                showAlert(`Successfully calculated ${result.indicator_count} indicators with ${result.candle_count} candles`, 'success');
             } else {
                 throw new Error(result.error || 'Calculation failed');
             }
-            
+
         } catch (error) {
             showAlert(`Failed to calculate indicators: ${error.message}`, 'danger');
         } finally {
@@ -239,112 +311,30 @@ document.addEventListener('DOMContentLoaded', function() {
             this.innerHTML = '<i class="fas fa-calculator me-2"></i>Calculate Indicators';
         }
     });
-    
-    // Load example data
-    loadExampleBtn.addEventListener('click', async function() {
-        try {
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
-            
-            const response = await fetch('/indicator/api/load_example');
-            const result = await response.json();
-            
-            if (result.success) {
-                currentData = result.data;
-                displayResults(result.data);
-                showAlert('Example data loaded successfully', 'success');
-            } else {
-                throw new Error(result.error || 'Failed to load example');
-            }
-            
-        } catch (error) {
-            showAlert(`Failed to load example: ${error.message}`, 'danger');
-        } finally {
-            this.disabled = false;
-            this.innerHTML = '<i class="fas fa-star me-2"></i>Load Example';
-        }
-    });
-    
-    function gatherFormData() {
-        const dataSourceValue = dataSource.value;
-        const selectedIndicators = [];
-        
-        // Gather selected indicators
-        if (document.getElementById('macdIndicator').checked) selectedIndicators.push('macd');
-        if (document.getElementById('smaIndicator').checked) selectedIndicators.push('sma');
-        if (document.getElementById('emaIndicator').checked) selectedIndicators.push('ema');
-        if (document.getElementById('rsiIndicator').checked) selectedIndicators.push('rsi');
-        if (document.getElementById('bollinger').checked) selectedIndicators.push('bollinger');
-        
-        const formData = {
-            data_source: dataSourceValue,
-            indicators: selectedIndicators,
-            show_triggers: document.getElementById('showTriggers').checked
-        };
-        
-        if (dataSourceValue === 'yahoo') {
-            formData.ticker = document.getElementById('tickerSymbol').value;
-            formData.start_date = document.getElementById('startDate').value;
-            formData.end_date = document.getElementById('endDate').value;
-        } else if (dataSourceValue === 'upload') {
-            // Handle file upload
-            const fileInput = document.getElementById('dataConfigFile');
-            if (fileInput.files.length > 0) {
-                formData.data_file = fileInput.files[0];
-            }
-        }
-        
-        return formData;
-    }
-    
-    function validateFormData(formData) {
-        if (formData.indicators.length === 0) {
-            showAlert('Please select at least one indicator to calculate', 'warning');
-            return false;
-        }
-        
-        if (formData.data_source === 'yahoo') {
-            if (!formData.ticker) {
-                showAlert('Please enter a ticker symbol', 'warning');
-                return false;
-            }
-            if (!formData.start_date || !formData.end_date) {
-                showAlert('Please select start and end dates', 'warning');
-                return false;
-            }
-        } else if (formData.data_source === 'upload') {
-            if (!formData.data_file) {
-                showAlert('Please select a data configuration file', 'warning');
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    
+
     function displayResults(data) {
         // Hide placeholder and show charts
         chartsContainer.querySelector('.text-center').style.display = 'none';
         document.getElementById('candlestickChart').style.display = 'block';
         document.getElementById('indicatorChartsContainer').style.display = 'block';
-        
+
         // Create main price chart
-        createCandlestickChart(data.price_data);
-        
+        createCandlestickChart(data.candlestick);
+
         // Create indicator charts
         createIndicatorCharts(data.indicators);
-        
+
         // Show trigger events if enabled
         if (data.triggers && data.triggers.length > 0) {
             displayTriggerEvents(data.triggers);
             triggersSection.style.display = 'block';
         }
-        
+
         // Show parameters card
         parametersCard.style.display = 'block';
-        displayIndicatorParameters(data.indicators);
+        displayIndicatorParameters(data.indicator_metadata);
     }
-    
+
     function createCandlestickChart(priceData) {
         const chartConfig = {
             chart: {
@@ -363,44 +353,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }],
             credits: { enabled: false }
         };
-        
+
         if (charts.candlestick) {
             charts.candlestick.destroy();
         }
         charts.candlestick = Highcharts.chart('candlestickChart', chartConfig);
     }
-    
+
     function createIndicatorCharts(indicators) {
         const container = document.getElementById('indicatorChartsContainer');
         container.innerHTML = '';
-        
+
         Object.entries(indicators).forEach(([indicatorName, indicatorData]) => {
             const chartDiv = document.createElement('div');
             chartDiv.id = `${indicatorName}Chart`;
             chartDiv.style.height = '300px';
             chartDiv.style.marginBottom = '20px';
-            
+
             // Add title
             const titleDiv = document.createElement('div');
-            titleDiv.innerHTML = `<h6>${indicatorName.toUpperCase()}</h6>`;
+            titleDiv.innerHTML = `<h6>${indicatorData.name || indicatorName.toUpperCase()}</h6>`;
             container.appendChild(titleDiv);
             container.appendChild(chartDiv);
-            
+
             // Create chart based on indicator type
-            if (indicatorName === 'macd') {
+            const lowerName = indicatorName.toLowerCase();
+            if (lowerName.includes('macd')) {
                 createMACDChart(chartDiv.id, indicatorData);
-            } else if (indicatorName === 'sma' || indicatorName === 'ema') {
-                createMovingAverageChart(chartDiv.id, indicatorData, indicatorName.toUpperCase());
-            } else if (indicatorName === 'rsi') {
+            } else if (lowerName.includes('sma') || lowerName.includes('ema')) {
+                createMovingAverageChart(chartDiv.id, indicatorData, indicatorData.name || indicatorName);
+            } else if (lowerName.includes('rsi')) {
                 createRSIChart(chartDiv.id, indicatorData);
-            } else if (indicatorName === 'bollinger') {
+            } else if (lowerName.includes('bollinger')) {
                 createBollingerChart(chartDiv.id, indicatorData);
             } else {
-                createGenericChart(chartDiv.id, indicatorData, indicatorName.toUpperCase());
+                createGenericChart(chartDiv.id, indicatorData, indicatorData.name || indicatorName);
             }
         });
     }
-    
+
     function createMACDChart(containerId, data) {
         charts[containerId] = Highcharts.chart(containerId, {
             chart: { height: 300 },
@@ -416,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }],
             series: [{
                 name: 'MACD',
-                data: data.macd || [],
+                data: data.macd || data.data || [],
                 yAxis: 0,
                 color: '#007bff'
             }, {
@@ -434,7 +425,7 @@ document.addEventListener('DOMContentLoaded', function() {
             credits: { enabled: false }
         });
     }
-    
+
     function createMovingAverageChart(containerId, data, title) {
         charts[containerId] = Highcharts.chart(containerId, {
             chart: { height: 300 },
@@ -443,19 +434,19 @@ document.addEventListener('DOMContentLoaded', function() {
             yAxis: { title: { text: 'Value' } },
             series: [{
                 name: title,
-                data: data,
+                data: data.data || data,
                 color: '#007bff'
             }],
             credits: { enabled: false }
         });
     }
-    
+
     function createRSIChart(containerId, data) {
         charts[containerId] = Highcharts.chart(containerId, {
             chart: { height: 300 },
             title: { text: null },
             xAxis: { type: 'datetime' },
-            yAxis: { 
+            yAxis: {
                 title: { text: 'RSI' },
                 min: 0,
                 max: 100,
@@ -466,13 +457,13 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             series: [{
                 name: 'RSI',
-                data: data,
+                data: data.data || data,
                 color: '#007bff'
             }],
             credits: { enabled: false }
         });
     }
-    
+
     function createBollingerChart(containerId, data) {
         charts[containerId] = Highcharts.chart(containerId, {
             chart: { height: 300 },
@@ -485,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 color: '#dc3545'
             }, {
                 name: 'Middle Band',
-                data: data.middle || [],
+                data: data.middle || data.data || [],
                 color: '#007bff'
             }, {
                 name: 'Lower Band',
@@ -495,7 +486,7 @@ document.addEventListener('DOMContentLoaded', function() {
             credits: { enabled: false }
         });
     }
-    
+
     function createGenericChart(containerId, data, title) {
         charts[containerId] = Highcharts.chart(containerId, {
             chart: { height: 300 },
@@ -504,47 +495,49 @@ document.addEventListener('DOMContentLoaded', function() {
             yAxis: { title: { text: 'Value' } },
             series: [{
                 name: title,
-                data: data,
+                data: data.data || data,
                 color: '#007bff'
             }],
             credits: { enabled: false }
         });
     }
-    
-    function displayIndicatorParameters(indicators) {
+
+    function displayIndicatorParameters(indicatorMetadata) {
         const container = document.getElementById('indicatorParameters');
         let html = '';
-        
-        Object.entries(indicators).forEach(([name, data]) => {
-            if (data.parameters) {
+
+        if (indicatorMetadata && indicatorMetadata.length > 0) {
+            indicatorMetadata.forEach(indicator => {
                 html += `
                     <div class="mb-3">
-                        <h6>${name.toUpperCase()} Parameters</h6>
+                        <h6>${indicator.display_name || indicator.name}</h6>
                         <ul class="list-unstyled">
                 `;
-                
-                Object.entries(data.parameters).forEach(([param, value]) => {
-                    html += `<li><strong>${param}:</strong> ${value}</li>`;
-                });
-                
+
+                if (indicator.parameters) {
+                    Object.entries(indicator.parameters).forEach(([param, value]) => {
+                        html += `<li><strong>${param}:</strong> ${value}</li>`;
+                    });
+                }
+
                 html += `</ul></div>`;
-            }
-        });
-        
-        container.innerHTML = html;
+            });
+        }
+
+        container.innerHTML = html || '<p class="text-muted">No parameter details available</p>';
     }
-    
+
     function displayTriggerEvents(triggers) {
         const tableBody = document.getElementById('triggersTable');
-        
+
         if (!triggers || triggers.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No trigger events detected</td></tr>';
             return;
         }
-        
+
         const rows = triggers.map(trigger => {
             const triggerTypeClass = trigger.type === 'bullish' ? 'text-success' : 'text-danger';
-            
+
             return `
                 <tr>
                     <td>${new Date(trigger.timestamp).toLocaleDateString()}</td>
@@ -556,7 +549,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </tr>
             `;
         }).join('');
-        
+
         tableBody.innerHTML = rows;
     }
 });

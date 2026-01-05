@@ -19,7 +19,7 @@ from mlf_utils import sanitize_nan_values, FileUploadHandler
 lm = LogManager('mlf-app.log')
 lm.configure_library_loggers()
 logger = lm.get_logger("visualization-app")
-
+logger.info("HERE")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'visualization-apps-secret-key'

@@ -34,7 +34,15 @@ class IndicatorProcessor:
         self.max_history_length: int = 100  # Keep last 100 data points
         self.indicators: Dict[str, float] = {}
         self.raw_indicators: Dict[str, float] = {}
-        self.component_data: Dict[str, float] = {}  # NEW: Store component data (MACD, SMA values, etc.)
+        self.component_data: Dict[str, float] = {}  # Store component data (MACD, SMA values, etc.)
+
+        # Data status tracking for insufficient data warnings
+        self.data_status: Dict[str, any] = {
+            'has_sufficient_data': False,
+            'warnings': [],
+            'tick_counts': {},  # aggregator_key -> tick_count
+            'required_ticks': 0  # max required across all indicators
+        }
 
         self.indicator_trigger_history: Dict[str, List[float]] = {}
         for indicator in self.config.indicators:
@@ -44,9 +52,35 @@ class IndicatorProcessor:
         self.indicator_objects: Dict[str, any] = {}
         self._initialize_indicators()
 
+        # Calculate required ticks based on indicator parameters
+        self._calculate_required_ticks()
+
         self.first_pass = True
 
         logger.info(f"IndicatorProcessor initialized with {len(self.config.indicators)} indicators")
+
+    def _calculate_required_ticks(self) -> None:
+        """Calculate the minimum required ticks based on indicator parameters"""
+        max_required = 10  # Default minimum
+
+        for indicator_def in self.config.indicators:
+            params = indicator_def.parameters or {}
+            # Check common period-related parameters
+            period = params.get('period', 0)
+            fast_period = params.get('fast_period', 0)
+            slow_period = params.get('slow_period', 0)
+            signal_period = params.get('signal_period', 0)
+            lookback = params.get('lookback', 0)
+
+            # The indicator needs at least the largest period + some buffer
+            indicator_required = max(period, fast_period, slow_period, signal_period, lookback)
+            if indicator_required > 0:
+                # Add buffer for calculation (indicator needs period + 1 at minimum)
+                indicator_required += 5
+                max_required = max(max_required, indicator_required)
+
+        self.data_status['required_ticks'] = max_required
+        logger.info(f"Required ticks for indicators: {max_required}")
 
     def _initialize_indicators(self) -> None:
         """Initialize indicator objects using IndicatorRegistry"""
@@ -67,6 +101,35 @@ class IndicatorProcessor:
                 logger.error(f"Failed to initialize indicator '{indicator_def.name}': {e}")
                 import traceback
                 logger.error(traceback.format_exc())
+
+    def _update_data_status(self, aggregators: Dict[str, 'CandleAggregator']) -> None:
+        """Update data status with tick counts and warnings for insufficient data"""
+        warnings = []
+        tick_counts = {}
+        min_tick_count = float('inf')
+
+        for agg_key, aggregator in aggregators.items():
+            # Count total candles (history + current)
+            count = len(aggregator.get_history())
+            if aggregator.get_current_candle():
+                count += 1
+            tick_counts[agg_key] = count
+            min_tick_count = min(min_tick_count, count)
+
+        required = self.data_status['required_ticks']
+        has_sufficient = min_tick_count >= required
+
+        # Generate warning message if insufficient data
+        if not has_sufficient and min_tick_count < float('inf'):
+            warnings.append(f"Requires {required} ticks, have {int(min_tick_count)}")
+
+        self.data_status['tick_counts'] = tick_counts
+        self.data_status['has_sufficient_data'] = has_sufficient
+        self.data_status['warnings'] = warnings
+
+    def get_data_status(self) -> Dict[str, any]:
+        """Get current data status including warnings for UI display"""
+        return self.data_status.copy()
 
     # def calculate_indicators_new(self, aggregators: Dict[str, 'CandleAggregator']) -> Tuple[
     #     Dict[str, float], Dict[str, float], Dict[str, float]]:
@@ -118,6 +181,8 @@ class IndicatorProcessor:
         Returns:
             Tuple of (indicators, raw_indicators, bar_scores)
         """
+        # Update tick counts and data status
+        self._update_data_status(aggregators)
 
         for indicator_def in self.config.indicators:
             # FIXED: Create the full aggregator key that matches how aggregators are stored

@@ -7,7 +7,7 @@ from models.monitor_configuration import MonitorConfiguration
 from candle_aggregator.candle_aggregator import CandleAggregator
 from candle_aggregator.candle_aggregator_normal import CANormal
 from candle_aggregator.candle_aggregator_heiken import CAHeiken
-from config.env_vars import EnvVars
+from mlf_utils.env_vars import EnvVars
 
 
 # we use mongodb and the collection tick_history_polygon now.
@@ -61,7 +61,8 @@ class MongoDBConnect:
         return 0.0  # Default fallback
 
     def process_historical_data(self, ticker: str, start_date: str, end_date: str,
-                                monitor_config: MonitorConfiguration) -> bool:
+                                monitor_config: MonitorConfiguration,
+                                include_extended_hours: bool = True) -> bool:
 
         # Processing data for ticker and date range
 
@@ -74,7 +75,7 @@ class MongoDBConnect:
         if not raw_ticks:
             return False
 
-        self._create_aggregators(ticker, monitor_config)
+        self._create_aggregators(ticker, monitor_config, include_extended_hours)
         self._process_all_ticks(raw_ticks)
         self._report_results()
 
@@ -154,9 +155,8 @@ class MongoDBConnect:
             traceback.print_exc()
             return []
 
-    # Fix the _create_aggregators method in YahooFinanceHistorical
-
-    def _create_aggregators(self, ticker: str, monitor_config: MonitorConfiguration):
+    def _create_aggregators(self, ticker: str, monitor_config: MonitorConfiguration,
+                            include_extended_hours: bool = True):
         """Create aggregators based on agg_config"""
         self.ticker = ticker
         aggregator_configs = monitor_config.get_aggregator_configs()  # Returns {"1m-normal": "normal", "5m-normal": "normal"}
@@ -166,9 +166,9 @@ class MongoDBConnect:
             timeframe = agg_key.split('-')[0]
 
             if agg_type == "heiken":
-                aggregator = CAHeiken(ticker, timeframe)
+                aggregator = CAHeiken(ticker, timeframe, include_extended_hours)
             else:
-                aggregator = CANormal(ticker, timeframe)
+                aggregator = CANormal(ticker, timeframe, include_extended_hours)
 
             # Store with the full key for lookup purposes
             self.aggregators[agg_key] = aggregator

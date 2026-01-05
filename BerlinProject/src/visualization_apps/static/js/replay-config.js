@@ -862,6 +862,78 @@ function collectMonitorConfigData() {
     // Update bars and indicators
     updateCurrentConfigBars();
     updateCurrentConfigIndicators();
+
+    // Update entry/exit conditions from UI
+    updateCurrentConfigConditions();
+}
+
+function updateCurrentConfigConditions() {
+    if (!monitorConfig || !monitorConfig.monitor) return;
+
+    // Collect enter_long conditions
+    const enterLongContainer = document.getElementById('enterLongContainer');
+    const enterLongInputs = enterLongContainer.querySelectorAll('[data-condition-index]');
+    const enterLongConditions = [];
+
+    // Group inputs by condition index
+    const enterLongByIndex = {};
+    enterLongInputs.forEach(input => {
+        const index = input.dataset.conditionIndex;
+        const field = input.dataset.field;
+
+        if (!enterLongByIndex[index]) {
+            enterLongByIndex[index] = {};
+        }
+
+        if (field === 'name') {
+            enterLongByIndex[index].name = input.value;
+        } else if (field === 'threshold') {
+            enterLongByIndex[index].threshold = parseFloat(input.value);
+        }
+    });
+
+    // Convert to array
+    Object.values(enterLongByIndex).forEach(condition => {
+        if (condition.name) {
+            enterLongConditions.push(condition);
+        }
+    });
+
+    // Collect exit_long conditions
+    const exitLongContainer = document.getElementById('exitLongContainer');
+    const exitLongInputs = exitLongContainer.querySelectorAll('[data-condition-index]');
+    const exitLongConditions = [];
+
+    // Group inputs by condition index
+    const exitLongByIndex = {};
+    exitLongInputs.forEach(input => {
+        const index = input.dataset.conditionIndex;
+        const field = input.dataset.field;
+
+        if (!exitLongByIndex[index]) {
+            exitLongByIndex[index] = {};
+        }
+
+        if (field === 'name') {
+            exitLongByIndex[index].name = input.value;
+        } else if (field === 'threshold') {
+            exitLongByIndex[index].threshold = parseFloat(input.value);
+        }
+    });
+
+    // Convert to array
+    Object.values(exitLongByIndex).forEach(condition => {
+        if (condition.name) {
+            exitLongConditions.push(condition);
+        }
+    });
+
+    // Update the monitor config with collected conditions
+    monitorConfig.monitor.enter_long = enterLongConditions;
+    monitorConfig.monitor.exit_long = exitLongConditions;
+
+    console.log('[REPLAY] Updated enter_long conditions:', enterLongConditions);
+    console.log('[REPLAY] Updated exit_long conditions:', exitLongConditions);
 }
 
 function collectDataConfigData() {

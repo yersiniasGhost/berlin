@@ -393,53 +393,48 @@ def get_candlestick_data(card_id: str):
 
         aggregator_key = timeframe_mapping.get(timeframe, '1m-normal')
 
-        # CREATE SINGLE CURRENT CANDLE from live data if available
+        # Get full candle history from the data streamer
         candlestick_data = []
-        
-        # Try to get the current price from the combination's latest data
         current_price = None
+
         if card_id in app_service.combinations:
             try:
                 combination = app_service.combinations[card_id]
                 if 'data_streamer' in combination:
                     data_streamer = combination['data_streamer']
-                    # Try to get current price from aggregator if available
                     all_candle_data = data_streamer._get_all_candle_data()
-                    if aggregator_key in all_candle_data and all_candle_data[aggregator_key]:
-                        latest_candle = all_candle_data[aggregator_key][-1]
-                        current_price = float(latest_candle.close)
-            except Exception as e:
-                logger.warning(f"Could not get current price: {e}")
-        
-        # If we have a current price, create an initial current candle
-        if current_price:
-            from datetime import datetime
-            now = datetime.now()
-            # Create timestamp for current minute
-            current_minute = now.replace(second=0, microsecond=0)
-            timestamp_ms = int(current_minute.timestamp() * 1000)
-            
-            # Create initial candle with current price as OHLC (will be updated by live data)
-            initial_candle = [
-                timestamp_ms,
-                current_price,  # open
-                current_price,  # high
-                current_price,  # low
-                current_price   # close
-            ]
-            candlestick_data = [initial_candle]
-            
-            logger.info(f"Created initial current candle for {card_id} at ${current_price}")
-        else:
-            logger.info(f"No current price available for {card_id}, starting with empty chart")
 
-        # Simple debug info
-        from datetime import datetime
+                    if aggregator_key in all_candle_data and all_candle_data[aggregator_key]:
+                        candle_history = all_candle_data[aggregator_key]
+
+                        # Convert TickData objects to [timestamp_ms, open, high, low, close] format
+                        for candle in candle_history:
+                            timestamp_ms = int(candle.timestamp.timestamp() * 1000)
+                            candlestick_data.append([
+                                timestamp_ms,
+                                float(candle.open),
+                                float(candle.high),
+                                float(candle.low),
+                                float(candle.close)
+                            ])
+
+                        # Get current price from last candle
+                        if candle_history:
+                            current_price = float(candle_history[-1].close)
+
+                        logger.info(f"Returning {len(candlestick_data)} candles for {card_id} ({aggregator_key})")
+            except Exception as e:
+                logger.warning(f"Could not get candle history: {e}")
+
+        if not candlestick_data:
+            logger.info(f"No candle history available for {card_id}, starting with empty chart")
+
+        # Debug info
         debug_info = {
             'initial_candles': len(candlestick_data),
             'current_price': current_price,
-            'data_source': 'current_minute_only',
-            'message': 'Starting with current minute candle, will build from live data'
+            'data_source': 'aggregator_history',
+            'message': f'Loaded {len(candlestick_data)} candles from aggregator history'
         }
 
         return jsonify({

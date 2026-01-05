@@ -14,7 +14,7 @@ from data_streamer.cs_replay_data_link import CSReplayDataLink
 
 # Configure logging
 from mlf_utils.log_manager import LogManager
-logger = LogManager("mlf").get_logger("app")
+logger = LogManager("mlf.log").get_logger("app")
 
 # Flask app setup
 app = Flask(__name__)
