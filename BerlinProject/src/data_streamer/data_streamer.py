@@ -180,8 +180,107 @@ class DataStreamer:
                 # Use prepopulate_data method from base CandleAggregator class
                 candles_loaded = aggregator.prepopulate_data(data_link)
                 logger.info(f"Loaded {candles_loaded} historical candles for {agg_key}")
+
+            # After loading historical data, calculate initial indicators
+            self._calculate_initial_indicators()
+
         except Exception as e:
             logger.error(f"Error loading historical data: {e}")
+
+    def _calculate_initial_indicators(self) -> None:
+        """
+        Calculate indicators based on historical data loaded into aggregators.
+        This is called after load_historical_data to initialize indicator state.
+        """
+        try:
+            # Log aggregator state before calculating
+            for agg_key, aggregator in self.aggregators.items():
+                history_count = len(aggregator.get_history())
+                has_current = aggregator.get_current_candle() is not None
+                logger.info(f"Aggregator {agg_key}: history={history_count}, has_current={has_current}")
+
+            # Calculate indicators from current aggregator state
+            self.indicators, self.raw_indicators, self.bar_scores = (
+                self.indicator_processor.calculate_indicators_new(self.aggregators))
+
+            logger.info(f"Calculated initial indicators: {len(self.indicators)} indicators, "
+                       f"{len(self.bar_scores)} bar scores")
+            if self.indicators:
+                logger.info(f"Indicator values: {self.indicators}")
+            if self.bar_scores:
+                logger.info(f"Bar scores: {self.bar_scores}")
+
+        except Exception as e:
+            logger.error(f"Error calculating initial indicators: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def emit_current_state(self) -> None:
+        """
+        Emit current state (indicators, bar_scores, data_status) to all external tools.
+        Used to push initial state after historical data is loaded.
+        """
+        try:
+            # Get the latest candle from any aggregator to use as tick_data
+            tick_data = None
+            for agg_key, aggregator in self.aggregators.items():
+                current = aggregator.get_current_candle()
+                if current:
+                    tick_data = current
+                    logger.info(f"Using current candle from {agg_key} for emit_current_state")
+                    break
+                # If no current candle, try history
+                history = aggregator.get_history()
+                if history:
+                    tick_data = history[-1]
+                    logger.info(f"Using last history candle from {agg_key} for emit_current_state")
+                    break
+
+            if not tick_data:
+                # Create synthetic tick data for initial display
+                logger.warning("No candle data available - creating synthetic tick for initial display")
+                tick_data = TickData(
+                    symbol=self.symbol,
+                    timestamp=datetime.now(),
+                    open=0.0,
+                    high=0.0,
+                    low=0.0,
+                    close=0.0,
+                    volume=0,
+                    time_increment="PIP"
+                )
+
+            # Get portfolio metrics
+            portfolio_metrics = self.trade_executor.portfolio.get_performance_metrics(tick_data.close)
+
+            # Get data status for UI warnings
+            data_status = self.indicator_processor.get_data_status()
+
+            logger.info(f"emit_current_state for {self.symbol}: "
+                       f"indicators={len(self.indicators)}, bar_scores={len(self.bar_scores)}, "
+                       f"data_status={data_status.get('has_sufficient_data', 'N/A')}, "
+                       f"tools={len(self.external_tools)}")
+
+            # Send to all external tools
+            for tool in self.external_tools:
+                tool.process_tick(
+                    card_id=self.card_id,
+                    symbol=self.symbol,
+                    tick_data=tick_data,
+                    indicators=self.indicators,
+                    raw_indicators=self.raw_indicators,
+                    bar_scores=self.bar_scores,
+                    portfolio_metrics=portfolio_metrics,
+                    component_data=self.indicator_processor.component_data,
+                    data_status=data_status
+                )
+
+            logger.info(f"Emitted current state for {self.symbol}: {len(self.indicators)} indicators")
+
+        except Exception as e:
+            logger.error(f"Error emitting current state: {e}")
+            import traceback
+            traceback.print_exc()
 
     def connect_tool(self, external_tool) -> None:
         """

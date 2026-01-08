@@ -29,5 +29,7 @@ class ExternalTool(ABC):
 
     def process_tick(self, card_id: str, symbol: str, tick_data: TickData,
                      indicators: Dict[str, float], raw_indicators: Dict[str, float],
-                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None) -> None:
+                     bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None,
+                     component_data: Optional[Dict[str, float]] = None,
+                     data_status: Optional[Dict[str, Any]] = None) -> None:
         pass

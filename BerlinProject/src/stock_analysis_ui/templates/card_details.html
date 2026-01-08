@@ -8,6 +8,8 @@
     <!-- Highcharts for candlestick chart -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
+    <!-- Shared indicator charts module -->
+    <script src="{{ url_for('static', filename='js/indicator-charts.js') }}"></script>
     <style>
         * {
             margin: 0;
@@ -454,6 +456,86 @@
             font-size: 0.875rem;
         }
 
+        /* Indicator Charts Section with Tabs */
+        .indicator-charts-section {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            grid-column: 1 / -1;
+        }
+
+        .chart-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 1rem;
+        }
+
+        .chart-tab {
+            padding: 0.5rem 1rem;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #7d8590;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .chart-tab:hover {
+            background: #30363d;
+            color: #e6edf3;
+        }
+
+        .chart-tab.active {
+            background: #238636;
+            border-color: #238636;
+            color: #ffffff;
+        }
+
+        .chart-tab-content {
+            display: none;
+        }
+
+        .chart-tab-content.active {
+            display: block;
+        }
+
+        .indicator-chart-container {
+            height: 400px;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+
+        /* Loading Spinner */
+        .chart-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #7d8590;
+            font-size: 0.875rem;
+        }
+
+        .chart-loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         /* Candlestick Chart Section */
         .candlestick-chart-section {
             margin-top: 2rem;
@@ -680,6 +762,28 @@
                         </div>
                         <div id="candlestickChart" style="height: 500px; width: 100%;"></div>
                     </div>
+
+                    <!-- Indicator Charts Section with Tabs -->
+                    <div class="indicator-charts-section">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">Indicator History Charts</div>
+                                <div class="section-subtitle">Historical indicator values and trigger signals</div>
+                            </div>
+                        </div>
+
+                        <!-- Indicator Tabs -->
+                        <div class="chart-tabs" id="indicatorTabs">
+                            <!-- Tabs will be dynamically generated -->
+                            <div class="chart-loading">Loading indicator charts...</div>
+                        </div>
+
+                        <!-- Tab Content Containers -->
+                        <div id="indicatorTabContents">
+                            <!-- Tab content will be dynamically generated -->
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </main>
@@ -700,6 +804,11 @@
         let candlestickChart = null;
         let candlestickData = [];
         let currentTimeframe = '1m';
+
+        // Chart data storage
+        let chartData = null;
+        let indicatorCharts = {};
+        let allCharts = [];  // For synchronization
 
         // Sidebar toggle function
         function toggleSidebar() {
@@ -802,6 +911,9 @@
 
                     // Load initial candlestick data
                     await loadCandlestickData(currentTimeframe);
+
+                    // Load comprehensive chart data for indicators, P&L, and trade bands
+                    await loadChartData();
 
                     // Check for portfolio data with trade history - check both possible locations
                     if (data.portfolio_data && data.portfolio_data.trade_history) {
@@ -1031,6 +1143,11 @@
             });
 
             console.log(`Candlestick chart initialized with ${candlestickData.length} candles`);
+
+            // Add to allCharts for synchronization
+            if (candlestickChart) {
+                allCharts.push(candlestickChart);
+            }
         }
 
         function updateLivePriceOnChart(data) {
@@ -1389,6 +1506,276 @@
                     <td>${pnlHTML}</td>
                 </tr>
             `;
+        }
+
+        // ========================================
+        // Chart Data Loading and Rendering
+        // ========================================
+
+        async function loadChartData() {
+            try {
+                console.log(`Loading chart data for card: ${cardId}`);
+
+                const response = await fetch(`/api/combinations/${cardId}/chart-data`);
+
+                if (!response.ok) {
+                    console.log('Chart data API not available');
+                    showChartError('Chart data not available');
+                    return;
+                }
+
+                chartData = await response.json();
+
+                if (chartData.success) {
+                    console.log('Chart data loaded:', {
+                        indicators: Object.keys(chartData.indicator_history || {}),
+                        trades: chartData.trades?.length || 0
+                    });
+
+                    // Render indicator tabs and charts
+                    renderIndicatorTabs();
+
+                    // Add trade bands to candlestick chart if trades exist
+                    if (chartData.trades && chartData.trades.length > 0 && candlestickChart) {
+                        addTradeBandsToCandlestick();
+                    }
+
+                    // Enable chart synchronization
+                    if (typeof IndicatorCharts !== 'undefined') {
+                        IndicatorCharts.enableChartSynchronization(allCharts);
+                    }
+
+                } else {
+                    console.log('Failed to load chart data:', chartData.error);
+                    showChartError(chartData.error || 'Failed to load chart data');
+                }
+
+            } catch (error) {
+                console.error('Error loading chart data:', error);
+                showChartError('Error loading chart data');
+            }
+        }
+
+        function showChartError(message) {
+            document.getElementById('indicatorTabs').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-text">${message}</div>
+                </div>
+            `;
+        }
+
+        function renderIndicatorTabs() {
+            const tabsContainer = document.getElementById('indicatorTabs');
+            const contentsContainer = document.getElementById('indicatorTabContents');
+
+            if (!chartData || !chartData.indicator_history) {
+                tabsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-text">No indicator history available</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const indicatorHistory = chartData.indicator_history;
+            const classToLayout = chartData.class_to_layout || {};
+            const componentHistory = chartData.component_history || {};
+            const rawIndicatorHistory = chartData.raw_indicator_history || {};
+            const indicatorNames = Object.keys(indicatorHistory);
+
+            if (indicatorNames.length === 0) {
+                tabsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-text">No indicator history available</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Generate tabs
+            let tabsHtml = '';
+            let contentsHtml = '';
+
+            indicatorNames.forEach((name, index) => {
+                const isActive = index === 0 ? ' active' : '';
+                const displayName = name.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
+
+                tabsHtml += `
+                    <button class="chart-tab${isActive}" onclick="switchIndicatorTab('${name}')" data-indicator="${name}">
+                        ${displayName}
+                    </button>
+                `;
+
+                contentsHtml += `
+                    <div class="chart-tab-content${isActive}" id="tab-${name}">
+                        <div class="indicator-chart-container" id="chart-${name}">
+                            <div class="chart-loading">Rendering ${displayName} chart...</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            tabsContainer.innerHTML = tabsHtml;
+            contentsContainer.innerHTML = contentsHtml;
+
+            // Render charts for all indicators (only first one visible initially)
+            indicatorNames.forEach((name, index) => {
+                setTimeout(() => {
+                    renderIndicatorChart(name, indicatorHistory, classToLayout, componentHistory, rawIndicatorHistory);
+                }, index * 50);  // Stagger chart creation
+            });
+        }
+
+        function switchIndicatorTab(indicatorName) {
+            // Update tab active state
+            document.querySelectorAll('.chart-tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.dataset.indicator === indicatorName) {
+                    tab.classList.add('active');
+                }
+            });
+
+            // Update content visibility
+            document.querySelectorAll('.chart-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            const targetContent = document.getElementById(`tab-${indicatorName}`);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+
+            // Reflow chart if it exists
+            if (indicatorCharts[indicatorName]) {
+                indicatorCharts[indicatorName].reflow();
+            }
+        }
+
+        function renderIndicatorChart(indicatorName, indicatorHistory, classToLayout, componentHistory, rawIndicatorHistory) {
+            const containerId = `chart-${indicatorName}`;
+            const container = document.getElementById(containerId);
+
+            if (!container) {
+                console.error(`Container not found: ${containerId}`);
+                return;
+            }
+
+            const history = indicatorHistory[indicatorName];
+            if (!history || history.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-text">No data available for ${indicatorName}</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Check if this is a trigger chart (values between 0 and ~1)
+            const values = history.map(p => p[1]).filter(v => v !== null);
+            const maxValue = Math.max(...values);
+            const minValue = Math.min(...values);
+            const isTriggerChart = maxValue <= 1.5 && minValue >= 0;
+
+            // Determine chart type based on class_to_layout mapping
+            const layout = classToLayout[indicatorName] || 'line';
+
+            let chart;
+            if (typeof IndicatorCharts !== 'undefined') {
+                if (layout === 'stacked' && indicatorName.toLowerCase().includes('macd')) {
+                    // MACD-style stacked chart with histogram
+                    chart = IndicatorCharts.createMACDChart(
+                        containerId,
+                        history,
+                        componentHistory,
+                        indicatorName
+                    );
+                } else if (isTriggerChart) {
+                    // Trigger chart with 0-1 range and reference line at 1
+                    chart = IndicatorCharts.createTriggerChart(
+                        containerId,
+                        history,
+                        indicatorName
+                    );
+                } else {
+                    // Generic line chart for other indicators
+                    chart = IndicatorCharts.createGenericIndicatorChart(
+                        containerId,
+                        history,
+                        indicatorName,
+                        rawIndicatorHistory[indicatorName]
+                    );
+                }
+            } else {
+                // Fallback to basic Highcharts if IndicatorCharts module not loaded
+                chart = createBasicChart(containerId, history, indicatorName);
+            }
+
+            if (chart) {
+                indicatorCharts[indicatorName] = chart;
+                allCharts.push(chart);
+            }
+        }
+
+        function createBasicChart(containerId, data, title) {
+            return Highcharts.chart(containerId, {
+                chart: {
+                    backgroundColor: '#161b22',
+                    style: { fontFamily: 'Inter, sans-serif' }
+                },
+                title: {
+                    text: title,
+                    style: { color: '#e6edf3' }
+                },
+                xAxis: {
+                    type: 'datetime',
+                    gridLineColor: '#30363d',
+                    labels: { style: { color: '#7d8590' } }
+                },
+                yAxis: {
+                    gridLineColor: '#30363d',
+                    labels: { style: { color: '#7d8590' } },
+                    title: { text: '', style: { color: '#7d8590' } }
+                },
+                legend: { enabled: false },
+                tooltip: {
+                    backgroundColor: '#21262d',
+                    borderColor: '#30363d',
+                    style: { color: '#e6edf3' }
+                },
+                series: [{
+                    name: title,
+                    data: data,
+                    color: '#58a6ff',
+                    lineWidth: 2
+                }]
+            });
+        }
+
+        function addTradeBandsToCandlestick() {
+            if (!candlestickChart || !chartData.trades) {
+                return;
+            }
+
+            const trades = chartData.trades;
+
+            if (typeof IndicatorCharts !== 'undefined') {
+                IndicatorCharts.addTradeBandsToChart(candlestickChart, trades);
+            } else {
+                // Fallback: Add simple plot bands
+                trades.forEach(trade => {
+                    if (!trade.entry_time || !trade.exit_time) return;
+
+                    const entryTime = new Date(trade.entry_time).getTime();
+                    const exitTime = new Date(trade.exit_time).getTime();
+                    const isProfit = trade.pnl_percent > 0;
+
+                    candlestickChart.xAxis[0].addPlotBand({
+                        from: entryTime,
+                        to: exitTime,
+                        color: isProfit ? 'rgba(35, 134, 54, 0.15)' : 'rgba(218, 54, 51, 0.15)',
+                        zIndex: 0
+                    });
+                });
+            }
         }
 
         console.log('Card details page initialized for real data streaming.');

@@ -106,26 +106,30 @@ class IndicatorProcessor:
         """Update data status with tick counts and warnings for insufficient data"""
         warnings = []
         tick_counts = {}
-        min_tick_count = float('inf')
+        min_tick_count = 0
 
-        for agg_key, aggregator in aggregators.items():
-            # Count total candles (history + current)
-            count = len(aggregator.get_history())
-            if aggregator.get_current_candle():
-                count += 1
-            tick_counts[agg_key] = count
-            min_tick_count = min(min_tick_count, count)
+        if aggregators:
+            counts = []
+            for agg_key, aggregator in aggregators.items():
+                # Count total candles (history + current)
+                count = len(aggregator.get_history())
+                if aggregator.get_current_candle():
+                    count += 1
+                tick_counts[agg_key] = count
+                counts.append(count)
+            min_tick_count = min(counts) if counts else 0
 
         required = self.data_status['required_ticks']
         has_sufficient = min_tick_count >= required
 
         # Generate warning message if insufficient data
-        if not has_sufficient and min_tick_count < float('inf'):
-            warnings.append(f"Requires {required} ticks, have {int(min_tick_count)}")
+        if not has_sufficient:
+            warnings.append(f"Requires {required} ticks, have {min_tick_count}")
 
         self.data_status['tick_counts'] = tick_counts
         self.data_status['has_sufficient_data'] = has_sufficient
         self.data_status['warnings'] = warnings
+        self.data_status['min_tick_count'] = min_tick_count
 
     def get_data_status(self) -> Dict[str, any]:
         """Get current data status including warnings for UI display"""
@@ -183,6 +187,10 @@ class IndicatorProcessor:
         """
         # Update tick counts and data status
         self._update_data_status(aggregators)
+
+        logger.info(f"calculate_indicators_new: first_pass={self.first_pass}, "
+                   f"aggregators={list(aggregators.keys())}, "
+                   f"indicators_to_calc={len(self.config.indicators)}")
 
         for indicator_def in self.config.indicators:
             # FIXED: Create the full aggregator key that matches how aggregators are stored

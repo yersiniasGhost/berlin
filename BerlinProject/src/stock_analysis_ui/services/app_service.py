@@ -188,6 +188,10 @@ class AppService:
             # Subscribe to symbol - handle both data link types
             self._subscribe_to_symbol(symbol)
 
+            # Emit current state with calculated indicators (from historical data if available)
+            # This ensures cards appear immediately with actual indicator values
+            data_streamer.emit_current_state()
+
             self.logger.info(f"Successfully added combination: {card_id} ({symbol}) - '{test_name}'")
 
             return {
@@ -227,6 +231,35 @@ class AppService:
 
         except Exception as e:
             self.logger.error(f"Error subscribing to {symbol}: {e}")
+
+    def _emit_initial_card_update(self, card_id: str, symbol: str, test_name: str, data_streamer) -> None:
+        """Emit an initial card_update event so the card appears immediately in the UI"""
+        try:
+            from datetime import datetime
+
+            # Get data status from the indicator processor
+            data_status = data_streamer.indicator_processor.get_data_status()
+
+            # Build initial update data with placeholder values
+            initial_data = {
+                'card_id': card_id,
+                'symbol': symbol,
+                'price': 0.0,
+                'timestamp': datetime.now().isoformat(),
+                'indicators': {},
+                'raw_indicators': {},
+                'bar_scores': {},
+                'data_status': data_status,
+                'test_name': test_name,
+                'monitor_config_name': test_name
+            }
+
+            # Emit using the UI tool
+            self.ui_tool.emit_to_session('card_update', initial_data, self.session_id)
+            self.logger.info(f"Emitted initial card_update for {card_id}")
+
+        except Exception as e:
+            self.logger.error(f"Error emitting initial card_update: {e}")
 
     def remove_combination(self, card_id: str) -> Dict[str, Any]:
         """Remove a combination and cleanup properly - works with both modes"""

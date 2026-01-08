@@ -28,6 +28,20 @@ def home():
 @dashboard_bp.route('/dashboard')
 def dashboard():
     """Main dashboard page - requires session-based authentication"""
+    # Check if we're in replay mode with a global app_service
+    global_app_service = current_app.app_service
+
+    # If in replay mode (global app_service exists) and no session, create one
+    if global_app_service is not None and (not session.get('authenticated') or not session.get('session_id')):
+        import uuid
+        session_id = str(uuid.uuid4())
+        session['session_id'] = session_id
+        session['authenticated'] = True
+
+        # Register the global app_service for this session
+        current_app.session_app_services[session_id] = global_app_service
+        logger.info(f"Replay mode: Auto-created session {session_id}")
+
     # Check if user has valid session
     if not session.get('authenticated') or not session.get('session_id'):
         return redirect('/')
@@ -140,6 +154,20 @@ def combination_detail(combination_id: str):
 @dashboard_bp.route('/card-details.html')
 def card_details():
     """Serve the card details page"""
+    # Check if we're in replay mode with a global app_service
+    global_app_service = current_app.app_service
+
+    # If in replay mode (global app_service exists) and no session, create one
+    if global_app_service is not None and (not session.get('authenticated') or not session.get('session_id')):
+        import uuid
+        session_id = str(uuid.uuid4())
+        session['session_id'] = session_id
+        session['authenticated'] = True
+
+        # Register the global app_service for this session
+        current_app.session_app_services[session_id] = global_app_service
+        logger.info(f"Replay mode: Auto-created session {session_id} for card details")
+
     # Same session-based authentication check
     if not session.get('authenticated') or not session.get('session_id'):
         return redirect('/')

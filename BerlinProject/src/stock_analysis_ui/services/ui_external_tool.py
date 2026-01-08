@@ -3,6 +3,7 @@ Enhanced UIExternalTool with candlestick chart support and minimal logging
 """
 
 import time
+import math
 from typing import Dict, Optional, Any, List
 from datetime import datetime
 from collections import defaultdict
@@ -15,6 +16,30 @@ from models.tick_data import TickData
 from mlf_utils.log_manager import LogManager
 
 logger = LogManager().get_logger("UIExternalTool")
+
+
+def sanitize_for_json(obj: Any) -> Any:
+    """
+    Recursively sanitize data for JSON serialization.
+    Converts NaN and Infinity to None (JSON null).
+    """
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None  # JSON null
+        return obj
+    elif isinstance(obj, np.floating):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
+    return obj
 
 
 class UIExternalTool(ExternalTool):
@@ -51,12 +76,15 @@ class UIExternalTool(ExternalTool):
     def emit_to_session(self, event_name, data, session_id=None):
         """Emit WebSocket event to specific session room or broadcast"""
         try:
+            # Sanitize data to handle NaN/Infinity values that break JSON serialization
+            sanitized_data = sanitize_for_json(data)
+
             if session_id:
                 # Send to specific session room
-                self.socketio.emit(event_name, data, room=f"session_{session_id}")
+                self.socketio.emit(event_name, sanitized_data, room=f"session_{session_id}")
             else:
                 # Fallback to broadcast (for replay mode or legacy)
-                self.socketio.emit(event_name, data)
+                self.socketio.emit(event_name, sanitized_data)
 
             self.total_emits += 1
             self.last_successful_emit = time.time()
