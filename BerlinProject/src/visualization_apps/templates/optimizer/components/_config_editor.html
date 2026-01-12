@@ -71,6 +71,12 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="mt-4">
+                                <button class="btn btn-primary" id="saveMonitorBtn" onclick="saveMonitorConfiguration()">
+                                    <i class="fas fa-save me-2"></i>Save Monitor
+                                </button>
+                                <small class="text-muted ms-2">Save the monitor configuration (indicators, bars, trade executor) to a JSON file</small>
+                            </div>
                         </div>
 
                         <!-- Indicators Tab -->
@@ -288,6 +294,13 @@
                                     </label>
                                     <small class="form-text text-muted d-block">When checked, elite configurations will be saved to outputs/monitor_name_timestamp/epoch_elite#.json after each epoch</small>
                                 </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <button class="btn btn-primary" id="saveGAConfigBtn" onclick="saveOptimizationConfiguration()">
+                                    <i class="fas fa-save me-2"></i>Save Optimization Configuration
+                                </button>
+                                <small class="text-muted ms-2">Save the complete optimization configuration (monitor + GA hyperparameters + objectives) to a JSON file</small>
                             </div>
                         </div>
                     </div>

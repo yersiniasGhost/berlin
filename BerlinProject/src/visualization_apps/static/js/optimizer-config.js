@@ -1551,3 +1551,162 @@ function initializePatternListbox(indicatorIndex, trend, selectedPatterns) {
         }
     });
 }
+
+/**
+ * Save Monitor Configuration
+ * Saves the monitor configuration (monitor + indicators) to a JSON file
+ * This excludes GA hyperparameters and objectives - just the trading strategy
+ */
+async function saveMonitorConfiguration() {
+    try {
+        // Ensure we have the latest values from the form
+        collectMonitorConfigData();
+
+        // Build the monitor-only configuration (similar to elite export format)
+        const monitorOnlyConfig = {
+            monitor: monitorConfig.monitor,
+            indicators: monitorConfig.indicators
+        };
+
+        // Generate suggested filename based on monitor name
+        const safeName = (monitorConfig.monitor.name || 'monitor')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const suggestedFilename = `${timestamp}_${safeName}_monitor.json`;
+
+        // Send to backend to save
+        const response = await fetch('/optimizer/api/save_monitor_config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                config_data: monitorOnlyConfig,
+                suggested_filename: suggestedFilename
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Trigger file download
+            downloadJsonFile(monitorOnlyConfig, result.filename || suggestedFilename);
+            showSaveNotification('Monitor configuration saved successfully!', 'success');
+            console.log('✅ Monitor config saved:', result.filepath);
+        } else {
+            showSaveNotification('Error saving monitor config: ' + result.error, 'danger');
+            console.error('❌ Error saving monitor config:', result.error);
+        }
+    } catch (error) {
+        showSaveNotification('Error saving monitor config: ' + error.message, 'danger');
+        console.error('❌ Error saving monitor config:', error);
+    }
+}
+
+/**
+ * Save Optimization Configuration
+ * Saves the complete optimization configuration (monitor + indicators + GA config + objectives)
+ * This is the full config needed to run an optimization
+ */
+async function saveOptimizationConfiguration() {
+    try {
+        // Collect all config data from the form
+        const fullConfig = collectAllConfigs();
+        collectTestDataConfigData();
+
+        // Add data configuration for completeness
+        const completeConfig = {
+            ...fullConfig,
+            data_config: dataConfig,
+            test_data_config: testDataConfig
+        };
+
+        // Generate suggested filename based on test name
+        const safeName = (fullConfig.test_name || 'optimization')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const suggestedFilename = `${timestamp}_${safeName}_ga_config.json`;
+
+        // Send to backend to save
+        const response = await fetch('/optimizer/api/save_optimization_config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                config_data: completeConfig,
+                suggested_filename: suggestedFilename
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Trigger file download
+            downloadJsonFile(completeConfig, result.filename || suggestedFilename);
+            showSaveNotification('Optimization configuration saved successfully!', 'success');
+            console.log('✅ Optimization config saved:', result.filepath);
+        } else {
+            showSaveNotification('Error saving optimization config: ' + result.error, 'danger');
+            console.error('❌ Error saving optimization config:', result.error);
+        }
+    } catch (error) {
+        showSaveNotification('Error saving optimization config: ' + error.message, 'danger');
+        console.error('❌ Error saving optimization config:', error);
+    }
+}
+
+/**
+ * Download JSON data as a file
+ */
+function downloadJsonFile(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Show a notification toast for save operations
+ */
+function showSaveNotification(message, type = 'info') {
+    // Create a Bootstrap toast notification
+    const toastId = 'save-toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+
+    // Create container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        toastContainer.style.zIndex = '11';
+        document.body.appendChild(toastContainer);
+    }
+
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 4000 });
+    toast.show();
+
+    // Clean up after hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}

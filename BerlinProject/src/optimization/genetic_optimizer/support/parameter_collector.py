@@ -109,6 +109,8 @@ class ParameterCollector:
                         numeric_value = int(param_value)
                     elif param_type == 'float':
                         numeric_value = float(param_value)
+                    elif param_type == 'unknown':
+                        continue
                     else:
                         # Default to float for unknown types
                         numeric_value = float(param_value)

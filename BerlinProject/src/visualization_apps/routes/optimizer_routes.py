@@ -475,6 +475,114 @@ def save_config():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@optimizer_bp.route('/api/save_monitor_config', methods=['POST'])
+def save_monitor_config():
+    """Save monitor configuration (monitor + indicators) to file
+
+    This saves just the trading strategy configuration without GA settings.
+    The resulting file can be loaded later for optimization or direct use.
+    """
+    try:
+        data = request.get_json()
+        config_data = data.get('config_data')
+        suggested_filename = data.get('suggested_filename', 'monitor_config.json')
+
+        if not config_data:
+            return jsonify({'success': False, 'error': 'Missing config_data'})
+
+        # Create monitors directory if it doesn't exist
+        monitors_dir = Path('monitors')
+        monitors_dir.mkdir(exist_ok=True)
+
+        # Use the suggested filename or generate one
+        filename = suggested_filename
+        filepath = monitors_dir / filename
+
+        # Avoid overwriting existing files - append counter if needed
+        counter = 1
+        base_name = filename.rsplit('.', 1)[0]
+        extension = filename.rsplit('.', 1)[1] if '.' in filename else 'json'
+        while filepath.exists():
+            filename = f"{base_name}_{counter}.{extension}"
+            filepath = monitors_dir / filename
+            counter += 1
+
+        # Save the config
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        logger.info(f"✅ Saved monitor configuration to {filepath}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Monitor configuration saved to monitors/{filename}',
+            'filepath': str(filepath.absolute()),
+            'filename': filename
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error saving monitor config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/save_optimization_config', methods=['POST'])
+def save_optimization_config():
+    """Save complete optimization configuration to file
+
+    This saves the full GA configuration including:
+    - Monitor configuration (name, description, trade executor settings)
+    - Indicators with parameters and optimization ranges
+    - Bars configuration with weight ranges
+    - GA hyperparameters
+    - Objectives
+    - Data configuration (optional)
+    - Test data configuration (optional)
+
+    The resulting file can be loaded to run an optimization.
+    """
+    try:
+        data = request.get_json()
+        config_data = data.get('config_data')
+        suggested_filename = data.get('suggested_filename', 'ga_config.json')
+
+        if not config_data:
+            return jsonify({'success': False, 'error': 'Missing config_data'})
+
+        # Create inputs directory if it doesn't exist (standard location for GA configs)
+        inputs_dir = Path('inputs')
+        inputs_dir.mkdir(exist_ok=True)
+
+        # Use the suggested filename or generate one
+        filename = suggested_filename
+        filepath = inputs_dir / filename
+
+        # Avoid overwriting existing files - append counter if needed
+        counter = 1
+        base_name = filename.rsplit('.', 1)[0]
+        extension = filename.rsplit('.', 1)[1] if '.' in filename else 'json'
+        while filepath.exists():
+            filename = f"{base_name}_{counter}.{extension}"
+            filepath = inputs_dir / filename
+            counter += 1
+
+        # Save the config
+        with open(filepath, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        logger.info(f"✅ Saved optimization configuration to {filepath}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Optimization configuration saved to inputs/{filename}',
+            'filepath': str(filepath.absolute()),
+            'filename': filename
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error saving optimization config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @optimizer_bp.route('/api/export_optimized_configs')
 def export_optimized_configs():
     """Export complete optimization results package like the old system"""
