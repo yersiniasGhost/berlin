@@ -300,6 +300,17 @@ def api_stop_optimization():
 
         logger.info("🛑 Stopping optimization threads...")
 
+        # Emit stopping event immediately for real-time UI updates
+        try:
+            socketio = current_app.extensions.get('socketio')
+            if socketio:
+                socketio.emit('optimization_stopping', {
+                    'generation': OptimizationState().get('current_generation', 0),
+                    'total_generations': OptimizationState().get('total_generations', 0)
+                })
+        except Exception as ws_error:
+            logger.warning(f"Could not emit optimization_stopping event: {ws_error}")
+
         # Try to gracefully stop the main optimization thread
         thread = OptimizationState().get('thread')
         if thread and thread.is_alive():

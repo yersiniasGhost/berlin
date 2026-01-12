@@ -22,9 +22,14 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
     logger.info("🎯 Generating optimizer chart data...")
 
     try:
-        # Get basic chart data from individual
+        # Get best individual stats from elites[0] for cached trade data
+        best_individual_stats = elites[0] if elites and isinstance(elites[0], MlfIndividualStats) else None
+
+        # Get basic chart data from individual (OPTIMIZED: uses cached data from best_individual_stats)
         logger.info(f"🎯 Generating chart data for best individual in generation...")
-        chart_data = generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path)
+        chart_data = generate_chart_data_for_individual_with_new_indicators(
+            best_individual, io, data_config_path, best_individual_stats=best_individual_stats
+        )
         logger.info(f"📊 Chart data generated: {list(chart_data.keys()) if chart_data else 'EMPTY'}")
 
         # 1. Objective Evolution Data - separate line for each objective
@@ -479,43 +484,93 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
     return trade_history, triggers, pnl_history, bar_scores_history, trade_details
 
 
-def generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path):
-    """Generate chart data for the given the best individual using NEW indicator system"""
+def generate_chart_data_for_individual_with_new_indicators(best_individual, io, data_config_path, best_individual_stats=None):
+    """
+    Generate chart data for the given the best individual using NEW indicator system.
+
+    PERFORMANCE OPTIMIZATION: If best_individual_stats (MlfIndividualStats) is provided,
+    uses pre-calculated trade_history and pnl_history from fitness evaluation instead of
+    re-running the entire backtest. This dramatically reduces inter-epoch processing time.
+
+    Args:
+        best_individual: The MlfIndividual to generate chart data for
+        io: OptimizationIO instance with fitness calculator
+        data_config_path: Path to data configuration file
+        best_individual_stats: Optional MlfIndividualStats with pre-calculated metrics
+    """
     # Load candle data
     candlestick_data, data_config = load_raw_candle_data(data_config_path, io)
 
-    # IMPORTANT: Run backtest for this specific individual to get trades and bar scores
     backtest_streamer = io.fitness_calculator.selected_streamer
-    backtest_streamer.replace_monitor_config(best_individual.monitor_configuration)
-
-    # Process indicators using NEW SYSTEM for this individual
-    monitor_config = best_individual.monitor_configuration
     tick_history = backtest_streamer.tick_history
+
+    # PERFORMANCE OPTIMIZATION: Use cached results from MlfIndividualStats if available
+    # This avoids re-running the full backtest for visualization
+    if best_individual_stats is not None and hasattr(best_individual_stats, 'trade_history') and best_individual_stats.trade_history:
+        logger.info("📊 Using cached trade data from MlfIndividualStats (skipping backtest re-run)")
+
+        # Use pre-calculated data from fitness evaluation
+        trade_history = best_individual_stats.trade_history
+        pnl_history = best_individual_stats.pnl_history
+
+        # Convert trade history to triggers format
+        triggers = [
+            {
+                'timestamp': t['timestamp'],
+                'type': t['type'],
+                'price': t['price'],
+                'reason': t['reason']
+            }
+            for t in trade_history
+        ]
+
+        # Get bar scores from streamer if available (cached from evaluation)
+        bar_scores_history = []
+        bar_score_history_dict = getattr(backtest_streamer, 'bar_score_history_dict', {})
+        if bar_score_history_dict and tick_history:
+            for i in range(len(tick_history)):
+                tick = tick_history[i]
+                timestamp = int(tick.timestamp.timestamp() * 1000)
+                scores = {}
+                for bar_name, bar_values in bar_score_history_dict.items():
+                    if i < len(bar_values):
+                        scores[bar_name] = bar_values[i]
+                    else:
+                        scores[bar_name] = 0.0
+                bar_scores_history.append({'timestamp': timestamp, 'scores': scores})
+
+        # Get component history from streamer if cached
+        component_history = getattr(backtest_streamer, 'component_history', {})
+        trade_details = getattr(backtest_streamer.trade_executor, 'trade_details_history', {}) if backtest_streamer.trade_executor else {}
+        portfolio = None  # Not needed when using cached data
+
+    else:
+        # FALLBACK: Run full backtest if no cached data available
+        logger.info("📊 No cached data available - running full backtest for visualization")
+
+        backtest_streamer.replace_monitor_config(best_individual.monitor_configuration)
+
+        # Process indicators using old system for compatibility
+        from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
+
+        indicator_processor = IndicatorProcessorHistoricalNew(best_individual.monitor_configuration)
+        indicator_history, raw_indicator_history, bar_score_history_dict, component_history, _ = (
+            indicator_processor.calculate_indicators(backtest_streamer.aggregators)
+        )
+
+        # Store the bar score history for later access
+        backtest_streamer.bar_score_history_dict = bar_score_history_dict
+
+        # Run the backtest to get trades
+        portfolio = backtest_streamer.run()
+
+        # Extract trade history and P&L from the fresh portfolio
+        trade_history, triggers, pnl_history, bar_scores_history, trade_details = extract_trade_history_and_pnl_from_portfolio(
+            portfolio, backtest_streamer
+        )
 
     # Process indicators using old system for now (new system disabled)
     new_indicator_results = {}
-    # TODO: Re-enable new indicator system when fully integrated
-    # if hasattr(monitor_config, 'indicators') and monitor_config.indicators:
-    #     registry = IndicatorRegistry()
-    #     ... (new system code commented out)
-
-    # Still use old system for compatibility
-    from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
-
-    indicator_processor = IndicatorProcessorHistoricalNew(best_individual.monitor_configuration)
-    indicator_history, raw_indicator_history, bar_score_history_dict, component_history, _ = (
-        indicator_processor.calculate_indicators(backtest_streamer.aggregators)
-    )
-
-    # Store the bar score history for later access
-    backtest_streamer.bar_score_history_dict = bar_score_history_dict
-
-    # Run the backtest to get trades
-    portfolio = backtest_streamer.run()
-
-    # Extract trade history and P&L from the fresh portfolio
-    trade_history, triggers, pnl_history, bar_scores_history, trade_details = extract_trade_history_and_pnl_from_portfolio(portfolio,
-                                                                                                        backtest_streamer)
 
     # Get threshold config
     threshold_config = {}

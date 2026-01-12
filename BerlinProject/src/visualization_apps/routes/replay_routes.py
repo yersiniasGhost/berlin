@@ -466,6 +466,10 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             'component_history': component_history_formatted,  # MACD components, SMA values, etc.
             'class_to_layout': class_to_layout,  # Class name → layout type (stacked or overlay)
             'indicators': indicators,  # Include indicators config for frontend
+            'bar_scores_history': bar_scores_history,  # Bar scores over time for visualization
+            'bars_config': monitor_config.get('bars', {}),  # Bar definitions with weights and types
+            'entry_conditions': monitor_config.get('enter_long', []),  # Entry thresholds
+            'exit_conditions': monitor_config.get('exit_long', []),  # Exit thresholds
             'total_candles': len(candlestick_data),
             'total_trades': len(trades_with_pnl),
             'date_range': {

@@ -403,6 +403,15 @@
                                 <!-- P&L Chart -->
                                 <div id="pnlChart" style="height: 300px; margin-bottom: 5px;"></div>
 
+                                <!-- Bar Scores Analysis Chart -->
+                                <div id="barScoresContainer" style="margin-top: 20px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">Bar Scores Analysis</h6>
+                                        <small class="text-muted">Weighted indicator trigger combinations with entry/exit thresholds</small>
+                                    </div>
+                                    <div id="barScoresChart" style="height: 280px; margin-bottom: 5px;"></div>
+                                </div>
+
                                 <!-- Tabbed Indicator Charts Container -->
                                 <div id="indicatorChartsContainer" style="margin-top: 20px;">
                                     <h6>Indicator Analysis</h6>
@@ -618,6 +627,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (data.pnl_data && data.trades && data.candlestick_data) {
             createPnLChart(data.pnl_data, data.trades, data.candlestick_data);
+        }
+
+        // Create bar scores chart showing weighted indicator trigger combinations
+        if (data.bar_scores_history && data.bar_scores_history.length > 0) {
+            createBarScoresChart(
+                data.bar_scores_history,
+                data.bars_config || {},
+                data.entry_conditions || [],
+                data.exit_conditions || []
+            );
         }
 
         // Create indicator charts (raw values + triggers)
@@ -953,7 +972,178 @@ document.addEventListener('DOMContentLoaded', function() {
         // Enable synchronization for P&L chart
         enableChartSynchronization(charts.pnl);
     }
-    
+
+    /**
+     * Create bar scores chart showing weighted indicator trigger combinations.
+     * Each bar is a line series, with threshold lines for entry/exit conditions.
+     *
+     * @param {Array} barScoresHistory - Array of {timestamp, scores: {bar_name: score}}
+     * @param {Object} barsConfig - Bar definitions with weights and types
+     * @param {Array} entryConditions - Entry conditions with thresholds
+     * @param {Array} exitConditions - Exit conditions with thresholds
+     */
+    function createBarScoresChart(barScoresHistory, barsConfig, entryConditions, exitConditions) {
+        console.log('📊 Creating bar scores chart');
+        console.log('   Bar scores history entries:', barScoresHistory.length);
+        console.log('   Bars config:', Object.keys(barsConfig));
+        console.log('   Entry conditions:', entryConditions);
+        console.log('   Exit conditions:', exitConditions);
+
+        if (!barScoresHistory || barScoresHistory.length === 0) {
+            console.warn('⚠️ No bar scores history data');
+            return;
+        }
+
+        // Get all unique bar names from the first entry
+        const barNames = Object.keys(barScoresHistory[0]?.scores || {});
+        if (barNames.length === 0) {
+            console.warn('⚠️ No bar names found in scores history');
+            return;
+        }
+
+        // Build threshold lookup from entry/exit conditions
+        const thresholds = {};
+        entryConditions.forEach(cond => {
+            if (cond.name) thresholds[cond.name] = { value: cond.threshold || 0.5, type: 'entry' };
+        });
+        exitConditions.forEach(cond => {
+            if (cond.name) thresholds[cond.name] = { value: cond.threshold || 0.5, type: 'exit' };
+        });
+
+        // Color palette for bars (bull bars in green tones, bear bars in red tones)
+        const bullColors = ['#4CAF50', '#8BC34A', '#CDDC39', '#00BCD4'];
+        const bearColors = ['#f44336', '#E91E63', '#FF5722', '#FF9800'];
+        const defaultColors = ['#2196F3', '#9C27B0', '#607D8B', '#795548'];
+
+        // Create series for each bar
+        const series = [];
+        let bullIdx = 0, bearIdx = 0, defaultIdx = 0;
+
+        barNames.forEach(barName => {
+            // Extract data for this bar
+            const barData = barScoresHistory.map(entry => [
+                entry.timestamp,
+                entry.scores[barName] || 0
+            ]);
+
+            // Determine bar type and color
+            const barConfig = barsConfig[barName] || {};
+            const barType = barConfig.type || 'unknown';
+            let color;
+
+            if (barType === 'bull') {
+                color = bullColors[bullIdx % bullColors.length];
+                bullIdx++;
+            } else if (barType === 'bear') {
+                color = bearColors[bearIdx % bearColors.length];
+                bearIdx++;
+            } else {
+                color = defaultColors[defaultIdx % defaultColors.length];
+                defaultIdx++;
+            }
+
+            series.push({
+                name: barName,
+                data: barData,
+                color: color,
+                lineWidth: 2,
+                marker: { enabled: false },
+                tooltip: {
+                    valueDecimals: 3
+                }
+            });
+        });
+
+        // Create threshold plot lines
+        const plotLines = [];
+        Object.entries(thresholds).forEach(([barName, thresh]) => {
+            plotLines.push({
+                value: thresh.value,
+                color: thresh.type === 'entry' ? '#28a745' : '#dc3545',
+                width: 1,
+                dashStyle: 'Dash',
+                label: {
+                    text: `${barName}: ${thresh.value}`,
+                    align: 'right',
+                    style: {
+                        fontSize: '9px',
+                        color: thresh.type === 'entry' ? '#28a745' : '#dc3545'
+                    }
+                },
+                zIndex: 3
+            });
+        });
+
+        const chartConfig = {
+            chart: {
+                type: 'line',
+                height: 280,
+                zoomType: 'x',
+                panKey: 'shift',
+                panning: { enabled: true, type: 'x' },
+                marginBottom: 10
+            },
+            title: { text: 'Bar Scores (Weighted Indicator Triggers)' },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                crosshair: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: {
+                title: { text: 'Score' },
+                min: 0,
+                max: 1.1,
+                crosshair: true,
+                plotLines: plotLines,
+                gridLineWidth: 1,
+                gridLineColor: '#e6e6e6'
+            },
+            legend: {
+                enabled: true,
+                align: 'right',
+                verticalAlign: 'top',
+                layout: 'horizontal',
+                itemStyle: { fontSize: '10px' }
+            },
+            plotOptions: {
+                line: {
+                    lineWidth: 2,
+                    marker: { enabled: false },
+                    states: { hover: { lineWidth: 3 } }
+                }
+            },
+            series: series,
+            tooltip: {
+                shared: true,
+                crosshairs: true,
+                formatter: function() {
+                    let s = '<b>' + Highcharts.dateFormat('%Y-%m-%d %H:%M', this.x) + '</b><br/>';
+                    this.points.forEach(point => {
+                        const thresh = thresholds[point.series.name];
+                        const threshStr = thresh ? ` (thresh: ${thresh.value})` : '';
+                        const triggered = thresh && point.y >= thresh.value ? ' ✓' : '';
+                        s += `<span style="color:${point.color}">●</span> ${point.series.name}: <b>${point.y.toFixed(3)}</b>${threshStr}${triggered}<br/>`;
+                    });
+                    return s;
+                }
+            },
+            credits: { enabled: false }
+        };
+
+        // Destroy existing chart if present
+        if (charts.barScores) {
+            charts.barScores.destroy();
+        }
+
+        charts.barScores = Highcharts.chart('barScoresChart', chartConfig);
+        enableChartSynchronization(charts.barScores);
+
+        console.log(`✅ Bar scores chart created with ${barNames.length} bars`);
+    }
+
     function createIndicatorCharts(componentHistory, rawIndicatorHistory, indicatorHistory, candlestickData, indicatorConfigs, classToLayout, perAggregatorCandles, indicatorAggMapping) {
         console.log('📊 Creating indicator charts');
         console.log('Component history keys:', Object.keys(componentHistory));

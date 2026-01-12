@@ -170,6 +170,11 @@ class OptimizerWebSocket {
             this.emit('optimization_resumed', data);
         });
 
+        this.socket.on('optimization_stopping', (data) => {
+            console.log('⏳ Optimization stopping:', data);
+            this.emit('optimization_stopping', data);
+        });
+
         this.socket.on('optimization_stopped', (data) => {
             console.log('⏹️ Optimization stopped:', data);
             this.optimizationRunning = false;

@@ -57,7 +57,6 @@ class LogManager(metaclass=Singleton):
 
 
     def get_logger(self, name: str) -> logging.Logger:
-        print(f"NEW: {name}")
         if name not in self._loggers:
             logger = logging.getLogger(name)
             level = EnvVars().log_level

@@ -20,14 +20,21 @@ class ParameterCollector:
 
     Captures parameters from all individuals in the population (all Pareto fronts)
     to provide a comprehensive view of parameter space exploration during optimization.
+
+    MEMORY OPTIMIZATION: Evolution history is limited to max_evolution_generations to
+    prevent unbounded memory growth during long optimization runs.
     """
+
+    # Maximum generations to retain in evolution history
+    # Set high to accumulate parameter evolution across all epochs (stores only summary stats, not raw values)
+    MAX_EVOLUTION_GENERATIONS = 10000
 
     def __init__(self):
         self.parameter_history = defaultdict(list)  # {param_name: [values per generation]}
         self.elite_parameter_history = defaultdict(list)  # {param_name: [elite values per generation]}
         self.parameter_metadata = {}  # {param_name: {type, source, range}}
 
-        # NEW: Track parameter evolution metrics across all generations
+        # Track parameter evolution metrics across generations (bounded)
         self.parameter_evolution_history = defaultdict(lambda: {
             'generations': [],  # List of generation numbers
             'mean': [],         # Mean value per generation
@@ -355,6 +362,9 @@ class ParameterCollector:
         Computes mean, std, min, max, median for both population and elite parameters
         and stores them in parameter_evolution_history for tracking over time.
 
+        MEMORY OPTIMIZATION: Automatically trims history to MAX_EVOLUTION_GENERATIONS
+        to prevent unbounded memory growth during long optimization runs.
+
         Args:
             generation: Current generation number
         """
@@ -396,6 +406,23 @@ class ParameterCollector:
             else:
                 evolution['elite_mean'].append(None)
                 evolution['elite_std'].append(None)
+
+            # MEMORY OPTIMIZATION: Trim evolution history to bounded size
+            self._trim_evolution_history(param_name)
+
+    def _trim_evolution_history(self, param_name: str):
+        """
+        Trim evolution history to MAX_EVOLUTION_GENERATIONS entries.
+        Removes oldest entries when limit is exceeded.
+        """
+        evolution = self.parameter_evolution_history[param_name]
+        max_gen = self.MAX_EVOLUTION_GENERATIONS
+
+        if len(evolution['generations']) > max_gen:
+            # Trim all lists to keep only the most recent entries
+            for key in evolution:
+                if isinstance(evolution[key], list) and len(evolution[key]) > max_gen:
+                    evolution[key] = evolution[key][-max_gen:]
 
     def get_parameter_evolution_data(self, param_name: str) -> Dict:
         """

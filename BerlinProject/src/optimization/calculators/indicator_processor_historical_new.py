@@ -24,12 +24,12 @@ class IndicatorCalculator:
             raise ValueError(f"Indicator '{config.name}': Missing 'indicator_class' or 'name'")
 
         # DIAGNOSTIC: Log parameters received by indicator
-        logger.info(f"📊 Creating indicator '{config.name}' (class: {ind})")
-        logger.info(f"   Parameters passed to indicator: {config.parameters}")
+        logger.debug(f"📊 Creating indicator '{config.name}' (class: {ind})")
+        logger.debug(f"   Parameters passed to indicator: {config.parameters}")
 
         try:
             self.indicator = IndicatorRegistry().get_indicator_class(ind)(self.config)
-            logger.info(f"   ✅ Indicator created successfully")
+            logger.debug(f"   ✅ Indicator created successfully")
         except ValueError as val_err:
             # Re-raise with indicator name for better error messaging
             raise ValueError(f"Indicator '{config.name}': {str(val_err)}")
@@ -124,7 +124,7 @@ class IndicatorProcessorHistoricalNew:
         # Store primary timeframe info (calculated once when aggregators are provided)
         self.primary_timeframe_minutes: int = None
         self.primary_timeframe_length: int = None
-        # logger.info(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
+        # logger.debug(f"IndicatorProcessorHistoricalNew initialized with {len(self.config.indicators)} indicators")
 
     def _create_indicator_objects(self):
         """Create indicator objects and collect validation errors"""
@@ -289,7 +289,7 @@ class IndicatorProcessorHistoricalNew:
 
         # If already at primary timeframe, no interpolation needed
         if indicator_timeframe_minutes == self.primary_timeframe_minutes:
-            logger.info(f"[ALIGN DEBUG] {indicator_name}: No alignment needed (already at {self.primary_timeframe_minutes}m)")
+            logger.debug(f"[ALIGN DEBUG] {indicator_name}: No alignment needed (already at {self.primary_timeframe_minutes}m)")
             return np.array(values)
 
         # Calculate the ratio (e.g., 5m/1m = 5)
@@ -322,7 +322,7 @@ class IndicatorProcessorHistoricalNew:
             - component_history: {component_name: [component_value_at_tick_0, ...]}  # At native timeframe resolution
             - indicator_agg_mapping: {indicator_name: agg_config}  # Maps indicators to their aggregator
         """
-        # logger.info("Starting batch historical indicator calculation...")
+        # logger.debug("Starting batch historical indicator calculation...")
 
         # Initialize primary timeframe info once
         self._initialize_primary_timeframe_info(aggregators)
@@ -332,7 +332,7 @@ class IndicatorProcessorHistoricalNew:
         if not all_candle_data:
             return {}, {}, {}, {}, {}
 
-        # logger.info(f"Processing timeline of {self.primary_timeframe_length} data points")
+        # logger.debug(f"Processing timeline of {self.primary_timeframe_length} data points")
 
         # Process each indicator
         raw_indicator_history = {}

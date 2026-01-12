@@ -138,6 +138,9 @@ class SMACrossoverIndicator(BaseIndicator):
         closes = np.array([tick.close for tick in tick_data])
         sma = ta.SMA(closes, timeperiod=period)
 
+        # Create mask for valid (non-NaN) SMA values
+        valid_mask = ~np.isnan(sma)
+
         if trend == 'bullish':
             sma_threshold = sma * (1 + crossover_value)
             crossovers = closes > sma_threshold
@@ -145,9 +148,11 @@ class SMACrossoverIndicator(BaseIndicator):
             sma_threshold = sma * (1 - crossover_value)
             crossovers = closes < sma_threshold
 
-        # Detect crossover moments
+        # Detect crossover moments - only trigger when BOTH current and previous are valid
         result = np.zeros(len(tick_data))
-        result[1:] = np.logical_and(crossovers[1:], ~crossovers[:-1])
+        crossover = np.logical_and(crossovers[1:], ~crossovers[:-1])
+        both_valid = np.logical_and(valid_mask[1:], valid_mask[:-1])
+        result[1:] = np.logical_and(crossover, both_valid)
 
         return result, {f"{self.name()}_sma": sma}
 
@@ -262,12 +267,22 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
         }
         result = np.zeros(len(tick_data))
 
+        # Create mask for valid (non-NaN) histogram values
+        # NaN comparisons return False, which causes false triggers at NaN→valid transitions
+        valid_mask = ~np.isnan(histogram)
+
         if trend == 'bullish':
             above_threshold = histogram > histogram_threshold
-            result[1:] = np.logical_and(above_threshold[1:], ~above_threshold[:-1])
+            # Only trigger when BOTH current and previous are valid AND crossover occurs
+            crossover = np.logical_and(above_threshold[1:], ~above_threshold[:-1])
+            both_valid = np.logical_and(valid_mask[1:], valid_mask[:-1])
+            result[1:] = np.logical_and(crossover, both_valid)
         else:  # bearish
             below_threshold = histogram < -histogram_threshold
-            result[1:] = np.logical_and(below_threshold[1:], ~below_threshold[:-1])
+            # Only trigger when BOTH current and previous are valid AND crossover occurs
+            crossover = np.logical_and(below_threshold[1:], ~below_threshold[:-1])
+            both_valid = np.logical_and(valid_mask[1:], valid_mask[:-1])
+            result[1:] = np.logical_and(crossover, both_valid)
 
         return result, component_data
 
@@ -680,6 +695,9 @@ class RSIIndicator(BaseIndicator):
         closes = np.array([tick.close for tick in tick_data])
         rsi = ta.RSI(closes, timeperiod=period)
 
+        # Create mask for valid (non-NaN) RSI values
+        valid_mask = ~np.isnan(rsi)
+
         # Initialize signal array
         signals = np.zeros(len(tick_data))
 
@@ -687,12 +705,18 @@ class RSIIndicator(BaseIndicator):
             # Bullish signal: RSI crosses above oversold threshold
             below_threshold = rsi < oversold_threshold
             # Detect when RSI crosses from below to above the oversold threshold
-            signals[1:] = np.logical_and(~below_threshold[1:], below_threshold[:-1])
+            # Only trigger when BOTH current and previous are valid
+            crossover = np.logical_and(~below_threshold[1:], below_threshold[:-1])
+            both_valid = np.logical_and(valid_mask[1:], valid_mask[:-1])
+            signals[1:] = np.logical_and(crossover, both_valid)
         else:  # bearish
             # Bearish signal: RSI crosses below overbought threshold
             above_threshold = rsi > overbought_threshold
             # Detect when RSI crosses from above to below the overbought threshold
-            signals[1:] = np.logical_and(~above_threshold[1:], above_threshold[:-1])
+            # Only trigger when BOTH current and previous are valid
+            crossover = np.logical_and(~above_threshold[1:], above_threshold[:-1])
+            both_valid = np.logical_and(valid_mask[1:], valid_mask[:-1])
+            signals[1:] = np.logical_and(crossover, both_valid)
 
         # Component data for visualization
         component_data = {

@@ -97,3 +97,34 @@
     margin-bottom: 1rem;
     background: #fff;
 }
+
+/* Entry/Exit Condition inputs - ensure minimum width for decimal display */
+#enterLongContainer .form-control,
+#exitLongContainer .form-control,
+#enterLongContainer .form-select,
+#exitLongContainer .form-select {
+    min-width: 80px;
+    font-size: 0.875rem;
+}
+
+/* Number inputs should have enough width to display values like 0.5 */
+#enterLongContainer input[type="number"],
+#exitLongContainer input[type="number"] {
+    min-width: 70px;
+    width: 100%;
+}
+
+/* Trade Executor tab threshold/min/max inputs */
+#trade-executor-pane .form-control-sm[type="number"] {
+    min-width: 70px;
+}
+
+/* Bar weight range inputs */
+.bar-indicators-container input[type="number"] {
+    min-width: 70px;
+}
+
+/* General fix for all small number inputs in config editor */
+#configEditor input[type="number"].form-control-sm {
+    min-width: 65px;
+}

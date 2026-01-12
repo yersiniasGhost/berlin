@@ -37,8 +37,8 @@ def choose_parameters(config: MonitorConfiguration):
     logger = LogManager().get_logger('MlfIndividual')
 
     for indicator in config.indicators:
-        logger.info(f"🔍 Indicator '{indicator.name}': Initial parameters = {indicator.parameters}")
-        logger.info(f"🔍 Indicator '{indicator.name}': Ranges = {indicator.ranges}")
+        logger.debug(f"🔍 Indicator '{indicator.name}': Initial parameters = {indicator.parameters}")
+        logger.debug(f"🔍 Indicator '{indicator.name}': Ranges = {indicator.ranges}")
 
         # Check if ranges dict is empty or None
         if not indicator.ranges:
@@ -54,11 +54,11 @@ def choose_parameters(config: MonitorConfiguration):
                 new_value = round(random.uniform(range_info['r'][0], range_info['r'][1]), 4)
             if new_value is not None:
                 indicator.parameters[name] = new_value
-                logger.info(f"  ✅ {name}: {old_value} → {new_value} (range: {range_info['r']})")
+                logger.debug(f"  ✅ {name}: {old_value} → {new_value} (range: {range_info['r']})")
             else:
                 logger.warning(f"  ⚠️  {name}: Could not generate value for type '{range_info.get('t', 'UNKNOWN')}'")
 
-        logger.info(f"🎯 Indicator '{indicator.name}': Final parameters = {indicator.parameters}")
+        logger.debug(f"🎯 Indicator '{indicator.name}': Final parameters = {indicator.parameters}")
 
 
 class MlfIndividual(IndividualBase):

@@ -305,6 +305,14 @@ class OptimizerUIIntegration {
             this.updateButtonStates('running', false);
         });
 
+        ws.on('optimization_stopping', (data) => {
+            console.log('⏳ Optimization stopping:', data);
+            if (typeof window.showAlert === 'function') {
+                window.showAlert('Optimization is being stopped...', 'info');
+            }
+            // Don't change button states yet - wait for full stop
+        });
+
         ws.on('optimization_stopped', (data) => {
             console.log('⏹️ Optimization stopped:', data);
             if (typeof window.showAlert === 'function') {

@@ -135,12 +135,12 @@ def handle_stop_optimization(data=None):
 
     logger.info("🛑 Stop signal sent to optimization threads")
 
-    # Emit stop event immediately to update UI
-    emit('optimization_stopped', {
+    # Emit stopping event immediately to update UI (not stopped yet)
+    emit('optimization_stopping', {
         'generation': OptimizationState().get('current_generation'),
         'total_generations': OptimizationState().get('total_generations')
     })
-    logger.info("✅ Optimization stop signal sent to user")
+    logger.info("⏳ Optimization stopping signal sent to user")
 
     # Clean up threads in background (non-blocking)
     # The finally block in the main optimization thread will handle the cleanup

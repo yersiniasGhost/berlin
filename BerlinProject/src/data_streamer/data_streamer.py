@@ -166,7 +166,7 @@ class DataStreamer:
 
     def enable_debug_mode(self):
         """Enable debug mode for trade executor"""
-        self.trade_executor.enable_debug_mode()
+        pass
 
     def load_historical_data(self, data_link) -> None:
         """

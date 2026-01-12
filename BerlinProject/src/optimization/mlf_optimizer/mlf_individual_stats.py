@@ -47,18 +47,26 @@ class MlfIndividualStats(IndividualStats):
 
     # ===== Raw Data References (optional, for advanced analysis) =====
     # Note: These should NOT be serialized/pickled for large-scale storage
+    # MEMORY OPTIMIZATION: These are cleared after metric calculation to prevent memory bloat
     portfolio_instance: Optional[Portfolio] = field(default=None, repr=False)
     tick_history: Optional[List[TickData]] = field(default=None, repr=False)
+
+    # Flag to control whether to retain raw data (default: False for memory efficiency)
+    _retain_raw_data: bool = field(default=False, repr=False)
 
 
     @classmethod
     def from_backtest(cls, index: int, fitness_values: np.array, individual,
-                     portfolio: Portfolio, tick_history: List[TickData]):
+                     portfolio: Portfolio, tick_history: List[TickData],
+                     retain_raw_data: bool = False):
         """
         Factory method to create MlfIndividualStats with all metrics calculated.
 
         This method should be called from mlf_fitness_calculator.__calculate_individual_stats()
         to create fully populated stats instances.
+
+        MEMORY OPTIMIZATION: By default, portfolio and tick_history references are cleared
+        after metrics are calculated. Set retain_raw_data=True only if you need them later.
 
         Args:
             index: Individual's index in population
@@ -66,6 +74,7 @@ class MlfIndividualStats(IndividualStats):
             individual: MlfIndividual instance
             portfolio: Portfolio result from backtest
             tick_history: Historical tick data for market return calculation
+            retain_raw_data: If True, keep portfolio/tick_history references (default: False)
 
         Returns:
             MlfIndividualStats instance with all metrics pre-calculated
@@ -75,7 +84,8 @@ class MlfIndividualStats(IndividualStats):
             fitness_values=fitness_values,
             individual=individual,
             portfolio_instance=portfolio,
-            tick_history=tick_history
+            tick_history=tick_history,
+            _retain_raw_data=retain_raw_data
         )
 
         # Calculate all metrics in order
@@ -85,7 +95,20 @@ class MlfIndividualStats(IndividualStats):
         instance._calculate_market_return()
         instance._calculate_distributions()
 
+        # MEMORY OPTIMIZATION: Clear large data references after calculation
+        # unless explicitly requested to retain them
+        if not retain_raw_data:
+            instance._clear_raw_data()
+
         return instance
+
+    def _clear_raw_data(self):
+        """
+        Clear large raw data references to free memory.
+        Called automatically after metrics calculation unless retain_raw_data=True.
+        """
+        self.portfolio_instance = None
+        self.tick_history = None
 
 
     def _extract_trade_history(self, portfolio: Portfolio):

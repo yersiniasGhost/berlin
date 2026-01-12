@@ -1,6 +1,9 @@
 """
 Genetic Algorithm Core Execution
 Main GA optimization logic with WebSocket updates and real-time monitoring
+
+MEMORY OPTIMIZATION: Includes periodic garbage collection and memory-efficient
+data handling to prevent memory bloat during long optimization runs.
 """
 
 import os
@@ -8,6 +11,7 @@ import json
 import time
 import threading
 import tempfile
+import gc
 from datetime import datetime
 from pathlib import Path
 
@@ -199,6 +203,10 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 'elites': elites
             })
 
+            # MEMORY OPTIMIZATION: Trim elites to prevent unbounded growth
+            # Keep only top 20 elites to reduce memory footprint
+            opt_state.trim_elites(max_elites=20)
+
             # Save elites every epoch if flag is enabled
             if config_data.get('ga_hyperparameters', {}).get('save_elites_every_epoch', False):
                 _save_elites_for_epoch(config_data, elites, test_name, optimization_timestamp, current_gen)
@@ -262,6 +270,11 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
                 logger.error(f"Error generating chart data: {e}")
                 socketio.emit('optimization_error', {'error': str(e)})
                 break
+
+            # MEMORY OPTIMIZATION: Periodic garbage collection every 5 generations
+            # to prevent memory accumulation during long optimization runs
+            if current_gen % 5 == 0:
+                gc.collect()
 
         # Optimization completed
         if opt_state.is_running():

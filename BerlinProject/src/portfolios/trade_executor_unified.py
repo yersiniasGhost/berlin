@@ -73,8 +73,6 @@ class TradeExecutorUnified:
         self.trailing_stop_price: Optional[float] = None
         self.highest_price_since_entry: Optional[float] = None
 
-        # Debug tracking
-        self.debug_mode = False
         self.trade_count = 0
 
         # Trade details history for UI visualization
@@ -82,18 +80,15 @@ class TradeExecutorUnified:
         self.trade_details_history: Dict[int, Dict] = {}
 
         # Log initialization configuration
-        logger.info(f"TradeExecutorUnified initialized:")
-        logger.info(f"  Position size: {self.default_position_size}")
-        logger.info(f"  Stop loss: {self.stop_loss_pct:.2%}")
-        logger.info(f"  Take profit: {self.take_profit_pct:.2%}")
-        logger.info(f"  Trailing stop: {self.trailing_stop_loss} "
+        logger.debug(f"TradeExecutorUnified initialized:")
+        logger.debug(f"  Position size: {self.default_position_size}")
+        logger.debug(f"  Stop loss: {self.stop_loss_pct:.2%}")
+        logger.debug(f"  Take profit: {self.take_profit_pct:.2%}")
+        logger.debug(f"  Trailing stop: {self.trailing_stop_loss} "
                     f"(distance={self.trailing_stop_distance_pct:.2%}, "
                     f"activation={self.trailing_stop_activation_pct:.2%})")
-        logger.info(f"  Ignore bear signals: {self.ignore_bear_signals}")
+        logger.debug(f"  Ignore bear signals: {self.ignore_bear_signals}")
 
-    def enable_debug_mode(self):
-        """Enable debug logging for first few trades"""
-        self.debug_mode = True
 
     def make_decision(self,
                       tick: TickData,
@@ -128,8 +123,6 @@ class TradeExecutorUnified:
                 # Always check for signal conflicts to prevent contradictory actions
                 if self._has_signal_conflicts(bar_scores):
                     logger.debug(f"[SIGNAL CONFLICT] No action taken - both bull and bear signals active")
-                    if self.debug_mode and self.trade_count < 10:
-                        print("Signal conflict detected - no action taken")
                     return
 
                 self._check_entry_conditions(timestamp, current_price, bar_scores, trade_time, indicators)
@@ -193,13 +186,9 @@ class TradeExecutorUnified:
             logger.debug(f"  {bar_name}: score={bar_score:.4f}, threshold={threshold:.4f}, "
                          f"triggered={bar_score >= threshold}")
 
-            if self.debug_mode and self.trade_count < 10:
-                print(f"Entry Check: {bar_name} = {bar_score:.3f} vs threshold {threshold:.3f}")
 
             if bar_score >= threshold:
-                logger.info(f"[ENTRY SIGNAL TRIGGERED] {bar_name}={bar_score:.4f} >= {threshold:.4f}")
-                if self.debug_mode:
-                    print(f"ENTRY SIGNAL: {bar_name} = {bar_score:.3f} >= {threshold:.3f}")
+                logger.debug(f"[ENTRY SIGNAL TRIGGERED] {bar_name}={bar_score:.4f} >= {threshold:.4f}")
                 # Pass trigger details for comprehensive logging
                 trigger_info = {
                     'bar_name': bar_name,
@@ -252,32 +241,30 @@ class TradeExecutorUnified:
             time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
 
             # Comprehensive exit logging
-            logger.info(f"{'='*60}")
-            logger.info(f"[EXIT - {stop_type}] Position closed")
-            logger.info(f"  Date/Time: {time_str}")
-            logger.info(f"  --- Exit Reason ---")
-            logger.info(f"  Price ${current_price:.2f} <= Stop ${stop_price:.2f}")
-            logger.info(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
-            logger.info(f"  P&L: {loss_pct:.2f}%")
-            logger.info(f"  Position size: {self.portfolio.position_size}")
+            logger.debug(f"{'='*60}")
+            logger.debug(f"[EXIT - {stop_type}] Position closed")
+            logger.debug(f"  Date/Time: {time_str}")
+            logger.debug(f"  --- Exit Reason ---")
+            logger.debug(f"  Price ${current_price:.2f} <= Stop ${stop_price:.2f}")
+            logger.debug(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
+            logger.debug(f"  P&L: {loss_pct:.2f}%")
+            logger.debug(f"  Position size: {self.portfolio.position_size}")
             if self.trailing_stop_loss:
-                logger.info(f"  Highest price since entry: ${self.highest_price_since_entry:.2f}"
+                logger.debug(f"  Highest price since entry: ${self.highest_price_since_entry:.2f}"
                             if self.highest_price_since_entry else "  Highest price: N/A")
-                logger.info(f"  Initial stop: ${self.stop_loss_price:.2f}" if self.stop_loss_price else "")
+                logger.debug(f"  Initial stop: ${self.stop_loss_price:.2f}" if self.stop_loss_price else "")
             # Log bar scores at exit
             if bar_scores:
-                logger.info(f"  --- Bar Scores at Exit ---")
+                logger.debug(f"  --- Bar Scores at Exit ---")
                 for bar_name, score in bar_scores.items():
-                    logger.info(f"    {bar_name}: {score:.4f}")
+                    logger.debug(f"    {bar_name}: {score:.4f}")
             # Log indicator values at exit
             if indicators:
-                logger.info(f"  --- Indicator Values at Exit ---")
+                logger.debug(f"  --- Indicator Values at Exit ---")
                 for ind_name, value in indicators.items():
-                    logger.info(f"    {ind_name}: {value:.4f}")
-            logger.info(f"{'='*60}")
+                    logger.debug(f"    {ind_name}: {value:.4f}")
+            logger.debug(f"{'='*60}")
 
-            if self.debug_mode:
-                print(f"{stop_type} HIT: ${current_price:.2f} <= ${stop_price:.2f}")
 
             # Store exit trade details for UI visualization
             self.trade_details_history[timestamp] = {
@@ -323,28 +310,26 @@ class TradeExecutorUnified:
             time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
 
             # Comprehensive exit logging
-            logger.info(f"{'='*60}")
-            logger.info(f"[EXIT - TAKE PROFIT] Position closed")
-            logger.info(f"  Date/Time: {time_str}")
-            logger.info(f"  --- Exit Reason ---")
-            logger.info(f"  Price ${current_price:.2f} >= Target ${self.take_profit_price:.2f}")
-            logger.info(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
-            logger.info(f"  P&L: +{profit_pct:.2f}%")
-            logger.info(f"  Position size: {self.portfolio.position_size}")
+            logger.debug(f"{'='*60}")
+            logger.debug(f"[EXIT - TAKE PROFIT] Position closed")
+            logger.debug(f"  Date/Time: {time_str}")
+            logger.debug(f"  --- Exit Reason ---")
+            logger.debug(f"  Price ${current_price:.2f} >= Target ${self.take_profit_price:.2f}")
+            logger.debug(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
+            logger.debug(f"  P&L: +{profit_pct:.2f}%")
+            logger.debug(f"  Position size: {self.portfolio.position_size}")
             # Log bar scores at exit
             if bar_scores:
-                logger.info(f"  --- Bar Scores at Exit ---")
+                logger.debug(f"  --- Bar Scores at Exit ---")
                 for bar_name, score in bar_scores.items():
-                    logger.info(f"    {bar_name}: {score:.4f}")
+                    logger.debug(f"    {bar_name}: {score:.4f}")
             # Log indicator values at exit
             if indicators:
-                logger.info(f"  --- Indicator Values at Exit ---")
+                logger.debug(f"  --- Indicator Values at Exit ---")
                 for ind_name, value in indicators.items():
-                    logger.info(f"    {ind_name}: {value:.4f}")
-            logger.info(f"{'='*60}")
+                    logger.debug(f"    {ind_name}: {value:.4f}")
+            logger.debug(f"{'='*60}")
 
-            if self.debug_mode:
-                print(f"TAKE PROFIT HIT: ${current_price:.2f} >= ${self.take_profit_price:.2f}")
 
             # Store exit trade details for UI visualization
             self.trade_details_history[timestamp] = {
@@ -390,38 +375,34 @@ class TradeExecutorUnified:
             logger.debug(f"  {bar_name}: score={bar_score:.4f}, threshold={threshold:.4f}, "
                          f"triggered={bar_score >= threshold}")
 
-            if self.debug_mode and self.trade_count < 10:
-                print(f"Exit Check: {bar_name} = {bar_score:.3f} vs threshold {threshold:.3f}")
 
             if bar_score >= threshold:
                 pnl_pct = ((current_price - entry_price) / entry_price * 100) if entry_price else 0
                 time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
 
                 # Comprehensive exit logging
-                logger.info(f"{'='*60}")
-                logger.info(f"[EXIT - BEAR SIGNAL] Position closed")
-                logger.info(f"  Date/Time: {time_str}")
-                logger.info(f"  --- Exit Reason ---")
-                logger.info(f"  Trigger bar: {bar_name}")
-                logger.info(f"  Bar score: {bar_score:.4f} >= threshold {threshold:.4f}")
-                logger.info(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
-                logger.info(f"  Exit price: ${current_price:.2f}")
-                logger.info(f"  P&L: {pnl_pct:+.2f}%")
-                logger.info(f"  Position size: {self.portfolio.position_size}")
+                logger.debug(f"{'='*60}")
+                logger.debug(f"[EXIT - BEAR SIGNAL] Position closed")
+                logger.debug(f"  Date/Time: {time_str}")
+                logger.debug(f"  --- Exit Reason ---")
+                logger.debug(f"  Trigger bar: {bar_name}")
+                logger.debug(f"  Bar score: {bar_score:.4f} >= threshold {threshold:.4f}")
+                logger.debug(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
+                logger.debug(f"  Exit price: ${current_price:.2f}")
+                logger.debug(f"  P&L: {pnl_pct:+.2f}%")
+                logger.debug(f"  Position size: {self.portfolio.position_size}")
                 # Log all bar scores
                 if bar_scores:
-                    logger.info(f"  --- All Bar Scores ---")
+                    logger.debug(f"  --- All Bar Scores ---")
                     for bn, score in bar_scores.items():
-                        logger.info(f"    {bn}: {score:.4f}")
+                        logger.debug(f"    {bn}: {score:.4f}")
                 # Log indicator values at exit
                 if indicators:
-                    logger.info(f"  --- Indicator Values at Exit ---")
+                    logger.debug(f"  --- Indicator Values at Exit ---")
                     for ind_name, value in indicators.items():
-                        logger.info(f"    {ind_name}: {value:.4f}")
-                logger.info(f"{'='*60}")
+                        logger.debug(f"    {ind_name}: {value:.4f}")
+                logger.debug(f"{'='*60}")
 
-                if self.debug_mode:
-                    print(f"EXIT SIGNAL: {bar_name} = {bar_score:.3f} >= {threshold:.3f}")
 
                 # Store exit trade details for UI visualization
                 self.trade_details_history[timestamp] = {
@@ -473,35 +454,35 @@ class TradeExecutorUnified:
         time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
 
         # Comprehensive entry logging
-        logger.info(f"{'='*60}")
-        logger.info(f"[ENTRY - LONG] Position opened")
-        logger.info(f"  Date/Time: {time_str}")
-        logger.info(f"  Entry price: ${current_price:.2f}")
-        logger.info(f"  Position size: {self.default_position_size}")
+        logger.debug(f"{'='*60}")
+        logger.debug(f"[ENTRY - LONG] Position opened")
+        logger.debug(f"  Date/Time: {time_str}")
+        logger.debug(f"  Entry price: ${current_price:.2f}")
+        logger.debug(f"  Position size: {self.default_position_size}")
         # Log trigger reason
         if trigger_info:
-            logger.info(f"  --- Trigger Reason ---")
-            logger.info(f"  Trigger bar: {trigger_info['bar_name']}")
-            logger.info(f"  Bar score: {trigger_info['bar_score']:.4f} >= threshold {trigger_info['threshold']:.4f}")
+            logger.debug(f"  --- Trigger Reason ---")
+            logger.debug(f"  Trigger bar: {trigger_info['bar_name']}")
+            logger.debug(f"  Bar score: {trigger_info['bar_score']:.4f} >= threshold {trigger_info['threshold']:.4f}")
         # Log all bar scores
         if bar_scores:
-            logger.info(f"  --- All Bar Scores ---")
+            logger.debug(f"  --- All Bar Scores ---")
             for bar_name, score in bar_scores.items():
-                logger.info(f"    {bar_name}: {score:.4f}")
+                logger.debug(f"    {bar_name}: {score:.4f}")
         # Log indicator values
         if indicators:
-            logger.info(f"  --- Indicator Values ---")
+            logger.debug(f"  --- Indicator Values ---")
             for ind_name, value in indicators.items():
-                logger.info(f"    {ind_name}: {value:.4f}")
-        logger.info(f"  --- Exit Targets ---")
-        logger.info(f"  Stop loss: ${self.stop_loss_price:.2f} ({self.stop_loss_pct:.2%} below entry)")
-        logger.info(f"  Take profit: ${self.take_profit_price:.2f} ({self.take_profit_pct:.2%} above entry)")
+                logger.debug(f"    {ind_name}: {value:.4f}")
+        logger.debug(f"  --- Exit Targets ---")
+        logger.debug(f"  Stop loss: ${self.stop_loss_price:.2f} ({self.stop_loss_pct:.2%} below entry)")
+        logger.debug(f"  Take profit: ${self.take_profit_price:.2f} ({self.take_profit_pct:.2%} above entry)")
         if self.trailing_stop_loss:
-            logger.info(f"  Trailing stop enabled: initial=${self.trailing_stop_price:.2f}")
-            logger.info(f"    Distance: {self.trailing_stop_distance_pct:.2%}")
-            logger.info(f"    Activation: {self.trailing_stop_activation_pct:.2%}")
-        logger.info(f"  Trade #{self.trade_count + 1}")
-        logger.info(f"{'='*60}")
+            logger.debug(f"  Trailing stop enabled: initial=${self.trailing_stop_price:.2f}")
+            logger.debug(f"    Distance: {self.trailing_stop_distance_pct:.2%}")
+            logger.debug(f"    Activation: {self.trailing_stop_activation_pct:.2%}")
+        logger.debug(f"  Trade #{self.trade_count + 1}")
+        logger.debug(f"{'='*60}")
 
         # Store trade details for UI visualization
         self.trade_details_history[timestamp] = {
@@ -524,12 +505,6 @@ class TradeExecutorUnified:
             'trade_number': self.trade_count + 1
         }
 
-        if self.debug_mode:
-            print(f"BUY EXECUTED: {self.default_position_size} @ ${current_price:.2f}")
-            print(f"Stop Loss: ${self.stop_loss_price:.2f}")
-            print(f"Take Profit: ${self.take_profit_price:.2f}")
-            if self.trailing_stop_loss:
-                print(f"Trailing Stop: ${self.trailing_stop_price:.2f}")
 
     def _update_trailing_stop(self, current_price: float) -> None:
         """
@@ -555,8 +530,6 @@ class TradeExecutorUnified:
                              f"new_high=${self.highest_price_since_entry:.2f} (was ${old_highest:.2f}), "
                              f"stop=${self.trailing_stop_price:.2f} (was ${old_trailing_stop:.2f})")
 
-                if self.debug_mode:
-                    print(f"Trailing stop updated: ${self.trailing_stop_price:.2f} (price: ${current_price:.2f})")
 
     def _clear_exit_levels(self) -> None:
         """Clear all exit levels after trade completion"""
