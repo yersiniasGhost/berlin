@@ -17,7 +17,7 @@ backward compatibility and easier Flask Blueprint management.
 
 # Import all modules for easy access
 from .constants import PERFORMANCE_TABLE_COLUMNS, get_table_columns_from_data
-from .elite_selection import balance_fronts, select_winning_population
+from .elite_selection import select_winning_population
 from .chart_generation import (
     generate_optimizer_chart_data,
     load_raw_candle_data,
@@ -36,7 +36,6 @@ __all__ = [
     'get_table_columns_from_data',
 
     # Elite selection
-    'balance_fronts',
     'select_winning_population',
 
     # Chart generation

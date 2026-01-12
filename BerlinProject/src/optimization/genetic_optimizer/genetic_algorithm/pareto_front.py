@@ -65,25 +65,48 @@ def sort_front(individuals: List[IndividualStats], objective_index: int) -> List
 
 def crowd_sort(front: List[IndividualStats]) -> List[IndividualStats]:
     """
-    For each objective, sort the individuals then calculate the crowding distance for each individual
+    NSGA-II crowding distance calculation and sorting.
+
+    For each objective, sort individuals and calculate crowding distance.
+    Crowding distance measures how isolated a solution is - higher values mean
+    the solution is in a less crowded region and should be preserved for diversity.
+
+    Boundary solutions (best/worst in any objective) get infinite distance to
+    ensure they're always preserved, maintaining the full extent of the Pareto front.
+
+    Returns solutions sorted by crowding distance DESCENDING (most isolated first).
     """
-    if True:
-        return balance_fronts(front)
+    # Edge case: small fronts don't need crowding calculation
+    if len(front) <= 2:
+        for ind in front:
+            ind.crowding_distance = np.inf
+        return front
 
     eps = np.finfo(float).eps
     objective_count = len(front[0].fitness_values)
-    for oc in range(0, objective_count):
+
+    # Reset crowding distances before calculation
+    for ind in front:
+        ind.crowding_distance = 0.0
+
+    # Calculate crowding distance contribution from each objective
+    for oc in range(objective_count):
         sorted_front = sort_front(front, oc)
-        denom = sorted_front[-1].fitness_values[oc] - sorted_front[0].fitness_values[oc] + eps
+        obj_min = sorted_front[0].fitness_values[oc]
+        obj_max = sorted_front[-1].fitness_values[oc]
+        denom = obj_max - obj_min + eps
+
+        # Boundary points get infinite distance (always preserve extremes)
         sorted_front[0].crowding_distance = np.inf
         sorted_front[-1].crowding_distance = np.inf
-        for i in range(1, len(sorted_front)-1):
-            fv0 = sorted_front[i-1].fitness_values[oc]
-            fv1 = sorted_front[i+1].fitness_values[oc]
-            sorted_front[i].crowding_distance += (fv1-fv0) / denom
-            # The minus makes the largest absolute values the largest negative number.  Easier for sorting
-            # and selecting.
 
-    return sorted(front, key=lambda x: x.crowding_distance)
+        # Interior points: distance = normalized gap between neighbors
+        for i in range(1, len(sorted_front) - 1):
+            fv_prev = sorted_front[i - 1].fitness_values[oc]
+            fv_next = sorted_front[i + 1].fitness_values[oc]
+            sorted_front[i].crowding_distance += (fv_next - fv_prev) / denom
+
+    # Sort DESCENDING: higher crowding distance = more isolated = preferred for diversity
+    return sorted(front, key=lambda x: x.crowding_distance, reverse=True)
 
 

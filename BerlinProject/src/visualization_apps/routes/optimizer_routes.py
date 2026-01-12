@@ -30,7 +30,6 @@ from .optimizer import (
     PERFORMANCE_TABLE_COLUMNS,
     get_table_columns_from_data,
     # Elite selection
-    balance_fronts,
     select_winning_population,
     # Chart generation
     generate_optimizer_chart_data,
