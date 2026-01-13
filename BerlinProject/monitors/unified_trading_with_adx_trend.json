@@ -1,0 +1,159 @@
+{
+  "indicators": [
+    {
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "name": "macd1m",
+      "parameters": {
+        "fast": 14,
+        "histogram_threshold": 0.001,
+        "lookback": 6,
+        "signal": 10,
+        "slow": 27,
+        "trend": "bullish"
+      },
+      "type": "Indicator"
+    },
+    {
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "name": "macd5m",
+      "parameters": {
+        "fast": 12,
+        "histogram_threshold": 0,
+        "lookback": 6,
+        "signal": 10,
+        "slow": 18,
+        "trend": "bullish"
+      },
+      "type": "Indicator"
+    },
+    {
+      "agg_config": "5m-heiken",
+      "calc_on_pip": false,
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "name": "macd5m-bear",
+      "parameters": {
+        "fast": 11,
+        "histogram_threshold": 0.4643909272978345,
+        "lookback": 20,
+        "signal": 11,
+        "slow": 27,
+        "trend": "bearish"
+      },
+      "type": "Indicator"
+    },
+    {
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "indicator_class": "CDLPatternIndicator",
+      "name": "CDL-bear",
+      "parameters": {
+        "lookback": 13,
+        "patterns": [
+          "CDL3BLACKCROWS",
+          "CDL3INSIDE",
+          "CDLEVENINGSTAR",
+          "CDLHANGINGMAN"
+        ],
+        "trend": "bearish"
+      },
+      "type": "Indicator"
+    },
+    {
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "indicator_class": "ADXTrendIndicator",
+      "name": "adx_trend_5m",
+      "parameters": {
+        "period": 14,
+        "trend_threshold": 25.0,
+        "strong_trend_threshold": 40.0
+      },
+      "type": "Indicator"
+    }
+  ],
+  "monitor": {
+    "bars": {
+      "macd_bear_strong": {
+        "description": "Strong bearish signal for exits",
+        "indicators": {
+          "CDL-bear": 0.8362526457569677,
+          "macd5m-bear": 0.6079370479186198
+        },
+        "type": "bear",
+        "weight_ranges": {
+          "CDL-bear": {
+            "r": [0.5, 1],
+            "t": "float"
+          },
+          "macd5m-bear": {
+            "r": [0.5, 1],
+            "t": "float"
+          }
+        },
+        "trend_indicators": {
+          "adx_trend_5m": {
+            "weight": 1.0,
+            "mode": "soft"
+          }
+        },
+        "trend_logic": "AND",
+        "trend_threshold": 0.0
+      },
+      "macd_bull_strong": {
+        "description": "needs macd and sma both triggered",
+        "indicators": {
+          "macd1m": 0.5241845167426933,
+          "macd5m": 0.6201142701208825
+        },
+        "type": "bull",
+        "weight_ranges": {
+          "macd1m": {
+            "r": [0.5, 1],
+            "t": "float"
+          },
+          "macd5m": {
+            "r": [0.5, 1],
+            "t": "float"
+          }
+        },
+        "trend_indicators": {
+          "adx_trend_5m": {
+            "weight": 1.0,
+            "mode": "soft"
+          }
+        },
+        "trend_logic": "AND",
+        "trend_threshold": 0.0
+      }
+    },
+    "description": "Example strategy using unified trade executor with ADX trend gating",
+    "enter_long": [
+      {
+        "name": "macd_bull_strong",
+        "threshold": 1,
+        "threshold_range": [0.5, 1]
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "macd_bear_strong",
+        "threshold": 1,
+        "threshold_range": [0.5, 1]
+      }
+    ],
+    "name": "Unified Trading Strategy with ADX Trend",
+    "trade_executor": {
+      "default_position_size": 100,
+      "ignore_bear_signals": false,
+      "stop_loss_pct": 0.02,
+      "take_profit_pct": 1,
+      "trailing_stop_activation_pct": 0.005,
+      "trailing_stop_distance_pct": 0.01,
+      "trailing_stop_loss": true
+    }
+  }
+}

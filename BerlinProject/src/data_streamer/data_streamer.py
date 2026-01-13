@@ -110,7 +110,11 @@ class DataStreamer:
 
     def _calculate_bar_scores(self) -> Dict[str, float]:
         """
-        Calculate bar scores based on indicators and bar configurations
+        Calculate bar scores based on indicators and bar configurations with trend gating support.
+
+        Trend gating allows trend indicators to filter/gate signal indicators:
+        - If trend_indicators are configured, they act as multipliers on signal scores
+        - If no trend_indicators are configured, bar score is calculated normally
         """
         bar_scores = {}
 
@@ -118,6 +122,10 @@ class DataStreamer:
             if 'indicators' not in bar_config:
                 continue
 
+            # Get bar type for trend direction alignment
+            bar_type = bar_config.get('type', 'bull')
+
+            # Calculate signal score (weighted average of signal indicators)
             total_score = 0.0
             total_weight = 0.0
 
@@ -128,13 +136,79 @@ class DataStreamer:
                     total_score += weighted_score
                     total_weight += weight
 
-            # Calculate normalized bar score
-            if total_weight > 0:
-                bar_scores[bar_name] = total_score / total_weight
-            else:
-                bar_scores[bar_name] = 0.0
+            signal_score = total_score / total_weight if total_weight > 0 else 0.0
+
+            # Calculate trend gate (NEW)
+            trend_config = bar_config.get('trend_indicators', {})
+            trend_logic = bar_config.get('trend_logic', 'AND')
+            trend_threshold = bar_config.get('trend_threshold', 0.0)
+
+            trend_gate = self._calculate_trend_gate(
+                trend_config, bar_type, trend_logic, trend_threshold
+            )
+
+            # Apply trend gate to signal score
+            bar_scores[bar_name] = signal_score * trend_gate
 
         return bar_scores
+
+    def _calculate_trend_gate(self, trend_config: Dict, bar_type: str,
+                              trend_logic: str, trend_threshold: float) -> float:
+        """Calculate trend gate multiplier for bar scores.
+
+        Args:
+            trend_config: Dict of trend_indicator_name -> {weight, mode}
+            bar_type: "bull" or "bear"
+            trend_logic: "AND", "OR", or "AVG"
+            trend_threshold: Minimum gate value required
+
+        Returns:
+            Trend gate multiplier (0.0 to 1.0)
+        """
+        if not trend_config:
+            return 1.0  # No trend indicators - pass through
+
+        trend_values = []
+
+        for trend_name, config in trend_config.items():
+            if trend_name not in self.indicators:
+                continue
+
+            trend_value = self.indicators[trend_name]
+
+            # Get config options
+            if isinstance(config, dict):
+                weight = config.get('weight', 1.0)
+                mode = config.get('mode', 'soft')
+            else:
+                weight = float(config)
+                mode = 'soft'
+
+            # Align direction with bar type
+            if bar_type.lower() == 'bear':
+                trend_value = -trend_value
+
+            # Apply gating mode
+            if mode == 'hard':
+                gated_value = 1.0 if trend_value > 0 else 0.0
+            else:  # 'soft'
+                gated_value = max(0.0, min(1.0, trend_value))
+
+            trend_values.append((gated_value, weight))
+
+        if not trend_values:
+            return 1.0
+
+        # Combine based on logic
+        if trend_logic.upper() == 'AND':
+            gate = min(v for v, w in trend_values)
+        elif trend_logic.upper() == 'OR':
+            gate = max(v for v, w in trend_values)
+        else:  # 'AVG'
+            total_weight = sum(w for v, w in trend_values)
+            gate = sum(v * w for v, w in trend_values) / total_weight if total_weight > 0 else 1.0
+
+        return gate if gate >= trend_threshold else 0.0
 
     def get_portfolio_status(self) -> Dict:
         """Get current portfolio and trade executor status"""

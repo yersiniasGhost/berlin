@@ -9,10 +9,12 @@ import numpy as np
 from candle_aggregator.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from models.tick_data import TickData
-from indicator_triggers.indicator_base import IndicatorRegistry
+from indicator_triggers.indicator_base import IndicatorRegistry, IndicatorType
 from features.indicators import *
 # Import refactored indicators to ensure they are registered
 import indicator_triggers.refactored_indicators
+# Import trend indicators to ensure they are registered
+import indicator_triggers.trend_indicators
 from mlf_utils.log_manager import LogManager
 
 logger = LogManager().get_logger("IndicatorProcessor")
@@ -477,31 +479,175 @@ class IndicatorProcessor:
         return timeframe_map.get(timeframe, 1)
 
     def _calculate_bar_scores(self, indicators: Dict[str, float]) -> Dict[str, float]:
-        """Calculate weighted bar scores from indicator values"""
+        """Calculate weighted bar scores from indicator values with trend gating.
+
+        Trend gating allows trend indicators to filter/gate signal indicators:
+        - If trend indicators are configured, they act as multipliers on signal scores
+        - If no trend indicators are configured, bar score is calculated normally
+        - Trend gate is calculated based on bar type (bull/bear) and trend logic (AND/OR/AVG)
+
+        Bar config structure:
+        {
+            "bar_name": {
+                "type": "bull" or "bear",
+                "indicators": {"signal1": weight1, "signal2": weight2},
+                "trend_indicators": {
+                    "trend1": {"weight": 1.0, "mode": "soft"},
+                    "trend2": {"weight": 0.5, "mode": "hard"}
+                },
+                "trend_logic": "AND" | "OR" | "AVG",
+                "trend_threshold": 0.0
+            }
+        }
+        """
         bar_scores: Dict[str, float] = {}
 
         if not hasattr(self.config, 'bars') or not self.config.bars:
             return bar_scores
 
         for bar_name, bar_config in self.config.bars.items():
-            # Extract indicator weights from nested structure
+            # Get bar type (bull/bear) - defaults to bull for backward compatibility
+            bar_type = bar_config.get('type', 'bull') if isinstance(bar_config, dict) else 'bull'
+
+            # Extract signal indicator weights
             if isinstance(bar_config, dict) and 'indicators' in bar_config:
-                weights: Dict[str, float] = bar_config['indicators']
+                signal_weights: Dict[str, float] = bar_config['indicators']
             else:
-                weights = bar_config
+                signal_weights = bar_config if isinstance(bar_config, dict) else {}
 
-            weighted_sum: float = 0.0
-            total_weight: float = 0.0
+            # Calculate signal score (existing weighted average logic)
+            signal_score = self._calculate_weighted_signal_score(indicators, signal_weights)
 
-            for indicator_name, weight in weights.items():
-                if indicator_name in indicators:
-                    weighted_sum += indicators[indicator_name] * weight
-                    total_weight += weight
+            # Extract trend indicator configuration (NEW)
+            trend_config = bar_config.get('trend_indicators', {}) if isinstance(bar_config, dict) else {}
+            trend_logic = bar_config.get('trend_logic', 'AND') if isinstance(bar_config, dict) else 'AND'
+            trend_threshold = bar_config.get('trend_threshold', 0.0) if isinstance(bar_config, dict) else 0.0
 
-            final_score: float = weighted_sum / total_weight if total_weight > 0 else 0.0
+            # Calculate trend gate (NEW)
+            trend_gate = self._calculate_trend_gate(
+                indicators, trend_config, bar_type, trend_logic, trend_threshold
+            )
+
+            # Apply trend gate to signal score
+            final_score = signal_score * trend_gate
             bar_scores[bar_name] = final_score
 
+            # Debug logging for trend gating
+            if trend_config and logger.isEnabledFor(10):  # DEBUG level
+                logger.debug(f"Bar '{bar_name}': signal={signal_score:.3f}, "
+                           f"trend_gate={trend_gate:.3f}, final={final_score:.3f}")
+
         return bar_scores
+
+    def _calculate_weighted_signal_score(self, indicators: Dict[str, float],
+                                         weights: Dict[str, float]) -> float:
+        """Calculate weighted average of signal indicator values.
+
+        Args:
+            indicators: Dict of indicator_name -> current value
+            weights: Dict of indicator_name -> weight
+
+        Returns:
+            Weighted average score (0.0 to 1.0 typically)
+        """
+        weighted_sum: float = 0.0
+        total_weight: float = 0.0
+
+        for indicator_name, weight in weights.items():
+            if indicator_name in indicators:
+                weighted_sum += indicators[indicator_name] * weight
+                total_weight += weight
+
+        return weighted_sum / total_weight if total_weight > 0 else 0.0
+
+    def _calculate_trend_gate(self, indicators: Dict[str, float],
+                              trend_config: Dict[str, Dict],
+                              bar_type: str, trend_logic: str,
+                              trend_threshold: float) -> float:
+        """Calculate trend gate multiplier for bar scores.
+
+        Trend indicators output values from -1.0 (bearish) to +1.0 (bullish).
+        The gate is calculated based on alignment with bar direction.
+
+        Args:
+            indicators: Dict of indicator_name -> current value (includes trend indicators)
+            trend_config: Dict of trend_indicator_name -> {weight, mode}
+                         mode: "hard" = binary 0/1, "soft" = continuous 0.0-1.0
+            bar_type: "bull" or "bear" - determines expected trend direction
+            trend_logic: "AND" (min), "OR" (max), or "AVG" (weighted average)
+            trend_threshold: Minimum gate value required (below this -> 0.0)
+
+        Returns:
+            Trend gate multiplier (0.0 to 1.0)
+            - 1.0 = full pass-through (no trend indicators OR strong confirmation)
+            - 0.0 = blocked (trend indicates opposite direction)
+            - 0.0-1.0 = partial gating based on trend strength
+        """
+        if not trend_config:
+            # No trend indicators configured - pass through
+            return 1.0
+
+        trend_values = []
+
+        for trend_name, config in trend_config.items():
+            if trend_name not in indicators:
+                logger.warning(f"Trend indicator '{trend_name}' not found in indicators")
+                continue
+
+            # Get trend indicator value (-1.0 to +1.0)
+            trend_value = indicators[trend_name]
+
+            # Get config options
+            if isinstance(config, dict):
+                weight = config.get('weight', 1.0)
+                mode = config.get('mode', 'soft')
+            else:
+                # Simple weight value (backward compatibility)
+                weight = float(config)
+                mode = 'soft'
+
+            # Align direction with bar type
+            # For BULL bars: positive trend = good, negative = bad
+            # For BEAR bars: negative trend = good, positive = bad
+            if bar_type.lower() == 'bear':
+                # Invert: bearish trend (negative) should give positive gate
+                trend_value = -trend_value
+
+            # Apply gating mode
+            if mode == 'hard':
+                # Binary gate: 1.0 if trend confirms, 0.0 otherwise
+                gated_value = 1.0 if trend_value > 0 else 0.0
+            else:  # 'soft'
+                # Continuous gate: use the positive portion of trend value
+                # Values <= 0 give gate of 0, positive values give proportional gate
+                gated_value = max(0.0, min(1.0, trend_value))
+
+            trend_values.append((gated_value, weight))
+
+        if not trend_values:
+            # No valid trend indicators found - pass through
+            return 1.0
+
+        # Combine trend values based on logic
+        if trend_logic.upper() == 'AND':
+            # AND: All trends must confirm - use minimum
+            gate = min(v for v, w in trend_values)
+        elif trend_logic.upper() == 'OR':
+            # OR: Any trend confirms - use maximum
+            gate = max(v for v, w in trend_values)
+        else:  # 'AVG' or default
+            # AVG: Weighted average of trend gates
+            total_weight = sum(w for v, w in trend_values)
+            if total_weight > 0:
+                gate = sum(v * w for v, w in trend_values) / total_weight
+            else:
+                gate = 1.0
+
+        # Apply threshold - gate must exceed threshold or it's blocked
+        if gate < trend_threshold:
+            return 0.0
+
+        return gate
 
     def _store_history_snapshot(self, indicators: Dict[str, float], bar_scores: Dict[str, float]) -> None:
         """Store current indicator and bar values in history"""

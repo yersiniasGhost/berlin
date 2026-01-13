@@ -8,6 +8,9 @@ from candle_aggregator.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from features.indicators import *
 from indicator_triggers.indicator_base import IndicatorRegistry
+# Import refactored and trend indicators to ensure they are registered
+import indicator_triggers.refactored_indicators
+import indicator_triggers.trend_indicators
 from models.indicator_definition import IndicatorDefinition
 from mlf_utils.log_manager import LogManager
 
@@ -409,8 +412,12 @@ class IndicatorProcessorHistoricalNew:
 
     def _calculate_bar_scores_batch(self, indicator_history: Dict[str, List[float]], timeline_length: int) -> Dict[str, List[float]]:
         """
-        Calculate bar scores for entire timeline using batch processing.
+        Calculate bar scores for entire timeline using batch processing with trend gating.
         All indicators are now aligned to primary timeframe, so calculation is simplified.
+
+        Trend gating allows trend indicators to filter/gate signal indicators:
+        - If trend_indicators are configured, they act as multipliers on signal scores
+        - If no trend_indicators are configured, bar score is calculated normally
         """
         bar_score_history = {}
 
@@ -423,29 +430,114 @@ class IndicatorProcessorHistoricalNew:
         for bar_name, bar_config in self.config.bars.items():
             bar_scores = []
 
-            # Extract indicator weights from bar config
+            # DEBUG: Log bar config structure
+            logger.debug(f"[TREND DEBUG] Bar '{bar_name}' config type: {type(bar_config)}")
+            logger.debug(f"[TREND DEBUG] Bar '{bar_name}' config: {bar_config}")
+
+            # Get bar type for trend direction alignment
+            bar_type = bar_config.get('type', 'bull') if isinstance(bar_config, dict) else 'bull'
+
+            # Extract signal indicator weights from bar config
             if isinstance(bar_config, dict) and 'indicators' in bar_config:
-                weights = bar_config['indicators']
+                signal_weights = bar_config['indicators']
             else:
-                weights = bar_config
+                signal_weights = bar_config if isinstance(bar_config, dict) else {}
+
+            # Extract trend indicator configuration (NEW)
+            trend_config = bar_config.get('trend_indicators', {}) if isinstance(bar_config, dict) else {}
+            trend_logic = bar_config.get('trend_logic', 'AND') if isinstance(bar_config, dict) else 'AND'
+            trend_threshold = bar_config.get('trend_threshold', 0.0) if isinstance(bar_config, dict) else 0.0
+
+            # DEBUG: Log extracted trend config
+            logger.debug(f"[TREND DEBUG] Bar '{bar_name}' trend_config: {trend_config}")
+            logger.debug(f"[TREND DEBUG] Bar '{bar_name}' trend_logic: {trend_logic}, threshold: {trend_threshold}")
 
             # Calculate bar score at each time point
             for i in range(timeline_length):
-                # Calculate weighted sum for this time point
+                # Calculate signal score (weighted sum of signal indicators)
                 weighted_sum = 0.0
                 total_weight = 0.0
 
-                for indicator_name, weight in weights.items():
+                for indicator_name, weight in signal_weights.items():
                     if indicator_name in indicator_history:
-                        # All indicators are now aligned, so direct indexing is safe
                         weighted_sum += indicator_history[indicator_name][i] * weight
                         total_weight += weight
 
-                # Calculate final score
-                final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+                signal_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+                # Calculate trend gate at this time point (NEW)
+                trend_gate = self._calculate_trend_gate_at_index(
+                    indicator_history, i, trend_config, bar_type, trend_logic, trend_threshold
+                )
+
+                # Apply trend gate to signal score
+                final_score = signal_score * trend_gate
                 bar_scores.append(final_score)
 
             bar_score_history[bar_name] = bar_scores
             logger.debug(f"Calculated bar scores for {bar_name}: {len(bar_scores)} values")
 
         return bar_score_history
+
+    def _calculate_trend_gate_at_index(self, indicator_history: Dict[str, List[float]],
+                                       index: int, trend_config: Dict,
+                                       bar_type: str, trend_logic: str,
+                                       trend_threshold: float) -> float:
+        """Calculate trend gate multiplier at a specific time index.
+
+        Args:
+            indicator_history: Dict of indicator_name -> list of values over time
+            index: Current time index
+            trend_config: Dict of trend_indicator_name -> {weight, mode}
+            bar_type: "bull" or "bear"
+            trend_logic: "AND", "OR", or "AVG"
+            trend_threshold: Minimum gate value required
+
+        Returns:
+            Trend gate multiplier (0.0 to 1.0)
+        """
+        if not trend_config:
+            return 1.0  # No trend indicators - pass through
+
+        trend_values = []
+
+        for trend_name, config in trend_config.items():
+            if trend_name not in indicator_history:
+                continue
+
+            # Get trend indicator value at this index
+            trend_value = indicator_history[trend_name][index]
+
+            # Get config options
+            if isinstance(config, dict):
+                weight = config.get('weight', 1.0)
+                mode = config.get('mode', 'soft')
+            else:
+                weight = float(config)
+                mode = 'soft'
+
+            # Align direction with bar type
+            if bar_type.lower() == 'bear':
+                trend_value = -trend_value
+
+            # Apply gating mode
+            if mode == 'hard':
+                gated_value = 1.0 if trend_value > 0 else 0.0
+            else:  # 'soft'
+                gated_value = max(0.0, min(1.0, trend_value))
+
+            trend_values.append((gated_value, weight))
+
+        if not trend_values:
+            return 1.0
+
+        # Combine based on logic
+        if trend_logic.upper() == 'AND':
+            gate = min(v for v, w in trend_values)
+        elif trend_logic.upper() == 'OR':
+            gate = max(v for v, w in trend_values)
+        else:  # 'AVG'
+            total_weight = sum(w for v, w in trend_values)
+            gate = sum(v * w for v, w in trend_values) / total_weight if total_weight > 0 else 1.0
+
+        return gate if gate >= trend_threshold else 0.0

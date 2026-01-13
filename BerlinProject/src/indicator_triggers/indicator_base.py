@@ -22,6 +22,12 @@ class ParameterType(Enum):
     LIST = "list"
 
 
+class IndicatorType(Enum):
+    """Classification of indicator types for different calculation flows."""
+    SIGNAL = "signal"  # Traditional trigger indicators (crossovers, patterns, etc.)
+    TREND = "trend"    # Trend direction/strength indicators (ADX, EMA slope, etc.)
+
+
 @dataclass
 class ParameterSpec:
     """Specification for an indicator parameter with UI metadata."""
@@ -134,6 +140,17 @@ class BaseIndicator(ABC):
     def get_layout_type(cls) -> str:
         """Return layout type for visualization: 'overlay' or 'stacked'."""
         return "overlay"  # Default to overlay for most indicators
+
+    @classmethod
+    def get_indicator_type(cls) -> IndicatorType:
+        """Return indicator type: SIGNAL or TREND.
+
+        SIGNAL indicators generate entry/exit triggers (crossovers, patterns).
+        TREND indicators provide direction/strength for gating signal indicators.
+
+        Override in subclasses to change the type.
+        """
+        return IndicatorType.SIGNAL  # Default for backward compatibility
 
     @abstractmethod
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
@@ -273,6 +290,7 @@ class BaseIndicator(ABC):
             'display_name': self.display_name,
             'description': self.description,
             'layout_type': self.__class__.get_layout_type(),
+            'indicator_type': self.__class__.get_indicator_type().value,
             'parameter_groups': groups
         }
 
@@ -298,16 +316,44 @@ class IndicatorRegistry(metaclass=Singleton):
         indicator_class = self.get_indicator_class(config.indicator_name)
         return indicator_class(config)
     
-    def get_available_indicators(self) -> List[Dict[str, str]]:
-        """Get list of available indicators with basic info."""
-        return [
-            {
-                'name': name,
-                'display_name': cls.display_name,
-                'description': cls.description
-            }
-            for name, cls in self._indicators.items()
-        ]
+    def get_available_indicators(self, indicator_type: Optional[IndicatorType] = None) -> List[Dict[str, str]]:
+        """Get list of available indicators with basic info.
+
+        Args:
+            indicator_type: Optional filter by IndicatorType (SIGNAL or TREND).
+                           If None, returns all indicators.
+        """
+        results = []
+        for name, cls in self._indicators.items():
+            # Filter by type if specified
+            if indicator_type is not None and cls.get_indicator_type() != indicator_type:
+                continue
+            # Create temp instance to access property values (display_name, description)
+            try:
+                temp_instance = cls()
+                results.append({
+                    'name': name,
+                    'display_name': temp_instance.display_name,
+                    'description': temp_instance.description,
+                    'indicator_type': cls.get_indicator_type().value
+                })
+            except Exception:
+                # Fallback if instantiation fails
+                results.append({
+                    'name': name,
+                    'display_name': name,
+                    'description': '',
+                    'indicator_type': cls.get_indicator_type().value
+                })
+        return results
+
+    def get_signal_indicators(self) -> List[Dict[str, str]]:
+        """Get list of SIGNAL type indicators (entry/exit triggers)."""
+        return self.get_available_indicators(IndicatorType.SIGNAL)
+
+    def get_trend_indicators(self) -> List[Dict[str, str]]:
+        """Get list of TREND type indicators (trend direction/strength)."""
+        return self.get_available_indicators(IndicatorType.TREND)
     
     def get_ui_schemas(self) -> Dict[str, Dict[str, Any]]:
         """Get UI schemas for all registered indicators."""

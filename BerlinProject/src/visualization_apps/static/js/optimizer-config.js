@@ -497,6 +497,14 @@ function createBarCardWithRanges(barName, barConfig) {
         `;
     }
 
+    // Generate trend indicators section using shared utility
+    const trendIndicatorsHtml = generateTrendIndicatorsSectionHtml(
+        barConfig.trend_indicators,
+        barConfig.trend_logic || 'AND',
+        barConfig.trend_threshold || 0.0,
+        generateIndicatorNameOptions
+    );
+
     return `
         <div class="bar-card" data-bar-name="${barName}">
             <div class="bar-card-header">
@@ -526,7 +534,7 @@ function createBarCardWithRanges(barName, barConfig) {
                     </div>
                 </div>
                 <div class="mt-2">
-                    <label class="form-label"><strong>Indicators & Weight Ranges:</strong></label>
+                    <label class="form-label"><strong>Signal Indicators & Weight Ranges:</strong></label>
                     <div class="bar-indicators-container">
                         ${indicatorsHtml}
                     </div>
@@ -534,6 +542,7 @@ function createBarCardWithRanges(barName, barConfig) {
                         <i class="fas fa-plus me-2"></i>Add Indicator
                     </button>
                 </div>
+                ${trendIndicatorsHtml}
             </div>
         </div>
     `;
@@ -1180,9 +1189,10 @@ function updateCurrentConfigBars() {
 
         const barName = nameInput ? nameInput.value : card.dataset.barName;
 
+        // Collect signal indicators (excluding trend indicator rows)
         const indicators = {};
         const weightRanges = {};
-        const indicatorSelects = card.querySelectorAll('[data-bar-indicator-name]');
+        const indicatorSelects = card.querySelectorAll('.bar-indicators-container [data-bar-indicator-name]');
 
         indicatorSelects.forEach(select => {
             const indName = select.value;
@@ -1213,12 +1223,15 @@ function updateCurrentConfigBars() {
             }
         });
 
-        bars[barName] = {
+        // Build bar config with basic fields and collect trend indicators from UI
+        const barConfig = buildBarConfigFromUI({
             type: typeSelect ? typeSelect.value : 'bull',
             description: descInput ? descInput.value : '',
             indicators: indicators,
             weight_ranges: weightRanges
-        };
+        }, card);
+
+        bars[barName] = barConfig;
     });
 
     monitorConfig.monitor.bars = bars;
@@ -1656,57 +1669,4 @@ async function saveOptimizationConfiguration() {
     }
 }
 
-/**
- * Download JSON data as a file
- */
-function downloadJsonFile(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-/**
- * Show a notification toast for save operations
- */
-function showSaveNotification(message, type = 'info') {
-    // Create a Bootstrap toast notification
-    const toastId = 'save-toast-' + Date.now();
-    const toastHtml = `
-        <div id="${toastId}" class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        </div>
-    `;
-
-    // Create container if it doesn't exist
-    let toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toast-container';
-        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        toastContainer.style.zIndex = '11';
-        document.body.appendChild(toastContainer);
-    }
-
-    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 4000 });
-    toast.show();
-
-    // Clean up after hidden
-    toastElement.addEventListener('hidden.bs.toast', () => {
-        toastElement.remove();
-    });
-}
+// Note: downloadJsonFile() and showSaveNotification() are now in config-utils.js

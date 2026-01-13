@@ -574,6 +574,14 @@ function createBarCard(barName, barConfig) {
         `;
     }
 
+    // Generate trend indicators section using shared utility
+    const trendIndicatorsHtml = generateTrendIndicatorsSectionHtml(
+        barConfig.trend_indicators,
+        barConfig.trend_logic || 'AND',
+        barConfig.trend_threshold || 0.0,
+        generateIndicatorNameOptions
+    );
+
     return `
         <div class="bar-card" data-bar-name="${barName}">
             <div class="bar-card-header">
@@ -603,7 +611,7 @@ function createBarCard(barName, barConfig) {
                     </div>
                 </div>
                 <div class="mt-2">
-                    <label class="form-label"><strong>Indicators & Weights:</strong></label>
+                    <label class="form-label"><strong>Signal Indicators & Weights:</strong></label>
                     <div class="bar-indicators-container">
                         ${indicatorsHtml}
                     </div>
@@ -611,6 +619,7 @@ function createBarCard(barName, barConfig) {
                         <i class="fas fa-plus me-2"></i>Add Indicator
                     </button>
                 </div>
+                ${trendIndicatorsHtml}
             </div>
         </div>
     `;
@@ -806,8 +815,9 @@ function updateCurrentConfigBars() {
 
         const barName = nameInput ? nameInput.value : card.dataset.barName;
 
+        // Collect signal indicators (excluding trend indicator rows)
         const indicators = {};
-        const indicatorRows = card.querySelectorAll('[data-bar-indicator-name]');
+        const indicatorRows = card.querySelectorAll('.bar-indicators-container [data-bar-indicator-name]');
         indicatorRows.forEach(row => {
             const indName = row.value;
             const weightInput = row.closest('.row').querySelector('[data-bar-indicator-weight]');
@@ -817,11 +827,14 @@ function updateCurrentConfigBars() {
             }
         });
 
-        bars[barName] = {
+        // Build bar config with basic fields and collect trend indicators from UI
+        const barConfig = buildBarConfigFromUI({
             type: typeSelect ? typeSelect.value : 'bull',
             description: descInput ? descInput.value : '',
             indicators: indicators
-        };
+        }, card);
+
+        bars[barName] = barConfig;
     });
 
     monitorConfig.monitor.bars = bars;
@@ -842,6 +855,33 @@ function saveConfiguration() {
     downloadConfig(dataConfig, currentDataFilename || 'data_config.json');
 
     showAlert('Configurations saved successfully', 'success');
+}
+
+/**
+ * Save Monitor Configuration only (without data config).
+ * Uses shared utility functions from config-utils.js
+ */
+function saveMonitorConfiguration() {
+    if (!monitorConfig) {
+        showSaveNotification('No monitor configuration loaded', 'warning');
+        return;
+    }
+
+    // Ensure we have the latest values from the form
+    collectMonitorConfigData();
+
+    // Build the monitor-only configuration
+    const monitorOnlyConfig = {
+        monitor: monitorConfig.monitor,
+        indicators: monitorConfig.indicators
+    };
+
+    // Generate filename using shared utility
+    const filename = generateSafeFilename(monitorConfig.monitor.name || 'monitor', 'monitor');
+
+    // Download the file
+    downloadJsonFile(monitorOnlyConfig, filename);
+    showSaveNotification('Monitor configuration saved: ' + filename, 'success');
 }
 
 function collectMonitorConfigData() {
