@@ -403,8 +403,9 @@
                                 <!-- Chart Container -->
                                 <div id="candlestickChart" style="height: 500px; margin-bottom: 5px;"></div>
 
-                                <!-- P&L Chart -->
+                                <!-- P&L Chart - COMMENTED OUT
                                 <div id="pnlChart" style="height: 300px; margin-bottom: 5px;"></div>
+                                -->
 
                                 <!-- Bar Scores Analysis Chart -->
                                 <div id="barScoresContainer" style="margin-top: 20px;">
@@ -629,9 +630,10 @@ document.addEventListener('DOMContentLoaded', function() {
             createCandlestickChart(data.candlestick_data, data.trades);
         }
         
-        if (data.pnl_data && data.trades && data.candlestick_data) {
-            createPnLChart(data.pnl_data, data.trades, data.candlestick_data);
-        }
+        // COMMENTED OUT: P&L Chart
+        // if (data.pnl_data && data.trades && data.candlestick_data) {
+        //     createPnLChart(data.pnl_data, data.trades, data.candlestick_data);
+        // }
 
         // Create bar scores chart showing weighted indicator trigger combinations
         if (data.bar_scores_history && data.bar_scores_history.length > 0) {
@@ -842,6 +844,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    /* COMMENTED OUT: Cumulative P&L Evolution Chart
     function createPnLChart(pnlData, trades, candlestickData) {
         // Build P&L data with unrealized gains during open positions
         let adjustedPnlData = [];
@@ -949,7 +952,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 lineWidth: 1,
                 tickWidth: 1
             },
-            yAxis: { 
+            yAxis: {
                 title: { text: 'Cumulative P&L (%)' },
                 plotLines: [{
                     value: 0,
@@ -967,15 +970,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }],
             credits: { enabled: false }
         };
-        
+
         if (charts.pnl) {
             charts.pnl.destroy();
         }
         charts.pnl = Highcharts.chart('pnlChart', chartConfig);
-        
+
         // Enable synchronization for P&L chart
         enableChartSynchronization(charts.pnl);
     }
+    END COMMENTED OUT: Cumulative P&L Evolution Chart */
 
     /**
      * Create bar scores chart showing weighted indicator trigger combinations.
