@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, jsonify
 import os
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add project path
@@ -326,76 +326,45 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         }
 
         # Format raw_indicator_history (trigger values: 0, 1) for frontend
-        # Uses native aggregator timestamps for each indicator
+        # IMPORTANT: These values are ALIGNED to primary timeframe by indicator_processor,
+        # so we MUST use primary timeframe timestamps (not native aggregator timestamps)
+        primary_timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
+
         raw_indicator_history_formatted = {}
         if raw_indicator_history:
             for ind_name, ind_values in raw_indicator_history.items():
-                # Get the aggregator key for this indicator
-                agg_key = indicator_agg_mapping.get(ind_name)
-                if agg_key:
-                    timestamps = backtest_streamer.get_aggregator_timestamps(agg_key)
-                else:
-                    # Fallback to primary timeframe
-                    timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
-
                 series = []
                 for i, value in enumerate(ind_values):
-                    if i < len(timestamps) and value is not None:
-                        series.append([timestamps[i], float(value)])
+                    if i < len(primary_timestamps) and value is not None:
+                        series.append([primary_timestamps[i], float(value)])
                 raw_indicator_history_formatted[ind_name] = series
-                logger.debug(f"📈 Raw indicator '{ind_name}' formatted with {len(series)} points from {agg_key or 'primary'}")
+                logger.debug(f"📈 Raw indicator '{ind_name}' formatted with {len(series)} points (primary timeframe)")
 
         # Format indicator_history (time-decayed values: 1, 0.9, 0.8, etc.) for frontend
-        # Uses native aggregator timestamps for each indicator
+        # IMPORTANT: These values are ALIGNED to primary timeframe by indicator_processor,
+        # so we MUST use primary timeframe timestamps (not native aggregator timestamps)
         indicator_history_formatted = {}
         if indicator_history:
             for ind_name, ind_values in indicator_history.items():
-                # Get the aggregator key for this indicator
-                agg_key = indicator_agg_mapping.get(ind_name)
-                if agg_key:
-                    timestamps = backtest_streamer.get_aggregator_timestamps(agg_key)
-                else:
-                    # Fallback to primary timeframe
-                    timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
-
                 series = []
                 for i, value in enumerate(ind_values):
-                    if i < len(timestamps) and value is not None:
-                        series.append([timestamps[i], float(value)])
+                    if i < len(primary_timestamps) and value is not None:
+                        series.append([primary_timestamps[i], float(value)])
                 indicator_history_formatted[ind_name] = series
-                logger.debug(f"📈 Indicator '{ind_name}' formatted with {len(series)} points from {agg_key or 'primary'}")
+                logger.debug(f"📈 Indicator '{ind_name}' formatted with {len(series)} points (primary timeframe)")
 
         # Format component_history (MACD line, signal, histogram, SMA values) for frontend
-        # Use the indicator's native aggregator timestamps (not primary 1m timeframe)
+        # IMPORTANT: Components are now ALIGNED to primary timeframe by indicator_processor,
+        # so we MUST use primary timeframe timestamps (same as indicator_history)
         component_history_formatted = {}
         if component_history:
             for comp_name, comp_values in component_history.items():
-                # Extract indicator name from component name (e.g., "macd5m_macd" -> "macd5m")
-                indicator_name = comp_name.rsplit('_', 1)[0] if '_' in comp_name else comp_name
-
-                # Get the aggregator key for this indicator
-                agg_key = indicator_agg_mapping.get(indicator_name)
-                if not agg_key:
-                    # Fallback: try to find matching indicator name
-                    for ind_name, key in indicator_agg_mapping.items():
-                        if ind_name in comp_name or comp_name.startswith(ind_name):
-                            agg_key = key
-                            break
-
-                # Get timestamps from the correct aggregator
-                if agg_key:
-                    timestamps = backtest_streamer.get_aggregator_timestamps(agg_key)
-                else:
-                    # Fallback to primary timeframe if no mapping found
-                    timestamps = [int(tick.timestamp.timestamp() * 1000) for tick in tick_history]
-                    logger.warning(f"⚠️ No aggregator mapping for component '{comp_name}', using primary timeframe")
-
                 series = []
                 for i, value in enumerate(comp_values):
-                    if i < len(timestamps) and value is not None:
-                        series.append([timestamps[i], float(value)])
+                    if i < len(primary_timestamps) and value is not None:
+                        series.append([primary_timestamps[i], float(value)])
                 component_history_formatted[comp_name] = series
-                logger.debug(f"📈 Component '{comp_name}' formatted with {len(series)} points from {agg_key}")
+                logger.debug(f"📈 Component '{comp_name}' formatted with {len(series)} points (primary timeframe)")
 
 
         # Merge P&L information into trade objects for frontend
@@ -423,9 +392,12 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         # Build class name to layout type mapping
         # Maps from CLASS NAME (e.g., "MACDHistogramCrossoverIndicator") to LAYOUT TYPE
         class_to_layout = {}
+        # Collect chart configs for self-describing visualization
+        chart_configs = {}
         try:
             # Ensure indicators are registered
             import indicator_triggers.refactored_indicators  # This imports and registers indicators
+            import indicator_triggers.trend_indicators  # Also import trend indicators
             from indicator_triggers.indicator_base import IndicatorRegistry
             registry = IndicatorRegistry()
 
@@ -441,6 +413,17 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
                     except ValueError as ve:
                         class_to_layout[indicator_class_name] = 'overlay'
                         logger.warning(f"⚠️ Class '{indicator_class_name}' not found, using default 'overlay'")
+
+                # Collect chart config for this indicator class
+                if indicator_class_name and indicator_class_name not in chart_configs:
+                    try:
+                        indicator_cls = registry.get_indicator_class(indicator_class_name)
+                        if hasattr(indicator_cls, 'get_chart_config'):
+                            chart_configs[indicator_class_name] = indicator_cls.get_chart_config()
+                            logger.debug(f"📊 Collected chart config for '{indicator_class_name}'")
+                    except ValueError:
+                        pass  # Skip if indicator class not found
+
         except Exception as e:
             logger.warning(f"Could not build class to layout mapping: {e}")
             # Build default mapping
@@ -465,6 +448,7 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             'indicator_history': indicator_history_formatted,  # Time-decayed values (1, 0.9, 0.8, etc.)
             'component_history': component_history_formatted,  # MACD components, SMA values, etc.
             'class_to_layout': class_to_layout,  # Class name → layout type (stacked or overlay)
+            'chart_configs': chart_configs,  # Self-describing chart configs from indicators
             'indicators': indicators,  # Include indicators config for frontend
             'bar_scores_history': bar_scores_history,  # Bar scores over time for visualization
             'bars_config': monitor_config.get('bars', {}),  # Bar definitions with weights and types
@@ -588,11 +572,14 @@ def load_examples():
             with open(example_data_path) as f:
                 examples['data_config'] = json.load(f)
         else:
-            # Provide default data config
+            # Provide default data config with dynamic dates (2 weeks ago to tomorrow)
+            today = datetime.now()
+            two_weeks_ago = today - timedelta(days=14)
+            tomorrow = today + timedelta(days=1)
             examples['data_config'] = {
                 "ticker": "NVDA",
-                "start_date": "2024-01-01",
-                "end_date": "2024-12-31"
+                "start_date": two_weeks_ago.strftime("%Y-%m-%d"),
+                "end_date": tomorrow.strftime("%Y-%m-%d")
             }
 
         return jsonify({
@@ -651,8 +638,9 @@ def run_visualization():
         import traceback
         traceback.print_exc()
 
-        # Check if error contains validation error details (JSON string)
         error_str = str(e)
+
+        # Check if error contains validation error details (JSON string)
         try:
             if error_str.startswith('{'):
                 error_details = json.loads(error_str)
@@ -666,6 +654,35 @@ def run_visualization():
                     })
         except:
             pass
+
+        # Check for validation error patterns in plain string errors
+        validation_keywords = ['validation failed', 'Parameter validation failed', 'Configuration validation failed']
+        if any(keyword in error_str for keyword in validation_keywords):
+            # Extract validation errors from the error message
+            validation_errors = []
+
+            # Parse errors that contain indicator validation details
+            # Format: "Indicator 'name': Parameter validation failed for ClassName:\n  • error details"
+            # Or: "Configuration validation failed:\nIndicator 'name': ..."
+            if "Configuration validation failed:" in error_str:
+                # Extract the part after "Configuration validation failed:"
+                error_content = error_str.split("Configuration validation failed:")[-1].strip()
+                # Remove list brackets if present (from str(list))
+                if error_content.startswith("[") and error_content.endswith("]"):
+                    error_content = error_content[1:-1].strip()
+                    # Handle quoted strings in list
+                    if error_content.startswith("'") or error_content.startswith('"'):
+                        error_content = error_content[1:-1]
+                validation_errors.append(error_content)
+            else:
+                validation_errors.append(error_str)
+
+            return jsonify({
+                'success': False,
+                'error': 'Configuration validation failed',
+                'validation_errors': validation_errors,
+                'has_validation_errors': True
+            })
 
         return jsonify({'success': False, 'error': error_str})
 
@@ -823,8 +840,9 @@ def run_replay():
         import traceback
         traceback.print_exc()
 
-        # Check if error contains validation error details (JSON string)
         error_str = str(e)
+
+        # Check if error contains validation error details (JSON string)
         try:
             if error_str.startswith('{'):
                 error_details = json.loads(error_str)
@@ -838,6 +856,29 @@ def run_replay():
                     })
         except:
             pass
+
+        # Check for validation error patterns in plain string errors
+        validation_keywords = ['validation failed', 'Parameter validation failed', 'Configuration validation failed']
+        if any(keyword in error_str for keyword in validation_keywords):
+            # Extract validation errors from the error message
+            validation_errors = []
+
+            if "Configuration validation failed:" in error_str:
+                error_content = error_str.split("Configuration validation failed:")[-1].strip()
+                if error_content.startswith("[") and error_content.endswith("]"):
+                    error_content = error_content[1:-1].strip()
+                    if error_content.startswith("'") or error_content.startswith('"'):
+                        error_content = error_content[1:-1]
+                validation_errors.append(error_content)
+            else:
+                validation_errors.append(error_str)
+
+            return jsonify({
+                'success': False,
+                'error': 'Configuration validation failed',
+                'validation_errors': validation_errors,
+                'has_validation_errors': True
+            })
 
         return jsonify({'success': False, 'error': error_str})
 

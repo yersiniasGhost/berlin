@@ -2,12 +2,14 @@
 Complete Historical Indicator Processor - Batch processing for genetic algorithms
 """
 
+import bisect
+from datetime import timedelta
 from typing import Tuple
 
 from candle_aggregator.candle_aggregator import CandleAggregator
 from models.monitor_configuration import MonitorConfiguration
 from features.indicators import *
-from indicator_triggers.indicator_base import IndicatorRegistry
+from indicator_triggers.indicator_base import IndicatorRegistry, IndicatorType
 # Import refactored and trend indicators to ensure they are registered
 import indicator_triggers.refactored_indicators
 import indicator_triggers.trend_indicators
@@ -174,41 +176,75 @@ class IndicatorProcessorHistoricalNew:
     def _align_to_primary_timeframe(
         self,
         values: List[float],
-        indicator_timeframe_minutes: int
+        indicator_timeframe_minutes: int,
+        coarse_candles: List = None,
+        primary_candles: List = None
     ) -> np.ndarray:
         """
-        Align indicator values from coarser timeframe to primary timeframe.
+        Align indicator values from coarser timeframe to primary timeframe
+        using TIMESTAMP matching instead of index ratios.
 
-        For raw trigger values, uses step interpolation (hold values until next trigger).
-        This method should only be used for raw trigger values, not lookback-decayed values.
+        The old index-based approach breaks when the ratio of candles between
+        timeframes isn't constant (due to market gaps, extended hours, different
+        trading days). This timestamp-based approach correctly maps each primary
+        candle to its containing coarse candle.
 
         Args:
             values: Raw indicator trigger values from coarser timeframe
             indicator_timeframe_minutes: Minutes per candle for this indicator
+            coarse_candles: Candles from the indicator's aggregator (for timestamps)
+            primary_candles: Candles from the primary (finest) aggregator
 
         Returns:
-            Step-interpolated values aligned to primary timeframe
+            Values aligned to primary timeframe via timestamp matching
         """
         if values is None or len(values) == 0:
             return np.zeros(self.primary_timeframe_length)
 
-        # If already at primary timeframe, no interpolation needed
+        # If already at primary timeframe, no alignment needed
         if indicator_timeframe_minutes == self.primary_timeframe_minutes:
             return np.array(values)
 
-        # Calculate the ratio (e.g., 5m/1m = 5)
-        ratio = indicator_timeframe_minutes / self.primary_timeframe_minutes
+        # Require candle lists for timestamp-based alignment
+        if coarse_candles is None or primary_candles is None:
+            logger.warning("Missing candle lists for timestamp-based alignment, falling back to index-based")
+            return self._align_to_primary_timeframe_index_based(values, indicator_timeframe_minutes)
 
-        # Create result array
         aligned_values = np.zeros(self.primary_timeframe_length)
 
-        # For each coarse timeframe value, fill the corresponding primary timeframe positions
+        # Build sorted list of coarse candle timestamps (as Unix seconds for binary search)
+        coarse_timestamps = [c.timestamp.timestamp() for c in coarse_candles]
+
+        # For each primary candle, find the coarse candle it falls within
+        for primary_idx, primary_candle in enumerate(primary_candles):
+            primary_ts = primary_candle.timestamp.timestamp()
+
+            # Binary search: find the rightmost coarse candle that starts <= primary_ts
+            # bisect_right returns insertion point, -1 gives us the containing candle
+            coarse_idx = bisect.bisect_right(coarse_timestamps, primary_ts) - 1
+
+            if 0 <= coarse_idx < len(values):
+                aligned_values[primary_idx] = values[coarse_idx]
+
+        return aligned_values
+
+    def _align_to_primary_timeframe_index_based(
+        self,
+        values: List[float],
+        indicator_timeframe_minutes: int
+    ) -> np.ndarray:
+        """
+        Legacy index-based alignment (fallback only).
+
+        WARNING: This approach is buggy when candle ratios aren't constant
+        (market gaps, extended hours, etc.). Use timestamp-based alignment.
+        """
+        ratio = indicator_timeframe_minutes / self.primary_timeframe_minutes
+        aligned_values = np.zeros(self.primary_timeframe_length)
+
         for coarse_idx, value in enumerate(values):
-            # Calculate the range of primary indices this coarse value covers
             start_primary_idx = int(coarse_idx * ratio)
             end_primary_idx = min(int((coarse_idx + 1) * ratio), self.primary_timeframe_length)
-
-            # Fill all primary positions with this value (step interpolation)
             aligned_values[start_primary_idx:end_primary_idx] = value
 
         return aligned_values
@@ -337,6 +373,14 @@ class IndicatorProcessorHistoricalNew:
 
         # logger.debug(f"Processing timeline of {self.primary_timeframe_length} data points")
 
+        # Find the primary aggregator key (shortest timeframe) for timestamp-based alignment
+        primary_agg_key = None
+        for agg_key, agg in aggregators.items():
+            if agg.get_timeframe_minutes() == self.primary_timeframe_minutes:
+                primary_agg_key = agg_key
+                break
+        primary_candles = all_candle_data.get(primary_agg_key, []) if primary_agg_key else []
+
         # Process each indicator
         raw_indicator_history = {}
         indicator_history: Dict[str, List[float]] = {}
@@ -361,16 +405,29 @@ class IndicatorProcessorHistoricalNew:
             # print(f"[ALIGN] {indicator.name}: {indicator_timeframe_minutes}m -> {self.primary_timeframe_minutes}m | "
             #            f"Before: {len(raw_values)} values | After: {self.primary_timeframe_length} values")
 
-            # Step 1: Align raw trigger values to primary timeframe
-            aligned_raw_values = self._align_to_primary_timeframe(raw_values, indicator_timeframe_minutes)
-
-            # Step 2: Apply lookback decay at primary timeframe resolution
-            lookback_periods = indicator.config.parameters.get('lookback', None)
-            aligned_trigger_values_with_lookback = self._apply_lookback_at_primary_timeframe(
-                aligned_raw_values,
-                lookback_periods,
-                indicator_timeframe_minutes
+            # Step 1: Align raw trigger values to primary timeframe using TIMESTAMP matching
+            # Pass candle lists for proper timestamp-based alignment (fixes market gap bug)
+            coarse_candles = candles  # Candles from the indicator's aggregator
+            aligned_raw_values = self._align_to_primary_timeframe(
+                raw_values, indicator_timeframe_minutes, coarse_candles, primary_candles
             )
+
+            # Step 2: Check if this is a TREND indicator (no decay) or SIGNAL indicator (with decay)
+            is_trend_indicator = (hasattr(indicator.indicator, 'get_indicator_type') and
+                                  indicator.indicator.get_indicator_type() == IndicatorType.TREND)
+
+            if is_trend_indicator:
+                # TREND indicators: use aligned raw values directly (no decay)
+                # Trend indicators show current market state, decay would corrupt the signal
+                aligned_trigger_values_with_lookback = aligned_raw_values
+            else:
+                # SIGNAL indicators: apply lookback decay at primary timeframe resolution
+                lookback_periods = indicator.config.parameters.get('lookback', None)
+                aligned_trigger_values_with_lookback = self._apply_lookback_at_primary_timeframe(
+                    aligned_raw_values,
+                    lookback_periods,
+                    indicator_timeframe_minutes
+                )
 
             # DEBUG: Verify alignment worked
             # print(f"[VERIFY] {indicator.name}: aligned_raw_values length = {len(aligned_raw_values)}, "
@@ -383,11 +440,17 @@ class IndicatorProcessorHistoricalNew:
             # Store indicator -> aggregator mapping for timestamp lookup
             indicator_agg_mapping[indicator.name] = aggregator_key
 
-            # Store component values at native resolution (NOT aligned to primary timeframe)
+            # Align component values to primary timeframe for consistent charting
+            # (Components like ADX raw value, +DI, -DI need same timestamps as other charts)
             if components:
                 for component_name, component_values in components.items():
                     key = f"{indicator.name}_{component_name}"
-                    component_history[key] = component_values.tolist() if isinstance(component_values, np.ndarray) else component_values
+                    comp_values_list = component_values.tolist() if isinstance(component_values, np.ndarray) else component_values
+                    # Align component values to primary timeframe
+                    aligned_components = self._align_to_primary_timeframe(
+                        comp_values_list, indicator_timeframe_minutes, coarse_candles, primary_candles
+                    )
+                    component_history[key] = aligned_components.tolist()
 
         # Calculate bar scores for entire timeline
         bar_score_history = self._calculate_bar_scores_batch(indicator_history, self.primary_timeframe_length)

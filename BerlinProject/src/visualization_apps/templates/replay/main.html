@@ -128,7 +128,7 @@
                         </div>
                         <div class="col-md-7">
                             <input type="file" class="form-control" id="dataFileInput" accept=".json">
-                            <small class="text-muted">If not provided, defaults to: NVDA, 01/01/2024 - 02/28/2024</small>
+                            <small class="text-muted">If not provided, defaults to: NVDA, last 2 weeks through tomorrow</small>
                         </div>
                     </div>
                     <div class="row">
@@ -340,10 +340,18 @@
     <div class="row" id="resultsSection" style="display: none;">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-chart-area me-2"></i>Visualization Results
                     </h5>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-info btn-sm" id="debugChartsBtn" onclick="captureDebugData()">
+                            <i class="fas fa-bug me-1"></i>Debug
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="saveImageBtn" onclick="saveChartsAsImage()">
+                            <i class="fas fa-camera me-1"></i>Save Image
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <!-- Strategy Overview -->
@@ -475,6 +483,58 @@
         </div>
     </div>
 </div>
+
+<!-- Debug Data Modal -->
+<div class="modal fade" id="debugDataModal" tabindex="-1" aria-labelledby="debugDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="debugDataModalLabel">
+                    <i class="fas fa-bug me-2"></i>Debug Data - Current View
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <h6>Visible Range</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>From:</strong> <span id="debugRangeFrom">-</span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>To:</strong> <span id="debugRangeTo">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Indicator Values in View</h6>
+                    <div id="debugIndicatorValues" style="max-height: 300px; overflow-y: auto;">
+                        <pre id="debugIndicatorPre" class="bg-light p-2 rounded" style="font-size: 12px;"></pre>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Bar Scores in View</h6>
+                    <div id="debugBarScores" style="max-height: 200px; overflow-y: auto;">
+                        <pre id="debugBarScoresPre" class="bg-light p-2 rounded" style="font-size: 12px;"></pre>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Raw Debug JSON</h6>
+                    <textarea id="debugJsonOutput" class="form-control" rows="8" readonly style="font-family: monospace; font-size: 11px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary" onclick="copyDebugToClipboard()">
+                    <i class="fas fa-copy me-1"></i>Copy to Clipboard
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="downloadDebugJson()">
+                    <i class="fas fa-download me-1"></i>Download JSON
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -499,12 +559,8 @@ document.addEventListener('DOMContentLoaded', function() {
         currentIndicator: null
     };
 
-    // Default data configuration
-    const DEFAULT_DATA_CONFIG = {
-        ticker: "NVDA",
-        start_date: "2024-01-01",
-        end_date: "2024-02-28"
-    };
+    // Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
+    // DEFAULT_DATA_CONFIG is already defined globally in config-utils.js
 
     // Check if we received configs from optimizer via sessionStorage
     checkForOptimzerData();
@@ -539,9 +595,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 dataConfig = JSON.parse(dataText);
                 showAlert('Configurations loaded successfully', 'success');
             } else {
-                // Use default data config: NVDA, 2024-01-01 to 2024-02-28
+                // Use default data config with dynamic dates (2 weeks ago to tomorrow)
                 dataConfig = JSON.parse(JSON.stringify(DEFAULT_DATA_CONFIG));
-                showAlert('Monitor configuration loaded. Using default data: NVDA, 01/01/2024 - 02/28/2024', 'info');
+                showAlert(`Monitor configuration loaded. Using default data: NVDA, ${DEFAULT_DATA_CONFIG.start_date} to ${DEFAULT_DATA_CONFIG.end_date}`, 'info');
             }
 
             // Render configurations
@@ -607,6 +663,7 @@ document.addEventListener('DOMContentLoaded', function() {
         globalChartData.trades = data.trades || [];
         globalChartData.tradeDetails = data.trade_details || {};  // Detailed trade info for popup
         globalChartData.primaryCandlestickData = data.candlestick_data;
+        globalChartData.chartConfigs = data.chart_configs || {};  // Self-describing chart configs
 
         // Build name to agg_config mapping from indicator configs
         globalChartData.nameToAggConfig = {};
@@ -659,6 +716,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('✅ Creating indicator charts with configs:', indicatorConfigs);
             console.log('📊 Per-aggregator candles available:', Object.keys(data.per_aggregator_candles || {}));
             console.log('📊 Indicator-aggregator mapping:', data.indicator_agg_mapping || {});
+            console.log('📊 Chart configs available:', Object.keys(data.chart_configs || {}));
             createIndicatorCharts(
                 data.component_history,
                 data.raw_indicator_history,
@@ -667,7 +725,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 indicatorConfigs,
                 data.class_to_layout || {},
                 data.per_aggregator_candles || {},
-                data.indicator_agg_mapping || {}
+                data.indicator_agg_mapping || {},
+                data.chart_configs || {}
             );
         } else {
             console.warn('⚠️ Skipping indicator charts - missing data or indicators');
@@ -1152,13 +1211,14 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log(`✅ Bar scores chart created with ${barNames.length} bars`);
     }
 
-    function createIndicatorCharts(componentHistory, rawIndicatorHistory, indicatorHistory, candlestickData, indicatorConfigs, classToLayout, perAggregatorCandles, indicatorAggMapping) {
+    function createIndicatorCharts(componentHistory, rawIndicatorHistory, indicatorHistory, candlestickData, indicatorConfigs, classToLayout, perAggregatorCandles, indicatorAggMapping, chartConfigs) {
         console.log('📊 Creating indicator charts');
         console.log('Component history keys:', Object.keys(componentHistory));
         console.log('Raw indicator history keys:', Object.keys(rawIndicatorHistory));
         console.log('Class to layout:', classToLayout);
         console.log('Per-aggregator candles:', Object.keys(perAggregatorCandles));
         console.log('Indicator-aggregator mapping:', indicatorAggMapping);
+        console.log('Chart configs:', chartConfigs);
 
         // Get all unique indicator names from raw_indicator_history
         const indicatorNames = Object.keys(rawIndicatorHistory);
@@ -1238,7 +1298,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log(`📈 Using ${aggConfig} candles (${indicatorCandles.length} points) for ${indicatorName}`);
                 }
 
-                const rawChart = createRawIndicatorChart(indicatorName, indicatorClass, componentHistory, indicatorCandles, rawChartId, classToLayout);
+                const rawChart = createRawIndicatorChart(indicatorName, indicatorClass, componentHistory, indicatorCandles, rawChartId, classToLayout, chartConfigs);
                 const triggerChart = createTriggerChart(indicatorName, rawIndicatorHistory, indicatorHistory, triggerChartId);
 
                 // Enable synchronization with all other charts
@@ -1280,21 +1340,148 @@ document.addEventListener('DOMContentLoaded', function() {
         return foundKeys;
     }
 
-    function createRawIndicatorChart(indicatorName, indicatorClass, componentHistory, candlestickData, chartId, classToLayout) {
+    function createRawIndicatorChart(indicatorName, indicatorClass, componentHistory, candlestickData, chartId, classToLayout, chartConfigs) {
         // Get layout type from the indicator CLASS
         const layoutType = (classToLayout && classToLayout[indicatorClass]) || 'overlay';
 
         console.log(`📈 Creating chart for instance '${indicatorName}' (class: ${indicatorClass}) with layout: '${layoutType}'`);
 
-        // Route to appropriate chart type based on layout_type from indicator class
+        // Check for self-describing chart config first (new config-driven approach)
+        const chartConfig = chartConfigs && chartConfigs[indicatorClass];
+        if (chartConfig && chartConfig.chart_type !== 'generic') {
+            console.log(`   → Using chart config for class '${indicatorClass}': ${chartConfig.chart_type}`);
+            return createConfigDrivenChart(indicatorName, componentHistory, candlestickData, chartId, chartConfig);
+        }
+
+        // Fallback to legacy class name detection for backwards compatibility
+        // ADX-type indicators (ADXTrendIndicator)
+        if (indicatorClass && indicatorClass.toLowerCase().includes('adx')) {
+            console.log(`   → [Legacy] Routing to ADX chart for class '${indicatorClass}'`);
+            return createADXChart(indicatorName, componentHistory, chartId);
+        }
+
+        // AROON-type indicators (AROONTrendIndicator)
+        if (indicatorClass && indicatorClass.toLowerCase().includes('aroon')) {
+            console.log(`   → [Legacy] Routing to AROON chart for class '${indicatorClass}'`);
+            return createAROONChart(indicatorName, componentHistory, chartId);
+        }
+
+        // MACD-type indicators (stacked layout with macd/signal/histogram)
         if (layoutType === 'stacked') {
-            return createMACDChart(indicatorName, componentHistory, chartId);
+            // Check if this looks like MACD by looking for macd components
+            const macdKeys = findComponentKeys(indicatorName, componentHistory, ['macd', 'signal', 'histogram']);
+            if (macdKeys.macd || macdKeys.signal || macdKeys.histogram) {
+                return createMACDChart(indicatorName, componentHistory, chartId);
+            }
+            // For other stacked indicators, use generic chart
+            return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
         } else if (layoutType === 'overlay') {
             return createSMAChart(indicatorName, componentHistory, candlestickData, chartId);
         } else {
             // Default: line chart for unknown layout types
             return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
         }
+    }
+
+    /**
+     * Creates a chart based on the indicator's self-describing chart configuration.
+     * This is the new config-driven approach that eliminates frontend hardcoding.
+     */
+    function createConfigDrivenChart(indicatorName, componentHistory, candlestickData, chartId, chartConfig) {
+        console.log(`\n🔍 [CONFIG-DRIVEN CHART] Creating chart for '${indicatorName}'`);
+        console.log(`   Chart config:`, chartConfig);
+
+        const series = [];
+        const components = chartConfig.components || [];
+
+        // Build series from components configuration
+        for (const comp of components) {
+            // Find the component key in componentHistory
+            const keySuffix = comp.key_suffix;
+            const matchingKey = Object.keys(componentHistory).find(key => {
+                return key.startsWith(indicatorName + '_') && key.endsWith('_' + keySuffix);
+            });
+
+            if (matchingKey && componentHistory[matchingKey]) {
+                const seriesConfig = {
+                    name: comp.name,
+                    data: componentHistory[matchingKey],
+                    color: comp.color || '#2962FF',
+                    lineWidth: comp.line_width || 2,
+                    marker: { enabled: false }
+                };
+
+                // Apply optional styling
+                if (comp.dash_style) {
+                    seriesConfig.dashStyle = comp.dash_style;
+                }
+                if (comp.type === 'column') {
+                    seriesConfig.type = 'column';
+                }
+                if (comp.y_axis !== undefined) {
+                    seriesConfig.yAxis = comp.y_axis;
+                }
+
+                series.push(seriesConfig);
+                console.log(`   ✓ Found component '${keySuffix}' → key '${matchingKey}'`);
+            } else {
+                console.log(`   ✗ Component '${keySuffix}' not found in componentHistory`);
+            }
+        }
+
+        // If no components found, fall back to auto-discovery
+        if (series.length === 0) {
+            console.warn(`⚠️ No components matched for '${indicatorName}'. Using auto-discovery.`);
+            return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
+        }
+
+        // Build y-axis configuration
+        const yAxisConfig = {
+            title: { text: chartConfig.y_axis?.title || 'Value' }
+        };
+        if (chartConfig.y_axis?.min !== undefined) {
+            yAxisConfig.min = chartConfig.y_axis.min;
+        }
+        if (chartConfig.y_axis?.max !== undefined) {
+            yAxisConfig.max = chartConfig.y_axis.max;
+        }
+
+        // Build plot lines from reference_lines configuration
+        const plotLines = (chartConfig.reference_lines || []).map(ref => ({
+            value: ref.value,
+            color: ref.color || '#9E9E9E',
+            width: 1,
+            dashStyle: ref.dash_style || 'Dash',
+            label: {
+                text: ref.label || '',
+                align: 'right',
+                style: { fontSize: '9px', color: ref.color || '#9E9E9E' }
+            },
+            zIndex: 1
+        }));
+
+        if (plotLines.length > 0) {
+            yAxisConfig.plotLines = plotLines;
+        }
+
+        const highchartsConfig = {
+            chart: { height: 300, zoomType: 'x' },
+            title: { text: `${indicatorName} - ${chartConfig.title_suffix || 'Raw Values'}`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: yAxisConfig,
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, highchartsConfig);
+        charts[`raw_${indicatorName}`] = chart;
+        return chart;
     }
 
     function createMACDChart(indicatorName, componentHistory, chartId) {
@@ -1342,6 +1529,279 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const chart = Highcharts.chart(chartId, chartConfig);
         charts[`raw_${indicatorName}`] = chart;
+        return chart;
+    }
+
+    /**
+     * Creates an ADX-style chart for ADXTrendIndicator and similar indicators.
+     * Displays ADX value (trend strength) along with +DI and -DI lines.
+     * Includes threshold reference lines at common ADX levels (20, 25, 40).
+     */
+    function createADXChart(indicatorName, componentHistory, chartId) {
+        console.log(`\n🔍 [ADX CHART] Looking for components for '${indicatorName}'`);
+        console.log(`   Available keys in componentHistory:`, Object.keys(componentHistory));
+
+        // Find ADX components by pattern matching
+        const componentKeys = findComponentKeys(indicatorName, componentHistory, ['adx', 'plus_di', 'minus_di', 'strength', 'direction']);
+
+        const series = [];
+
+        // ADX line (main trend strength indicator, 0-100 scale)
+        if (componentKeys.adx && componentHistory[componentKeys.adx]) {
+            series.push({
+                name: 'ADX',
+                data: componentHistory[componentKeys.adx],
+                color: '#2962FF',
+                lineWidth: 2.5,
+                marker: { enabled: false },
+                tooltip: { valueSuffix: '' }
+            });
+        }
+
+        // +DI line (positive directional indicator)
+        if (componentKeys.plus_di && componentHistory[componentKeys.plus_di]) {
+            series.push({
+                name: '+DI',
+                data: componentHistory[componentKeys.plus_di],
+                color: '#26A69A',  // Green
+                lineWidth: 1.5,
+                marker: { enabled: false },
+                dashStyle: 'ShortDash'
+            });
+        }
+
+        // -DI line (negative directional indicator)
+        if (componentKeys.minus_di && componentHistory[componentKeys.minus_di]) {
+            series.push({
+                name: '-DI',
+                data: componentHistory[componentKeys.minus_di],
+                color: '#EF5350',  // Red
+                lineWidth: 1.5,
+                marker: { enabled: false },
+                dashStyle: 'ShortDash'
+            });
+        }
+
+        if (series.length === 0) {
+            console.warn(`⚠️ No ADX components found for '${indicatorName}'. Falling back to generic chart.`);
+            return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
+        }
+
+        const chartConfig = {
+            chart: { height: 300, zoomType: 'x' },
+            title: { text: `${indicatorName} - ADX Trend Analysis`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: {
+                title: { text: 'Value' },
+                min: 0,
+                max: 100,
+                plotLines: [
+                    {
+                        value: 20,
+                        color: '#9E9E9E',
+                        width: 1,
+                        dashStyle: 'Dot',
+                        label: {
+                            text: 'Weak Trend (20)',
+                            align: 'right',
+                            style: { fontSize: '9px', color: '#9E9E9E' }
+                        },
+                        zIndex: 1
+                    },
+                    {
+                        value: 25,
+                        color: '#FFA726',
+                        width: 1,
+                        dashStyle: 'Dash',
+                        label: {
+                            text: 'Trend Threshold (25)',
+                            align: 'right',
+                            style: { fontSize: '9px', color: '#FFA726' }
+                        },
+                        zIndex: 1
+                    },
+                    {
+                        value: 40,
+                        color: '#66BB6A',
+                        width: 1,
+                        dashStyle: 'Dash',
+                        label: {
+                            text: 'Strong Trend (40)',
+                            align: 'right',
+                            style: { fontSize: '9px', color: '#66BB6A' }
+                        },
+                        zIndex: 1
+                    }
+                ]
+            },
+            legend: {
+                enabled: true,
+                align: 'right',
+                verticalAlign: 'top',
+                layout: 'horizontal',
+                itemStyle: { fontSize: '10px' }
+            },
+            tooltip: {
+                shared: true,
+                crosshairs: true,
+                formatter: function() {
+                    let s = '<b>' + Highcharts.dateFormat('%Y-%m-%d %H:%M', this.x) + '</b><br/>';
+                    this.points.forEach(point => {
+                        const value = point.y !== null ? point.y.toFixed(2) : 'N/A';
+                        s += `<span style="color:${point.color}">●</span> ${point.series.name}: <b>${value}</b><br/>`;
+                    });
+                    // Add trend interpretation
+                    const adxPoint = this.points.find(p => p.series.name === 'ADX');
+                    const plusDiPoint = this.points.find(p => p.series.name === '+DI');
+                    const minusDiPoint = this.points.find(p => p.series.name === '-DI');
+                    if (adxPoint && plusDiPoint && minusDiPoint) {
+                        const adx = adxPoint.y;
+                        const plusDi = plusDiPoint.y;
+                        const minusDi = minusDiPoint.y;
+                        let trend = 'No Trend';
+                        if (adx >= 25) {
+                            trend = plusDi > minusDi ? '📈 Bullish' : '📉 Bearish';
+                            if (adx >= 40) trend += ' (Strong)';
+                        }
+                        s += `<br/><b>Trend: ${trend}</b>`;
+                    }
+                    return s;
+                }
+            },
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, chartConfig);
+        charts[`raw_${indicatorName}`] = chart;
+        console.log(`✅ ADX chart created for '${indicatorName}' with ${series.length} series`);
+        return chart;
+    }
+
+    /**
+     * Creates an AROON-style chart for AROONTrendIndicator.
+     * Displays AROON Up, AROON Down, and the Oscillator.
+     */
+    function createAROONChart(indicatorName, componentHistory, chartId) {
+        console.log(`\n🔍 [AROON CHART] Looking for components for '${indicatorName}'`);
+        console.log(`   Available keys in componentHistory:`, Object.keys(componentHistory));
+
+        // Find AROON components by pattern matching
+        const componentKeys = findComponentKeys(indicatorName, componentHistory, ['up', 'down', 'oscillator']);
+
+        const series = [];
+
+        // AROON Up line
+        if (componentKeys.up && componentHistory[componentKeys.up]) {
+            series.push({
+                name: 'AROON Up',
+                data: componentHistory[componentKeys.up],
+                color: '#26A69A',  // Green
+                lineWidth: 2,
+                marker: { enabled: false }
+            });
+        }
+
+        // AROON Down line
+        if (componentKeys.down && componentHistory[componentKeys.down]) {
+            series.push({
+                name: 'AROON Down',
+                data: componentHistory[componentKeys.down],
+                color: '#EF5350',  // Red
+                lineWidth: 2,
+                marker: { enabled: false }
+            });
+        }
+
+        // AROON Oscillator (optional, separate y-axis could be added)
+        if (componentKeys.oscillator && componentHistory[componentKeys.oscillator]) {
+            series.push({
+                name: 'Oscillator',
+                data: componentHistory[componentKeys.oscillator],
+                color: '#7E57C2',  // Purple
+                lineWidth: 1.5,
+                dashStyle: 'ShortDash',
+                marker: { enabled: false }
+            });
+        }
+
+        if (series.length === 0) {
+            console.warn(`⚠️ No AROON components found for '${indicatorName}'. Falling back to generic chart.`);
+            return createGenericIndicatorChart(indicatorName, componentHistory, chartId);
+        }
+
+        const chartConfig = {
+            chart: { height: 300, zoomType: 'x' },
+            title: { text: `${indicatorName} - AROON Analysis`, style: { fontSize: '14px' } },
+            xAxis: {
+                type: 'datetime',
+                ordinal: true,
+                labels: { enabled: false },
+                lineWidth: 0,
+                tickWidth: 0
+            },
+            yAxis: {
+                title: { text: 'Value' },
+                min: -100,
+                max: 100,
+                plotLines: [
+                    {
+                        value: 0,
+                        color: '#9E9E9E',
+                        width: 1,
+                        dashStyle: 'Solid',
+                        zIndex: 1
+                    },
+                    {
+                        value: 50,
+                        color: '#26A69A',
+                        width: 1,
+                        dashStyle: 'Dot',
+                        label: {
+                            text: 'Bullish Zone',
+                            align: 'right',
+                            style: { fontSize: '9px', color: '#26A69A' }
+                        },
+                        zIndex: 1
+                    },
+                    {
+                        value: -50,
+                        color: '#EF5350',
+                        width: 1,
+                        dashStyle: 'Dot',
+                        label: {
+                            text: 'Bearish Zone',
+                            align: 'right',
+                            style: { fontSize: '9px', color: '#EF5350' }
+                        },
+                        zIndex: 1
+                    }
+                ]
+            },
+            legend: {
+                enabled: true,
+                align: 'right',
+                verticalAlign: 'top',
+                layout: 'horizontal',
+                itemStyle: { fontSize: '10px' }
+            },
+            tooltip: {
+                shared: true,
+                crosshairs: true
+            },
+            series: series,
+            credits: { enabled: false }
+        };
+
+        const chart = Highcharts.chart(chartId, chartConfig);
+        charts[`raw_${indicatorName}`] = chart;
+        console.log(`✅ AROON chart created for '${indicatorName}' with ${series.length} series`);
         return chart;
     }
 
@@ -1449,7 +1909,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: { enabled: true }
             },
             yAxis: {
-                title: { text: 'Trigger Value' },
+                title: { text: 'Trigger' },
                 min: 0,
                 max: 1.1,
                 plotLines: [{
@@ -1576,6 +2036,85 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 50); // Shorter delay for more responsive sync
         }
     }
+
+    /**
+     * Zooms all charts to center around a specific trade timestamp.
+     * Creates a window of approximately 2 hours (60 minutes before and after)
+     * centered on the trade time for detailed analysis.
+     *
+     * @param {number} timestamp - The trade timestamp in milliseconds
+     */
+    function zoomChartsToTradeTimestamp(timestamp) {
+        // Define zoom window: ±60 minutes around the trade (2 hours total)
+        const zoomWindowMs = 60 * 60 * 1000; // 60 minutes in milliseconds
+        const min = timestamp - zoomWindowMs;
+        const max = timestamp + zoomWindowMs;
+
+        console.log(`📍 Zooming charts to trade at ${new Date(timestamp).toLocaleString()}`);
+        console.log(`   Window: ${new Date(min).toLocaleString()} to ${new Date(max).toLocaleString()}`);
+
+        // Get any chart to use as reference (we'll sync all charts including the source)
+        const firstChart = Object.values(charts)[0];
+        if (!firstChart) {
+            console.warn('⚠️ No charts available to zoom');
+            return;
+        }
+
+        // Get data bounds from the first chart to clamp the zoom window
+        const xAxis = firstChart.xAxis && firstChart.xAxis[0];
+        if (xAxis) {
+            const extremes = xAxis.getExtremes();
+            const dataMin = extremes.dataMin || min;
+            const dataMax = extremes.dataMax || max;
+
+            // Clamp zoom window to data bounds
+            const clampedMin = Math.max(min, dataMin);
+            const clampedMax = Math.min(max, dataMax);
+
+            // Ensure minimum range (at least 30 minutes)
+            const minRange = 30 * 60 * 1000;
+            if (clampedMax - clampedMin < minRange) {
+                const center = timestamp;
+                const halfMinRange = minRange / 2;
+                const adjustedMin = Math.max(center - halfMinRange, dataMin);
+                const adjustedMax = Math.min(center + halfMinRange, dataMax);
+                syncAllChartsFromDetails(adjustedMin, adjustedMax);
+            } else {
+                syncAllChartsFromDetails(clampedMin, clampedMax);
+            }
+        }
+    }
+
+    /**
+     * Syncs all charts to a specific time range (for use from trade details).
+     * This variant updates ALL charts including the first one since there's no
+     * "source" chart when triggered from the trade details popup.
+     *
+     * @param {number} min - Start of zoom window in milliseconds
+     * @param {number} max - End of zoom window in milliseconds
+     */
+    function syncAllChartsFromDetails(min, max) {
+        // Prevent infinite loops
+        if (window.syncInProgress) return;
+        window.syncInProgress = true;
+
+        console.log(`🔍 Zooming all charts to: ${new Date(min).toLocaleString()} - ${new Date(max).toLocaleString()}`);
+
+        try {
+            let syncedCount = 0;
+            Object.values(charts).forEach(chart => {
+                if (chart && chart.xAxis && chart.xAxis[0]) {
+                    chart.xAxis[0].setExtremes(min, max, true, false);
+                    syncedCount++;
+                }
+            });
+            console.log(`✅ Zoomed ${syncedCount} charts to trade timestamp`);
+        } finally {
+            setTimeout(() => {
+                window.syncInProgress = false;
+            }, 50);
+        }
+    }
     
     function populateTradeHistory(trades) {
         const tableBody = document.getElementById('tradeHistoryTable');
@@ -1627,6 +2166,9 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('No detailed information available for this trade.');
             return;
         }
+
+        // Zoom all charts to center around this trade's timestamp
+        zoomChartsToTradeTimestamp(timestamp);
 
         // Format the details for the modal
         let content = `<div class="trade-details-content">`;
@@ -1805,6 +2347,206 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAlert('Error loading configuration from optimizer', 'danger');
             }
         }
+    }
+
+    // =========================================================================
+    // DEBUG AND EXPORT FUNCTIONS
+    // =========================================================================
+
+    /**
+     * Capture debug data from current chart view.
+     * Shows indicator values, bar scores, and price data for the visible range.
+     */
+    window.captureDebugData = function() {
+        const debugData = {
+            timestamp: new Date().toISOString(),
+            visibleRange: { from: null, to: null },
+            indicators: {},
+            barScores: {},
+            priceData: [],
+            chartConfig: {}
+        };
+
+        // Get visible range from candlestick chart
+        if (charts.candlestick && charts.candlestick.xAxis && charts.candlestick.xAxis[0]) {
+            const xAxis = charts.candlestick.xAxis[0];
+            const extremes = xAxis.getExtremes();
+            debugData.visibleRange.from = extremes.min;
+            debugData.visibleRange.to = extremes.max;
+
+            // Format dates for display
+            const fromDate = new Date(extremes.min);
+            const toDate = new Date(extremes.max);
+            document.getElementById('debugRangeFrom').textContent = fromDate.toLocaleString();
+            document.getElementById('debugRangeTo').textContent = toDate.toLocaleString();
+        }
+
+        // Collect price data in visible range
+        if (charts.candlestick && charts.candlestick.series) {
+            charts.candlestick.series.forEach(series => {
+                if (series.name === 'Price' || series.type === 'candlestick') {
+                    const visibleData = series.data.filter(point => {
+                        if (!point || point.x === undefined) return false;
+                        return point.x >= debugData.visibleRange.from &&
+                               point.x <= debugData.visibleRange.to;
+                    });
+                    debugData.priceData = visibleData.map(p => ({
+                        time: new Date(p.x).toISOString(),
+                        open: p.open,
+                        high: p.high,
+                        low: p.low,
+                        close: p.close
+                    }));
+                }
+            });
+        }
+
+        // Collect bar scores in visible range
+        if (charts.barScores && charts.barScores.series) {
+            charts.barScores.series.forEach(series => {
+                if (!series.visible || !series.data) return;
+                const visibleData = series.data.filter(point => {
+                    if (!point || point.x === undefined) return false;
+                    return point.x >= debugData.visibleRange.from &&
+                           point.x <= debugData.visibleRange.to;
+                });
+                debugData.barScores[series.name] = visibleData.map(p => ({
+                    time: new Date(p.x).toISOString(),
+                    value: p.y
+                }));
+            });
+        }
+
+        // Collect indicator data from all indicator charts
+        // Charts are stored with prefixes: raw_, trigger_
+        const indicatorChartPrefixes = ['raw_', 'trigger_'];
+        const indicatorCharts = Object.keys(charts).filter(k =>
+            indicatorChartPrefixes.some(prefix => k.startsWith(prefix))
+        );
+
+        console.log('Debug: Found indicator charts:', indicatorCharts);
+
+        indicatorCharts.forEach(chartKey => {
+            const chart = charts[chartKey];
+            if (!chart || !chart.series) return;
+
+            chart.series.forEach(series => {
+                if (!series.visible || !series.data) return;
+                const seriesKey = `${chartKey}::${series.name}`;
+                const visibleData = series.data.filter(point => {
+                    if (!point || point.x === undefined) return false;
+                    return point.x >= debugData.visibleRange.from &&
+                           point.x <= debugData.visibleRange.to;
+                });
+                debugData.indicators[seriesKey] = visibleData.map(p => ({
+                    time: new Date(p.x).toISOString(),
+                    value: p.y
+                }));
+            });
+        });
+
+        // Also list all chart keys for debugging
+        debugData.chartKeys = Object.keys(charts);
+
+        // Also collect from globalChartData if available
+        if (globalChartData && globalChartData.indicatorConfigs) {
+            debugData.chartConfig.indicatorConfigs = globalChartData.indicatorConfigs;
+        }
+
+        // Format for display
+        const indicatorText = JSON.stringify(debugData.indicators, null, 2);
+        const barScoresText = JSON.stringify(debugData.barScores, null, 2);
+        const fullJson = JSON.stringify(debugData, null, 2);
+
+        document.getElementById('debugIndicatorPre').textContent = indicatorText;
+        document.getElementById('debugBarScoresPre').textContent = barScoresText;
+        document.getElementById('debugJsonOutput').value = fullJson;
+
+        // Store for download
+        window.currentDebugData = debugData;
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('debugDataModal'));
+        modal.show();
+    };
+
+    /**
+     * Copy debug JSON to clipboard.
+     */
+    window.copyDebugToClipboard = function() {
+        const jsonOutput = document.getElementById('debugJsonOutput');
+        jsonOutput.select();
+        document.execCommand('copy');
+        showAlert('Debug data copied to clipboard!', 'success');
+    };
+
+    /**
+     * Download debug data as JSON file.
+     */
+    window.downloadDebugJson = function() {
+        if (!window.currentDebugData) {
+            showAlert('No debug data available', 'warning');
+            return;
+        }
+        const filename = `debug_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        downloadJsonFile(window.currentDebugData, filename);
+        showAlert('Debug data downloaded!', 'success');
+    };
+
+    /**
+     * Save all charts as a single image.
+     * Captures Price Chart, Bar Scores, and visible Indicator charts.
+     */
+    window.saveChartsAsImage = async function() {
+        showAlert('Capturing charts...', 'info');
+
+        try {
+            // Use html2canvas to capture the entire stacked charts container
+            const container = document.getElementById('stackedChartsContainer');
+            if (!container) {
+                showAlert('Charts container not found', 'danger');
+                return;
+            }
+
+            // Check if html2canvas is available, if not load it
+            if (typeof html2canvas === 'undefined') {
+                await loadHtml2Canvas();
+            }
+
+            // Capture the container
+            const canvas = await html2canvas(container, {
+                backgroundColor: '#ffffff',
+                scale: 2, // Higher quality
+                logging: false,
+                useCORS: true,
+                allowTaint: true
+            });
+
+            // Convert to image and download
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            link.download = `charts_${timestamp}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+            showAlert('Charts saved as image!', 'success');
+        } catch (error) {
+            console.error('Error saving charts as image:', error);
+            showAlert('Error saving image: ' + error.message, 'danger');
+        }
+    };
+
+    /**
+     * Load html2canvas library dynamically.
+     */
+    async function loadHtml2Canvas() {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
     }
 });
 </script>
