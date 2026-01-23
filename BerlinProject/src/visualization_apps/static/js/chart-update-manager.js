@@ -206,6 +206,7 @@ class ChartUpdateManager {
         window.perfMonitor?.measure('update_parallel_coords', () => {
             const eliteData = data.elite_population_data;
             const objectiveNames = data.objective_names;
+            const diversityMetrics = data.diversity_metrics || null;
 
             if (eliteData.length === 0) return;
 
@@ -217,6 +218,11 @@ class ChartUpdateManager {
 
             const colors = Highcharts.getOptions().colors;
             const colorCount = colors.length;
+
+            // Update X-axis categories with objective names (FIX: labels were missing)
+            if (chart.xAxis && chart.xAxis[0] && objectiveNames.length > 0) {
+                chart.xAxis[0].setCategories(objectiveNames, false);
+            }
 
             // Update series data in-place instead of destroying chart
             normalizedData.forEach((elite, index) => {
@@ -240,11 +246,15 @@ class ChartUpdateManager {
                 chart.series[chart.series.length - 1].remove(false);
             }
 
-            // Update title
+            // Update title with diversity indicator if available
+            let titleText = `Elite Population Analysis (${eliteData.length} Individuals)`;
+            if (diversityMetrics && diversityMetrics.similarity_score !== undefined) {
+                const diversityPct = ((1 - diversityMetrics.similarity_score) * 100).toFixed(0);
+                const diversityIcon = diversityMetrics.similarity_score > 0.7 ? '⚠️' : '✅';
+                titleText = `${diversityIcon} Elite Population (${eliteData.length} | Diversity: ${diversityPct}%)`;
+            }
             if (chart.setTitle) {
-                chart.setTitle({
-                    text: `Elite Population Analysis (${eliteData.length} Individuals)`
-                }, null, false);
+                chart.setTitle({ text: titleText }, null, false);
             }
 
             if (redraw) chart.redraw();

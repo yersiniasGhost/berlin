@@ -9,7 +9,7 @@ import json
 import time
 import threading
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict
 from .optimization_state import OptimizationState
@@ -160,11 +160,14 @@ def load_examples():
                 }
             }
 
-        # Provide default data config
+        # Provide default data config with dynamic dates (2 weeks ago to tomorrow)
+        today = datetime.now()
+        two_weeks_ago = today - timedelta(days=14)
+        tomorrow = today + timedelta(days=1)
         examples['data_config'] = {
             "ticker": "NVDA",
-            "start_date": "2024-01-01",
-            "end_date": "2024-12-31"
+            "start_date": two_weeks_ago.strftime('%Y-%m-%d'),
+            "end_date": tomorrow.strftime('%Y-%m-%d')
         }
 
         return jsonify({
@@ -282,7 +285,33 @@ def start_optimization():
         logger.error(f"Error preparing optimization: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+
+        error_str = str(e)
+
+        # Check for validation error patterns in plain string errors
+        validation_keywords = ['validation failed', 'Parameter validation failed', 'Configuration validation failed']
+        if any(keyword in error_str for keyword in validation_keywords):
+            # Extract validation errors from the error message
+            validation_errors = []
+
+            if "Configuration validation failed:" in error_str:
+                error_content = error_str.split("Configuration validation failed:")[-1].strip()
+                if error_content.startswith("[") and error_content.endswith("]"):
+                    error_content = error_content[1:-1].strip()
+                    if error_content.startswith("'") or error_content.startswith('"'):
+                        error_content = error_content[1:-1]
+                validation_errors.append(error_content)
+            else:
+                validation_errors.append(error_str)
+
+            return jsonify({
+                'success': False,
+                'error': 'Configuration validation failed',
+                'validation_errors': validation_errors,
+                'has_validation_errors': True
+            })
+
+        return jsonify({'success': False, 'error': error_str})
 
 
 @optimizer_bp.route('/api/stop_optimization', methods=['POST'])

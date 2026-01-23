@@ -1,11 +1,15 @@
+import copy
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict
 
 from optimization.genetic_optimizer.abstractions.problem_domain import ProblemDomain, IndividualBase
 from .mlf_individual import MlfIndividual
 from models.monitor_configuration import MonitorConfiguration
 from models.monitor_model import Monitor
+from mlf_utils.log_manager import LogManager
+
+logger = LogManager().get_logger("MlfProblem")
 
 
 def get_random_int(delta: int):
@@ -20,17 +24,40 @@ def get_random_int(delta: int):
 @dataclass
 class MlfProblem(ProblemDomain):
     monitor_configuration: MonitorConfiguration
-
-    # monitor: Monitor
+    seed_with_original: bool = True  # Include original monitor as first individual
 
     def optimizer_results(self, best_individual: IndividualBase, metrics: List[float]):
         pass
 
     def create_initial_population(self, population_size: int) -> List[MlfIndividual]:
+        """Create initial population, optionally seeding with original monitor config.
+
+        When seed_with_original is True:
+        - First individual is the original monitor configuration (unmodified)
+        - Remaining N-1 individuals are randomly generated
+
+        This ensures the optimizer starts with the user's original configuration
+        as a baseline, which can be useful if the original is already near-optimal.
+        """
         individuals = []
-        for i in range(population_size):
-            # FIXED: Only pass monitor_configuration
-            individuals.append(MlfIndividual.create_itself(self.monitor_configuration))
+
+        if self.seed_with_original and population_size > 0:
+            # Create first individual from original config (no randomization)
+            original_individual = MlfIndividual(
+                monitor_configuration=copy.deepcopy(self.monitor_configuration),
+                source="original_seed"
+            )
+            individuals.append(original_individual)
+            logger.info("🌱 Seeded population with original monitor configuration as first individual")
+
+            # Create remaining individuals with randomization
+            for i in range(population_size - 1):
+                individuals.append(MlfIndividual.create_itself(self.monitor_configuration))
+        else:
+            # All individuals are randomly generated
+            for i in range(population_size):
+                individuals.append(MlfIndividual.create_itself(self.monitor_configuration))
+
         return individuals
 
     def post_iteration_cleanup(self, iteration: str):

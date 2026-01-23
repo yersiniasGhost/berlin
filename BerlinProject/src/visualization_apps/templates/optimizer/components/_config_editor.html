@@ -268,7 +268,15 @@
                                     </div>
                                     <div class="col-md-4">
                                         <label for="numSplits" class="form-label">Number of Splits</label>
-                                        <input type="number" class="form-control" id="numSplits" style="max-width: 150px;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <input type="number" class="form-control" id="numSplits" style="max-width: 100px;">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="dailySplits" onchange="toggleDailySplits()">
+                                                <label class="form-check-label" for="dailySplits" title="When checked, creates one split per calendar day in the date range">
+                                                    Daily
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="col-md-4">
                                         <label for="randomSeed" class="form-label">Random Number Seed</label>
@@ -282,6 +290,17 @@
                                         <label for="splitRepeats" class="form-label">Split Repeats</label>
                                         <input type="number" class="form-control" id="splitRepeats" style="max-width: 150px;" title="Number of times to repeat the same data split before selecting a new one">
                                     </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <h6>Population Seeding</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="seedWithOriginal" checked>
+                                    <label class="form-check-label" for="seedWithOriginal">
+                                        <i class="fas fa-seedling me-1 text-success"></i>Seed with original monitor configuration
+                                    </label>
+                                    <small class="form-text text-muted d-block">When checked, the first individual in the initial population will be your original monitor configuration (unmodified). This ensures your starting point is evaluated and used as a baseline for optimization.</small>
                                 </div>
                             </div>
 

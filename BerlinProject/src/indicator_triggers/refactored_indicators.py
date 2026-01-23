@@ -246,6 +246,23 @@ class MACDHistogramCrossoverIndicator(BaseIndicator):
         """MACD uses stacked layout - candlesticks on top, MACD lines below."""
         return "stacked"
 
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return MACD-specific chart configuration for visualization."""
+        return {
+            "chart_type": "macd",
+            "title_suffix": "MACD Analysis",
+            "components": [
+                {"key_suffix": "macd", "name": "MACD Line", "color": "#2962FF", "line_width": 2},
+                {"key_suffix": "signal", "name": "Signal Line", "color": "#FF6D00", "line_width": 2},
+                {"key_suffix": "histogram", "name": "Histogram", "color": "#00897B", "type": "column"},
+            ],
+            "y_axis": {"title": "Value"},
+            "reference_lines": [
+                {"value": 0, "color": "#9E9E9E", "dash_style": "Dash", "label": "Zero Line"},
+            ]
+        }
+
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         fast = self.get_parameter("fast")
         slow = self.get_parameter("slow")
@@ -675,6 +692,23 @@ class RSIIndicator(BaseIndicator):
     def get_layout_type(cls) -> str:
         """RSI uses stacked layout - candlesticks on top, RSI oscillator below."""
         return "stacked"
+
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return RSI-specific chart configuration for visualization."""
+        return {
+            "chart_type": "rsi",
+            "title_suffix": "RSI Oscillator",
+            "components": [
+                {"key_suffix": "rsi", "name": "RSI", "color": "#2962FF", "line_width": 2},
+            ],
+            "y_axis": {"min": 0, "max": 100, "title": "RSI"},
+            "reference_lines": [
+                {"value": 30, "color": "#26A69A", "dash_style": "Dash", "label": "Oversold (30)"},
+                {"value": 70, "color": "#EF5350", "dash_style": "Dash", "label": "Overbought (70)"},
+                {"value": 50, "color": "#9E9E9E", "dash_style": "Dot", "label": "Neutral (50)"},
+            ]
+        }
 
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Calculate RSI values and generate signals.

@@ -9,6 +9,9 @@ from optimization.genetic_optimizer.abstractions.individual_stats import Individ
 
 from optimization.genetic_optimizer.abstractions import ProblemDomain, IndividualBase
 from optimization.genetic_optimizer.genetic_algorithm import collect_fronts, crowd_sort, collect_domination_statistics
+from optimization.genetic_optimizer.genetic_algorithm.pareto_front import (
+    calculate_elite_diversity, select_distinct_elites
+)
 from optimization.genetic_optimizer.support.types import Json
 from mlf_utils.log_manager import LogManager
 
@@ -39,6 +42,10 @@ class GeneticAlgorithm:
     mutation_decay_factor: float = 0.93
     crossover_decay_factor: float = 0.95
     random_seed: int = 0
+    # Diversity reinjection settings
+    diversity_threshold: float = 0.80  # Trigger reinjection when similarity > 80%
+    diversity_mutation_multiplier: float = 3.0  # Heavy mutation rate for diversity individuals
+    diversity_random_fraction: float = 0.30  # Fraction of reinjected individuals that are random
 
 
     def __post_init__(self):
@@ -123,9 +130,14 @@ class GeneticAlgorithm:
         com = max(1.0e-6, self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index))
         print("New mutation rate: ", com)
         coc = max(1.0e-6, self.chance_of_crossover * self.crossover_decay_factor ** self.iteration_index)
-        print("New mutation rate: ", coc)
+        print("New crossover rate: ", coc)
 
         elitists, parents = self.select_winning_population(fronts)
+
+        # ===== DIVERSITY REINJECTION CHECK =====
+        # Analyze elite diversity and reinject if needed to prevent premature convergence
+        elitists = self._check_and_reinject_diversity(elitists, fronts)
+
         self.debug_population(elitists, 'e1')
         self.debug_population(parents, "p1")
         self.debug_population(elitists+parents, 'ep')
@@ -168,6 +180,115 @@ class GeneticAlgorithm:
         self.debug_population(elitists, 'e3')
 
         return elitists
+
+    def _check_and_reinject_diversity(self, elitists: List[IndividualBase],
+                                       fronts: Dict[int, List]) -> List[IndividualBase]:
+        """
+        Check elite diversity and reinject diverse individuals if needed.
+
+        When similarity_score > diversity_threshold, the elites have converged
+        too much and we need to inject fresh genetic material:
+        - Keep only distinct elites (one per cluster)
+        - Fill remaining slots with heavy mutations (70%) and random individuals (30%)
+
+        Args:
+            elitists: Current elite population (IndividualBase instances)
+            fronts: Pareto fronts containing IndividualStats
+
+        Returns:
+            Modified elite population with diversity reinjection if needed
+        """
+        if len(elitists) < 3:
+            return elitists  # Not enough elites to analyze
+
+        # Get IndividualStats from first front for diversity analysis
+        front_0_stats = fronts.get(0, [])
+        if len(front_0_stats) < 3:
+            return elitists
+
+        # Calculate diversity metrics
+        diversity_info = calculate_elite_diversity(front_0_stats[:self.elitist_size], threshold=0.05)
+
+        # Store diversity metrics for reporting (can be accessed by visualization)
+        self._last_diversity_info = diversity_info
+
+        similarity = diversity_info['similarity_score']
+        if similarity <= self.diversity_threshold:
+            # Diversity is acceptable
+            logger.info(f"✅ Elite diversity OK: similarity={similarity:.2f}, "
+                       f"distinct={diversity_info['distinct_count']}")
+            return elitists
+
+        # Low diversity detected - need reinjection
+        logger.warning(f"⚠️ Low elite diversity: similarity={similarity:.2f} > threshold={self.diversity_threshold}")
+        logger.info(f"🔄 Performing diversity reinjection...")
+
+        # Select distinct elites (one representative per cluster)
+        distinct_stats = select_distinct_elites(front_0_stats, diversity_info, max_keep=5)
+        distinct_elites = [stat.individual.copy_individual("distinct_elite") for stat in distinct_stats]
+
+        logger.info(f"   Kept {len(distinct_elites)} distinct elites from {len(elitists)} total")
+
+        # Calculate how many to reinject
+        num_to_reinject = self.elitist_size - len(distinct_elites)
+        if num_to_reinject <= 0:
+            return distinct_elites[:self.elitist_size]
+
+        # Create diverse variants
+        reinjected = self._create_diverse_variants(distinct_elites, num_to_reinject)
+        logger.info(f"   Created {len(reinjected)} diverse variants for reinjection")
+
+        # Combine distinct elites with reinjected variants
+        new_elitists = distinct_elites + reinjected
+
+        return new_elitists[:self.elitist_size]
+
+    def _create_diverse_variants(self, source_elites: List[IndividualBase],
+                                  count: int) -> List[IndividualBase]:
+        """
+        Create diverse variants through heavy mutation and random generation.
+
+        Strategy:
+        - 30% fresh random individuals (new genetic material)
+        - 70% heavily mutated existing elites (explore nearby space more aggressively)
+
+        Args:
+            source_elites: Elite individuals to base mutations on
+            count: Number of variants to create
+
+        Returns:
+            List of diverse IndividualBase instances
+        """
+        variants = []
+        num_random = int(count * self.diversity_random_fraction)
+        num_mutated = count - num_random
+
+        # Create fresh random individuals using initial population generator
+        if num_random > 0:
+            try:
+                random_individuals = self.problem_domain.create_initial_population(num_random)
+                for ind in random_individuals:
+                    ind.source = "diversity_random"
+                variants.extend(random_individuals)
+                logger.info(f"   Created {len(random_individuals)} fresh random individuals")
+            except Exception as e:
+                logger.warning(f"Failed to create random individuals: {e}")
+
+        # Create heavily mutated variants
+        for i in range(num_mutated):
+            if not source_elites:
+                break
+            source = source_elites[i % len(source_elites)]
+            mutated = source.copy_individual("diversity_mutation")
+
+            # Apply heavy mutation (multiple times normal rate)
+            heavy_mutation_rate = min(1.0, self.chance_of_mutation * self.diversity_mutation_multiplier)
+            for _ in range(3):  # Multiple mutation passes
+                self.problem_domain.mutation_function(mutated, heavy_mutation_rate, self.iteration_index)
+
+            variants.append(mutated)
+
+        return variants
 
     def mutate_population(self, population: List[IndividualBase]):
         com = max(0.01, self.chance_of_mutation * self.mutation_decay_factor ** float(self.iteration_index))

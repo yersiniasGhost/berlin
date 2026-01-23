@@ -20,7 +20,8 @@ from indicator_triggers.trend_indicators import ADXTrendIndicator
 
 
 def create_adx_indicator(name: str = "test_adx", period: int = 14,
-                         trend_threshold: float = 25.0, strong_trend_threshold: float = 40.0):
+                         trend_threshold: float = 25.0, strong_trend_threshold: float = 40.0,
+                         direction_filter: str = "Both"):
     """Factory function to create ADXTrendIndicator with custom parameters."""
     config = IndicatorConfiguration(
         indicator_name="ADXTrendIndicator",
@@ -28,7 +29,8 @@ def create_adx_indicator(name: str = "test_adx", period: int = 14,
         parameters={
             "period": period,
             "trend_threshold": trend_threshold,
-            "strong_trend_threshold": strong_trend_threshold
+            "strong_trend_threshold": strong_trend_threshold,
+            "direction_filter": direction_filter
         }
     )
     return ADXTrendIndicator(config)
@@ -443,6 +445,143 @@ class TestADXTrendIndicator(unittest.TestCase):
             f"Downtrend period should be mostly negative, got {downtrend_negative:.1%}")
 
 
+class TestADXTrendIndicatorDirectionFilter(unittest.TestCase):
+    """Test direction_filter parameter functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        np.random.seed(42)  # For reproducibility
+
+    def test_bull_filter_zeros_negative_values(self):
+        """Test that Bull filter zeros out negative (bearish) values."""
+        indicator_both = create_adx_indicator(direction_filter="Both")
+        indicator_bull = create_adx_indicator(direction_filter="Bull")
+
+        # Generate downtrend data (produces negative values)
+        tick_data = generate_strong_downtrend_data(100.0, 80, trend_strength=0.02)
+
+        values_both, _ = indicator_both.calculate(tick_data)
+        values_bull, _ = indicator_bull.calculate(tick_data)
+
+        # Both should have negative values
+        negative_both = np.sum(values_both < 0)
+        self.assertGreater(negative_both, 10,
+            f"Downtrend with Both filter should have negative values, got {negative_both}")
+
+        # Bull filter should have NO negative values
+        negative_bull = np.sum(values_bull < 0)
+        self.assertEqual(negative_bull, 0,
+            f"Bull filter should have NO negative values, got {negative_bull}")
+
+        # Bull filter should have all zeros (since downtrend produces only negative)
+        nonzero_bull = np.sum(values_bull != 0)
+        self.assertEqual(nonzero_bull, 0,
+            f"Bull filter on downtrend should be all zeros, got {nonzero_bull} non-zero")
+
+    def test_bear_filter_zeros_positive_values(self):
+        """Test that Bear filter zeros out positive (bullish) values."""
+        indicator_both = create_adx_indicator(direction_filter="Both")
+        indicator_bear = create_adx_indicator(direction_filter="Bear")
+
+        # Generate uptrend data (produces positive values)
+        tick_data = generate_strong_uptrend_data(100.0, 80, trend_strength=0.02)
+
+        values_both, _ = indicator_both.calculate(tick_data)
+        values_bear, _ = indicator_bear.calculate(tick_data)
+
+        # Both should have positive values
+        positive_both = np.sum(values_both > 0)
+        self.assertGreater(positive_both, 10,
+            f"Uptrend with Both filter should have positive values, got {positive_both}")
+
+        # Bear filter should have NO positive values
+        positive_bear = np.sum(values_bear > 0)
+        self.assertEqual(positive_bear, 0,
+            f"Bear filter should have NO positive values, got {positive_bear}")
+
+        # Bear filter should have all zeros (since uptrend produces only positive)
+        nonzero_bear = np.sum(values_bear != 0)
+        self.assertEqual(nonzero_bear, 0,
+            f"Bear filter on uptrend should be all zeros, got {nonzero_bear} non-zero")
+
+    def test_both_filter_preserves_all_values(self):
+        """Test that Both filter preserves both positive and negative values."""
+        indicator = create_adx_indicator(direction_filter="Both")
+
+        # Build combined data: uptrend -> downtrend
+        uptrend = generate_strong_uptrend_data(100.0, 50, trend_strength=0.015)
+        last_price = uptrend[-1].close
+        downtrend = generate_strong_downtrend_data(last_price, 50, trend_strength=0.015)
+
+        tick_data = uptrend + downtrend
+        values, _ = indicator.calculate(tick_data)
+
+        # Should have both positive and negative values
+        has_positive = np.any(values > 0)
+        has_negative = np.any(values < 0)
+
+        self.assertTrue(has_positive, "Both filter should preserve positive values")
+        self.assertTrue(has_negative, "Both filter should preserve negative values")
+
+    def test_bull_filter_preserves_positive_in_mixed_market(self):
+        """Test Bull filter preserves positive values in mixed trend market."""
+        indicator_both = create_adx_indicator(direction_filter="Both")
+        indicator_bull = create_adx_indicator(direction_filter="Bull")
+
+        # Build combined data: uptrend -> downtrend
+        uptrend = generate_strong_uptrend_data(100.0, 50, trend_strength=0.015)
+        last_price = uptrend[-1].close
+        downtrend = generate_strong_downtrend_data(last_price, 50, trend_strength=0.015)
+
+        tick_data = uptrend + downtrend
+        values_both, _ = indicator_both.calculate(tick_data)
+        values_bull, _ = indicator_bull.calculate(tick_data)
+
+        # Bull filter should preserve positive values from uptrend portion
+        positive_both = values_both[values_both > 0]
+        positive_bull = values_bull[values_bull > 0]
+
+        # All positive values from Both should be preserved in Bull
+        np.testing.assert_array_almost_equal(
+            np.sort(positive_both), np.sort(positive_bull),
+            decimal=10,
+            err_msg="Bull filter should preserve all positive values"
+        )
+
+    def test_bear_filter_preserves_negative_in_mixed_market(self):
+        """Test Bear filter preserves negative values in mixed trend market."""
+        indicator_both = create_adx_indicator(direction_filter="Both")
+        indicator_bear = create_adx_indicator(direction_filter="Bear")
+
+        # Build combined data: uptrend -> downtrend
+        uptrend = generate_strong_uptrend_data(100.0, 50, trend_strength=0.015)
+        last_price = uptrend[-1].close
+        downtrend = generate_strong_downtrend_data(last_price, 50, trend_strength=0.015)
+
+        tick_data = uptrend + downtrend
+        values_both, _ = indicator_both.calculate(tick_data)
+        values_bear, _ = indicator_bear.calculate(tick_data)
+
+        # Bear filter should preserve negative values from downtrend portion
+        negative_both = values_both[values_both < 0]
+        negative_bear = values_bear[values_bear < 0]
+
+        # All negative values from Both should be preserved in Bear
+        np.testing.assert_array_almost_equal(
+            np.sort(negative_both), np.sort(negative_bear),
+            decimal=10,
+            err_msg="Bear filter should preserve all negative values"
+        )
+
+    def test_direction_filter_default_is_both(self):
+        """Test that direction_filter default value is 'Both'."""
+        specs = ADXTrendIndicator.get_parameter_specs()
+        filter_spec = next(s for s in specs if s.name == "direction_filter")
+
+        self.assertEqual(filter_spec.default_value, "Both")
+        self.assertEqual(filter_spec.choices, ["Both", "Bull", "Bear"])
+
+
 class TestADXTrendIndicatorParameterValidation(unittest.TestCase):
     """Test parameter specification and validation."""
 
@@ -454,6 +593,7 @@ class TestADXTrendIndicatorParameterValidation(unittest.TestCase):
         self.assertIn("period", param_names)
         self.assertIn("trend_threshold", param_names)
         self.assertIn("strong_trend_threshold", param_names)
+        self.assertIn("direction_filter", param_names)
 
     def test_default_parameters(self):
         """Test default parameter values."""
@@ -463,6 +603,7 @@ class TestADXTrendIndicatorParameterValidation(unittest.TestCase):
         self.assertEqual(defaults["period"], 14)
         self.assertEqual(defaults["trend_threshold"], 25.0)
         self.assertEqual(defaults["strong_trend_threshold"], 40.0)
+        self.assertEqual(defaults["direction_filter"], "Both")
 
     def test_custom_period(self):
         """Test indicator works with custom period values."""

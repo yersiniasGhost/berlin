@@ -9,13 +9,8 @@ let currentMonitorFilename = null;
 let currentDataFilename = null;
 let indicatorClasses = {};
 
-// Default data configuration
-const DEFAULT_DATA_CONFIG = {
-    ticker: "NVDA",
-    start_date: "2024-01-01",
-    end_date: "2024-02-28",
-    include_extended_hours: true
-};
+// Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
+// Note: DEFAULT_DATA_CONFIG is defined in config-utils.js (must be loaded first)
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -81,7 +76,7 @@ async function loadDataConfiguration() {
 
         renderDataConfiguration();
         checkBothConfigsLoaded();
-        showAlert('Using default data configuration: NVDA, 2024-01-01 to 2024-02-28', 'info');
+        showAlert(`Using default data configuration: NVDA, ${DEFAULT_DATA_CONFIG.start_date} to ${DEFAULT_DATA_CONFIG.end_date}`, 'info');
         return;
     }
 
@@ -1027,8 +1022,8 @@ async function runReplay() {
             showAlert('Replay completed successfully', 'success');
         } else {
             // Check if there are validation errors to display
-            if (result.has_validation_errors && result.validation_errors) {
-                showValidationErrors(result.validation_errors);
+            if (handleValidationErrorResponse(result, showAlert)) {
+                // Validation errors were handled
             } else {
                 showAlert('Failed to run replay: ' + result.error, 'danger');
             }
@@ -1247,51 +1242,7 @@ function showAlert(message, type) {
     alert(message);
 }
 
-function showValidationErrors(validationErrors) {
-    /**
-     * Display validation errors in a user-friendly format
-     * Each error contains indicator name and specific parameter issues
-     */
-    if (!validationErrors || validationErrors.length === 0) {
-        showAlert('Configuration validation failed', 'danger');
-        return;
-    }
-
-    // Format errors for display
-    let errorMessage = '❌ Configuration Validation Failed:\n\n';
-
-    validationErrors.forEach((error, index) => {
-        // Parse error message to extract indicator name and issues
-        // Error format: "Indicator 'sma_1m': Parameter validation failed for SMACrossoverIndicator:\n  • Missing required parameter: 'trend'"
-
-        const lines = error.split('\n');
-        const firstLine = lines[0];
-
-        // Extract indicator name
-        const indicatorMatch = firstLine.match(/Indicator '([^']+)'/);
-        const indicatorName = indicatorMatch ? indicatorMatch[1] : 'Unknown';
-
-        errorMessage += `\n${index + 1}. Indicator: ${indicatorName}\n`;
-
-        // Add all parameter issues
-        lines.forEach(line => {
-            if (line.includes('Missing required parameter')) {
-                const paramMatch = line.match(/'([^']+)'/);
-                const paramName = paramMatch ? paramMatch[1] : 'unknown';
-                errorMessage += `   ⚠️  Missing required parameter: "${paramName}"\n`;
-            } else if (line.includes('must be')) {
-                errorMessage += `   ⚠️  ${line.trim()}\n`;
-            } else if (line.includes('not in allowed choices')) {
-                errorMessage += `   ⚠️  ${line.trim()}\n`;
-            } else if (line.includes('is below') || line.includes('is above')) {
-                errorMessage += `   ⚠️  ${line.trim()}\n`;
-            }
-        });
-    });
-
-    console.error('Validation Errors:', validationErrors);
-    showAlert(errorMessage, 'danger');
-}
+// Note: showValidationErrors and handleValidationErrorResponse are now in config-utils.js
 
 // Pattern management functions for dual listbox
 function movePatterns(indicatorIndex, action) {

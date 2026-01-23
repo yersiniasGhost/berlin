@@ -152,6 +152,29 @@ class BaseIndicator(ABC):
         """
         return IndicatorType.SIGNAL  # Default for backward compatibility
 
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return chart configuration for frontend visualization.
+
+        Override in subclasses to customize chart appearance. The frontend uses
+        this config to render charts data-driven, without hardcoded class name checks.
+
+        Returns:
+            Dict with chart configuration:
+            - chart_type: Type identifier (e.g., "adx", "macd", "generic")
+            - title_suffix: Suffix for chart title (e.g., "ADX Trend Analysis")
+            - components: List of component configs with keys, colors, line styles
+            - y_axis: Y-axis configuration (min, max, title)
+            - reference_lines: List of horizontal reference lines with thresholds
+        """
+        return {
+            "chart_type": "generic",
+            "title_suffix": "Raw Values",
+            "components": [],  # Empty = auto-discover components from component_history
+            "y_axis": {},
+            "reference_lines": []
+        }
+
     @abstractmethod
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Calculate indicator values for given tick data."""

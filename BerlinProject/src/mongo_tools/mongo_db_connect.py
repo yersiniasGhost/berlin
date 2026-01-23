@@ -88,11 +88,30 @@ class MongoDBConnect:
         try:
             start = datetime.strptime(start_date, "%Y-%m-%d")
             end = datetime.strptime(end_date, "%Y-%m-%d")
-            query = {
-                'ticker': ticker,
-                'year': {'$gte': start.year, '$lte': end.year},
-                'month': {'$gte': start.month, '$lte': end.month}
-            }
+
+            # Build query that correctly handles year boundaries
+            # When start_year == end_year, simple range works
+            # When crossing years, need $or to handle each year's valid months
+            if start.year == end.year:
+                query = {
+                    'ticker': ticker,
+                    'year': start.year,
+                    'month': {'$gte': start.month, '$lte': end.month}
+                }
+            else:
+                # Crossing year boundary - use $or for each year's valid month range
+                year_conditions = []
+                for year in range(start.year, end.year + 1):
+                    if year == start.year:
+                        # First year: from start month to December
+                        year_conditions.append({'year': year, 'month': {'$gte': start.month}})
+                    elif year == end.year:
+                        # Last year: from January to end month
+                        year_conditions.append({'year': year, 'month': {'$lte': end.month}})
+                    else:
+                        # Middle years: all months
+                        year_conditions.append({'year': year})
+                query = {'ticker': ticker, '$or': year_conditions}
 
             documents = list(self.collection.find(query).sort([('year', 1), ('month', 1)]))
 

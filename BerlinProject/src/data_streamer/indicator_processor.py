@@ -242,16 +242,22 @@ class IndicatorProcessor:
                         # Store raw value (user-facing indicator name)
                         self.raw_indicators[indicator_def.name] = raw_value
 
-                        # Store in history using unique key (internal tracking)
-                        self.indicator_trigger_history[indicator_key].append(raw_value)
+                        # Check if this is a TREND indicator (no decay) or SIGNAL indicator (with decay)
+                        indicator_obj = self.indicator_objects.get(indicator_def.name)
+                        is_trend_indicator = (indicator_obj and
+                                              hasattr(indicator_obj, 'get_indicator_type') and
+                                              indicator_obj.get_indicator_type() == IndicatorType.TREND)
 
-                        # Calculate time-based decay
-                        lookback = indicator_def.parameters.get('lookback', 10)
-                        trigger_history = np.array(self.indicator_trigger_history[indicator_key])
-                        decay_value = self.calculate_time_based_metric(trigger_history, lookback)
-
-                        # Store decayed value (user-facing indicator name)
-                        self.indicators[indicator_def.name] = decay_value
+                        if is_trend_indicator:
+                            # TREND indicators: use raw value directly (no decay)
+                            self.indicators[indicator_def.name] = raw_value
+                        else:
+                            # SIGNAL indicators: apply time-based decay
+                            self.indicator_trigger_history[indicator_key].append(raw_value)
+                            lookback = indicator_def.parameters.get('lookback', 10)
+                            trigger_history = np.array(self.indicator_trigger_history[indicator_key])
+                            decay_value = self.calculate_time_based_metric(trigger_history, lookback)
+                            self.indicators[indicator_def.name] = decay_value
 
                         # Store component data (latest values only for real-time)
                         if components:

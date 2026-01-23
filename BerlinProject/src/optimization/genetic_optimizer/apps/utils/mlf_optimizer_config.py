@@ -44,7 +44,7 @@ class MlfOptimizerConfig:
         """Create genetic algorithm project with data splits"""
         # Load data and create splits
         dc = DataContainer.from_file(self.data_config_file)
-        dc.create_splits(self.hyper_parameters.num_splits)
+        dc.create_splits(self.hyper_parameters.num_splits, self.hyper_parameters.daily_splits)
 
         # Create streamers for each split
         backtest_streamers: List[BacktestDataStreamer] = []
@@ -94,10 +94,11 @@ class MlfOptimizerConfig:
             obj_instance = objective.create_objective()
             self.fitness_calculator.add_objective(obj_instance)
 
-        # Create problem instance
+        # Create problem instance with seed_with_original setting
         problem = MlfProblem(
             monitor_configuration=self.monitor_config,
-            fitness_calculator=self.fitness_calculator
+            fitness_calculator=self.fitness_calculator,
+            seed_with_original=self.hyper_parameters.seed_with_original
         )
 
         # Create and return genetic algorithm with correct parameter name and random seed

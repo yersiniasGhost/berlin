@@ -28,11 +28,11 @@
                         </div>
                         <div class="col-6">
                             <label for="dataStartDate" class="form-label">Start Date</label>
-                            <input type="date" class="form-control" id="dataStartDate" value="2024-01-01">
+                            <input type="date" class="form-control" id="dataStartDate">
                         </div>
                         <div class="col-6">
                             <label for="dataEndDate" class="form-label">End Date</label>
-                            <input type="date" class="form-control" id="dataEndDate" value="2024-02-28">
+                            <input type="date" class="form-control" id="dataEndDate">
                         </div>
                         <div class="col-12">
                             <div class="form-check">
@@ -167,16 +167,15 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/config-utils.js') }}"></script>
 <script>
-// Default data configuration (matching optimizer pattern)
-const DEFAULT_DATA_CONFIG = {
-    ticker: "NVDA",
-    start_date: "2024-01-01",
-    end_date: "2024-02-28",
-    include_extended_hours: true
-};
+// Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
+// DEFAULT_DATA_CONFIG is already defined globally in config-utils.js
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates dynamically (2 weeks ago to tomorrow)
+    document.getElementById('dataStartDate').value = DEFAULT_DATA_CONFIG.start_date;
+    document.getElementById('dataEndDate').value = DEFAULT_DATA_CONFIG.end_date;
     const calculateBtn = document.getElementById('calculateIndicators');
     const parametersCard = document.getElementById('parametersCard');
     const chartsContainer = document.getElementById('chartsContainer');

@@ -19,6 +19,7 @@ from models.tick_data import TickData
 from indicator_triggers.indicator_base import (
     BaseIndicator, ParameterSpec, ParameterType, IndicatorType, IndicatorRegistry
 )
+from typing import Any
 
 
 class ADXTrendIndicator(BaseIndicator):
@@ -30,10 +31,15 @@ class ADXTrendIndicator(BaseIndicator):
     - +DI > -DI indicates bullish direction
     - -DI > +DI indicates bearish direction
 
+    The direction_filter parameter allows filtering signals:
+    - "Both": Output all trend signals (default behavior)
+    - "Bull": Only output bullish trends (positive values), zero out bearish
+    - "Bear": Only output bearish trends (negative values), zero out bullish
+
     Output:
     - Positive values (0.0 to 1.0): Bullish trend with strength
     - Negative values (-1.0 to 0.0): Bearish trend with strength
-    - Values near 0: No clear trend (ADX below threshold)
+    - Values near 0: No clear trend (ADX below threshold or filtered out)
     """
 
     @classmethod
@@ -55,6 +61,25 @@ class ADXTrendIndicator(BaseIndicator):
     @classmethod
     def get_layout_type(cls) -> str:
         return "stacked"  # ADX displayed in separate panel
+
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return ADX-specific chart configuration for visualization."""
+        return {
+            "chart_type": "adx",
+            "title_suffix": "ADX Trend Analysis",
+            "components": [
+                {"key_suffix": "adx", "name": "ADX", "color": "#2962FF", "line_width": 2.5},
+                {"key_suffix": "plus_di", "name": "+DI", "color": "#26A69A", "line_width": 1.5, "dash_style": "ShortDash"},
+                {"key_suffix": "minus_di", "name": "-DI", "color": "#EF5350", "line_width": 1.5, "dash_style": "ShortDash"},
+            ],
+            "y_axis": {"min": 0, "max": 100, "title": "Value"},
+            "reference_lines": [
+                {"value": 20, "color": "#9E9E9E", "dash_style": "Dot", "label": "Weak Trend (20)"},
+                {"value": 25, "color": "#FFA726", "dash_style": "Dash", "label": "Trend Threshold (25)"},
+                {"value": 40, "color": "#66BB6A", "dash_style": "Dash", "label": "Strong Trend (40)"},
+            ]
+        }
 
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
@@ -92,18 +117,36 @@ class ADXTrendIndicator(BaseIndicator):
                 description="ADX value for maximum trend strength output",
                 ui_group="ADX Settings"
             ),
+            ParameterSpec(
+                name="direction_filter",
+                display_name="Direction Filter",
+                parameter_type=ParameterType.CHOICE,
+                default_value="Both",
+                choices=["Both", "Bull", "Bear"],
+                description="Filter signals: Bull (positive only), Bear (negative only), Both (all signals)",
+                ui_group="ADX Settings"
+            ),
         ]
 
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Calculate ADX trend values.
 
         Returns:
-            - values: Array of trend values from -1.0 (strong bearish) to +1.0 (strong bullish)
+            - values: Array of trend values (range depends on direction_filter)
             - components: Dict with ADX, +DI, -DI values for visualization
+
+        When direction_filter is set:
+            - "Bull": Positive values (0 to +1) when bullish (+DI > -DI), 0 otherwise
+            - "Bear": Negative values (-1 to 0) when bearish (-DI > +DI), 0 otherwise
+            - "Both": Signed values (-1 to +1): positive=bullish, negative=bearish
+
+        Note: The trend gate system expects negative values for bearish trends,
+        which it then inverts for bear bars. So Bear filter keeps values negative.
         """
         period = self.get_parameter("period")
         trend_threshold = self.get_parameter("trend_threshold")
         strong_trend_threshold = self.get_parameter("strong_trend_threshold")
+        direction_filter = self.get_parameter("direction_filter")
 
         n = len(tick_data)
         if n < period + 1:
@@ -150,6 +193,21 @@ class ADXTrendIndicator(BaseIndicator):
         # Set NaN positions to 0
         result[~valid_mask] = 0.0
 
+        # Apply direction filter
+        # Bull: only positive values (bullish trends), zero out bearish
+        # Bear: only negative values (bearish trends), zero out bullish
+        # Both: keep all values (positive=bullish, negative=bearish)
+        #
+        # Note: The trend gate expects negative values for bearish trends.
+        # For bear bars, it inverts negative → positive gate. So Bear filter
+        # must keep values negative (not convert to positive).
+        if direction_filter == "Bull":
+            result = np.where(result > 0, result, 0.0)
+        elif direction_filter == "Bear":
+            # Keep negative values for bearish trends (trend gate will invert for bear bars)
+            result = np.where(result < 0, result, 0.0)
+        # "Both" keeps all values unchanged (positive=bullish, negative=bearish)
+
         component_data = {
             f"{self.name()}_adx": adx,
             f"{self.name()}_plus_di": plus_di,
@@ -170,9 +228,14 @@ class EMASlopeTrendIndicator(BaseIndicator):
     - Negative slope = bearish trend
     - Steeper slope = stronger trend
 
-    Output:
-    - Positive values (0.0 to 1.0): Bullish trend
-    - Negative values (-1.0 to 0.0): Bearish trend
+    The direction_filter parameter controls output:
+    - "Both": Signed output (-1 to +1), positive=bullish, negative=bearish
+    - "Bull": Only bullish trends, always positive (0 to +1), bearish zeroed
+    - "Bear": Only bearish trends, always positive (0 to +1), bullish zeroed
+
+    Output with direction_filter:
+    - Bull/Bear filters always return positive values (0.0 to 1.0)
+    - Both filter returns signed values (-1.0 to +1.0)
     """
 
     @classmethod
@@ -194,6 +257,20 @@ class EMASlopeTrendIndicator(BaseIndicator):
     @classmethod
     def get_layout_type(cls) -> str:
         return "overlay"  # EMA displayed on price chart
+
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return EMA Slope chart configuration for visualization."""
+        return {
+            "chart_type": "ema_slope",
+            "title_suffix": "EMA Slope Analysis",
+            "components": [
+                {"key_suffix": "ema", "name": "EMA", "color": "#2962FF", "line_width": 2},
+                {"key_suffix": "normalized", "name": "Normalized Slope", "color": "#FF6D00", "line_width": 1.5, "y_axis": 1},
+            ],
+            "y_axis": {"title": "Price"},
+            "reference_lines": []
+        }
 
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
@@ -242,19 +319,34 @@ class EMASlopeTrendIndicator(BaseIndicator):
                 description="SMA period to smooth the slope values",
                 ui_group="Slope Settings"
             ),
+            ParameterSpec(
+                name="direction_filter",
+                display_name="Direction Filter",
+                parameter_type=ParameterType.CHOICE,
+                default_value="Both",
+                choices=["Both", "Bull", "Bear"],
+                description="Filter signals: Bull (bullish only), Bear (bearish only), Both (all). Bull/Bear always output positive values.",
+                ui_group="Slope Settings"
+            ),
         ]
 
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Calculate EMA slope trend values.
 
         Returns:
-            - values: Array of trend values from -1.0 (bearish) to +1.0 (bullish)
+            - values: Array of trend values (range depends on direction_filter)
             - components: Dict with EMA and slope values for visualization
+
+        When direction_filter is set:
+            - "Bull": Positive values (0 to +1) when bullish (slope > 0), 0 otherwise
+            - "Bear": Positive values (0 to +1) when bearish (slope < 0), 0 otherwise
+            - "Both": Signed values (-1 to +1): positive=bullish, negative=bearish
         """
         period = self.get_parameter("period")
         slope_period = self.get_parameter("slope_period")
         normalize_factor = self.get_parameter("normalize_factor")
         smoothing = self.get_parameter("smoothing")
+        direction_filter = self.get_parameter("direction_filter")
 
         n = len(tick_data)
         min_required = period + slope_period + smoothing
@@ -296,11 +388,24 @@ class EMASlopeTrendIndicator(BaseIndicator):
         # Clamp to [-1, 1]
         result = np.clip(normalized, -1.0, 1.0)
 
+        # Apply direction filter
+        # Bull: only positive values (bullish trends), always positive output
+        # Bear: only negative values become positive (bearish trends), always positive output
+        # Both: keep signed values (positive=bullish, negative=bearish)
+        if direction_filter == "Bull":
+            # Keep positive values, zero out negative
+            result = np.where(result > 0, result, 0.0)
+        elif direction_filter == "Bear":
+            # Convert negative values to positive, zero out positive
+            # This ensures the trigger is always positive for bearish trends
+            result = np.where(result < 0, np.abs(result), 0.0)
+        # "Both" keeps all values unchanged (positive=bullish, negative=bearish)
+
         component_data = {
             f"{self.name()}_ema": ema,
             f"{self.name()}_slope": slope,
             f"{self.name()}_smoothed_slope": smoothed_slope,
-            f"{self.name()}_normalized": result
+            f"{self.name()}_normalized": normalized  # Store pre-filter normalized for visualization
         }
 
         return result, component_data
@@ -314,9 +419,14 @@ class SuperTrendIndicator(BaseIndicator):
     - Trend flips when price crosses the bands
     - Provides clear trend direction signals
 
-    Output:
-    - +1.0: Bullish trend (price above SuperTrend)
-    - -1.0: Bearish trend (price below SuperTrend)
+    The direction_filter parameter controls output:
+    - "Both": Signed output (+1 or -1), positive=bullish, negative=bearish
+    - "Bull": Only bullish trends, always positive (+1), bearish zeroed
+    - "Bear": Only bearish trends, always positive (+1), bullish zeroed
+
+    Output with direction_filter:
+    - Bull/Bear filters always return positive values (0.0 or 1.0)
+    - Both filter returns signed values (-1.0 or +1.0)
     """
 
     @classmethod
@@ -338,6 +448,21 @@ class SuperTrendIndicator(BaseIndicator):
     @classmethod
     def get_layout_type(cls) -> str:
         return "overlay"  # SuperTrend line on price chart
+
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return SuperTrend chart configuration for visualization."""
+        return {
+            "chart_type": "supertrend",
+            "title_suffix": "SuperTrend Analysis",
+            "components": [
+                {"key_suffix": "line", "name": "SuperTrend", "color": "#2962FF", "line_width": 2},
+                {"key_suffix": "upper", "name": "Upper Band", "color": "#EF5350", "line_width": 1, "dash_style": "Dot"},
+                {"key_suffix": "lower", "name": "Lower Band", "color": "#26A69A", "line_width": 1, "dash_style": "Dot"},
+            ],
+            "y_axis": {"title": "Price"},
+            "reference_lines": []
+        }
 
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:
@@ -364,17 +489,32 @@ class SuperTrendIndicator(BaseIndicator):
                 description="Multiplier for ATR to set band distance",
                 ui_group="SuperTrend Settings"
             ),
+            ParameterSpec(
+                name="direction_filter",
+                display_name="Direction Filter",
+                parameter_type=ParameterType.CHOICE,
+                default_value="Both",
+                choices=["Both", "Bull", "Bear"],
+                description="Filter signals: Bull (bullish only), Bear (bearish only), Both (all). Bull/Bear always output positive values.",
+                ui_group="SuperTrend Settings"
+            ),
         ]
 
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Calculate SuperTrend trend values.
 
         Returns:
-            - values: Array of trend values (+1.0 bullish, -1.0 bearish)
+            - values: Array of trend values (range depends on direction_filter)
             - components: Dict with SuperTrend line and bands for visualization
+
+        When direction_filter is set:
+            - "Bull": Positive value (+1) when bullish, 0 otherwise
+            - "Bear": Positive value (+1) when bearish, 0 otherwise
+            - "Both": Signed values (+1 bullish, -1 bearish)
         """
         atr_period = self.get_parameter("atr_period")
         multiplier = self.get_parameter("multiplier")
+        direction_filter = self.get_parameter("direction_filter")
 
         n = len(tick_data)
         if n < atr_period + 1:
@@ -459,11 +599,24 @@ class SuperTrendIndicator(BaseIndicator):
         # Result is the direction (+1 or -1)
         result = direction.copy()
 
+        # Apply direction filter
+        # Bull: only positive values (bullish trends), always positive output
+        # Bear: only negative values become positive (bearish trends), always positive output
+        # Both: keep signed values (positive=bullish, negative=bearish)
+        if direction_filter == "Bull":
+            # Keep positive values (+1), zero out negative (-1 becomes 0)
+            result = np.where(result > 0, result, 0.0)
+        elif direction_filter == "Bear":
+            # Convert negative values to positive, zero out positive
+            # This ensures the trigger is always positive for bearish trends
+            result = np.where(result < 0, np.abs(result), 0.0)
+        # "Both" keeps all values unchanged (+1=bullish, -1=bearish)
+
         component_data = {
             f"{self.name()}_line": supertrend,
             f"{self.name()}_upper": final_upper,
             f"{self.name()}_lower": final_lower,
-            f"{self.name()}_direction": direction,
+            f"{self.name()}_direction": direction,  # Original direction before filter
             f"{self.name()}_atr": atr
         }
 
@@ -502,6 +655,25 @@ class AROONTrendIndicator(BaseIndicator):
     @classmethod
     def get_layout_type(cls) -> str:
         return "stacked"  # AROON displayed in separate panel
+
+    @classmethod
+    def get_chart_config(cls) -> Dict[str, Any]:
+        """Return AROON chart configuration for visualization."""
+        return {
+            "chart_type": "aroon",
+            "title_suffix": "AROON Trend Analysis",
+            "components": [
+                {"key_suffix": "up", "name": "AROON Up", "color": "#26A69A", "line_width": 2},
+                {"key_suffix": "down", "name": "AROON Down", "color": "#EF5350", "line_width": 2},
+                {"key_suffix": "oscillator", "name": "Oscillator", "color": "#2962FF", "line_width": 1.5, "dash_style": "ShortDash"},
+            ],
+            "y_axis": {"min": -100, "max": 100, "title": "Value"},
+            "reference_lines": [
+                {"value": 0, "color": "#9E9E9E", "dash_style": "Dash", "label": "Zero Line"},
+                {"value": 50, "color": "#66BB6A", "dash_style": "Dot", "label": "Strong Bull (50)"},
+                {"value": -50, "color": "#EF5350", "dash_style": "Dot", "label": "Strong Bear (-50)"},
+            ]
+        }
 
     @classmethod
     def get_parameter_specs(cls) -> List[ParameterSpec]:

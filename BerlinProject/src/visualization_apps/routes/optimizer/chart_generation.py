@@ -10,6 +10,7 @@ from pathlib import Path
 
 from optimization.mlf_optimizer.mlf_individual_stats import MlfIndividualStats
 from optimization.genetic_optimizer.abstractions.individual_stats import IndividualStats
+from optimization.genetic_optimizer.genetic_algorithm.pareto_front import calculate_elite_diversity
 from portfolios.portfolio_tool import TradeReason
 from .constants import get_table_columns_from_data
 from mlf_utils.log_manager import LogManager
@@ -288,6 +289,16 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
         # Auto-detect table columns from performance metrics
         table_columns = get_table_columns_from_data(performance_metrics)
 
+        # Calculate elite diversity metrics for visualization
+        diversity_metrics = {}
+        if elites and len(elites) >= 3:
+            try:
+                diversity_metrics = calculate_elite_diversity(elites[:20], threshold=0.05)
+                logger.info(f"📊 Elite diversity: similarity={diversity_metrics.get('similarity_score', 0):.2f}, "
+                           f"distinct={diversity_metrics.get('distinct_count', 0)}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not calculate elite diversity: {e}")
+
         # Combine all chart data (matching old app format)
         optimizer_charts = {
             'objective_evolution': objective_evolution,
@@ -298,6 +309,7 @@ def generate_optimizer_chart_data(best_individual, elites, io, data_config_path,
             'performance_metrics': performance_metrics,
             'table_columns': table_columns,  # Dynamic table column definitions
             'individual_pnl_ranking': individual_pnl_ranking,  # Individual P&L sorted by rank
+            'diversity_metrics': diversity_metrics,  # Elite diversity analysis for parallel coords
             'best_strategy': {
                 'candlestick_data': chart_data.get('candlestick_data', []),
                 'triggers': chart_data.get('triggers', [])

@@ -8,7 +8,7 @@ import os
 import sys
 import json
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add project path
@@ -254,12 +254,17 @@ def load_examples():
                     'enabled': True
                 })
 
+        # Calculate dynamic default dates (2 weeks ago to tomorrow)
+        today = datetime.now()
+        two_weeks_ago = today - timedelta(days=14)
+        tomorrow = today + timedelta(days=1)
+
         examples = {
             'indicators': example_configs,
             'data_config': {
                 'ticker': 'NVDA',
-                'start_date': '2024-01-01',
-                'end_date': '2024-12-31'
+                'start_date': two_weeks_ago.strftime('%Y-%m-%d'),
+                'end_date': tomorrow.strftime('%Y-%m-%d')
             }
         }
         
@@ -300,8 +305,12 @@ def check_data_availability():
     try:
         data = request.get_json()
         ticker = data.get('ticker', 'AAPL').upper()
-        start_date = data.get('start_date', '2024-01-01')
-        end_date = data.get('end_date', '2024-12-31')
+        # Dynamic default dates: 2 weeks ago to tomorrow
+        today = datetime.now()
+        default_start = (today - timedelta(days=14)).strftime('%Y-%m-%d')
+        default_end = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+        start_date = data.get('start_date', default_start)
+        end_date = data.get('end_date', default_end)
         include_extended_hours = data.get('include_extended_hours', True)
 
         # Test data availability using CSAContainer (same pattern as visualizer)

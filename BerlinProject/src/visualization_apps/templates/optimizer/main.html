@@ -164,6 +164,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 startPolling();
                 showCharts();
             } else {
+                // Check for validation errors first
+                if (handleValidationErrorResponse(result, showAlert)) {
+                    resetButtons();
+                    return;
+                }
                 throw new Error(result.error || 'Failed to start optimization');
             }
 
@@ -298,6 +303,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             title: { text: 'Elite Population Analysis' },
+            xAxis: {
+                categories: [],  // Will be populated with objective names dynamically
+                labels: {
+                    rotation: -45,
+                    style: { fontSize: '11px', fontWeight: 'bold' }
+                }
+            },
+            yAxis: {
+                min: 0,
+                max: 1,
+                title: { text: 'Normalized Values' },
+                labels: { format: '{value:.1f}' }
+            },
             plotOptions: {
                 series: {
                     animation: { duration: 500 },
@@ -994,6 +1012,45 @@ document.addEventListener('DOMContentLoaded', function() {
             loadParameterHistogram(selectedParameter);
             loadParameterEvolution(selectedParameter);
         }
+
+        // 7. Update Diversity Status Badge
+        updateDiversityStatus(chartData.diversity_metrics);
+    }
+
+    function updateDiversityStatus(diversityMetrics) {
+        const diversityBadge = document.getElementById('diversityStatus');
+        if (!diversityBadge) return;
+
+        if (!diversityMetrics || diversityMetrics.similarity_score === undefined) {
+            diversityBadge.style.display = 'none';
+            return;
+        }
+
+        diversityBadge.style.display = 'inline-block';
+
+        // Calculate diversity percentage (inverse of similarity)
+        const diversityPct = ((1 - diversityMetrics.similarity_score) * 100).toFixed(0);
+        const distinctCount = diversityMetrics.distinct_count || '--';
+
+        // Update badge text
+        diversityBadge.textContent = `Diversity: ${diversityPct}% (${distinctCount} distinct)`;
+
+        // Update badge color based on diversity level
+        diversityBadge.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-secondary');
+
+        if (diversityMetrics.similarity_score > 0.8) {
+            // Critical: Very low diversity - reinjection triggered
+            diversityBadge.classList.add('bg-danger');
+            diversityBadge.setAttribute('title', '⚠️ Critical: Elite population has converged. Diversity reinjection activated.');
+        } else if (diversityMetrics.similarity_score > 0.6) {
+            // Warning: Low diversity
+            diversityBadge.classList.add('bg-warning');
+            diversityBadge.setAttribute('title', '⚠️ Warning: Elite diversity is low. Monitor for convergence.');
+        } else {
+            // Good diversity
+            diversityBadge.classList.add('bg-success');
+            diversityBadge.setAttribute('title', '✅ Healthy: Elite population has good diversity.');
+        }
     }
 
     function updatePerformanceMetricsTable(metricsData, tableColumns) {
@@ -1327,6 +1384,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 },
                 title: { text: 'Elite Population Analysis' },
+                xAxis: {
+                    categories: [],  // Will be populated with objective names dynamically
+                    labels: {
+                        rotation: -45,
+                        style: { fontSize: '11px', fontWeight: 'bold' }
+                    }
+                },
+                yAxis: {
+                    min: 0,
+                    max: 1,
+                    title: { text: 'Normalized Values' },
+                    labels: { format: '{value:.1f}' }
+                },
                 plotOptions: {
                     series: {
                         animation: { duration: 500 },
@@ -1829,12 +1899,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (data.success) {
-                // Use default data config
-                const defaultDataConfig = {
-                    ticker: "NVDA",
-                    start_date: "2024-01-01",
-                    end_date: "2024-02-28"
-                };
+                // Use default data config with dynamic dates from config-utils.js
+                const defaultDataConfig = getDefaultDataConfig();
 
                 // Store config in sessionStorage for Replay tab
                 sessionStorage.setItem('replayMonitorConfig', JSON.stringify(data.monitor_config));

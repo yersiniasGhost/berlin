@@ -26,19 +26,16 @@ const DEFAULT_GA_CONFIG = {
         chance_of_mutation: 0.05,
         chance_of_crossover: 0.03,
         num_splits: 1,
+        daily_splits: false,
         random_seed: 0,
         num_workers: navigator.hardwareConcurrency || 4,
-        split_repeats: 2
+        split_repeats: 2,
+        seed_with_original: true
     }
 };
 
-// Default data configuration
-const DEFAULT_DATA_CONFIG = {
-    ticker: "NVDA",
-    start_date: "2024-01-01",
-    end_date: "2024-02-28",
-    include_extended_hours: true
-};
+// Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
+// Note: DEFAULT_DATA_CONFIG is defined in config-utils.js (must be loaded first)
 
 const AVAILABLE_OBJECTIVES = [
     'MaximizeProfit',
@@ -52,6 +49,263 @@ const AVAILABLE_OBJECTIVES = [
 // Default ranges for bar weights and thresholds
 const DEFAULT_WEIGHT_RANGE = [0.0, 10.0];
 const DEFAULT_THRESHOLD_RANGE = [0.0, 1.0];
+const DEFAULT_TREND_WEIGHT_RANGE = [0.0, 2.0];
+const DEFAULT_TREND_THRESHOLD_RANGE = [0.0, 1.0];
+
+// ============================================================================
+// OPTIMIZER-SPECIFIC TREND INDICATOR HTML GENERATORS
+// ============================================================================
+
+/**
+ * Generates optimizer-specific HTML for trend indicators section with weight ranges.
+ * This version includes optimization controls (checkbox, min/max ranges) for GA.
+ *
+ * @param {Object} trendIndicators - Dict of indicator_name -> {weight, mode} or just weight
+ * @param {string} trendLogic - "AND", "OR", or "AVG"
+ * @param {number} trendThreshold - Current threshold value
+ * @param {Array|null} trendThresholdRange - [min, max] range or null if not optimizing
+ * @param {Object} trendWeightRanges - Dict of indicator_name -> {r: [min, max], t: type} or {t: 'skip'}
+ * @param {Function} generateOptionsFunc - Function to generate indicator name options
+ * @returns {string} HTML string for the trend indicators section
+ */
+function generateTrendIndicatorsSectionWithRanges(trendIndicators, trendLogic, trendThreshold, trendThresholdRange, trendWeightRanges, generateOptionsFunc) {
+    const trendInds = trendIndicators || {};
+
+    // Should we optimize the threshold?
+    const shouldOptimizeThreshold = trendThresholdRange !== null;
+    const thresholdRange = trendThresholdRange || DEFAULT_TREND_THRESHOLD_RANGE;
+
+    let trendIndicatorsHtml = '';
+    for (const [indName, config] of Object.entries(trendInds)) {
+        const weight = typeof config === 'object' ? (config.weight || 1.0) : config;
+        const mode = typeof config === 'object' ? (config.mode || 'soft') : 'soft';
+
+        // Get weight range for this indicator
+        const weightRangeInfo = trendWeightRanges[indName] || {};
+        const shouldOptimizeWeight = weightRangeInfo.t !== 'skip';
+        const weightRange = weightRangeInfo.r || DEFAULT_TREND_WEIGHT_RANGE;
+
+        trendIndicatorsHtml += generateTrendIndicatorRowWithRanges(indName, weight, mode, weightRange, shouldOptimizeWeight, generateOptionsFunc);
+    }
+
+    return `
+        <div class="mt-3 trend-indicators-section">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0"><strong>Trend Indicators (Gate):</strong></label>
+                <div class="d-flex gap-2 align-items-center">
+                    <label class="form-label mb-0 small">Logic:</label>
+                    <select class="form-select form-select-sm" data-trend-logic style="width: auto;"
+                            title="AND: All trends must confirm (min). OR: Any trend confirms (max). AVG: Weighted average using weights.">
+                        <option value="AND" ${trendLogic === 'AND' ? 'selected' : ''}>AND (min)</option>
+                        <option value="OR" ${trendLogic === 'OR' ? 'selected' : ''}>OR (max)</option>
+                        <option value="AVG" ${trendLogic === 'AVG' ? 'selected' : ''}>AVG (weighted)</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Gate Threshold with optimization range -->
+            <div class="row g-2 mb-2 align-items-end">
+                <div class="col-md-1 d-flex align-items-center justify-content-center">
+                    <input type="checkbox" class="form-check-input" data-trend-threshold-optimize
+                           ${shouldOptimizeThreshold ? 'checked' : ''}
+                           title="Optimize gate threshold">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0"
+                           title="Gate Threshold: Minimum combined trend gate value required. If gate < threshold, bar score = 0.">
+                        Gate Threshold:
+                    </label>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" style="font-size: 0.7rem; margin-bottom: 0.1rem;">Value</label>
+                    <input type="number" class="form-control form-control-sm" data-trend-threshold
+                           value="${trendThreshold || 0}" step="0.1" min="0" max="1"
+                           title="Current threshold value">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" style="font-size: 0.7rem; margin-bottom: 0.1rem;">Min</label>
+                    <input type="number" class="form-control form-control-sm" data-trend-threshold-min
+                           value="${thresholdRange[0]}" step="0.1" min="0" max="1"
+                           title="Minimum threshold for optimization">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" style="font-size: 0.7rem; margin-bottom: 0.1rem;">Max</label>
+                    <input type="number" class="form-control form-control-sm" data-trend-threshold-max
+                           value="${thresholdRange[1]}" step="0.1" min="0" max="1"
+                           title="Maximum threshold for optimization">
+                </div>
+            </div>
+            <!-- Column headers for trend indicator rows -->
+            <div class="row g-2 mb-1 text-muted small">
+                <div class="col-md-1"></div>
+                <div class="col-md-3">Indicator</div>
+                <div class="col-md-2" title="Weight: Multiplier for AVG logic">Weight</div>
+                <div class="col-md-1">Min</div>
+                <div class="col-md-1">Max</div>
+                <div class="col-md-2" title="Soft: Continuous 0-1. Hard: Binary.">Mode</div>
+                <div class="col-md-2"></div>
+            </div>
+            <div class="trend-indicators-container">
+                ${trendIndicatorsHtml}
+            </div>
+            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="addTrendIndicatorWithRange(this)">
+                <i class="fas fa-plus me-1"></i>Add Trend Indicator
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * Generates optimizer-specific HTML for a single trend indicator row with weight range.
+ *
+ * @param {string} indName - The indicator name
+ * @param {number} weight - The weight value
+ * @param {string} mode - The mode ('soft' or 'hard')
+ * @param {Array} weightRange - [min, max] for weight optimization
+ * @param {boolean} shouldOptimize - Whether to optimize this weight
+ * @param {Function} generateOptionsFunc - Function to generate indicator name options
+ * @returns {string} HTML string for the trend indicator row
+ */
+function generateTrendIndicatorRowWithRanges(indName, weight, mode, weightRange, shouldOptimize, generateOptionsFunc) {
+    return `
+        <div class="row g-2 mb-2 trend-indicator-row">
+            <div class="col-md-1 d-flex align-items-center justify-content-center">
+                <input type="checkbox" class="form-check-input" data-trend-weight-optimize
+                       ${shouldOptimize ? 'checked' : ''}
+                       title="Optimize this weight">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" data-trend-indicator-name>
+                    ${generateOptionsFunc(indName)}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="number" class="form-control form-control-sm" value="${weight}"
+                       data-trend-indicator-weight step="0.1" min="0" max="2"
+                       title="Current weight value">
+            </div>
+            <div class="col-md-1">
+                <input type="number" class="form-control form-control-sm" value="${weightRange[0]}"
+                       data-trend-indicator-weight-min step="0.1" min="0" max="2"
+                       title="Minimum weight for optimization">
+            </div>
+            <div class="col-md-1">
+                <input type="number" class="form-control form-control-sm" value="${weightRange[1]}"
+                       data-trend-indicator-weight-max step="0.1" min="0" max="2"
+                       title="Maximum weight for optimization">
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" data-trend-indicator-mode
+                        title="Soft: Continuous scaling. Hard: Binary gate.">
+                    <option value="soft" ${mode === 'soft' ? 'selected' : ''}>Soft</option>
+                    <option value="hard" ${mode === 'hard' ? 'selected' : ''}>Hard</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-sm btn-danger w-100" onclick="removeTrendIndicator(this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Adds a new trend indicator row with optimization ranges.
+ * Optimizer-specific version.
+ *
+ * @param {HTMLElement} button - The "Add Trend Indicator" button
+ */
+function addTrendIndicatorWithRange(button) {
+    const barCard = button.closest('.bar-card');
+    const container = barCard.querySelector('.trend-indicators-container');
+
+    const newRowHtml = generateTrendIndicatorRowWithRanges('', 1.0, 'soft', DEFAULT_TREND_WEIGHT_RANGE, true, generateIndicatorNameOptions);
+    container.insertAdjacentHTML('beforeend', newRowHtml);
+}
+
+/**
+ * Collects trend indicator data including optimization ranges from a bar card's DOM elements.
+ * Optimizer-specific version that captures weight ranges and threshold range for GA.
+ *
+ * @param {HTMLElement} barCard - The bar card element
+ * @returns {Object} Object with trend_indicators, trend_weight_ranges, trend_logic, trend_threshold, trend_threshold_range
+ */
+function collectTrendIndicatorDataWithRanges(barCard) {
+    const result = {};
+
+    // Collect trend logic
+    const trendLogicSelect = barCard.querySelector('[data-trend-logic]');
+    if (trendLogicSelect) {
+        result.trend_logic = trendLogicSelect.value;
+    }
+
+    // Collect trend threshold and its optimization range
+    const trendThresholdInput = barCard.querySelector('[data-trend-threshold]');
+    const trendThresholdMinInput = barCard.querySelector('[data-trend-threshold-min]');
+    const trendThresholdMaxInput = barCard.querySelector('[data-trend-threshold-max]');
+    const trendThresholdOptimize = barCard.querySelector('[data-trend-threshold-optimize]');
+
+    if (trendThresholdInput) {
+        result.trend_threshold = parseFloat(trendThresholdInput.value) || 0.0;
+    }
+
+    // Check if threshold should be optimized
+    const shouldOptimizeThreshold = trendThresholdOptimize && trendThresholdOptimize.checked;
+    if (shouldOptimizeThreshold && trendThresholdMinInput && trendThresholdMaxInput) {
+        result.trend_threshold_range = [
+            parseFloat(trendThresholdMinInput.value) || 0.0,
+            parseFloat(trendThresholdMaxInput.value) || 1.0
+        ];
+    } else {
+        result.trend_threshold_range = null;  // Signal to skip optimization
+    }
+
+    // Collect trend indicators with their weight ranges
+    const trendIndicators = {};
+    const trendWeightRanges = {};
+    const trendRows = barCard.querySelectorAll('.trend-indicator-row');
+
+    trendRows.forEach(row => {
+        const nameSelect = row.querySelector('[data-trend-indicator-name]');
+        const weightInput = row.querySelector('[data-trend-indicator-weight]');
+        const weightMinInput = row.querySelector('[data-trend-indicator-weight-min]');
+        const weightMaxInput = row.querySelector('[data-trend-indicator-weight-max]');
+        const modeSelect = row.querySelector('[data-trend-indicator-mode]');
+        const optimizeCheckbox = row.querySelector('[data-trend-weight-optimize]');
+
+        if (nameSelect && nameSelect.value) {
+            const indName = nameSelect.value;
+
+            // Store the trend indicator config
+            trendIndicators[indName] = {
+                weight: weightInput ? parseFloat(weightInput.value) || 1.0 : 1.0,
+                mode: modeSelect ? modeSelect.value : 'soft'
+            };
+
+            // Check if weight should be optimized
+            const shouldOptimizeWeight = !optimizeCheckbox || optimizeCheckbox.checked;
+
+            if (shouldOptimizeWeight && weightMinInput && weightMaxInput) {
+                trendWeightRanges[indName] = {
+                    r: [
+                        parseFloat(weightMinInput.value) || 0.0,
+                        parseFloat(weightMaxInput.value) || 2.0
+                    ],
+                    t: 'float'
+                };
+            } else {
+                trendWeightRanges[indName] = { t: 'skip' };
+            }
+        }
+    });
+
+    if (Object.keys(trendIndicators).length > 0) {
+        result.trend_indicators = trendIndicators;
+        result.trend_weight_ranges = trendWeightRanges;
+    }
+
+    return result;
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -115,7 +369,7 @@ async function loadConfigurations() {
             const dataText = await dataFile.text();
             dataConfig = JSON.parse(dataText);
         } else {
-            // Use default data config: NVDA, 2024-01-01 to 2024-02-28
+            // Use default data config with dynamic dates (2 weeks ago to tomorrow)
             dataConfig = JSON.parse(JSON.stringify(DEFAULT_DATA_CONFIG)); // Deep clone
             console.log('Using default data config:', dataConfig);
         }
@@ -225,10 +479,13 @@ function renderGAConfiguration() {
     document.getElementById('chanceMutation').value = hp.chance_of_mutation || 0.05;
     document.getElementById('chanceCrossover').value = hp.chance_of_crossover || 0.03;
     document.getElementById('numSplits').value = hp.num_splits || 1;
+    document.getElementById('dailySplits').checked = hp.daily_splits || false;
+    toggleDailySplits();  // Update UI state based on checkbox
     document.getElementById('randomSeed').value = hp.random_seed || 69;
     document.getElementById('numWorkers').value = hp.num_workers || (navigator.hardwareConcurrency || 4);
     document.getElementById('splitRepeats').value = hp.split_repeats || 2;
     document.getElementById('saveElitesEveryEpoch').checked = hp.save_elites_every_epoch || false;
+    document.getElementById('seedWithOriginal').checked = hp.seed_with_original !== false;  // Default to true
 }
 
 function renderConditionsWithRanges(containerId, conditions) {
@@ -497,11 +754,13 @@ function createBarCardWithRanges(barName, barConfig) {
         `;
     }
 
-    // Generate trend indicators section using shared utility
-    const trendIndicatorsHtml = generateTrendIndicatorsSectionHtml(
+    // Generate trend indicators section with optimization ranges (optimizer-specific)
+    const trendIndicatorsHtml = generateTrendIndicatorsSectionWithRanges(
         barConfig.trend_indicators,
         barConfig.trend_logic || 'AND',
         barConfig.trend_threshold || 0.0,
+        barConfig.trend_threshold_range || null,
+        barConfig.trend_weight_ranges || {},
         generateIndicatorNameOptions
     );
 
@@ -662,6 +921,21 @@ function toggleIndicatorCard(index) {
     if (body && icon) {
         body.classList.toggle('show');
         icon.classList.toggle('expanded');
+    }
+}
+
+function toggleDailySplits() {
+    const dailySplitsCheckbox = document.getElementById('dailySplits');
+    const numSplitsInput = document.getElementById('numSplits');
+
+    if (dailySplitsCheckbox.checked) {
+        // When daily splits is enabled, disable the num_splits input
+        numSplitsInput.disabled = true;
+        numSplitsInput.title = 'Daily splits mode: one split per calendar day (num_splits calculated from date range)';
+    } else {
+        // When daily splits is disabled, enable the num_splits input
+        numSplitsInput.disabled = false;
+        numSplitsInput.title = '';
     }
 }
 
@@ -1223,13 +1497,17 @@ function updateCurrentConfigBars() {
             }
         });
 
-        // Build bar config with basic fields and collect trend indicators from UI
-        const barConfig = buildBarConfigFromUI({
+        // Build bar config with basic fields and collect trend indicators with optimization ranges
+        const barConfig = {
             type: typeSelect ? typeSelect.value : 'bull',
             description: descInput ? descInput.value : '',
             indicators: indicators,
             weight_ranges: weightRanges
-        }, card);
+        };
+
+        // Collect trend indicator data with optimization ranges (optimizer-specific)
+        const trendData = collectTrendIndicatorDataWithRanges(card);
+        Object.assign(barConfig, trendData);
 
         bars[barName] = barConfig;
     });
@@ -1412,10 +1690,12 @@ function collectGAConfigData() {
         chance_of_mutation: parseFloat(document.getElementById('chanceMutation').value),
         chance_of_crossover: parseFloat(document.getElementById('chanceCrossover').value),
         num_splits: parseInt(document.getElementById('numSplits').value),
+        daily_splits: document.getElementById('dailySplits').checked,
         random_seed: parseInt(document.getElementById('randomSeed').value),
         num_workers: parseInt(document.getElementById('numWorkers').value),
         split_repeats: parseInt(document.getElementById('splitRepeats').value),
-        save_elites_every_epoch: document.getElementById('saveElitesEveryEpoch').checked
+        save_elites_every_epoch: document.getElementById('saveElitesEveryEpoch').checked,
+        seed_with_original: document.getElementById('seedWithOriginal').checked
     };
 }
 

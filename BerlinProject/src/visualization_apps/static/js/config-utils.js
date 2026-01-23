@@ -4,6 +4,48 @@
  */
 
 // ============================================================================
+// DEFAULT DATA CONFIGURATION - DYNAMIC DATES
+// ============================================================================
+
+/**
+ * Format a Date object as YYYY-MM-DD string.
+ * @param {Date} date - The date to format
+ * @returns {string} Date in YYYY-MM-DD format
+ */
+function formatDateYYYYMMDD(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get the default data configuration with dynamic dates.
+ * Start date: 2 weeks ago, End date: tomorrow
+ * @returns {Object} Default data configuration object
+ */
+function getDefaultDataConfig() {
+    const today = new Date();
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(today.getDate() - 14);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    return {
+        ticker: "NVDA",
+        start_date: formatDateYYYYMMDD(twoWeeksAgo),
+        end_date: formatDateYYYYMMDD(tomorrow),
+        include_extended_hours: true
+    };
+}
+
+/**
+ * Global default data configuration (computed once on load).
+ * Use this constant or call getDefaultDataConfig() for fresh dates.
+ */
+const DEFAULT_DATA_CONFIG = getDefaultDataConfig();
+
+// ============================================================================
 // TREND INDICATOR FIELD PRESERVATION & BUILDING
 // ============================================================================
 
@@ -74,15 +116,27 @@ function generateTrendIndicatorsSectionHtml(trendIndicators, trendLogic, trendTh
                 <label class="form-label mb-0"><strong>Trend Indicators (Gate):</strong></label>
                 <div class="d-flex gap-2 align-items-center">
                     <label class="form-label mb-0 small">Logic:</label>
-                    <select class="form-select form-select-sm" data-trend-logic style="width: auto;">
-                        <option value="AND" ${trendLogic === 'AND' ? 'selected' : ''}>AND</option>
-                        <option value="OR" ${trendLogic === 'OR' ? 'selected' : ''}>OR</option>
-                        <option value="AVG" ${trendLogic === 'AVG' ? 'selected' : ''}>AVG</option>
+                    <select class="form-select form-select-sm" data-trend-logic style="width: auto;"
+                            title="AND: All trends must confirm (min). OR: Any trend confirms (max). AVG: Weighted average using weights.">
+                        <option value="AND" ${trendLogic === 'AND' ? 'selected' : ''}>AND (min)</option>
+                        <option value="OR" ${trendLogic === 'OR' ? 'selected' : ''}>OR (max)</option>
+                        <option value="AVG" ${trendLogic === 'AVG' ? 'selected' : ''}>AVG (weighted)</option>
                     </select>
-                    <label class="form-label mb-0 small">Threshold:</label>
+                    <label class="form-label mb-0 small"
+                           title="Gate Threshold: Minimum combined trend gate value required. If gate < threshold, bar score = 0.">
+                        Gate Threshold:
+                    </label>
                     <input type="number" class="form-control form-control-sm" data-trend-threshold
-                           value="${trendThreshold || 0}" step="0.1" min="0" max="1" style="width: 80px;">
+                           value="${trendThreshold || 0}" step="0.1" min="0" max="1" style="width: 80px;"
+                           title="Minimum gate value to pass signals. Example: 0.3 means trend gate must be >= 0.3 or bar score becomes 0.">
                 </div>
+            </div>
+            <!-- Column headers for trend indicator rows -->
+            <div class="row g-2 mb-1 text-muted small">
+                <div class="col-md-5">Indicator</div>
+                <div class="col-md-2" title="Weight: Multiplier for AVG logic. Only affects AVG mode.">Weight (AVG)</div>
+                <div class="col-md-3" title="Soft: Continuous 0-1 scaling. Hard: Binary pass/block.">Mode</div>
+                <div class="col-md-2"></div>
             </div>
             <div class="trend-indicators-container">
                 ${trendIndicatorsHtml}
@@ -113,10 +167,12 @@ function generateTrendIndicatorRowHtml(indName, weight, mode, generateOptionsFun
             </div>
             <div class="col-md-2">
                 <input type="number" class="form-control form-control-sm" value="${weight}"
-                       data-trend-indicator-weight step="0.1" min="0" max="2" placeholder="Weight">
+                       data-trend-indicator-weight step="0.1" min="0" max="2"
+                       title="Weight for AVG logic. 1.0 = full influence, 0.5 = half. Only used when Logic = AVG.">
             </div>
             <div class="col-md-3">
-                <select class="form-select form-select-sm" data-trend-indicator-mode>
+                <select class="form-select form-select-sm" data-trend-indicator-mode
+                        title="Soft: Continuous scaling (trend value 0.5 = 50% signal). Hard: Binary gate (positive = pass, negative = block).">
                     <option value="soft" ${mode === 'soft' ? 'selected' : ''}>Soft (scale)</option>
                     <option value="hard" ${mode === 'hard' ? 'selected' : ''}>Hard (gate)</option>
                 </select>
@@ -315,4 +371,76 @@ function generateSafeFilename(name, suffix = 'monitor') {
         .replace(/^_+|_+$/g, '');
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     return `${timestamp}_${safeName}_${suffix}.json`;
+}
+
+// ============================================================================
+// VALIDATION ERROR DISPLAY
+// ============================================================================
+
+/**
+ * Display validation errors in a user-friendly format.
+ * Each error contains indicator name and specific parameter issues.
+ *
+ * @param {Array} validationErrors - Array of validation error strings
+ * @param {Function} showAlertFn - The showAlert function to use for display
+ */
+function showValidationErrors(validationErrors, showAlertFn) {
+    if (!validationErrors || validationErrors.length === 0) {
+        showAlertFn('Configuration validation failed', 'danger');
+        return;
+    }
+
+    // Format errors for display
+    let errorMessage = '❌ Configuration Validation Failed:\n\n';
+
+    validationErrors.forEach((error, index) => {
+        // Parse error message to extract indicator name and issues
+        // Error format: "Indicator 'sma_1m': Parameter validation failed for SMACrossoverIndicator:\n  • Missing required parameter: 'trend'"
+
+        const lines = error.split('\n');
+        const firstLine = lines[0];
+
+        // Extract indicator name
+        const indicatorMatch = firstLine.match(/Indicator '([^']+)'/);
+        const indicatorName = indicatorMatch ? indicatorMatch[1] : 'Unknown';
+
+        errorMessage += `\n${index + 1}. Indicator: ${indicatorName}\n`;
+
+        // Add all parameter issues
+        lines.forEach(line => {
+            if (line.includes('Missing required parameter')) {
+                const paramMatch = line.match(/'([^']+)'/);
+                const paramName = paramMatch ? paramMatch[1] : 'unknown';
+                errorMessage += `   ⚠️  Missing required parameter: "${paramName}"\n`;
+            } else if (line.includes('must be')) {
+                errorMessage += `   ⚠️  ${line.trim()}\n`;
+            } else if (line.includes('not in allowed choices')) {
+                errorMessage += `   ⚠️  ${line.trim()}\n`;
+            } else if (line.includes('is below') || line.includes('is above')) {
+                errorMessage += `   ⚠️  ${line.trim()}\n`;
+            } else if (line.includes('•')) {
+                // Catch any bullet-pointed errors
+                errorMessage += `   ${line.trim()}\n`;
+            }
+        });
+    });
+
+    console.error('Validation Errors:', validationErrors);
+    showAlertFn(errorMessage, 'danger');
+}
+
+/**
+ * Handle API response that may contain validation errors.
+ * Returns true if validation errors were handled, false otherwise.
+ *
+ * @param {Object} result - The API response object
+ * @param {Function} showAlertFn - The showAlert function to use for display
+ * @returns {boolean} True if validation errors were found and handled
+ */
+function handleValidationErrorResponse(result, showAlertFn) {
+    if (result.has_validation_errors && result.validation_errors) {
+        showValidationErrors(result.validation_errors, showAlertFn);
+        return true;
+    }
+    return false;
 }
