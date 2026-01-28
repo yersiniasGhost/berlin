@@ -31,22 +31,7 @@ function setupEventListeners() {
     }
 }
 
-/**
- * Toggle visibility of take profit input fields based on selected type
- */
-function toggleTakeProfitInputs() {
-    const takeProfitType = document.getElementById('takeProfitType').value;
-    const pctContainer = document.getElementById('takeProfitPctContainer');
-    const dollarsContainer = document.getElementById('takeProfitDollarsContainer');
-
-    if (takeProfitType === 'dollars') {
-        pctContainer.style.display = 'none';
-        dollarsContainer.style.display = 'block';
-    } else {
-        pctContainer.style.display = 'block';
-        dollarsContainer.style.display = 'none';
-    }
-}
+// Note: toggleTakeProfitInputs() is now in trade-executor-common.js
 
 async function loadIndicatorClasses() {
     try {

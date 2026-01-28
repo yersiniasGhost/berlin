@@ -1,0 +1,100 @@
+{#
+    Shared Trade Executor Form Component
+
+    Usage: {% include 'components/_trade_executor_form.html' %}
+
+    Optional variables:
+    - section_class: CSS class for sections (default: "mb-3")
+    - show_conditions: Whether to show Entry/Exit condition containers (default: true)
+    - input_style: Style for inputs (default: "max-width: 200px;")
+#}
+
+{% set section_class = section_class | default("mb-3") %}
+{% set show_conditions = show_conditions | default(true) %}
+{% set input_style = input_style | default("max-width: 200px;") %}
+
+<!-- Position Settings -->
+<div class="{{ section_class }}">
+    <h6>Position Settings</h6>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label for="positionSize" class="form-label">Position Size</label>
+            <input type="number" class="form-control" id="positionSize" step="0.01" style="{{ input_style }}">
+        </div>
+        <div class="col-md-4">
+            <label for="stopLoss" class="form-label">Stop Loss %</label>
+            <input type="number" class="form-control" id="stopLoss" step="0.001" style="{{ input_style }}">
+        </div>
+    </div>
+</div>
+
+<!-- Take Profit Settings -->
+<div class="{{ section_class }}">
+    <h6>Take Profit Settings</h6>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label for="takeProfitType" class="form-label">Take Profit Type</label>
+            <select class="form-select" id="takeProfitType" style="{{ input_style }}" onchange="toggleTakeProfitInputs()">
+                <option value="percent">Percentage</option>
+                <option value="dollars">Dollar Amount</option>
+            </select>
+        </div>
+        <div class="col-md-4" id="takeProfitPctContainer">
+            <label for="takeProfit" class="form-label">Take Profit %</label>
+            <input type="number" class="form-control" id="takeProfit" step="0.001" style="{{ input_style }}">
+        </div>
+        <div class="col-md-4" id="takeProfitDollarsContainer" style="display: none;">
+            <label for="takeProfitDollars" class="form-label">Take Profit $</label>
+            <input type="number" class="form-control" id="takeProfitDollars" step="0.01" placeholder="e.g., 50.00" style="{{ input_style }}">
+            <small class="form-text text-muted">Dollar profit target per trade</small>
+        </div>
+    </div>
+</div>
+
+<!-- Trailing Stop Loss -->
+<div class="{{ section_class }}">
+    <h6>Trailing Stop Loss</h6>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="trailingStopEnabled">
+                <label class="form-check-label" for="trailingStopEnabled">
+                    Enable Trailing Stop
+                </label>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label for="trailingDistance" class="form-label">Distance %</label>
+            <input type="number" class="form-control" id="trailingDistance" step="0.001" style="{{ input_style }}">
+        </div>
+        <div class="col-md-4">
+            <label for="trailingActivation" class="form-label">Activation %</label>
+            <input type="number" class="form-control" id="trailingActivation" step="0.001" style="{{ input_style }}">
+        </div>
+    </div>
+</div>
+
+{% if show_conditions %}
+<!-- Entry Conditions -->
+<div class="{{ section_class }}">
+    <h6>Entry Conditions</h6>
+    <div id="enterLongContainer"></div>
+</div>
+
+<!-- Exit Conditions -->
+<div class="{{ section_class }}">
+    <h6>Exit Conditions</h6>
+    <div id="exitLongContainer"></div>
+</div>
+{% endif %}
+
+<!-- Behavior -->
+<div class="{{ section_class }}">
+    <h6>Behavior</h6>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="ignoreBearSignals">
+        <label class="form-check-label" for="ignoreBearSignals">
+            Ignore Bear Signals
+        </label>
+    </div>
+</div>

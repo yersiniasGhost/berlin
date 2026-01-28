@@ -4,6 +4,9 @@
  */
 
 let currentConfig = null;
+
+// Note: toggleTakeProfitInputs() is now in trade-executor-common.js
+
 let currentFilename = null;
 let indicatorClasses = {};
 
@@ -94,6 +97,13 @@ function renderConfiguration() {
     document.getElementById('positionSize').value = tradeExecutor.default_position_size || 100;
     document.getElementById('stopLoss').value = tradeExecutor.stop_loss_pct || 0.02;
     document.getElementById('takeProfit').value = tradeExecutor.take_profit_pct || 0.04;
+
+    // Take profit type and dollar amount
+    const takeProfitType = tradeExecutor.take_profit_type || 'percent';
+    document.getElementById('takeProfitType').value = takeProfitType;
+    document.getElementById('takeProfitDollars').value = tradeExecutor.take_profit_dollars || 0;
+    toggleTakeProfitInputs(); // Update visibility based on type
+
     document.getElementById('trailingStopEnabled').checked = tradeExecutor.trailing_stop_loss || false;
     document.getElementById('trailingDistance').value = tradeExecutor.trailing_stop_distance_pct || 0.01;
     document.getElementById('trailingActivation').value = tradeExecutor.trailing_stop_activation_pct || 0.005;
@@ -762,6 +772,8 @@ function collectConfigurationData() {
             default_position_size: parseFloat(document.getElementById('positionSize').value),
             stop_loss_pct: parseFloat(document.getElementById('stopLoss').value),
             take_profit_pct: parseFloat(document.getElementById('takeProfit').value),
+            take_profit_type: document.getElementById('takeProfitType').value,
+            take_profit_dollars: parseFloat(document.getElementById('takeProfitDollars').value) || 0,
             ignore_bear_signals: document.getElementById('ignoreBearSignals').checked,
             trailing_stop_loss: document.getElementById('trailingStopEnabled').checked,
             trailing_stop_distance_pct: parseFloat(document.getElementById('trailingDistance').value),

@@ -289,65 +289,8 @@
 
                 <!-- Trade Executor Tab -->
                 <div class="tab-pane fade" id="trade-executor-pane" role="tabpanel">
-                    <div class="form-section">
-                        <h6>Position Settings</h6>
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label for="positionSize" class="form-label">Position Size</label>
-                                <input type="number" class="form-control" id="positionSize" step="0.01">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="stopLoss" class="form-label">Stop Loss %</label>
-                                <input type="number" class="form-control" id="stopLoss" step="0.001">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="takeProfit" class="form-label">Take Profit %</label>
-                                <input type="number" class="form-control" id="takeProfit" step="0.001">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h6>Trailing Stop Loss</h6>
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="trailingStopEnabled">
-                                    <label class="form-check-label" for="trailingStopEnabled">
-                                        Enable Trailing Stop
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="trailingDistance" class="form-label">Distance %</label>
-                                <input type="number" class="form-control" id="trailingDistance" step="0.001">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="trailingActivation" class="form-label">Activation %</label>
-                                <input type="number" class="form-control" id="trailingActivation" step="0.001">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h6>Entry Conditions</h6>
-                        <div id="enterLongContainer"></div>
-                    </div>
-
-                    <div class="form-section">
-                        <h6>Exit Conditions</h6>
-                        <div id="exitLongContainer"></div>
-                    </div>
-
-                    <div class="form-section">
-                        <h6>Behavior</h6>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="ignoreBearSignals">
-                            <label class="form-check-label" for="ignoreBearSignals">
-                                Ignore Bear Signals
-                            </label>
-                        </div>
-                    </div>
+                    {% set section_class = "form-section" %}
+                    {% include 'components/_trade_executor_form.html' %}
                 </div>
             </div>
 
@@ -365,5 +308,6 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
+<script src="{{ url_for('static', filename='js/trade-executor-common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/monitor-config.js') }}"></script>
 {% endblock %}
