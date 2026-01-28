@@ -13,17 +13,6 @@
 {% set show_conditions = show_conditions | default(true) %}
 {% set input_style = input_style | default("max-width: 200px;") %}
 
-<!-- Position Settings (Stop Loss only - Position Size moved to Take Profit for dollar mode) -->
-<div class="{{ section_class }}">
-    <h6>Position Settings</h6>
-    <div class="row g-3">
-        <div class="col-md-4">
-            <label for="stopLoss" class="form-label">Stop Loss %</label>
-            <input type="number" class="form-control" id="stopLoss" step="0.001" style="{{ input_style }}">
-        </div>
-    </div>
-</div>
-
 <!-- Take Profit Settings -->
 <div class="{{ section_class }}">
     <h6>Take Profit Settings</h6>
@@ -61,12 +50,16 @@
     </div>
 </div>
 
-<!-- Trailing Stop Loss -->
+<!-- Stop Loss -->
 <div class="{{ section_class }}">
-    <h6>Trailing Stop Loss</h6>
+    <h6>Stop Loss</h6>
     <div class="row g-3">
         <div class="col-md-4">
-            <div class="form-check">
+            <label for="stopLoss" class="form-label">Stop Loss %</label>
+            <input type="number" class="form-control" id="stopLoss" step="0.001" style="{{ input_style }}">
+        </div>
+        <div class="col-md-4">
+            <div class="form-check mt-4">
                 <input class="form-check-input" type="checkbox" id="trailingStopEnabled">
                 <label class="form-check-label" for="trailingStopEnabled">
                     Enable Trailing Stop
@@ -74,11 +67,11 @@
             </div>
         </div>
         <div class="col-md-4">
-            <label for="trailingDistance" class="form-label">Distance %</label>
+            <label for="trailingDistance" class="form-label">Trailing Distance %</label>
             <input type="number" class="form-control" id="trailingDistance" step="0.001" style="{{ input_style }}">
         </div>
         <div class="col-md-4">
-            <label for="trailingActivation" class="form-label">Activation %</label>
+            <label for="trailingActivation" class="form-label">Trailing Activation %</label>
             <input type="number" class="form-control" id="trailingActivation" step="0.001" style="{{ input_style }}">
         </div>
     </div>
