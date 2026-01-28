@@ -9,6 +9,8 @@ from typing import Tuple, Dict, Any, Set, Optional
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 
+from .timezone_utils import now_et
+
 
 class FileUploadHandler:
     """
@@ -122,9 +124,8 @@ class FileUploadHandler:
         # Ensure unique filename if file already exists
         filepath = self.upload_dir / filename
         if filepath.exists():
-            # Add timestamp to make unique
-            from datetime import datetime
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            # Add timestamp to make unique (ET for user-friendly naming)
+            timestamp = now_et().strftime('%Y%m%d_%H%M%S')
             name_parts = filename.rsplit('.', 1)
             if len(name_parts) == 2:
                 filename = f"{name_parts[0]}_{timestamp}.{name_parts[1]}"

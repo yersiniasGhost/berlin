@@ -4,9 +4,10 @@ import pandas as pd
 from pymongo import MongoClient
 import yfinance as yf
 from datetime import datetime, timedelta
-import pytz
 import sys
 import time
+
+from mlf_utils.timezone_utils import now_et, ET, MARKET_OPEN_SECONDS, MARKET_CLOSE_SECONDS
 
 
 class DataFetch:
@@ -26,8 +27,8 @@ class DataFetch:
             # Convert timestamp to seconds from midnight
             seconds: int = self.seconds_from_midnight(idx.strftime('%H:%M:%S'))
 
-            # Only include market hours (9:30 AM - 4:00 PM)
-            if 34200 <= seconds <= 57600:  # 9:30 AM to 4:00 PM
+            # Only include regular market hours (9:30 AM - 4:00 PM ET)
+            if MARKET_OPEN_SECONDS <= seconds <= MARKET_CLOSE_SECONDS:
                 day_data[str(seconds)] = {
                     'open': float(row['Open']),
                     'high': float(row['High']),
@@ -39,8 +40,9 @@ class DataFetch:
 
     def update_ticker_data(self, ticker: str, interval: int) -> None:
         """Update data for a specific ticker and interval"""
-        # Get current date
-        now: datetime = datetime.now()
+        # Get current date in Eastern Time (market timezone)
+        # Using ET ensures correct date boundaries for market data
+        now: datetime = now_et()
 
         # Calculate start date (1 day ago to ensure we get recent data)
         start_date: datetime = now - timedelta(days=1)
@@ -58,8 +60,16 @@ class DataFetch:
                 print(f"No data found for {ticker}")
                 return
 
-            # Group data by month and year
+            # Ensure timestamps are in Eastern Time (market timezone)
+            # yfinance returns ET for US stocks, but we explicitly convert to be safe
             df.index = pd.to_datetime(df.index)
+            if df.index.tz is not None:
+                df.index = df.index.tz_convert('America/New_York')
+            else:
+                # If no timezone, localize to ET (assume it's already in ET)
+                df.index = df.index.tz_localize('America/New_York')
+
+            # Group data by month and year
             grouped = df.groupby([df.index.year, df.index.month])
 
             for (year, month), month_df in grouped:

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_et
 
 logger = LogManager().get_logger("OptimizerVisualization")
 
@@ -35,7 +36,7 @@ def save_optimization_results_with_new_indicators(best_individuals_log, best_ind
     logger.info("💾 Saving optimization results with NEW indicator system...")
 
     if not timestamp:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        timestamp = now_et().strftime("%Y-%m-%d_%H%M%S")
 
     results_dir = Path('results') / f"{timestamp}_{test_name}"
     results_dir.mkdir(parents=True, exist_ok=True)

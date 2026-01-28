@@ -15,6 +15,7 @@ from models.monitor_configuration import MonitorConfiguration, load_monitor_conf
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_utc, isoformat_et
 
 
 class AppService:
@@ -235,8 +236,6 @@ class AppService:
     def _emit_initial_card_update(self, card_id: str, symbol: str, test_name: str, data_streamer) -> None:
         """Emit an initial card_update event so the card appears immediately in the UI"""
         try:
-            from datetime import datetime
-
             # Get data status from the indicator processor
             data_status = data_streamer.indicator_processor.get_data_status()
 
@@ -245,7 +244,7 @@ class AppService:
                 'card_id': card_id,
                 'symbol': symbol,
                 'price': 0.0,
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': isoformat_et(now_utc()),
                 'indicators': {},
                 'raw_indicators': {},
                 'bar_scores': {},

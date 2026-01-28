@@ -75,8 +75,11 @@ class TickHistoryTools(DataLink):
 
         retrieved_data = collection.find_one(query)
         if retrieved_data:
-            #  THIS IS WHERE I WOULD FIX TIMESTAMP FOR EACH DATA IF NEED BE
-            return TickHistory(**retrieved_data)
+            # Create TickHistory and process timestamps to UTC-aware datetimes
+            # This ensures consistency with live data from SchwabDataLink
+            history = TickHistory(**retrieved_data)
+            history.process_timestamps(as_utc=True)
+            return history
         return None
 
     # [{0: [TickData]}, {1:[TickData]}, {2:[TickData]}...]

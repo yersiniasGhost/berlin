@@ -15,6 +15,7 @@ from routes.monitor_config_routes import monitor_config_bp
 
 from mlf_utils.log_manager import LogManager
 from mlf_utils import sanitize_nan_values, FileUploadHandler
+from mlf_utils.timezone_utils import now_et
 # Configure logging
 lm = LogManager('mlf-app.log')
 lm.configure_library_loggers()
@@ -160,8 +161,8 @@ def handle_save_current_best(data=None):
         return
 
     try:
-        # Generate timestamp for this save
-        save_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        # Generate timestamp for this save (ET for user-friendly naming)
+        save_timestamp = now_et().strftime("%Y-%m-%d_%H%M%S")
 
         # Get the current GA config path and test name (thread-safe)
         ga_config_path = OptimizationState().get('ga_config_path', 'unknown_config.json')

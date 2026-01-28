@@ -17,6 +17,7 @@ from collections import defaultdict
 from typing import List, Dict, Any, Optional, Tuple
 
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_et, ET, utc_from_timestamp_ms, to_et, format_et
 
 # Same ticker list as original script
 MAJOR_STOCKS = [
@@ -129,15 +130,15 @@ def find_latest_timestamp_for_ticker(collection, ticker: str) -> Optional[dateti
                 for time_seconds_str in sorted(day_data.keys(), key=int, reverse=True):
                     time_seconds = int(time_seconds_str)
 
-                    # Convert back to datetime
-                    # Create base date for this day
+                    # Convert back to datetime in Eastern Time
+                    # The stored seconds_from_midnight are in ET (market timezone)
                     day = int(day_str)
                     try:
-                        base_date = datetime(year, month, day)
+                        base_date = datetime(year, month, day, tzinfo=ET)
                     except ValueError:
                         continue  # Skip invalid dates
 
-                    # Add the seconds from midnight
+                    # Add the seconds from midnight (result is ET-aware)
                     timestamp = base_date + timedelta(seconds=time_seconds)
 
                     if latest_timestamp is None or timestamp > latest_timestamp:
@@ -171,7 +172,8 @@ def fetch_incremental_data(client: RESTClient, ticker: str, start_datetime: date
     """
     # Start from 1 minute after the last timestamp to avoid duplicates
     actual_start = start_datetime + timedelta(minutes=1)
-    end_date = datetime.now()
+    # Use ET for consistent market date boundaries
+    end_date = now_et()
 
     # If start is after end, no new data needed
     if actual_start >= end_date:
@@ -310,14 +312,16 @@ def update_mongodb_data(collection, ticker: str, aggs: List[Any]) -> int:
     organized_data = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
 
     for agg in aggs:
-        # Convert from milliseconds to datetime
-        dt = datetime.fromtimestamp(agg.timestamp / 1000)
+        # Convert from UTC milliseconds to ET datetime
+        # Polygon API returns UTC timestamps, but we store in ET (market timezone)
+        dt_utc = utc_from_timestamp_ms(agg.timestamp)
+        dt = to_et(dt_utc)  # Convert to Eastern Time for correct market day/time
 
         year = dt.year
         month = dt.month
         day = dt.day
 
-        # Convert time to seconds from midnight
+        # Convert time to seconds from midnight (in ET)
         time_seconds = dt.hour * 3600 + dt.minute * 60 + dt.second
         time_key = str(time_seconds)
 
@@ -412,7 +416,7 @@ To: {EMAIL_ADDRESS}
 
 Stock Data Update Script Error
 
-Time: {datetime.now()}
+Time: {format_et(now_et())}
 Error: {error_message}
 
 Traceback:

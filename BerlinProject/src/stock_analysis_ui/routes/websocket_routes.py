@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import current_app
 from flask_socketio import emit, join_room, leave_room
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_utc, isoformat_et
 
 logger = LogManager().get_logger("WebSocketRoutes")
 
@@ -43,7 +44,7 @@ def register_websocket_events(socketio, initial_app_service):
                     'streaming': False,
                     'authenticated': False,
                     'message': 'Connected - authentication required',
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': isoformat_et(now_utc())
                 }
                 emit('initial_data', initial_data)
                 return
@@ -61,7 +62,7 @@ def register_websocket_events(socketio, initial_app_service):
                     'streaming': False,
                     'authenticated': False,
                     'message': 'Session expired - please re-authenticate',
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': isoformat_et(now_utc())
                 }
                 emit('initial_data', initial_data)
                 return
@@ -78,7 +79,7 @@ def register_websocket_events(socketio, initial_app_service):
                 'authenticated': is_authenticated,
                 'message': 'Connected to your trading dashboard',
                 'session_id': session_id,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': isoformat_et(now_utc())
             }
 
             logger.info(

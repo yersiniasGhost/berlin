@@ -14,6 +14,7 @@ from flask_socketio import SocketIO
 from data_streamer import ExternalTool
 from models.tick_data import TickData
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_utc, isoformat_et
 
 logger = LogManager().get_logger("UIExternalTool")
 
@@ -266,7 +267,7 @@ class UIExternalTool(ExternalTool):
             message_data = {
                 'message': message,
                 'type': message_type,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': isoformat_et(now_utc())
             }
 
             self.emit_to_session('system_message', message_data, session_id)
@@ -280,7 +281,7 @@ class UIExternalTool(ExternalTool):
         try:
             status_data = {
                 'streaming': is_streaming,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': isoformat_et(now_utc())
             }
 
             self.emit_to_session('streaming_status', status_data, session_id)
@@ -294,7 +295,7 @@ class UIExternalTool(ExternalTool):
         try:
             status_data = {
                 'connected': connected,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': isoformat_et(now_utc())
             }
 
             self.emit_to_session('connection_status', status_data, session_id)
@@ -310,7 +311,7 @@ class UIExternalTool(ExternalTool):
                 'streaming': self.app_service.is_streaming if self.app_service else False,
                 'authenticated': True,
                 'message': 'Connected successfully',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': isoformat_et(now_utc())
             }
 
             self.emit_to_session('initial_data', initial_data, session_id)

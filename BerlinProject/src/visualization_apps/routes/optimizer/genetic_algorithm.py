@@ -21,6 +21,7 @@ from portfolios.portfolio_tool import TradeReason
 from candle_aggregator.csa_container import CSAContainer
 from optimization.calculators.bt_data_streamer import BacktestDataStreamer
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_et, isoformat_et, format_et
 
 from .elite_selection import select_winning_population
 from .chart_generation import generate_optimizer_chart_data
@@ -36,7 +37,7 @@ def heartbeat_thread(socketio, opt_state):
         try:
             # Send heartbeat with current optimization state
             heartbeat_data = {
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': isoformat_et(now_et()),
                 'optimization_state': {
                     'running': opt_state.is_running(),
                     'paused': opt_state.is_paused(),
@@ -134,8 +135,8 @@ def run_genetic_algorithm_threaded_with_new_indicators(ga_config_path: str, data
         logger.info(f"   Elitist Size: {genetic_algorithm.elitist_size}")
         logger.info(f"   New Indicators: {len(processed_indicators)}")
 
-        # Store timestamp for later use
-        optimization_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        # Store timestamp for later use (ET for user-friendly file naming)
+        optimization_timestamp = now_et().strftime("%Y-%m-%d_%H%M%S")
         opt_state.set('timestamp', optimization_timestamp)
 
         # Start heartbeat thread

@@ -23,6 +23,7 @@ from optimization.genetic_optimizer.support.parameter_collector import Parameter
 # Import mlf_utils
 from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_et
 
 # Import optimizer module functions (extracted for modularity)
 from .optimizer import (
@@ -161,7 +162,7 @@ def load_examples():
             }
 
         # Provide default data config with dynamic dates (2 weeks ago to tomorrow)
-        today = datetime.now()
+        today = now_et()
         two_weeks_ago = today - timedelta(days=14)
         tomorrow = today + timedelta(days=1)
         examples['data_config'] = {
@@ -482,7 +483,7 @@ def save_config():
         saved_configs_dir.mkdir(exist_ok=True)
 
         # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = now_et().strftime('%Y%m%d_%H%M%S')
         filename = f"{timestamp}_{config_type}.json"
         filepath = saved_configs_dir / filename
 
@@ -626,7 +627,7 @@ def export_optimized_configs():
             return jsonify({'success': False, 'error': 'No elite configurations available'})
 
         # Generate timestamp for folder name
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        timestamp = now_et().strftime("%Y-%m-%d_%H%M%S")
 
         # Get number of elites to save from GA hyperparameters (specifically "elites_to_save")
         elites_to_save = 5  # Default
@@ -1029,7 +1030,7 @@ def export_elite(index):
             elite_config = elite.to_config()
         else:
             elite_config = {
-                'test_name': f'Elite_{index + 1}_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                'test_name': f'Elite_{index + 1}_{now_et().strftime("%Y%m%d_%H%M%S")}',
                 'monitor': elite.genotype if hasattr(elite, 'genotype') else {},
                 'elite_fitness': getattr(elite, 'fitness', 0)
             }

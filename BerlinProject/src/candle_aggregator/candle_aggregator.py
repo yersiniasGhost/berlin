@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional, List, Tuple
 from models.tick_data import TickData
+from mlf_utils.timezone_utils import is_market_hours, is_aware
 import numpy as np
 
 
@@ -69,23 +70,36 @@ class CandleAggregator(ABC):
         - After-hours: 4:00 PM ET and later
 
         Args:
-            timestamp: Datetime to check (assumed to be in ET timezone)
+            timestamp: Timezone-aware datetime to check (any timezone accepted,
+                      will be converted to ET internally)
 
         Returns:
             bool: True if during regular trading hours, False otherwise
+
+        Note:
+            This method now uses the centralized is_market_hours() function from
+            timezone_utils, which properly handles timezone conversion and DST.
         """
-        hour = timestamp.hour
-        minute = timestamp.minute
+        # Use centralized market hours check from timezone_utils
+        # This handles any timezone-aware datetime by converting to ET internally
+        if not is_aware(timestamp):
+            # Log warning for naive datetimes (legacy compatibility)
+            # In future, this should raise an error
+            from mlf_utils.log_manager import LogManager
+            logger = LogManager().get_logger("CandleAggregator")
+            logger.warning(f"Naive datetime passed to _is_trading_hours: {timestamp}. "
+                          f"This may cause incorrect market hours filtering. "
+                          f"Please update data source to use timezone-aware datetimes.")
+            # Fall back to old behavior for naive datetimes (assume ET)
+            hour = timestamp.hour
+            minute = timestamp.minute
+            if hour < 9 or (hour == 9 and minute < 30):
+                return False
+            if hour >= 16:
+                return False
+            return True
 
-        # Before 9:30 AM = pre-market
-        if hour < 9 or (hour == 9 and minute < 30):
-            return False
-
-        # After 4:00 PM = after-hours
-        if hour >= 16:
-            return False
-
-        return True
+        return is_market_hours(timestamp)
 
     def process_tick(self, tick_data: TickData) -> Optional[TickData]:
         """Process tick and return completed candle if timeframe ended"""

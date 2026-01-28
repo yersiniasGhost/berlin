@@ -16,6 +16,7 @@ from flask import Blueprint, request, jsonify, current_app, session
 from stock_analysis_ui.services.app_service import AppService
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import now_utc, isoformat_et
 
 logger = LogManager().get_logger("APIRoutes")
 api_bp = Blueprint('api', __name__)
@@ -722,7 +723,7 @@ def debug_streaming():
         return jsonify({
             'success': True,
             'debug_info': debug_info,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': isoformat_et(now_utc())
         })
 
     except Exception as e:
@@ -740,7 +741,7 @@ def websocket_health():
         app_service = get_session_app_service()
 
         health_data = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': isoformat_et(now_utc()),
             'ui_tool_health': app_service.ui_tool.get_health_status() if hasattr(app_service.ui_tool,
                                                                                  'get_health_status') else {},
             'active_combinations': len(app_service.combinations),
@@ -839,7 +840,7 @@ def get_chart_data(card_id: str):
             # Pad timestamps if needed
             while len(timestamps) < len(history):
                 # Generate synthetic timestamps
-                base_ts = timestamps[0] if timestamps else int(datetime.now().timestamp() * 1000)
+                base_ts = timestamps[0] if timestamps else int(now_utc().timestamp() * 1000)
                 timestamps.insert(0, base_ts - (len(history) - len(timestamps)) * 60000)
 
             # Format raw indicator values (trigger values 0/1)

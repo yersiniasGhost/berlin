@@ -9,6 +9,7 @@ from datetime import datetime
 from data_streamer.data_link import DataLink
 from models.tick_data import TickData
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import utc_from_timestamp_ms, now_utc, format_et
 
 logger = LogManager().get_logger("SchwabDataLink")
 
@@ -47,8 +48,10 @@ class SchwabDataLink(DataLink):
 
     def _pip_to_tick_data(self, pip_data: Dict) -> TickData:
         """
-        Simple conversion of Schwab PIP data to TickData object.
-        Now uses current time as fallback for missing/invalid timestamps.
+        Convert Schwab PIP (Price In Progress) data to TickData object.
+
+        All timestamps are converted to UTC-aware datetimes using timezone_utils.
+        This ensures consistent timezone handling throughout the application.
         """
         # Get required fields
         symbol = pip_data.get('key')
@@ -70,6 +73,7 @@ class SchwabDataLink(DataLink):
             return None
 
         # Handle timestamp with fallback to current time
+        # Schwab API returns timestamps as milliseconds since Unix epoch (UTC)
         timestamp_ms = pip_data.get('38')
         timestamp = None
 
@@ -77,7 +81,8 @@ class SchwabDataLink(DataLink):
             try:
                 timestamp_ms = int(timestamp_ms)
                 if timestamp_ms > 0:
-                    timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+                    # Convert to UTC-aware datetime
+                    timestamp = utc_from_timestamp_ms(timestamp_ms)
 
                     # Sanity check timestamp (must be after year 2000)
                     if timestamp.year < 2000:
@@ -90,9 +95,9 @@ class SchwabDataLink(DataLink):
                 print(f"Cannot convert timestamp: {timestamp_ms}, using current time")
                 timestamp = None  # Will use current time below
 
-        # If no valid timestamp, use current time
+        # If no valid timestamp, use current UTC time
         if timestamp is None:
-            timestamp = datetime.now()
+            timestamp = now_utc()
 
         volume = int(pip_data.get('8', 0))  # Optional, default to 0
 
@@ -539,13 +544,14 @@ class SchwabDataLink(DataLink):
             data = response.json()
             candles = data.get('candles', [])
 
-            # Convert to TickData objects
+            # Convert to TickData objects with UTC-aware timestamps
             result = []
             for candle in candles:
-                # Create TickData with correct timeframe (no type field)
+                # Schwab API returns timestamps as milliseconds since Unix epoch (UTC)
+                # Convert to UTC-aware datetime for consistent timezone handling
                 tick = TickData(
                     symbol=symbol,
-                    timestamp=datetime.fromtimestamp(candle['datetime'] / 1000),
+                    timestamp=utc_from_timestamp_ms(candle['datetime']),
                     open=candle['open'],
                     high=candle['high'],
                     low=candle['low'],
@@ -556,12 +562,13 @@ class SchwabDataLink(DataLink):
                 result.append(tick)
 
             # Enhanced logging for debugging historical data issues
+            # Display times in ET for readability (market timezone)
             if result:
                 first_candle = result[0]
                 last_candle = result[-1]
                 logger.info(f"Loaded {len(result)} {timeframe} candles for {symbol}: "
-                           f"{first_candle.timestamp.strftime('%Y-%m-%d %H:%M')} to "
-                           f"{last_candle.timestamp.strftime('%Y-%m-%d %H:%M')}")
+                           f"{format_et(first_candle.timestamp, '%Y-%m-%d %H:%M')} to "
+                           f"{format_et(last_candle.timestamp, '%Y-%m-%d %H:%M')} ET")
             else:
                 logger.warning(f"No historical candles returned from Schwab API for {symbol} ({timeframe})")
 
