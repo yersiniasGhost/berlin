@@ -1,7 +1,121 @@
 /**
  * Shared utilities for monitor configuration editing.
- * Used by both optimizer-config.js and replay-config.js
+ * Used by optimizer-config.js, replay-config.js, and monitor-config.js
  */
+
+// ============================================================================
+// INDICATOR CARD UI UTILITIES
+// ============================================================================
+
+/**
+ * Updates the indicator card title when the name field changes.
+ * Called via oninput event on the indicator name input field.
+ *
+ * @param {number} index - The indicator card index
+ * @param {string} newName - The new name value from the input field
+ */
+function updateIndicatorTitle(index, newName) {
+    const titleElement = document.getElementById(`indicator-title-${index}`);
+    if (titleElement) {
+        titleElement.textContent = newName || 'New Indicator';
+    }
+}
+
+/**
+ * Gets the indicator name from an indicator card by its index.
+ *
+ * @param {number} index - The indicator card index
+ * @returns {string|null} The indicator name or null if not found
+ */
+function getIndicatorNameFromCard(index) {
+    const card = document.querySelector(`[data-indicator-index="${index}"]`);
+    if (!card) return null;
+
+    const nameInput = card.querySelector('[data-indicator-field="name"]');
+    return nameInput ? nameInput.value : null;
+}
+
+/**
+ * Finds all bar indicator rows that reference a specific indicator name.
+ *
+ * @param {string} indicatorName - The indicator name to search for
+ * @returns {Array<HTMLElement>} Array of row elements containing the indicator
+ */
+function findBarRowsWithIndicator(indicatorName) {
+    const rows = [];
+    const barIndicatorSelects = document.querySelectorAll('[data-bar-indicator-name]');
+
+    barIndicatorSelects.forEach(select => {
+        if (select.value === indicatorName) {
+            const row = select.closest('.row');
+            if (row) rows.push(row);
+        }
+    });
+
+    return rows;
+}
+
+/**
+ * Finds all trend indicator rows that reference a specific indicator name.
+ *
+ * @param {string} indicatorName - The indicator name to search for
+ * @returns {Array<HTMLElement>} Array of row elements containing the indicator
+ */
+function findTrendRowsWithIndicator(indicatorName) {
+    const rows = [];
+    const trendIndicatorSelects = document.querySelectorAll('[data-trend-indicator-name]');
+
+    trendIndicatorSelects.forEach(select => {
+        if (select.value === indicatorName) {
+            const row = select.closest('.trend-indicator-row');
+            if (row) rows.push(row);
+        }
+    });
+
+    return rows;
+}
+
+/**
+ * Removes an indicator and automatically removes it from all bar configurations.
+ * Shows a single confirmation dialog and handles the removal logic.
+ *
+ * @param {number} index - The indicator card index
+ * @param {Function} refreshCallback - Callback to refresh bar indicator dropdowns after removal
+ * @returns {boolean} True if the indicator was removed, false if cancelled
+ */
+function removeIndicatorWithBarCleanup(index, refreshCallback) {
+    const card = document.querySelector(`[data-indicator-index="${index}"]`);
+    if (!card) return false;
+
+    // Single confirmation: remove the indicator
+    if (!confirm('Remove this indicator?')) {
+        return false;
+    }
+
+    // Get the indicator name before removing
+    const indicatorName = getIndicatorNameFromCard(index);
+
+    // Find and remove all bar rows and trend rows that reference this indicator
+    if (indicatorName) {
+        const barRows = findBarRowsWithIndicator(indicatorName);
+        const trendRows = findTrendRowsWithIndicator(indicatorName);
+
+        // Remove all bar indicator rows that reference this indicator
+        barRows.forEach(row => row.remove());
+        // Remove all trend indicator rows that reference this indicator
+        trendRows.forEach(row => row.remove());
+    }
+
+    // Remove the indicator card
+    card.remove();
+
+    // Refresh dropdowns
+    if (refreshCallback) {
+        refreshCallback();
+    }
+
+    return true;
+}
 
 // ============================================================================
 // DEFAULT DATA CONFIGURATION - DYNAMIC DATES

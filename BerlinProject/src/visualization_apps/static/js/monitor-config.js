@@ -26,6 +26,9 @@ function setupEventListeners() {
     // Load button
     document.getElementById('loadBtn').addEventListener('click', loadConfiguration);
 
+    // New Monitor button
+    document.getElementById('newMonitorBtn').addEventListener('click', createNewMonitor);
+
     // Save button
     document.getElementById('saveBtn').addEventListener('click', saveConfiguration);
 
@@ -79,6 +82,44 @@ async function loadConfiguration() {
     } catch (error) {
         showAlert('Error loading configuration: ' + error.message, 'danger');
     }
+}
+
+/**
+ * Create a new monitor configuration from scratch with sensible defaults
+ */
+function createNewMonitor() {
+    // Generate a default filename with timestamp
+    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    currentFilename = `new_monitor_${timestamp}.json`;
+
+    // Create a fresh configuration with default values matching the MonitorConfiguration model
+    currentConfig = {
+        test_name: 'new-monitor',
+        monitor: {
+            name: 'New Trading Monitor',
+            description: 'Custom trading strategy configuration',
+            trade_executor: {
+                default_position_size: 100,
+                stop_loss_pct: 0.02,
+                take_profit_pct: 0.04,
+                take_profit_type: 'percent',
+                take_profit_dollars: 0,
+                ignore_bear_signals: false,
+                trailing_stop_loss: false,
+                trailing_stop_distance_pct: 0.01,
+                trailing_stop_activation_pct: 0.005
+            },
+            enter_long: [],
+            exit_long: [],
+            bars: {}
+        },
+        indicators: []
+    };
+
+    // Render the empty configuration
+    renderConfiguration();
+    document.getElementById('configEditor').style.display = 'block';
+    showAlert('New monitor created. Add indicators, bars, and configure trade executor settings.', 'success');
 }
 
 function renderConfiguration() {
@@ -258,7 +299,7 @@ function createIndicatorCard(indicator, index) {
             <div class="indicator-card-header" onclick="toggleIndicatorCard(${index})">
                 <span class="indicator-card-title">
                     <i class="fas fa-chevron-right collapse-icon" id="collapse-icon-${index}"></i>
-                    ${indicator.name || 'New Indicator'}
+                    <span id="indicator-title-${index}">${indicator.name || 'New Indicator'}</span>
                 </span>
                 <button class="btn-remove" onclick="event.stopPropagation(); removeIndicator(${index})">
                     <i class="fas fa-trash me-1"></i>Remove
@@ -269,7 +310,9 @@ function createIndicatorCard(indicator, index) {
                 <div class="col-md-4">
                     <label class="form-label">Name</label>
                     <input type="text" class="form-control" value="${indicator.name || ''}"
-                           data-indicator-field="name" onchange="refreshBarIndicatorDropdowns()">
+                           data-indicator-field="name"
+                           oninput="updateIndicatorTitle(${index}, this.value)"
+                           onchange="refreshBarIndicatorDropdowns()">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Indicator Class</label>
@@ -467,13 +510,7 @@ function addIndicator() {
 }
 
 function removeIndicator(index) {
-    const card = document.querySelector(`[data-indicator-index="${index}"]`);
-    if (card && confirm('Remove this indicator?')) {
-        card.remove();
-
-        // Refresh bar indicator dropdowns
-        refreshBarIndicatorDropdowns();
-    }
+    removeIndicatorWithBarCleanup(index, refreshBarIndicatorDropdowns);
 }
 
 function renderBars(bars) {

@@ -199,17 +199,22 @@
         <div class="col-12">
             <div class="file-selector">
                 <div class="row align-items-center">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="fileInput" class="form-label mb-0">
                             <i class="fas fa-file me-2"></i>Select Configuration File
                         </label>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-5">
                         <input type="file" class="form-control" id="fileInput" accept=".json">
                     </div>
                     <div class="col-md-2">
                         <button class="btn btn-primary w-100" id="loadBtn" disabled>
                             <i class="fas fa-upload me-2"></i>Load
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-success w-100" id="newMonitorBtn">
+                            <i class="fas fa-plus me-2"></i>New Monitor
                         </button>
                     </div>
                 </div>
@@ -307,6 +312,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/config-utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/trade-executor-common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/monitor-config.js') }}"></script>

@@ -252,7 +252,7 @@ function createIndicatorCard(indicator, index) {
             <div class="indicator-card-header" onclick="toggleIndicatorCard(${index})">
                 <span class="indicator-card-title">
                     <i class="fas fa-chevron-right collapse-icon" id="collapse-icon-${index}"></i>
-                    ${indicator.name || 'New Indicator'}
+                    <span id="indicator-title-${index}">${indicator.name || 'New Indicator'}</span>
                 </span>
                 <button class="btn-remove" onclick="event.stopPropagation(); removeIndicator(${index})">
                     <i class="fas fa-trash me-1"></i>Remove
@@ -263,7 +263,9 @@ function createIndicatorCard(indicator, index) {
                     <div class="col-md-4">
                         <label class="form-label">Name</label>
                         <input type="text" class="form-control" value="${indicator.name || ''}"
-                               data-indicator-field="name" onchange="refreshBarIndicatorDropdowns()">
+                               data-indicator-field="name"
+                               oninput="updateIndicatorTitle(${index}, this.value)"
+                               onchange="refreshBarIndicatorDropdowns()">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Indicator Class</label>
@@ -532,11 +534,7 @@ function addIndicator() {
 }
 
 function removeIndicator(index) {
-    const card = document.querySelector(`[data-indicator-index="${index}"]`);
-    if (card && confirm('Remove this indicator?')) {
-        card.remove();
-        refreshBarIndicatorDropdowns();
-    }
+    removeIndicatorWithBarCleanup(index, refreshBarIndicatorDropdowns);
 }
 
 function renderBars(bars) {
