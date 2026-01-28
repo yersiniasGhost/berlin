@@ -8,7 +8,7 @@
         <div class="col-12">
             <div class="text-center mb-5">
                 <h1 class="display-4 mb-3">
-                    <i class="fas fa-chart-area me-3"></i>Visualization Suite
+                    <i class="fas fa-chart-area me-3"></i>MLF Trader
                 </h1>
                 <p class="lead text-muted">
                     Advanced trading strategy visualization and optimization tools with the new indicator system
@@ -20,16 +20,16 @@
     <div class="row justify-content-center">
         <div class="col-lg-10">
             <div class="row g-4">
-                <!-- Replay Visualization Card -->
-                <div class="col-md-4">
+                <!-- Replay Card -->
+                <div class="col-md-6">
                     <div class="card h-100 shadow-sm border-0">
                         <div class="card-body text-center p-4">
                             <div class="mb-3">
                                 <i class="fas fa-play-circle text-success" style="font-size: 4rem;"></i>
                             </div>
-                            <h4 class="card-title mb-3">Replay Visualization</h4>
+                            <h4 class="card-title mb-3">Replay</h4>
                             <p class="card-text text-muted">
-                                Backtest and visualize trading strategies with monitor configurations. 
+                                Backtest and visualize trading strategies with monitor configurations.
                                 View candlestick charts, trade entries/exits, P&L evolution, and performance metrics.
                             </p>
                             <div class="mt-auto">
@@ -45,17 +45,17 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- Optimizer Visualization Card -->
-                <div class="col-md-4">
+
+                <!-- Optimizer Card -->
+                <div class="col-md-6">
                     <div class="card h-100 shadow-sm border-0">
                         <div class="card-body text-center p-4">
                             <div class="mb-3">
                                 <i class="fas fa-dna text-primary" style="font-size: 4rem;"></i>
                             </div>
-                            <h4 class="card-title mb-3">Optimizer Visualization</h4>
+                            <h4 class="card-title mb-3">Optimizer</h4>
                             <p class="card-text text-muted">
-                                Run genetic algorithm optimization with real-time updates. 
+                                Run genetic algorithm optimization with real-time updates.
                                 Track fitness evolution, elite populations, and save best strategies.
                             </p>
                             <div class="mt-auto">
@@ -67,32 +67,6 @@
                         <div class="card-footer bg-light border-0">
                             <small class="text-muted">
                                 <i class="fas fa-check me-1"></i>GA Config + Data Config → Real-time Optimization
-                            </small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Indicator Visualization Card -->
-                <div class="col-md-4">
-                    <div class="card h-100 shadow-sm border-0">
-                        <div class="card-body text-center p-4">
-                            <div class="mb-3">
-                                <i class="fas fa-chart-line text-warning" style="font-size: 4rem;"></i>
-                            </div>
-                            <h4 class="card-title mb-3">Indicator Visualization</h4>
-                            <p class="card-text text-muted">
-                                Test and visualize individual indicators with the new refactored system. 
-                                MACD, SMA, RSI and custom indicators with real-time configuration.
-                            </p>
-                            <div class="mt-auto">
-                                <a href="{{ url_for('indicator.indicator_main') }}" class="btn btn-warning btn-lg">
-                                    <i class="fas fa-chart-line me-2"></i>Launch Indicators
-                                </a>
-                            </div>
-                        </div>
-                        <div class="card-footer bg-light border-0">
-                            <small class="text-muted">
-                                <i class="fas fa-check me-1"></i>NEW Indicator System → Dynamic Testing
                             </small>
                         </div>
                     </div>
@@ -111,31 +85,22 @@
                         <i class="fas fa-rocket me-2"></i>Quick Start Guide
                     </h5>
                     <div class="row">
-                        <div class="col-md-4">
-                            <h6 class="text-success">1. Replay Visualization</h6>
+                        <div class="col-md-6">
+                            <h6 class="text-success">1. Replay</h6>
                             <ul class="small text-muted">
                                 <li>Upload monitor_config.json</li>
                                 <li>Upload data_config.json</li>
-                                <li>Click "Run Replay Visualization"</li>
+                                <li>Click "Run Replay"</li>
                                 <li>View charts and trade performance</li>
                             </ul>
                         </div>
-                        <div class="col-md-4">
-                            <h6 class="text-primary">2. Optimizer Visualization</h6>
+                        <div class="col-md-6">
+                            <h6 class="text-primary">2. Optimizer</h6>
                             <ul class="small text-muted">
                                 <li>Upload ga_config.json</li>
                                 <li>Upload data_config.json</li>
                                 <li>Click "Start Optimization"</li>
                                 <li>Monitor real-time progress</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="text-warning">3. Indicator Visualization</h6>
-                            <ul class="small text-muted">
-                                <li>Select ticker and date range</li>
-                                <li>Configure indicators</li>
-                                <li>Click "Visualize Indicators"</li>
-                                <li>Analyze indicator signals</li>
                             </ul>
                         </div>
                     </div>

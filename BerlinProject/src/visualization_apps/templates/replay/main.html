@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Replay Visualization{% endblock %}
+{% block title %}Replay{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -100,7 +100,7 @@
     <div class="row">
         <div class="col-12">
             <h2 class="mb-4">
-                <i class="fas fa-play-circle me-2"></i>Replay Visualization
+                <i class="fas fa-play-circle me-2"></i>Replay
             </h2>
         </div>
     </div>
@@ -238,29 +238,7 @@
                         <div class="tab-pane fade" id="data-config-pane" role="tabpanel">
                             <div class="mb-3">
                                 <h6>Data Configuration</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="dataTicker" class="form-label">Ticker Symbol</label>
-                                        <input type="text" class="form-control" id="dataTicker" placeholder="e.g., NVDA" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="dataStartDate" class="form-label">Start Date</label>
-                                        <input type="date" class="form-control" id="dataStartDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="dataEndDate" class="form-label">End Date</label>
-                                        <input type="date" class="form-control" id="dataEndDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check mt-4">
-                                            <input class="form-check-input" type="checkbox" id="dataExtendedHours" checked>
-                                            <label class="form-check-label" for="dataExtendedHours">
-                                                Include Extended Hours
-                                            </label>
-                                            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET (regular market hours)</small>
-                                        </div>
-                                    </div>
-                                </div>
+                                {% include 'components/_data_config_form.html' %}
                             </div>
                         </div>
                     </div>
@@ -273,7 +251,7 @@
     <div class="row mb-4">
         <div class="col-12 text-center">
             <button type="button" class="btn btn-success btn-lg" id="runReplayBtn" disabled>
-                <i class="fas fa-play me-2"></i>Run Replay Visualization
+                <i class="fas fa-play me-2"></i>Run Replay
             </button>
         </div>
     </div>
@@ -305,7 +283,7 @@
                                     <strong>Strategy:</strong> <span id="strategyName">-</span>
                                 </div>
                                 <div class="col-md-2">
-                                    <strong>Symbol:</strong> <span id="dataTicker">-</span>
+                                    <strong>Symbol:</strong> <span id="displayTicker">-</span>
                                 </div>
                                 <div class="col-md-3">
                                     <strong>Date Range:</strong> <span id="dateRange">-</span>
@@ -407,6 +385,15 @@
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h6 class="mb-0">Trade History</h6>
                                 <div class="d-flex align-items-center">
+                                    <!-- Timezone Selector -->
+                                    <div class="timezone-selector" style="margin-right: 1rem; border-left: none; padding-left: 0;">
+                                        <span class="timezone-label">TZ</span>
+                                        <select id="timezoneSelect" class="timezone-select" onchange="handleTimezoneChange(this.value)">
+                                            <option value="America/New_York">ET</option>
+                                            <option value="America/Los_Angeles">PT</option>
+                                            <option value="UTC">UTC</option>
+                                        </select>
+                                    </div>
                                     <label for="pnlDisplayMode" class="form-label mb-0 me-2 small">Display:</label>
                                     <select class="form-select form-select-sm" id="pnlDisplayMode" style="width: auto;" onchange="updatePnLDisplay()">
                                         <option value="percent">Percentage</option>
@@ -540,6 +527,24 @@ document.addEventListener('DOMContentLoaded', function() {
         currentIndicator: null
     };
 
+    // Page-specific timezone change handler
+    window.handleTimezoneChange = function(timezone) {
+        // Call shared handler (updates Highcharts, localStorage, etc.)
+        onTimezoneChange(timezone);
+
+        // Redraw all charts
+        Object.values(charts).forEach(chart => {
+            if (chart && chart.redraw) {
+                chart.redraw();
+            }
+        });
+
+        // Re-render trade history with new timezone
+        if (globalChartData.trades && globalChartData.trades.length > 0) {
+            populateTradeHistory(globalChartData.trades);
+        }
+    };
+
     // Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
     // DEFAULT_DATA_CONFIG is already defined globally in config-utils.js
 
@@ -632,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
             alert(`Failed to run replay: ${error.message}`);
         } finally {
             this.disabled = false;
-            this.innerHTML = '<i class="fas fa-play me-2"></i>Run Replay Visualization';
+            this.innerHTML = '<i class="fas fa-play me-2"></i>Run Replay';
         }
     });
     
@@ -2179,9 +2184,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const cumPctClass = cumulativePnLPct >= 0 ? 'text-success' : 'text-danger';
             const cumDollarsClass = cumulativePnLDollars >= 0 ? 'text-success' : 'text-danger';
 
-            // Format date and time
-            const tradeDate = new Date(trade.timestamp);
-            const dateTimeStr = tradeDate.toLocaleString('en-US', {
+            // Format date and time using selected timezone (from timezone-utils.js)
+            const dateTimeStr = formatDateTimeInTimezone(trade.timestamp, window.currentTimezone, {
+                timeZone: window.currentTimezone,
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',

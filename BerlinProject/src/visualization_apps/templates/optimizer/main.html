@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Optimizer Visualization{% endblock %}
+{% block title %}Optimizer{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/optimizer.css') }}">
@@ -11,7 +11,7 @@
     <div class="row">
         <div class="col-12">
             <h2 class="mb-4">
-                <i class="fas fa-dna me-2"></i>Optimizer Visualization
+                <i class="fas fa-dna me-2"></i>Optimizer
             </h2>
         </div>
     </div>
@@ -75,6 +75,19 @@ document.addEventListener('DOMContentLoaded', function() {
     let optimizationRunning = false;
     let pollInterval = null;
     let addedGenerations = new Set(); // Track which generations have been added to the table
+
+    // Page-specific timezone change handler
+    window.handleTimezoneChange = function(timezone) {
+        // Call shared handler (updates Highcharts, localStorage, etc.)
+        onTimezoneChange(timezone);
+
+        // Redraw all charts
+        Object.values(charts).forEach(chart => {
+            if (chart && chart.redraw) {
+                chart.redraw();
+            }
+        });
+    };
 
     // NOTE: WebSocket initialization moved to optimizer-websocket.js and optimizer-ui-integration.js
     // The old initializeWebSocket() function has been replaced with a robust connection manager

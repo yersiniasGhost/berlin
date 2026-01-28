@@ -12,10 +12,53 @@
     <!-- Highcharts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
-    
+    <!-- Shared Timezone Utilities -->
+    <script src="{{ url_for('static', filename='js/timezone-utils.js') }}"></script>
+    <!-- Shared Data Config Utilities -->
+    <script src="{{ url_for('static', filename='js/data-config-utils.js') }}"></script>
+
     <style>
         body {
             background-color: #f8f9fa;
+        }
+
+        /* Timezone Selector - Shared Component */
+        .timezone-selector {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: 1rem;
+            padding-left: 1rem;
+            border-left: 1px solid #dee2e6;
+        }
+
+        .timezone-label {
+            color: #6c757d;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .timezone-select {
+            padding: 0.25rem 0.5rem;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            color: #495057;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .timezone-select:hover {
+            border-color: #adb5bd;
+        }
+
+        .timezone-select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
         }
         
         .sidebar {
@@ -445,7 +488,7 @@
     <nav class="sidebar" id="sidebar">
         <div class="logo-section">
             <img src="{{ url_for('static', filename='mlf_logo.png') }}" alt="Logo" class="logo-img">
-            <h4>Visualization Suite</h4>
+            <h4>MLF Trader</h4>
         </div>
         
         <ul class="nav nav-pills flex-column">
@@ -456,17 +499,12 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'replay.replay_main' %}active{% endif %}" href="{{ url_for('replay.replay_main') }}">
-                    <i class="fas fa-play-circle"></i>Replay Visualization
+                    <i class="fas fa-play-circle"></i>Replay
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'optimizer.optimizer_main' %}active{% endif %}" href="{{ url_for('optimizer.optimizer_main') }}">
-                    <i class="fas fa-dna"></i>Optimizer Visualization
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.endpoint == 'indicator.indicator_main' %}active{% endif %}" href="{{ url_for('indicator.indicator_main') }}">
-                    <i class="fas fa-chart-line"></i>Indicator Visualization
+                    <i class="fas fa-dna"></i>Optimizer
                 </a>
             </li>
             <li class="nav-item">
@@ -489,6 +527,13 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
+        // Initialize timezone on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof initializeTimezone === 'function') {
+                initializeTimezone();
+            }
+        });
+
         // Global alert function
         window.showAlert = function(message, type = 'info') {
             const alertContainer = document.getElementById('alertContainer');
