@@ -55,6 +55,10 @@ class TradeExecutorUnified:
         self.stop_loss_pct = trade_exec_config.stop_loss_pct
         self.take_profit_pct = trade_exec_config.take_profit_pct
 
+        # Take profit type configuration: "percent" or "dollars"
+        self.take_profit_type = getattr(trade_exec_config, 'take_profit_type', 'percent')
+        self.take_profit_dollars = getattr(trade_exec_config, 'take_profit_dollars', 0.0)
+
         # Behavior configuration
         self.ignore_bear_signals = trade_exec_config.ignore_bear_signals
         self.check_signal_conflicts = True  # Always check for signal conflicts
@@ -83,7 +87,10 @@ class TradeExecutorUnified:
         logger.debug(f"TradeExecutorUnified initialized:")
         logger.debug(f"  Position size: {self.default_position_size}")
         logger.debug(f"  Stop loss: {self.stop_loss_pct:.2%}")
-        logger.debug(f"  Take profit: {self.take_profit_pct:.2%}")
+        if self.take_profit_type == "dollars":
+            logger.debug(f"  Take profit: ${self.take_profit_dollars:.2f} (dollar-based)")
+        else:
+            logger.debug(f"  Take profit: {self.take_profit_pct:.2%} (percent-based)")
         logger.debug(f"  Trailing stop: {self.trailing_stop_loss} "
                     f"(distance={self.trailing_stop_distance_pct:.2%}, "
                     f"activation={self.trailing_stop_activation_pct:.2%})")
@@ -238,6 +245,8 @@ class TradeExecutorUnified:
         if stop_price and current_price <= stop_price:
             stop_type = "TRAILING STOP LOSS" if self.trailing_stop_loss else "FIXED STOP LOSS"
             loss_pct = ((current_price - entry_price) / entry_price * 100) if entry_price else 0
+            # Calculate dollar P/L: position_size * (exit_price - entry_price)
+            loss_dollars = self.portfolio.position_size * (current_price - entry_price) if entry_price else 0
             time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
 
             # Comprehensive exit logging
@@ -247,7 +256,7 @@ class TradeExecutorUnified:
             logger.debug(f"  --- Exit Reason ---")
             logger.debug(f"  Price ${current_price:.2f} <= Stop ${stop_price:.2f}")
             logger.debug(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
-            logger.debug(f"  P&L: {loss_pct:.2f}%")
+            logger.debug(f"  P&L: {loss_pct:.2f}% (${loss_dollars:.2f})")
             logger.debug(f"  Position size: {self.portfolio.position_size}")
             if self.trailing_stop_loss:
                 logger.debug(f"  Highest price since entry: ${self.highest_price_since_entry:.2f}"
@@ -275,6 +284,7 @@ class TradeExecutorUnified:
                 'exit_price': current_price,
                 'stop_trigger': stop_price,
                 'pnl_pct': loss_pct,
+                'pnl_dollars': loss_dollars,
                 'position_size': self.portfolio.position_size,
                 'trigger_info': {
                     'reason': stop_type,
@@ -307,6 +317,8 @@ class TradeExecutorUnified:
 
         if self.take_profit_price and current_price >= self.take_profit_price:
             profit_pct = ((current_price - entry_price) / entry_price * 100) if entry_price else 0
+            # Calculate dollar P/L: position_size * (exit_price - entry_price)
+            profit_dollars = self.portfolio.position_size * (current_price - entry_price) if entry_price else 0
             time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
 
             # Comprehensive exit logging
@@ -314,9 +326,12 @@ class TradeExecutorUnified:
             logger.debug(f"[EXIT - TAKE PROFIT] Position closed")
             logger.debug(f"  Date/Time: {time_str}")
             logger.debug(f"  --- Exit Reason ---")
-            logger.debug(f"  Price ${current_price:.2f} >= Target ${self.take_profit_price:.2f}")
+            if self.take_profit_type == "dollars":
+                logger.debug(f"  Price ${current_price:.2f} >= Target ${self.take_profit_price:.2f} (dollar-based TP)")
+            else:
+                logger.debug(f"  Price ${current_price:.2f} >= Target ${self.take_profit_price:.2f}")
             logger.debug(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
-            logger.debug(f"  P&L: +{profit_pct:.2f}%")
+            logger.debug(f"  P&L: +{profit_pct:.2f}% (${profit_dollars:.2f})")
             logger.debug(f"  Position size: {self.portfolio.position_size}")
             # Log bar scores at exit
             if bar_scores:
@@ -340,11 +355,14 @@ class TradeExecutorUnified:
                 'exit_price': current_price,
                 'target_price': self.take_profit_price,
                 'pnl_pct': profit_pct,
+                'pnl_dollars': profit_dollars,
                 'position_size': self.portfolio.position_size,
+                'take_profit_type': self.take_profit_type,
                 'trigger_info': {
                     'reason': 'TAKE PROFIT',
                     'target_price': self.take_profit_price,
-                    'current_price': current_price
+                    'current_price': current_price,
+                    'take_profit_type': self.take_profit_type
                 },
                 'bar_scores': dict(bar_scores) if bar_scores else {},
                 'indicators': dict(indicators) if indicators else {}
@@ -437,9 +455,22 @@ class TradeExecutorUnified:
         """
         Execute buy order and set stop loss and take profit levels
         """
-        # Calculate stop loss and take profit prices
+        # Calculate stop loss price (always percentage-based)
         self.stop_loss_price = current_price * (1.0 - self.stop_loss_pct)
-        self.take_profit_price = current_price * (1.0 + self.take_profit_pct)
+
+        # Calculate take profit price based on type
+        if self.take_profit_type == "dollars":
+            # Dollar-based: target price = entry + (target_dollars / position_size)
+            # price_gain_per_share = target_dollars / shares
+            if self.default_position_size > 0:
+                price_gain_per_share = self.take_profit_dollars / self.default_position_size
+                self.take_profit_price = current_price + price_gain_per_share
+            else:
+                # Fallback to percentage if position size is 0
+                self.take_profit_price = current_price * (1.0 + self.take_profit_pct)
+        else:
+            # Percentage-based (default)
+            self.take_profit_price = current_price * (1.0 + self.take_profit_pct)
 
         # Initialize trailing stop if enabled
         if self.trailing_stop_loss:
@@ -476,7 +507,10 @@ class TradeExecutorUnified:
                 logger.debug(f"    {ind_name}: {value:.4f}")
         logger.debug(f"  --- Exit Targets ---")
         logger.debug(f"  Stop loss: ${self.stop_loss_price:.2f} ({self.stop_loss_pct:.2%} below entry)")
-        logger.debug(f"  Take profit: ${self.take_profit_price:.2f} ({self.take_profit_pct:.2%} above entry)")
+        if self.take_profit_type == "dollars":
+            logger.debug(f"  Take profit: ${self.take_profit_price:.2f} (${self.take_profit_dollars:.2f} dollar target)")
+        else:
+            logger.debug(f"  Take profit: ${self.take_profit_price:.2f} ({self.take_profit_pct:.2%} above entry)")
         if self.trailing_stop_loss:
             logger.debug(f"  Trailing stop enabled: initial=${self.trailing_stop_price:.2f}")
             logger.debug(f"    Distance: {self.trailing_stop_distance_pct:.2%}")
@@ -498,6 +532,8 @@ class TradeExecutorUnified:
             'take_profit': self.take_profit_price,
             'stop_loss_pct': self.stop_loss_pct,
             'take_profit_pct': self.take_profit_pct,
+            'take_profit_type': self.take_profit_type,
+            'take_profit_dollars': self.take_profit_dollars,
             'trailing_stop_loss': self.trailing_stop_loss,
             'trailing_stop_price': self.trailing_stop_price,
             'trailing_stop_distance_pct': self.trailing_stop_distance_pct,
@@ -549,6 +585,8 @@ class TradeExecutorUnified:
             'highest_price_since_entry': self.highest_price_since_entry,
             'stop_loss_pct': self.stop_loss_pct,
             'take_profit_pct': self.take_profit_pct,
+            'take_profit_type': self.take_profit_type,
+            'take_profit_dollars': self.take_profit_dollars,
             'trailing_stop_loss': self.trailing_stop_loss,
             'ignore_bear_signals': self.ignore_bear_signals,
             'total_trades': len(self.portfolio.trade_history)

@@ -21,6 +21,11 @@ class TradeExecutorConfig(BaseModel):
     stop_loss_pct: float = PydanticField(default=0.01)
     take_profit_pct: float = PydanticField(default=0.02)
 
+    # Take profit type: "percent" (default) or "dollars"
+    take_profit_type: str = PydanticField(default="percent")
+    # Dollar amount target for take profit (used when take_profit_type="dollars")
+    take_profit_dollars: float = PydanticField(default=0.0)
+
     # Behavior flags
     ignore_bear_signals: bool = PydanticField(default=False)
     # Note: check_signal_conflicts is always True and not configurable

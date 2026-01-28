@@ -139,6 +139,10 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
             trade_pairs = []  # Store entry/exit pairs for P&L calculation
 
             # Process trades to build P&L history
+            # Track last entry for dollar P/L calculation
+            last_entry_price = 0.0
+            last_entry_size = 0.0
+
             for i, trade in enumerate(portfolio.trade_history):
                 # Determine trade type based on TradeReason
                 trade_type = 'buy'
@@ -148,14 +152,37 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
                 # Convert timestamp to milliseconds for JavaScript
                 timestamp_ms = int(trade.time.timestamp() * 1000) if hasattr(trade.time, 'timestamp') else trade.time
 
+                # Calculate P/L values for sell trades
+                pnl_pct = 0.0
+                pnl_dollars = 0.0
+                if trade_type == 'sell' and last_entry_price > 0:
+                    pnl_pct = ((trade.price - last_entry_price) / last_entry_price) * 100.0
+                    pnl_dollars = last_entry_size * (trade.price - last_entry_price)
+
+                # Check if trade_details has pnl_dollars from the executor (more accurate)
+                if timestamp_ms in trade_details:
+                    detail = trade_details[timestamp_ms]
+                    if 'pnl_dollars' in detail:
+                        pnl_dollars = detail['pnl_dollars']
+                    if 'pnl_pct' in detail:
+                        pnl_pct = detail['pnl_pct']
+
                 trade_entry = {
                     'timestamp': timestamp_ms,
                     'type': trade_type,
                     'price': trade.price,
                     'quantity': trade.size,
-                    'reason': trade.reason.value if hasattr(trade.reason, 'value') else str(trade.reason)
+                    'size': trade.size,  # Add 'size' field for frontend compatibility
+                    'reason': trade.reason.value if hasattr(trade.reason, 'value') else str(trade.reason),
+                    'pnl': pnl_pct,  # Percentage P/L
+                    'pnl_dollars': pnl_dollars  # Dollar P/L
                 }
                 trade_history.append(trade_entry)
+
+                # Track entry price/size for next sell calculation
+                if trade_type == 'buy':
+                    last_entry_price = trade.price
+                    last_entry_size = trade.size
 
                 # Add to triggers for chart display
                 triggers.append({

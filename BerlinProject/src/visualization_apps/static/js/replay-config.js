@@ -31,6 +31,23 @@ function setupEventListeners() {
     }
 }
 
+/**
+ * Toggle visibility of take profit input fields based on selected type
+ */
+function toggleTakeProfitInputs() {
+    const takeProfitType = document.getElementById('takeProfitType').value;
+    const pctContainer = document.getElementById('takeProfitPctContainer');
+    const dollarsContainer = document.getElementById('takeProfitDollarsContainer');
+
+    if (takeProfitType === 'dollars') {
+        pctContainer.style.display = 'none';
+        dollarsContainer.style.display = 'block';
+    } else {
+        pctContainer.style.display = 'block';
+        dollarsContainer.style.display = 'none';
+    }
+}
+
 async function loadIndicatorClasses() {
     try {
         const response = await fetch('/monitor_config/api/get_indicator_classes');
@@ -121,6 +138,9 @@ function renderMonitorConfiguration() {
     document.getElementById('positionSize').value = tradeExecutor.default_position_size || 100;
     document.getElementById('stopLoss').value = tradeExecutor.stop_loss_pct || 0.02;
     document.getElementById('takeProfit').value = tradeExecutor.take_profit_pct || 0.04;
+    document.getElementById('takeProfitType').value = tradeExecutor.take_profit_type || 'percent';
+    document.getElementById('takeProfitDollars').value = tradeExecutor.take_profit_dollars || 0;
+    toggleTakeProfitInputs(); // Show/hide appropriate inputs based on type
     document.getElementById('trailingStopEnabled').checked = tradeExecutor.trailing_stop_loss || false;
     document.getElementById('trailingDistance').value = tradeExecutor.trailing_stop_distance_pct || 0.01;
     document.getElementById('trailingActivation').value = tradeExecutor.trailing_stop_activation_pct || 0.005;
@@ -889,6 +909,8 @@ function collectMonitorConfigData() {
     te.default_position_size = parseFloat(document.getElementById('positionSize').value);
     te.stop_loss_pct = parseFloat(document.getElementById('stopLoss').value);
     te.take_profit_pct = parseFloat(document.getElementById('takeProfit').value);
+    te.take_profit_type = document.getElementById('takeProfitType').value;
+    te.take_profit_dollars = parseFloat(document.getElementById('takeProfitDollars').value) || 0;
     te.trailing_stop_loss = document.getElementById('trailingStopEnabled').checked;
     te.trailing_stop_distance_pct = parseFloat(document.getElementById('trailingDistance').value);
     te.trailing_stop_activation_pct = parseFloat(document.getElementById('trailingActivation').value);
@@ -1072,28 +1094,76 @@ function calculateMetrics(trades) {
     let totalLossPnL = 0;
     let cumulativePnL = 0;
 
+    // Dollar-based tracking
+    let totalWinDollars = 0;
+    let totalLossDollars = 0;
+    let cumulativePnLDollars = 0;
+    let lastEntryPrice = 0;
+    let lastPositionSize = 0;
+
     trades.forEach(trade => {
+        // Track entry for dollar calculations
+        if (trade.type === 'buy') {
+            lastEntryPrice = trade.price || 0;
+            lastPositionSize = trade.size || trade.quantity || 0;
+        }
+
+        // Calculate dollar P/L for this trade
+        let tradePnLDollars = 0;
+        if (trade.type === 'sell') {
+            if (trade.pnl_dollars !== undefined) {
+                tradePnLDollars = trade.pnl_dollars;
+            } else if (lastEntryPrice > 0) {
+                tradePnLDollars = lastPositionSize * ((trade.price || 0) - lastEntryPrice);
+            }
+        }
+
         if (trade.pnl > 0) {
             winningTrades++;
             totalWinPnL += trade.pnl;
+            totalWinDollars += tradePnLDollars;
         } else if (trade.pnl < 0) {
             losingTrades++;
             totalLossPnL += Math.abs(trade.pnl);
+            totalLossDollars += Math.abs(tradePnLDollars);
         }
-        cumulativePnL += trade.pnl;
+
+        cumulativePnL += trade.pnl || 0;
+        cumulativePnLDollars += tradePnLDollars;
     });
 
     const avgWin = winningTrades > 0 ? totalWinPnL / winningTrades : 0;
     const avgLoss = losingTrades > 0 ? totalLossPnL / losingTrades : 0;
+    const avgWinDollars = winningTrades > 0 ? totalWinDollars / winningTrades : 0;
+    const avgLossDollars = losingTrades > 0 ? totalLossDollars / losingTrades : 0;
 
-    // Update UI
+    // Update Strategy Overview - Trade counts
+    const winningTradesEl = document.getElementById('winningTrades');
+    const losingTradesEl = document.getElementById('losingTrades');
+    if (winningTradesEl) winningTradesEl.textContent = winningTrades;
+    if (losingTradesEl) losingTradesEl.textContent = losingTrades;
+
+    // Update Performance Metrics - Percentage
     document.getElementById('totalPnL').textContent = `${cumulativePnL.toFixed(2)}%`;
     document.getElementById('avgWin').textContent = `${avgWin.toFixed(2)}%`;
     document.getElementById('avgLoss').textContent = `${avgLoss.toFixed(2)}%`;
 
-    // Color coding
+    // Update Performance Metrics - Dollars
+    const totalPnLDollarsEl = document.getElementById('totalPnLDollars');
+    const avgWinDollarsEl = document.getElementById('avgWinDollars');
+    const avgLossDollarsEl = document.getElementById('avgLossDollars');
+    if (totalPnLDollarsEl) totalPnLDollarsEl.textContent = `$${cumulativePnLDollars.toFixed(2)}`;
+    if (avgWinDollarsEl) avgWinDollarsEl.textContent = `$${avgWinDollars.toFixed(2)}`;
+    if (avgLossDollarsEl) avgLossDollarsEl.textContent = `$${avgLossDollars.toFixed(2)}`;
+
+    // Color coding - Percentage
     const totalPnLElement = document.getElementById('totalPnL');
     totalPnLElement.className = `h5 mb-0 ${cumulativePnL >= 0 ? 'text-success' : 'text-danger'}`;
+
+    // Color coding - Dollars
+    if (totalPnLDollarsEl) {
+        totalPnLDollarsEl.className = `h5 mb-0 ${cumulativePnLDollars >= 0 ? 'text-success' : 'text-danger'}`;
+    }
 }
 
 function createCandlestickChart(candlestickData, trades) {
@@ -1209,31 +1279,88 @@ function populateTradeHistory(trades) {
     tbody.innerHTML = '';
 
     if (!trades || trades.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No trades to display</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No trades to display</td></tr>';
         return;
     }
 
-    let cumulativePnL = 0;
+    let cumulativePnLPct = 0;
+    let cumulativePnLDollars = 0;
+    let lastEntryPrice = 0;
+    let lastPositionSize = 0;
 
     trades.forEach(trade => {
-        cumulativePnL += (trade.pnl || 0);
+        // Track entry price and position size for dollar P/L calculation
+        if (trade.type === 'buy') {
+            lastEntryPrice = trade.price || 0;
+            lastPositionSize = trade.quantity || trade.size || 0;
+        }
+
+        // Calculate dollar P/L for sell trades
+        let pnlDollars = 0;
+        if (trade.type === 'sell' && lastEntryPrice > 0) {
+            pnlDollars = lastPositionSize * ((trade.price || 0) - lastEntryPrice);
+        }
+
+        // Also check if pnl_dollars is provided from backend
+        if (trade.pnl_dollars !== undefined) {
+            pnlDollars = trade.pnl_dollars;
+        }
+
+        cumulativePnLPct += (trade.pnl || 0);
+        cumulativePnLDollars += pnlDollars;
 
         const row = document.createElement('tr');
         const date = new Date(trade.timestamp);
         const typeClass = trade.type === 'buy' ? 'text-success' : 'text-danger';
-        const pnlClass = trade.pnl > 0 ? 'text-success' : (trade.pnl < 0 ? 'text-danger' : '');
+        const pnlPctClass = trade.pnl > 0 ? 'text-success' : (trade.pnl < 0 ? 'text-danger' : '');
+        const pnlDollarsClass = pnlDollars > 0 ? 'text-success' : (pnlDollars < 0 ? 'text-danger' : '');
+        const cumPctClass = cumulativePnLPct >= 0 ? 'text-success' : 'text-danger';
+        const cumDollarsClass = cumulativePnLDollars >= 0 ? 'text-success' : 'text-danger';
+
+        // Format P/L values (show dash for entry trades)
+        const pnlPctDisplay = trade.type === 'sell' ? `${(trade.pnl || 0).toFixed(2)}%` : '-';
+        const pnlDollarsDisplay = trade.type === 'sell' ? `$${pnlDollars.toFixed(2)}` : '-';
+        const cumPctDisplay = trade.type === 'sell' ? `${cumulativePnLPct.toFixed(2)}%` : '-';
+        const cumDollarsDisplay = trade.type === 'sell' ? `$${cumulativePnLDollars.toFixed(2)}` : '-';
 
         row.innerHTML = `
             <td>${date.toLocaleString()}</td>
             <td class="${typeClass}">${trade.type.toUpperCase()}</td>
             <td>$${trade.price.toFixed(2)}</td>
-            <td>${trade.quantity || '-'}</td>
-            <td class="${pnlClass}">${trade.pnl ? trade.pnl.toFixed(2) + '%' : '-'}</td>
-            <td>${cumulativePnL.toFixed(2)}%</td>
+            <td>${trade.quantity || trade.size || '-'}</td>
+            <td class="pnl-col-pct ${pnlPctClass}">${pnlPctDisplay}</td>
+            <td class="pnl-col-dollars ${pnlDollarsClass}">${pnlDollarsDisplay}</td>
+            <td class="pnl-col-pct ${cumPctClass}">${cumPctDisplay}</td>
+            <td class="pnl-col-dollars ${cumDollarsClass}">${cumDollarsDisplay}</td>
             <td><small>${trade.reason || '-'}</small></td>
         `;
 
         tbody.appendChild(row);
+    });
+
+    // Apply current display mode if the selector exists
+    if (document.getElementById('pnlDisplayMode')) {
+        updatePnLDisplay();
+    }
+}
+
+/**
+ * Toggle P&L column visibility based on selected display mode
+ */
+function updatePnLDisplay() {
+    const modeSelect = document.getElementById('pnlDisplayMode');
+    if (!modeSelect) return;
+
+    const mode = modeSelect.value;
+    const pctCols = document.querySelectorAll('.pnl-col-pct');
+    const dollarCols = document.querySelectorAll('.pnl-col-dollars');
+
+    pctCols.forEach(col => {
+        col.style.display = (mode === 'percent' || mode === 'both') ? '' : 'none';
+    });
+
+    dollarCols.forEach(col => {
+        col.style.display = (mode === 'dollars' || mode === 'both') ? '' : 'none';
     });
 }
 
