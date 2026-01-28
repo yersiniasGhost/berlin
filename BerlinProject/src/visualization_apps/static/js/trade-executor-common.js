@@ -5,22 +5,51 @@
 
 /**
  * Toggle take profit input visibility based on selected type
+ * Shows/hides: percentage input, dollar input, position size, rise per share calculation
  */
 function toggleTakeProfitInputs() {
     const takeProfitType = document.getElementById('takeProfitType');
     const pctContainer = document.getElementById('takeProfitPctContainer');
     const dollarsContainer = document.getElementById('takeProfitDollarsContainer');
+    const positionSizeContainer = document.getElementById('positionSizeContainer');
+    const risePerShareContainer = document.getElementById('risePerShareContainer');
 
     if (!takeProfitType || !pctContainer || !dollarsContainer) {
         return; // Elements not present on this page
     }
 
-    if (takeProfitType.value === 'percent') {
-        pctContainer.style.display = '';
-        dollarsContainer.style.display = 'none';
-    } else {
+    const isDollarMode = takeProfitType.value === 'dollars';
+
+    if (isDollarMode) {
         pctContainer.style.display = 'none';
         dollarsContainer.style.display = '';
+        if (positionSizeContainer) positionSizeContainer.style.display = '';
+        if (risePerShareContainer) risePerShareContainer.style.display = '';
+        updateRisePerShare();
+    } else {
+        pctContainer.style.display = '';
+        dollarsContainer.style.display = 'none';
+        if (positionSizeContainer) positionSizeContainer.style.display = 'none';
+        if (risePerShareContainer) risePerShareContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Calculate and display the required rise per share for dollar-based take profit
+ * Formula: rise_per_share = take_profit_dollars / position_size
+ */
+function updateRisePerShare() {
+    const takeProfitDollars = parseFloat(document.getElementById('takeProfitDollars')?.value) || 0;
+    const positionSize = parseFloat(document.getElementById('positionSize')?.value) || 0;
+    const risePerShareInput = document.getElementById('risePerShare');
+
+    if (!risePerShareInput) return;
+
+    if (positionSize > 0 && takeProfitDollars > 0) {
+        const risePerShare = takeProfitDollars / positionSize;
+        risePerShareInput.value = risePerShare.toFixed(4);
+    } else {
+        risePerShareInput.value = '--';
     }
 }
 
@@ -50,7 +79,7 @@ function loadTradeExecutorForm(tradeExecutor) {
     if (takeProfitDollars) {
         takeProfitDollars.value = tradeExecutor.take_profit_dollars || 0;
     }
-    toggleTakeProfitInputs();
+    toggleTakeProfitInputs();  // Also triggers updateRisePerShare() for dollar mode
 
     // Trailing stop settings
     const trailingStopEnabled = document.getElementById('trailingStopEnabled');

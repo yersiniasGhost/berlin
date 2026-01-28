@@ -13,14 +13,10 @@
 {% set show_conditions = show_conditions | default(true) %}
 {% set input_style = input_style | default("max-width: 200px;") %}
 
-<!-- Position Settings -->
+<!-- Position Settings (Stop Loss only - Position Size moved to Take Profit for dollar mode) -->
 <div class="{{ section_class }}">
     <h6>Position Settings</h6>
     <div class="row g-3">
-        <div class="col-md-4">
-            <label for="positionSize" class="form-label">Position Size</label>
-            <input type="number" class="form-control" id="positionSize" step="0.01" style="{{ input_style }}">
-        </div>
         <div class="col-md-4">
             <label for="stopLoss" class="form-label">Stop Loss %</label>
             <input type="number" class="form-control" id="stopLoss" step="0.001" style="{{ input_style }}">
@@ -45,8 +41,22 @@
         </div>
         <div class="col-md-4" id="takeProfitDollarsContainer" style="display: none;">
             <label for="takeProfitDollars" class="form-label">Take Profit $</label>
-            <input type="number" class="form-control" id="takeProfitDollars" step="0.01" placeholder="e.g., 50.00" style="{{ input_style }}">
+            <input type="number" class="form-control" id="takeProfitDollars" step="0.01" placeholder="e.g., 50.00" style="{{ input_style }}" oninput="updateRisePerShare()">
             <small class="form-text text-muted">Dollar profit target per trade</small>
+        </div>
+        <!-- Position Size (shown only in dollar mode) -->
+        <div class="col-md-4" id="positionSizeContainer" style="display: none;">
+            <label for="positionSize" class="form-label">Position Size (shares)</label>
+            <input type="number" class="form-control" id="positionSize" step="1" style="{{ input_style }}" oninput="updateRisePerShare()">
+        </div>
+        <!-- Rise Per Share calculation (shown only in dollar mode) -->
+        <div class="col-md-4" id="risePerShareContainer" style="display: none;">
+            <label class="form-label">Required Rise/Share</label>
+            <div class="input-group" style="{{ input_style }}">
+                <span class="input-group-text">$</span>
+                <input type="text" class="form-control" id="risePerShare" readonly style="background-color: #e9ecef;">
+            </div>
+            <small class="form-text text-muted">Price increase needed per share</small>
         </div>
     </div>
 </div>
