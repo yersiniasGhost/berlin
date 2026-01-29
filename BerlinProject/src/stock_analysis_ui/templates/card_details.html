@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
     <!-- Shared indicator charts module -->
     <script src="{{ url_for('static', filename='js/indicator-charts.js') }}"></script>
+    <!-- Shared timezone utilities -->
+    <script src="{{ url_for('static', filename='js/timezone-utils.js') }}"></script>
     <style>
         * {
             margin: 0;
@@ -563,6 +565,45 @@
         .chart-controls {
             display: flex;
             gap: 0.5rem;
+            align-items: center;
+        }
+
+        .timezone-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: 1rem;
+            padding-left: 1rem;
+            border-left: 1px solid #30363d;
+        }
+
+        .timezone-label {
+            color: #7d8590;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .timezone-select {
+            padding: 0.4rem 0.75rem;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .timezone-select:hover {
+            background: #30363d;
+            border-color: #484f58;
+        }
+
+        .timezone-select:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
         }
 
         .chart-btn {
@@ -758,6 +799,14 @@
                                 <button class="chart-btn" onclick="loadCandlestickData('5m')" data-timeframe="5m">5M</button>
                                 <button class="chart-btn" onclick="loadCandlestickData('15m')" data-timeframe="15m">15M</button>
                                 <button class="chart-btn" onclick="loadCandlestickData('1h')" data-timeframe="1h">1H</button>
+                                <div class="timezone-selector">
+                                    <span class="timezone-label">TZ</span>
+                                    <select id="timezoneSelect" class="timezone-select" onchange="handleTimezoneChange(this.value)">
+                                        <option value="America/New_York">ET</option>
+                                        <option value="America/Los_Angeles">PT</option>
+                                        <option value="UTC">UTC</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div id="candlestickChart" style="height: 500px; width: 100%;"></div>
@@ -805,6 +854,27 @@
         let candlestickData = [];
         let currentTimeframe = '1m';
 
+        // Page-specific timezone change handler (wraps shared utility)
+        function handleTimezoneChange(timezone) {
+            // Call shared handler (updates Highcharts, localStorage, etc.)
+            onTimezoneChange(timezone);
+
+            // Redraw page-specific charts
+            if (candlestickChart) {
+                candlestickChart.redraw();
+            }
+            allCharts.forEach(chart => {
+                if (chart && chart.redraw) {
+                    chart.redraw();
+                }
+            });
+
+            // Re-render trade history with new timezone
+            if (chartData && chartData.trades) {
+                updateTradesSection(chartData.trades);
+            }
+        }
+
         // Chart data storage
         let chartData = null;
         let indicatorCharts = {};
@@ -819,6 +889,10 @@
         // Connect to the card's data stream
         socket.on('connect', function() {
             console.log('Connected to server');
+
+            // Initialize timezone settings before loading data
+            initializeTimezone();
+
             if (cardId) {
                 loadCardDetails(cardId);
             }
@@ -863,11 +937,11 @@
                 priceElement.className = data.price >= 0 ? 'live-price price-positive' : 'live-price price-negative';
             }
 
-            // Update timestamp
+            // Update timestamp using selected timezone (from shared timezone-utils.js)
             const timestampElement = document.getElementById('priceTimestamp');
             if (timestampElement) {
                 const now = new Date();
-                timestampElement.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+                timestampElement.textContent = `Last updated: ${formatTimeInTimezone(now, window.currentTimezone)}`;
             }
         }
 
@@ -1469,8 +1543,9 @@
         }
 
         function createTradeRow(pair) {
-            const enterTime = new Date(pair.enterTime).toLocaleTimeString();
-            const exitTime = pair.exitTime ? new Date(pair.exitTime).toLocaleTimeString() : '--';
+            // Format times using selected timezone (from shared timezone-utils.js)
+            const enterTime = formatTimeInTimezone(pair.enterTime, window.currentTimezone);
+            const exitTime = pair.exitTime ? formatTimeInTimezone(pair.exitTime, window.currentTimezone) : '--';
 
             // Format prices
             const enterPrice = `${pair.enterPrice.toFixed(2)}`;

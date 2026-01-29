@@ -24,7 +24,10 @@
                     <div class="row g-3">
                         <div class="col-12">
                             <label for="dataTicker" class="form-label">Ticker Symbol</label>
-                            <input type="text" class="form-control" id="dataTicker" placeholder="e.g., NVDA" value="NVDA">
+                            <select class="form-select data-ticker-select" id="dataTicker" style="width: 120px;">
+                                <option value="">Loading...</option>
+                            </select>
+                            <small id="dataTickerDateRange" class="form-text text-muted d-block mt-1"></small>
                         </div>
                         <div class="col-6">
                             <label for="dataStartDate" class="form-label">Start Date</label>

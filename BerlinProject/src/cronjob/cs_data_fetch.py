@@ -12,6 +12,7 @@ import base64
 from urllib.parse import urlparse, parse_qs
 
 from mlf_utils.log_manager import LogManager
+from mlf_utils.ticker_config import get_tracked_tickers, TRACKED_INTERVALS
 
 # Initialize LogManager with log file (must be called first in main apps)
 LogManager(log_file='schwab_weekly_fetch.log')
@@ -582,16 +583,11 @@ def main():
                 logger.error("❌ Authentication failed")
                 sys.exit(1)
 
-        # Same tickers as your Yahoo Finance script
-        tickers = [
-            'AAPL', 'ADBE', 'ADP', 'ADSK', 'AMAT', 'AMD', 'AMGN', 'AMZN', 'ASML', 'AVGO',
-            'BKNG', 'CHTR', 'CMCSA', 'COST', 'CSCO', 'GILD', 'GOOG', 'GOOGL', 'ILMN', 'INTC',
-            'INTU', 'ISRG', 'LRCX', 'MDLZ', 'MELI', 'META', 'MRNA', 'MSFT', 'NFLX', 'NVDA',
-            'PEP', 'PLTR', 'QCOM', 'REGN', 'SBUX', 'TMUS', 'TSLA', 'TXN', 'VRTX'
-        ]
+        # Use centralized ticker configuration
+        tickers = get_tracked_tickers()
 
-        # Same intervals as your Yahoo Finance script
-        intervals = [1, 5]
+        # Use centralized interval configuration
+        intervals = TRACKED_INTERVALS
 
         # Run the update (get last 5 trading days)
         results = fetcher.run_schwab_weekly_update(tickers, intervals, days_back=5)

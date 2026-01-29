@@ -185,7 +185,7 @@ class Portfolio:
                     'action': trade.reason.value,
                     'price': trade.price,
                     'size': trade.size,
-                    'timestamp': datetime.fromtimestamp(trade.time / 1000).isoformat()
+                    'timestamp': trade.time  # Send raw milliseconds, frontend handles timezone display
                 }
                 for trade in self.trade_history[-10:]  # Last 10 trades
             ]

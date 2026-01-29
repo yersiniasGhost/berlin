@@ -18,22 +18,10 @@ from typing import List, Dict, Any, Optional, Tuple
 
 from mlf_utils.log_manager import LogManager
 from mlf_utils.timezone_utils import now_et, ET, utc_from_timestamp_ms, to_et, format_et
+from mlf_utils.ticker_config import get_tracked_tickers
 
-# Same ticker list as original script
-MAJOR_STOCKS = [
-    # Mega-cap Tech
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
-    # Other Major Tech
-    "AVGO", "ORCL", "ADBE", "CRM", "AMD", "INTC", "QCOM", "TXN",
-    # Finance
-    "BRK.B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS",
-    # Consumer/Retail
-    "WMT", "HD", "PG", "KO", "PEP", "MCD", "NKE", "DIS",
-    # Healthcare/Pharma
-    "UNH", "JNJ", "LLY", "PFE", "ABBV", "MRK",
-    # Hot/Trending Stocks
-    "PLTR", "SOFI", "RIVN", "LCID"
-]
+# Use centralized ticker configuration
+MAJOR_STOCKS = get_tracked_tickers()
 
 # More aggressive rate limiting for weekly updates (since less data)
 API_CALLS_PER_MINUTE = 10  # More aggressive than original 5

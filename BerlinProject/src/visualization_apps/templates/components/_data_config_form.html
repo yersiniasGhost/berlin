@@ -1,0 +1,42 @@
+{#
+Shared Data Configuration Form Component
+Used by: Optimizer, Replay, Indicator tools
+
+Parameters (set before including):
+- data_config_id_prefix: Optional prefix for element IDs (default: 'data')
+- show_extended_hours: Whether to show extended hours checkbox (default: true)
+- compact_layout: Use compact 4-column layout (default: false)
+#}
+
+{% set prefix = data_config_id_prefix | default('data') %}
+{% set show_extended = show_extended_hours | default(true) %}
+{% set compact = compact_layout | default(false) %}
+
+<div class="row g-3">
+    <div class="col-md-{{ '3' if compact else '4' }}">
+        <label for="{{ prefix }}Ticker" class="form-label">Ticker Symbol</label>
+        <select class="form-select data-ticker-select" id="{{ prefix }}Ticker" style="width: 120px;">
+            <option value="">Loading...</option>
+        </select>
+        <small id="{{ prefix }}TickerDateRange" class="form-text text-muted d-block mt-1"></small>
+    </div>
+    <div class="col-md-{{ '3' if compact else '4' }}">
+        <label for="{{ prefix }}StartDate" class="form-label">Start Date</label>
+        <input type="date" class="form-control" id="{{ prefix }}StartDate" style="max-width: 200px;">
+    </div>
+    <div class="col-md-{{ '3' if compact else '4' }}">
+        <label for="{{ prefix }}EndDate" class="form-label">End Date</label>
+        <input type="date" class="form-control" id="{{ prefix }}EndDate" style="max-width: 200px;">
+    </div>
+    {% if show_extended %}
+    <div class="col-md-{{ '3' if compact else '4' }}">
+        <div class="form-check mt-4">
+            <input class="form-check-input" type="checkbox" id="{{ prefix }}ExtendedHours" checked>
+            <label class="form-check-label" for="{{ prefix }}ExtendedHours">
+                Include Extended Hours
+            </label>
+            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET</small>
+        </div>
+    </div>
+    {% endif %}
+</div>

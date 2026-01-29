@@ -108,29 +108,8 @@
                         <div class="tab-pane fade" id="data-config-pane" role="tabpanel">
                             <div class="mb-3">
                                 <h6>Data Configuration</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="dataTicker" class="form-label">Ticker Symbol</label>
-                                        <input type="text" class="form-control" id="dataTicker" placeholder="e.g., NVDA" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="dataStartDate" class="form-label">Start Date</label>
-                                        <input type="date" class="form-control" id="dataStartDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="dataEndDate" class="form-label">End Date</label>
-                                        <input type="date" class="form-control" id="dataEndDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check mt-4">
-                                            <input class="form-check-input" type="checkbox" id="dataExtendedHours" checked>
-                                            <label class="form-check-label" for="dataExtendedHours">
-                                                Include Extended Hours
-                                            </label>
-                                            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET (regular market hours)</small>
-                                        </div>
-                                    </div>
-                                </div>
+                                {% set data_config_id_prefix = 'data' %}
+                                {% include 'components/_data_config_form.html' %}
                             </div>
                         </div>
 
@@ -139,29 +118,8 @@
                             <div class="mb-3">
                                 <h6>Test Data Configuration</h6>
                                 <p class="text-muted small">Configure the test dataset for evaluating elite individuals after each epoch</p>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label for="testDataTicker" class="form-label">Ticker Symbol</label>
-                                        <input type="text" class="form-control" id="testDataTicker" placeholder="e.g., NVDA" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="testDataStartDate" class="form-label">Start Date</label>
-                                        <input type="date" class="form-control" id="testDataStartDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="testDataEndDate" class="form-label">End Date</label>
-                                        <input type="date" class="form-control" id="testDataEndDate" style="max-width: 200px;">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check mt-4">
-                                            <input class="form-check-input" type="checkbox" id="testDataExtendedHours" checked>
-                                            <label class="form-check-label" for="testDataExtendedHours">
-                                                Include Extended Hours
-                                            </label>
-                                            <small class="form-text text-muted d-block">When unchecked, only uses data from 9:30 AM - 4:00 PM ET (regular market hours)</small>
-                                        </div>
-                                    </div>
-                                </div>
+                                {% set data_config_id_prefix = 'testData' %}
+                                {% include 'components/_data_config_form.html' %}
                             </div>
                         </div>
 

@@ -8,6 +8,7 @@ import sys
 import time
 
 from mlf_utils.timezone_utils import now_et, ET, MARKET_OPEN_SECONDS, MARKET_CLOSE_SECONDS
+from mlf_utils.ticker_config import get_tracked_tickers, TRACKED_INTERVALS
 
 
 class DataFetch:
@@ -129,14 +130,11 @@ def main() -> None:
     # Initialize loader
     loader: DataFetch = DataFetch(collection)
 
-    # List of tickers to process
-    tickers: List[str] = ['AAPL', 'ADBE', 'ADP', 'ADSK', 'AMAT', 'AMD', 'AMGN', 'AMZN', 'ASML', 'AVGO',
-                         'BKNG', 'CHTR', 'CMCSA', 'COST', 'CSCO', 'GILD', 'GOOG', 'GOOGL', 'ILMN', 'INTC',
-                         'INTU', 'ISRG', 'LRCX', 'MDLZ', 'MELI', 'META', 'MRNA', 'MSFT', 'NFLX', 'NVDA',
-                         'PEP', 'PLTR', 'QCOM', 'REGN', 'SBUX', 'TMUS', 'TSLA', 'TXN', 'VRTX']
+    # Use centralized ticker configuration
+    tickers: List[str] = get_tracked_tickers()
 
-    # Intervals to process
-    intervals: List[int] = [1, 5]
+    # Use centralized interval configuration
+    intervals: List[int] = TRACKED_INTERVALS
 
     # Process each ticker and interval
     for ticker in tickers:

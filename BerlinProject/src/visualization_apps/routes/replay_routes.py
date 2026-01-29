@@ -23,6 +23,7 @@ from models.monitor_configuration import MonitorConfiguration, TradeExecutorConf
 # Import mlf_utils
 from mlf_utils import sanitize_nan_values, FileUploadHandler, ConfigLoader
 from mlf_utils.log_manager import LogManager
+from mlf_utils.ticker_config import get_tracked_tickers, get_default_ticker
 
 # Remove new indicator system imports that are causing backend conflicts
 # from indicator_triggers.indicator_base import IndicatorRegistry
@@ -255,7 +256,6 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
 
         logger.info(f"📋 Running backtest for: {test_name}")
         logger.info(f"📊 Data: {data_config['ticker']} from {data_config['start_date']} to {data_config['end_date']}")
-        logger.info(f"   Data config path: {data_config_path}")
 
         # Create monitor configuration object directly using the old working method
         from models.monitor_configuration import MonitorConfiguration
@@ -949,6 +949,89 @@ def get_indicator_schemas():
         return jsonify({
             'success': False,
             'error': str(e)
+        })
+
+
+@replay_bp.route('/api/get_available_tickers', methods=['GET'])
+def get_available_tickers():
+    """Get list of tracked tickers with their available date ranges from MongoDB"""
+    try:
+        from mlf_utils.env_vars import EnvVars
+        from pymongo import MongoClient
+
+        env = EnvVars()
+        client = MongoClient(env.mongo_host, env.mongo_port, serverSelectionTimeoutMS=5000)
+        db = client[env.mongo_database]
+        collection = db[env.mongo_collection]
+
+        tracked_tickers = get_tracked_tickers()
+        ticker_info = []
+
+        for ticker in tracked_tickers:
+            # Find all documents for this ticker and get min/max dates
+            docs = list(collection.find({'ticker': ticker}, {'year': 1, 'month': 1, 'data': 1}))
+
+            if docs:
+                min_date = None
+                max_date = None
+
+                for doc in docs:
+                    year = doc['year']
+                    month = doc['month']
+                    data_dict = doc.get('data', {})
+
+                    if data_dict:
+                        days = [int(d) for d in data_dict.keys()]
+                        if days:
+                            doc_min = datetime(year, month, min(days))
+                            doc_max = datetime(year, month, max(days))
+
+                            if min_date is None or doc_min < min_date:
+                                min_date = doc_min
+                            if max_date is None or doc_max > max_date:
+                                max_date = doc_max
+
+                if min_date and max_date:
+                    ticker_info.append({
+                        'ticker': ticker,
+                        'start_date': min_date.strftime('%Y-%m-%d'),
+                        'end_date': max_date.strftime('%Y-%m-%d'),
+                        'has_data': True
+                    })
+                else:
+                    ticker_info.append({
+                        'ticker': ticker,
+                        'start_date': None,
+                        'end_date': None,
+                        'has_data': False
+                    })
+            else:
+                ticker_info.append({
+                    'ticker': ticker,
+                    'start_date': None,
+                    'end_date': None,
+                    'has_data': False
+                })
+
+        client.close()
+
+        # Sort by ticker name, putting tickers with data first
+        ticker_info.sort(key=lambda x: (not x['has_data'], x['ticker']))
+
+        return jsonify({
+            'success': True,
+            'tickers': ticker_info,
+            'default_ticker': get_default_ticker()
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting available tickers: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'tickers': []
         })
 
 

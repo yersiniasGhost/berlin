@@ -11,6 +11,7 @@ let indicatorClasses = {};
 
 // Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
 // Note: DEFAULT_DATA_CONFIG is defined in config-utils.js (must be loaded first)
+// Note: Ticker dropdown is handled by data-config-utils.js (loaded in base.html)
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -29,6 +30,7 @@ function setupEventListeners() {
     if (addBarBtn) {
         addBarBtn.addEventListener('click', addBar);
     }
+    // Note: Ticker dropdown change handler is set up by data-config-utils.js
 }
 
 // Note: toggleTakeProfitInputs() is now in trade-executor-common.js
@@ -145,7 +147,18 @@ function renderMonitorConfiguration() {
 function renderDataConfiguration() {
     if (!dataConfig) return;
 
-    document.getElementById('dataTicker').value = dataConfig.ticker || '';
+    const tickerSelect = document.getElementById('dataTicker');
+    const ticker = dataConfig.ticker || '';
+
+    // Set the ticker dropdown value (works for both input and select)
+    if (tickerSelect) {
+        tickerSelect.value = ticker;
+        // Update date range display using shared utility
+        if (typeof updateTickerDateRange === 'function') {
+            updateTickerDateRange('dataTicker', 'dataTickerDateRange');
+        }
+    }
+
     document.getElementById('dataStartDate').value = dataConfig.start_date || '';
     document.getElementById('dataEndDate').value = dataConfig.end_date || '';
     // Default to checked (true) if not specified for backward compatibility

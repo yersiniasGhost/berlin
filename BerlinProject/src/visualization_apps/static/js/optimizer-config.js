@@ -470,6 +470,11 @@ function renderDataConfiguration() {
     document.getElementById('dataEndDate').value = dataConfig.end_date || '';
     // Default to checked (true) if not specified for backward compatibility
     document.getElementById('dataExtendedHours').checked = dataConfig.include_extended_hours !== undefined ? dataConfig.include_extended_hours : true;
+
+    // Update date range display using shared utility
+    if (typeof updateTickerDateRange === 'function') {
+        updateTickerDateRange('dataTicker', 'dataTickerDateRange');
+    }
 }
 
 function renderGAConfiguration() {
@@ -1663,6 +1668,11 @@ function renderTestDataConfiguration() {
     document.getElementById('testDataStartDate').value = testDataConfig.start_date || '';
     document.getElementById('testDataEndDate').value = testDataConfig.end_date || '';
     document.getElementById('testDataExtendedHours').checked = testDataConfig.include_extended_hours !== undefined ? testDataConfig.include_extended_hours : true;
+
+    // Update date range display using shared utility
+    if (typeof updateTickerDateRange === 'function') {
+        updateTickerDateRange('testDataTicker', 'testDataTickerDateRange');
+    }
 }
 
 function collectTestDataConfigData() {
