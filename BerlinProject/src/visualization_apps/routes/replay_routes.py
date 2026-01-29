@@ -255,7 +255,8 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
             test_name = monitor_data.get('name', 'Monitor Visualization')
 
         logger.info(f"📋 Running backtest for: {test_name}")
-        logger.info(f"📊 Data: {data_config['ticker']} from {data_config['start_date']} to {data_config['end_date']}")
+        hours_mode = "including extended hours" if data_config.get('include_extended_hours', True) else "regular hours only"
+        logger.info(f"📊 Data: {data_config['ticker']} from {data_config['start_date']} to {data_config['end_date']} ({hours_mode})")
 
         # Create monitor configuration object directly using the old working method
         from models.monitor_configuration import MonitorConfiguration
@@ -279,12 +280,14 @@ def run_monitor_backtest(monitor_config_path: str, data_config_path: str):
         )
 
         # Load historical data using MongoDB
+        include_extended_hours = data_config.get('include_extended_hours', True)
         mongo_source = MongoDBConnect()
         mongo_source.process_historical_data(
             data_config['ticker'],
             data_config['start_date'],
             data_config['end_date'],
-            monitor_obj
+            monitor_obj,
+            include_extended_hours
         )
 
         # Create backtest streamer manually

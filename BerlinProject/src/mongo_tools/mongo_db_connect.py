@@ -3,6 +3,7 @@ from typing import List, Dict, Optional
 from pymongo import MongoClient
 
 from models.tick_data import TickData
+from mlf_utils.timezone_utils import assume_et
 from models.monitor_configuration import MonitorConfiguration
 from candle_aggregator.candle_aggregator import CandleAggregator
 from candle_aggregator.candle_aggregator_normal import CANormal
@@ -133,12 +134,14 @@ class MongoDBConnect:
                     for timestamp_str, ohlc in day_data.items():
                         timestamp_seconds = int(timestamp_str)
 
-                        # Convert timestamp
+                        # Convert timestamp (stored as seconds-since-midnight in ET)
                         hours = timestamp_seconds // 3600
                         minutes = (timestamp_seconds % 3600) // 60
                         seconds = timestamp_seconds % 60
 
-                        dt = datetime(year, month, day, hours, minutes, seconds)
+                        # Create ET-aware datetime since MongoDB stores market time (Eastern)
+                        naive_dt = datetime(year, month, day, hours, minutes, seconds)
+                        dt = assume_et(naive_dt)
 
                         if start.date() <= dt.date() <= end.date():
                             # Debug: Skip raw OHLC logging for performance
