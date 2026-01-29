@@ -659,7 +659,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Update strategy overview
         document.getElementById('strategyName').textContent = data.monitor_config?.name || 'Unknown';
-        document.getElementById('dataTicker').textContent = data.data_config?.ticker || 'Unknown';
+        document.getElementById('displayTicker').textContent = data.data_config?.ticker || 'Unknown';
         document.getElementById('dateRange').textContent = `${data.data_config?.start_date || 'Unknown'} to ${data.data_config?.end_date || 'Unknown'}`;
         document.getElementById('totalTrades').textContent = data.trades?.length || 0;
 
