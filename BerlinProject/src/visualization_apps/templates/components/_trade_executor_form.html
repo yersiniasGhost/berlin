@@ -48,6 +48,33 @@
             <small class="form-text text-muted">Price increase needed per share</small>
         </div>
     </div>
+    <!-- Estimated Price Section (shown only in dollar mode) -->
+    <div class="row g-3 mt-2" id="estimatedPriceSection" style="display: none;">
+        <div class="col-md-4">
+            <label for="estimatedPrice" class="form-label">Estimated Entry Price</label>
+            <div class="input-group" style="{{ input_style }}">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control" id="estimatedPrice" step="0.01" placeholder="e.g., 150.00" oninput="updateProfitCalculations()">
+            </div>
+            <small class="form-text text-muted">Expected stock price at entry</small>
+        </div>
+        <div class="col-md-4" id="positionCostContainer">
+            <label class="form-label">Position Cost</label>
+            <div class="input-group" style="{{ input_style }}">
+                <span class="input-group-text">$</span>
+                <input type="text" class="form-control" id="positionCost" readonly style="background-color: #e9ecef;">
+            </div>
+            <small class="form-text text-muted">Total cost to open position</small>
+        </div>
+        <div class="col-md-4" id="profitPercentContainer">
+            <label class="form-label">Profit %</label>
+            <div class="input-group" style="{{ input_style }}">
+                <input type="text" class="form-control" id="profitPercent" readonly style="background-color: #e9ecef;">
+                <span class="input-group-text">%</span>
+            </div>
+            <small class="form-text text-muted">ROI on profit target</small>
+        </div>
+    </div>
 </div>
 
 <!-- Stop Loss -->

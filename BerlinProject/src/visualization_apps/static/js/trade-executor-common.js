@@ -5,7 +5,8 @@
 
 /**
  * Toggle take profit input visibility based on selected type
- * Shows/hides: percentage input, dollar input, position size, rise per share calculation
+ * Shows/hides: percentage input, dollar input, position size, rise per share calculation,
+ * and the estimated price section with position cost and profit percentage
  */
 function toggleTakeProfitInputs() {
     const takeProfitType = document.getElementById('takeProfitType');
@@ -13,6 +14,7 @@ function toggleTakeProfitInputs() {
     const dollarsContainer = document.getElementById('takeProfitDollarsContainer');
     const positionSizeContainer = document.getElementById('positionSizeContainer');
     const risePerShareContainer = document.getElementById('risePerShareContainer');
+    const estimatedPriceSection = document.getElementById('estimatedPriceSection');
 
     if (!takeProfitType || !pctContainer || !dollarsContainer) {
         return; // Elements not present on this page
@@ -25,12 +27,15 @@ function toggleTakeProfitInputs() {
         dollarsContainer.style.display = '';
         if (positionSizeContainer) positionSizeContainer.style.display = '';
         if (risePerShareContainer) risePerShareContainer.style.display = '';
+        if (estimatedPriceSection) estimatedPriceSection.style.display = '';
         updateRisePerShare();
+        updateProfitCalculations();
     } else {
         pctContainer.style.display = '';
         dollarsContainer.style.display = 'none';
         if (positionSizeContainer) positionSizeContainer.style.display = 'none';
         if (risePerShareContainer) risePerShareContainer.style.display = 'none';
+        if (estimatedPriceSection) estimatedPriceSection.style.display = 'none';
     }
 }
 
@@ -50,6 +55,46 @@ function updateRisePerShare() {
         risePerShareInput.value = risePerShare.toFixed(4);
     } else {
         risePerShareInput.value = '--';
+    }
+
+    // Also update profit calculations when position size or dollars change
+    updateProfitCalculations();
+}
+
+/**
+ * Calculate and display position cost and profit percentage based on estimated entry price
+ * Formulas:
+ *   position_cost = estimated_price * position_size
+ *   profit_percent = (take_profit_dollars / position_cost) * 100
+ */
+function updateProfitCalculations() {
+    const estimatedPrice = parseFloat(document.getElementById('estimatedPrice')?.value) || 0;
+    const positionSize = parseFloat(document.getElementById('positionSize')?.value) || 0;
+    const takeProfitDollars = parseFloat(document.getElementById('takeProfitDollars')?.value) || 0;
+
+    const positionCostInput = document.getElementById('positionCost');
+    const profitPercentInput = document.getElementById('profitPercent');
+
+    if (!positionCostInput || !profitPercentInput) return;
+
+    if (estimatedPrice > 0 && positionSize > 0) {
+        // Calculate position cost
+        const positionCost = estimatedPrice * positionSize;
+        positionCostInput.value = positionCost.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        // Calculate profit percentage
+        if (takeProfitDollars > 0) {
+            const profitPercent = (takeProfitDollars / positionCost) * 100;
+            profitPercentInput.value = profitPercent.toFixed(2);
+        } else {
+            profitPercentInput.value = '--';
+        }
+    } else {
+        positionCostInput.value = '--';
+        profitPercentInput.value = '--';
     }
 }
 
@@ -79,7 +124,14 @@ function loadTradeExecutorForm(tradeExecutor) {
     if (takeProfitDollars) {
         takeProfitDollars.value = tradeExecutor.take_profit_dollars || 0;
     }
-    toggleTakeProfitInputs();  // Also triggers updateRisePerShare() for dollar mode
+
+    // Estimated price (optional, for profit calculation display)
+    const estimatedPrice = document.getElementById('estimatedPrice');
+    if (estimatedPrice && tradeExecutor.estimated_price) {
+        estimatedPrice.value = tradeExecutor.estimated_price;
+    }
+
+    toggleTakeProfitInputs();  // Also triggers updateRisePerShare() and updateProfitCalculations() for dollar mode
 
     // Trailing stop settings
     const trailingStopEnabled = document.getElementById('trailingStopEnabled');
@@ -100,7 +152,7 @@ function loadTradeExecutorForm(tradeExecutor) {
  * @returns {Object} Trade executor configuration object
  */
 function collectTradeExecutorForm() {
-    return {
+    const config = {
         default_position_size: parseFloat(document.getElementById('positionSize')?.value) || 100,
         stop_loss_pct: parseFloat(document.getElementById('stopLoss')?.value) || 0.02,
         take_profit_pct: parseFloat(document.getElementById('takeProfit')?.value) || 0.04,
@@ -111,4 +163,12 @@ function collectTradeExecutorForm() {
         trailing_stop_activation_pct: parseFloat(document.getElementById('trailingActivation')?.value) || 0.005,
         ignore_bear_signals: document.getElementById('ignoreBearSignals')?.checked || false
     };
+
+    // Include estimated price if provided (optional, for profit calculation reference)
+    const estimatedPrice = parseFloat(document.getElementById('estimatedPrice')?.value);
+    if (estimatedPrice > 0) {
+        config.estimated_price = estimatedPrice;
+    }
+
+    return config;
 }
