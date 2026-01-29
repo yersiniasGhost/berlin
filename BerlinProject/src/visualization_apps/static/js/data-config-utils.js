@@ -97,6 +97,24 @@ async function populateTickerDropdown(selectId, dateRangeId = null, defaultTicke
     if (dateRangeId) {
         tickerSelect.addEventListener('change', () => updateTickerDateRange(selectId, dateRangeId));
     }
+
+    // Add change listener for estimated price auto-population (primary data ticker only)
+    // Only the primary data config ticker (not test data) should update the estimated price
+    const isPrimaryDataTicker = selectId === 'dataTicker';
+    if (isPrimaryDataTicker) {
+        tickerSelect.addEventListener('change', () => {
+            const selectedTicker = tickerSelect.value;
+            if (selectedTicker) {
+                updateEstimatedPriceFromTicker(selectedTicker);
+            }
+        });
+
+        // Also fetch the initial estimated price for the default selected ticker
+        const initialTicker = tickerSelect.value;
+        if (initialTicker) {
+            updateEstimatedPriceFromTicker(initialTicker);
+        }
+    }
 }
 
 /**
@@ -139,6 +157,49 @@ function getTickerInfo(ticker) {
     const data = window.availableTickersCache;
     if (!data) return null;
     return data.tickers.find(t => t.ticker === ticker);
+}
+
+/**
+ * Fetch the last close price for a ticker from the database
+ * @param {string} ticker - The ticker symbol
+ * @returns {Promise<number|null>} - The last close price or null if not found
+ */
+async function fetchTickerLastClose(ticker) {
+    if (!ticker) return null;
+
+    try {
+        const response = await fetch(`/replay/api/get_ticker_last_close/${encodeURIComponent(ticker)}`);
+        const result = await response.json();
+
+        if (result.success && result.last_close !== null) {
+            console.log(`Last close for ${ticker}: $${result.last_close} (${result.date})`);
+            return result.last_close;
+        } else {
+            console.warn(`Could not fetch last close for ${ticker}: ${result.error || 'Unknown error'}`);
+            return null;
+        }
+    } catch (error) {
+        console.error(`Error fetching last close for ${ticker}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Update the estimated price field with the last close price for the selected ticker
+ * @param {string} ticker - The ticker symbol
+ */
+async function updateEstimatedPriceFromTicker(ticker) {
+    const estimatedPriceInput = document.getElementById('estimatedPrice');
+    if (!estimatedPriceInput) return;
+
+    const lastClose = await fetchTickerLastClose(ticker);
+    if (lastClose !== null) {
+        estimatedPriceInput.value = lastClose.toFixed(2);
+        // Trigger the profit calculations update
+        if (typeof updateProfitCalculations === 'function') {
+            updateProfitCalculations();
+        }
+    }
 }
 
 /**

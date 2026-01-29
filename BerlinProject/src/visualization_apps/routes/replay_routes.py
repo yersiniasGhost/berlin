@@ -1038,5 +1038,113 @@ def get_available_tickers():
         })
 
 
+@replay_bp.route('/api/get_ticker_last_close/<ticker>', methods=['GET'])
+def get_ticker_last_close(ticker: str):
+    """Get the last close price for a ticker from MongoDB.
+
+    This fetches the most recent tick data and returns the close price,
+    which can be used to auto-populate the Estimated Entry Price field.
+    """
+    try:
+        from mlf_utils.env_vars import EnvVars
+        from pymongo import MongoClient
+
+        env = EnvVars()
+        client = MongoClient(env.mongo_host, env.mongo_port, serverSelectionTimeoutMS=5000)
+        db = client[env.mongo_database]
+        collection = db[env.mongo_collection]
+
+        # Find the most recent document for this ticker
+        # Documents are stored with year/month/data structure
+        docs = list(collection.find({'ticker': ticker.upper()}, {'year': 1, 'month': 1, 'data': 1}).sort([('year', -1), ('month', -1)]).limit(1))
+
+        if not docs:
+            client.close()
+            return jsonify({
+                'success': False,
+                'error': f'No data found for ticker {ticker}',
+                'last_close': None
+            })
+
+        # Get the most recent document
+        doc = docs[0]
+        year = doc['year']
+        month = doc['month']
+        data_dict = doc.get('data', {})
+
+        if not data_dict:
+            client.close()
+            return jsonify({
+                'success': False,
+                'error': f'No tick data found for ticker {ticker}',
+                'last_close': None
+            })
+
+        # Find the most recent day in this month
+        days = [int(d) for d in data_dict.keys()]
+        if not days:
+            client.close()
+            return jsonify({
+                'success': False,
+                'error': f'No daily data found for ticker {ticker}',
+                'last_close': None
+            })
+
+        max_day = max(days)
+        day_data = data_dict.get(str(max_day), {})
+
+        # Get the last tick of the day (highest timestamp)
+        if not day_data:
+            client.close()
+            return jsonify({
+                'success': False,
+                'error': f'No tick data for day {max_day}',
+                'last_close': None
+            })
+
+        # day_data is a dict with timestamp keys containing tick data
+        timestamps = list(day_data.keys())
+        if not timestamps:
+            client.close()
+            return jsonify({
+                'success': False,
+                'error': f'No timestamps found for day {max_day}',
+                'last_close': None
+            })
+
+        # Get the last timestamp (most recent tick)
+        last_timestamp = max(timestamps, key=lambda x: int(x) if x.isdigit() else 0)
+        last_tick = day_data.get(last_timestamp, {})
+
+        # Extract the close price from the tick data
+        last_close = last_tick.get('close') or last_tick.get('last_price') or last_tick.get('price')
+
+        client.close()
+
+        if last_close is None:
+            return jsonify({
+                'success': False,
+                'error': f'Could not extract close price from tick data',
+                'last_close': None
+            })
+
+        return jsonify({
+            'success': True,
+            'ticker': ticker.upper(),
+            'last_close': float(last_close),
+            'date': f'{year}-{month:02d}-{max_day:02d}'
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting last close for {ticker}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'last_close': None
+        })
+
+
 # Additional routes can be added here (download_config, etc.)
 # Following the same pattern as the original replay_visualization/app.py
