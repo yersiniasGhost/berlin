@@ -46,6 +46,9 @@ function setupEventListeners() {
 
     // Add bar button
     document.getElementById('addBarBtn').addEventListener('click', addBar);
+
+    // Send to Replay button
+    document.getElementById('sendToReplayBtn').addEventListener('click', sendToReplay);
 }
 
 
@@ -812,6 +815,40 @@ async function saveConfiguration() {
         currentConfig = config;
     } catch (error) {
         showAlert('Error saving configuration: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * Send the current configuration to the Replay page.
+ * Collects current form data, stores in sessionStorage, and opens Replay in a new tab.
+ * Uses shared getDefaultDataConfig() from config-utils.js for data configuration.
+ */
+function sendToReplay() {
+    try {
+        // Collect all data from the form
+        const config = collectConfigurationData();
+
+        // Use default data config with dynamic dates (from config-utils.js)
+        const defaultDataConfig = getDefaultDataConfig();
+
+        // Store config in sessionStorage for Replay tab
+        sessionStorage.setItem('replayMonitorConfig', JSON.stringify(config));
+        sessionStorage.setItem('replayDataConfig', JSON.stringify(defaultDataConfig));
+
+        // Open new Replay tab with unique name to ensure it always opens a new tab
+        const replayUrl = '/replay';
+        const uniqueTabName = `replay_tab_${Date.now()}`;
+        const replayWindow = window.open(replayUrl, uniqueTabName);
+
+        if (replayWindow) {
+            replayWindow.focus();
+            showAlert('Configuration sent to Replay tab', 'success');
+        } else {
+            showAlert('Please allow popups to open the Replay tab', 'warning');
+        }
+    } catch (error) {
+        console.error('Error sending to replay:', error);
+        showAlert('Error sending configuration to replay: ' + error.message, 'danger');
     }
 }
 
