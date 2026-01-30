@@ -548,6 +548,14 @@ function createBarCard(barName, barConfig) {
         `;
     }
 
+    // Generate trend indicators section using shared utility from config-utils.js
+    const trendIndicatorsHtml = generateTrendIndicatorsSectionHtml(
+        barConfig.trend_indicators,
+        barConfig.trend_logic || 'AND',
+        barConfig.trend_threshold || 0.0,
+        generateIndicatorNameOptions
+    );
+
     return `
         <div class="bar-card" data-bar-name="${barName}">
             <div class="bar-card-header">
@@ -556,33 +564,36 @@ function createBarCard(barName, barConfig) {
                     <i class="fas fa-trash me-1"></i>Remove
                 </button>
             </div>
-            <div class="row g-2 mb-2">
-                <div class="col-md-4">
-                    <label class="form-label">Bar Name</label>
-                    <input type="text" class="form-control" value="${barName}"
-                           data-bar-field="name" onchange="refreshConditionDropdowns()">
+            <div class="bar-card-body show">
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label">Bar Name</label>
+                        <input type="text" class="form-control" value="${barName}"
+                               data-bar-field="name" onchange="refreshConditionDropdowns()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" data-bar-field="type">
+                            <option value="bull" ${barConfig.type === 'bull' ? 'selected' : ''}>Bull</option>
+                            <option value="bear" ${barConfig.type === 'bear' ? 'selected' : ''}>Bear</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" value="${barConfig.description || ''}"
+                               data-bar-field="description">
+                    </div>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Type</label>
-                    <select class="form-select" data-bar-field="type">
-                        <option value="bull" ${barConfig.type === 'bull' ? 'selected' : ''}>Bull</option>
-                        <option value="bear" ${barConfig.type === 'bear' ? 'selected' : ''}>Bear</option>
-                    </select>
+                <div class="mt-2">
+                    <label class="form-label"><strong>Signal Indicators & Weights:</strong></label>
+                    <div class="bar-indicators-container">
+                        ${indicatorsHtml}
+                    </div>
+                    <button class="btn btn-sm btn-primary mt-2" onclick="addBarIndicator(this)">
+                        <i class="fas fa-plus me-2"></i>Add Indicator
+                    </button>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Description</label>
-                    <input type="text" class="form-control" value="${barConfig.description || ''}"
-                           data-bar-field="description">
-                </div>
-            </div>
-            <div class="mt-2">
-                <label class="form-label"><strong>Indicators & Weights:</strong></label>
-                <div class="bar-indicators-container">
-                    ${indicatorsHtml}
-                </div>
-                <button class="btn btn-sm btn-primary mt-2" onclick="addBarIndicator(this)">
-                    <i class="fas fa-plus me-2"></i>Add Indicator
-                </button>
+                ${trendIndicatorsHtml}
             </div>
         </div>
     `;
@@ -714,9 +725,9 @@ function updateCurrentConfigBars() {
 
         const barName = nameInput ? nameInput.value : card.dataset.barName;
 
-        // Get indicators and weights
+        // Collect signal indicators (excluding trend indicator rows)
         const indicators = {};
-        const indicatorRows = card.querySelectorAll('[data-bar-indicator-name]');
+        const indicatorRows = card.querySelectorAll('.bar-indicators-container [data-bar-indicator-name]');
         indicatorRows.forEach(row => {
             const indName = row.value;
             const weightInput = row.closest('.row').querySelector('[data-bar-indicator-weight]');
@@ -726,11 +737,15 @@ function updateCurrentConfigBars() {
             }
         });
 
-        bars[barName] = {
+        // Build bar config with basic fields and collect trend indicators from UI
+        // using shared utility from config-utils.js
+        const barConfig = buildBarConfigFromUI({
             type: typeSelect ? typeSelect.value : 'bull',
             description: descInput ? descInput.value : '',
             indicators: indicators
-        };
+        }, card);
+
+        bars[barName] = barConfig;
     });
 
     currentConfig.monitor.bars = bars;
@@ -895,9 +910,11 @@ function collectBars() {
         const descInput = card.querySelector('[data-bar-field="description"]');
 
         const barName = nameInput.value;
-        const indicators = {};
 
-        card.querySelectorAll('[data-bar-indicator-name]').forEach(input => {
+        // Collect signal indicators (excluding trend indicator rows)
+        const indicators = {};
+        const indicatorRows = card.querySelectorAll('.bar-indicators-container [data-bar-indicator-name]');
+        indicatorRows.forEach(input => {
             const indName = input.value;
             const weightInput = input.closest('.row').querySelector('[data-bar-indicator-weight]');
             if (indName && weightInput) {
@@ -905,11 +922,15 @@ function collectBars() {
             }
         });
 
-        bars[barName] = {
+        // Build bar config with basic fields and collect trend indicators from UI
+        // using shared utility from config-utils.js
+        const barConfig = buildBarConfigFromUI({
             type: typeSelect.value,
             description: descInput.value,
             indicators: indicators
-        };
+        }, card);
+
+        bars[barName] = barConfig;
     });
 
     return bars;

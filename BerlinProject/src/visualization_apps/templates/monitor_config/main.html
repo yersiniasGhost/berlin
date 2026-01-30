@@ -152,18 +152,53 @@
     .bar-card {
         border: 1px solid #dee2e6;
         border-radius: 0.5rem;
-        padding: 1rem;
+        padding: 0;
         margin-bottom: 1rem;
         background: #fff;
+        transition: box-shadow 0.3s;
+    }
+
+    .bar-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
     .bar-card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid #ecf0f1;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem 0.5rem 0 0;
+        cursor: pointer;
+    }
+
+    .bar-card-header:hover {
+        background: #e9ecef;
+    }
+
+    .bar-card-body {
+        padding: 1rem;
+        display: none;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .bar-card-body.show {
+        display: block;
+    }
+
+    /* Compact parameter inputs for bars */
+    .bar-card-body .form-control,
+    .bar-card-body .form-select {
+        font-size: 0.875rem;
+    }
+
+    .bar-card-body .form-label {
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .bar-card-body .row.g-2 {
+        row-gap: 0.5rem !important;
     }
 
     /* Compact parameter inputs */
