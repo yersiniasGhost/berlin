@@ -508,6 +508,7 @@
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/config-utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/trade-executor-common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/indicator-charts.js') }}"></script>
 <script src="{{ url_for('static', filename='js/replay-config.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -846,10 +847,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear any existing plot bands before adding new ones
         if (charts.candlestick.xAxis[0].plotLinesAndBands) {
             charts.candlestick.xAxis[0].plotLinesAndBands.slice().forEach(band => {
-                if (band.options.className && band.options.className.includes('trade-band')) {
+                if (band.options.className &&
+                    (band.options.className.includes('trade-band') || band.options.className.includes('market-hours-band'))) {
                     band.destroy();
                 }
             });
+        }
+
+        // Add market hours shading (extended hours get subtle background)
+        if (typeof IndicatorCharts !== 'undefined' && candlestickData && candlestickData.length > 0) {
+            IndicatorCharts.addMarketHoursBandsToChart(charts.candlestick, candlestickData);
         }
 
         // Add background shading bands for trades
@@ -2089,26 +2096,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Get data bounds from the first chart to clamp the zoom window
         const xAxis = firstChart.xAxis && firstChart.xAxis[0];
-        if (xAxis) {
-            const extremes = xAxis.getExtremes();
-            const dataMin = extremes.dataMin || min;
-            const dataMax = extremes.dataMax || max;
+        if (!xAxis) {
+            console.warn('⚠️ First chart has no xAxis, cannot zoom');
+            return;
+        }
 
-            // Clamp zoom window to data bounds
-            const clampedMin = Math.max(min, dataMin);
-            const clampedMax = Math.min(max, dataMax);
+        const extremes = xAxis.getExtremes();
+        const dataMin = extremes.dataMin || min;
+        const dataMax = extremes.dataMax || max;
 
-            // Ensure minimum range (at least 30 minutes)
-            const minRange = 30 * 60 * 1000;
-            if (clampedMax - clampedMin < minRange) {
-                const center = timestamp;
-                const halfMinRange = minRange / 2;
-                const adjustedMin = Math.max(center - halfMinRange, dataMin);
-                const adjustedMax = Math.min(center + halfMinRange, dataMax);
-                syncAllChartsFromDetails(adjustedMin, adjustedMax);
-            } else {
-                syncAllChartsFromDetails(clampedMin, clampedMax);
-            }
+        // Clamp zoom window to data bounds
+        const clampedMin = Math.max(min, dataMin);
+        const clampedMax = Math.min(max, dataMax);
+
+        // Ensure minimum range (at least 30 minutes)
+        const minRange = 30 * 60 * 1000;
+        if (clampedMax - clampedMin < minRange) {
+            const center = timestamp;
+            const halfMinRange = minRange / 2;
+            const adjustedMin = Math.max(center - halfMinRange, dataMin);
+            const adjustedMax = Math.min(center + halfMinRange, dataMax);
+            syncAllChartsFromDetails(adjustedMin, adjustedMax);
+        } else {
+            syncAllChartsFromDetails(clampedMin, clampedMax);
         }
     }
 
@@ -2121,11 +2131,16 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {number} max - End of zoom window in milliseconds
      */
     function syncAllChartsFromDetails(min, max) {
-        // Prevent infinite loops
-        if (window.syncInProgress) return;
+        // For explicit user actions (Details button), force the zoom even if sync is in progress
+        // This is safe because we're not responding to an afterSetExtremes event
+        if (window.syncInProgress) {
+            console.log('⚠️ syncInProgress was true, forcing zoom for trade details');
+        }
         window.syncInProgress = true;
 
-        console.log(`🔍 Zooming all charts to: ${new Date(min).toLocaleString()} - ${new Date(max).toLocaleString()}`);
+        const chartKeys = Object.keys(charts);
+        console.log(`🔍 Zooming ${chartKeys.length} charts to: ${new Date(min).toLocaleString()} - ${new Date(max).toLocaleString()}`);
+        console.log(`   Chart keys: ${chartKeys.join(', ')}`);
 
         try {
             let syncedCount = 0;
@@ -2135,7 +2150,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     syncedCount++;
                 }
             });
-            console.log(`✅ Zoomed ${syncedCount} charts to trade timestamp`);
+            console.log(`✅ Zoomed ${syncedCount}/${chartKeys.length} charts to trade timestamp`);
         } finally {
             setTimeout(() => {
                 window.syncInProgress = false;
@@ -2366,6 +2381,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Update the candlestick series data
             charts.candlestick.series[0].setData(candlestickData, false);
+
+            // Re-add market hours bands (must be before trade bands for z-index)
+            if (typeof IndicatorCharts !== 'undefined' && candlestickData && candlestickData.length > 0) {
+                IndicatorCharts.addMarketHoursBandsToChart(charts.candlestick, candlestickData);
+            }
 
             // Re-add trade bands using the reusable helper
             addTradeBandsToChart(charts.candlestick, globalChartData.trades);

@@ -1,0 +1,1 @@
+../../../shared/static/js/indicator-charts.js
