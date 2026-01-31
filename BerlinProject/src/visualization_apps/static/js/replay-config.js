@@ -1,12 +1,16 @@
 /**
  * Replay Configuration Editor
  * Handles dynamic loading, editing, and saving of replay configurations
+ *
+ * Uses shared indicator-form-handler.js for type-separated indicator loading.
  */
 
 let monitorConfig = null;
 let dataConfig = null;
 let currentMonitorFilename = null;
 let currentDataFilename = null;
+
+// Legacy reference for backwards compatibility - now uses IndicatorFormHandler.IndicatorStore
 let indicatorClasses = {};
 
 // Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
@@ -14,42 +18,50 @@ let indicatorClasses = {};
 // Note: Ticker dropdown is handled by data-config-utils.js (loaded in base.html)
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-    loadIndicatorClasses();
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load both signal and trend indicators using shared handler
+    await IndicatorFormHandler.loadAllIndicatorTypes('/monitor_config');
+
+    // Set legacy reference for any code still using indicatorClasses directly
+    indicatorClasses = IndicatorFormHandler.getIndicatorClasses('all');
+
     setupEventListeners();
 });
 
 function setupEventListeners() {
-    // Add indicator/bar buttons
-    const addIndicatorBtn = document.getElementById('addIndicatorBtn');
-    const addBarBtn = document.getElementById('addBarBtn');
-
-    if (addIndicatorBtn) {
-        addIndicatorBtn.addEventListener('click', addIndicator);
+    // Add Signal Indicator button
+    const addSignalIndicatorBtn = document.getElementById('addSignalIndicatorBtn');
+    if (addSignalIndicatorBtn) {
+        addSignalIndicatorBtn.addEventListener('click', function() {
+            addIndicatorOfType('signal');
+        });
     }
+
+    // Add Trend Indicator button
+    const addTrendIndicatorBtn = document.getElementById('addTrendIndicatorBtn');
+    if (addTrendIndicatorBtn) {
+        addTrendIndicatorBtn.addEventListener('click', function() {
+            addIndicatorOfType('trend');
+        });
+    }
+
+    // Add bar button
+    const addBarBtn = document.getElementById('addBarBtn');
     if (addBarBtn) {
         addBarBtn.addEventListener('click', addBar);
+    }
+
+    // Send to Optimizer button
+    const sendToOptimizerBtn = document.getElementById('sendToOptimizerBtn');
+    if (sendToOptimizerBtn) {
+        sendToOptimizerBtn.addEventListener('click', sendToOptimizer);
     }
     // Note: Ticker dropdown change handler is set up by data-config-utils.js
 }
 
 // Note: toggleTakeProfitInputs() is now in trade-executor-common.js
 
-async function loadIndicatorClasses() {
-    try {
-        const response = await fetch('/monitor_config/api/get_indicator_classes');
-        const result = await response.json();
-
-        if (result.success) {
-            indicatorClasses = result.indicators;
-            console.log('Loaded indicator classes:', indicatorClasses);
-        } else {
-            showAlert('Failed to load indicator classes: ' + result.error, 'warning');
-        }
-    } catch (error) {
-        console.error('Error loading indicator classes:', error);
-    }
-}
+// loadIndicatorClasses() - Now handled by IndicatorFormHandler in DOMContentLoaded
 
 async function loadMonitorConfiguration() {
     const fileInput = document.getElementById('monitorFileInput');
@@ -123,14 +135,16 @@ function renderMonitorConfiguration() {
 
     // Trade Executor tab
     document.getElementById('positionSize').value = tradeExecutor.default_position_size || 100;
-    document.getElementById('stopLoss').value = tradeExecutor.stop_loss_pct || 0.02;
-    document.getElementById('takeProfit').value = tradeExecutor.take_profit_pct || 0.04;
+    // Convert decimal to percentage for display (0.02 -> 2)
+    document.getElementById('stopLoss').value = decimalToPercent(tradeExecutor.stop_loss_pct || 0.02);
+    document.getElementById('takeProfit').value = decimalToPercent(tradeExecutor.take_profit_pct || 0.04);
     document.getElementById('takeProfitType').value = tradeExecutor.take_profit_type || 'percent';
     document.getElementById('takeProfitDollars').value = tradeExecutor.take_profit_dollars || 0;
     toggleTakeProfitInputs(); // Show/hide appropriate inputs based on type
     document.getElementById('trailingStopEnabled').checked = tradeExecutor.trailing_stop_loss || false;
-    document.getElementById('trailingDistance').value = tradeExecutor.trailing_stop_distance_pct || 0.01;
-    document.getElementById('trailingActivation').value = tradeExecutor.trailing_stop_activation_pct || 0.005;
+    // Convert decimal to percentage for display (0.01 -> 1, 0.005 -> 0.5)
+    document.getElementById('trailingDistance').value = decimalToPercent(tradeExecutor.trailing_stop_distance_pct || 0.01);
+    document.getElementById('trailingActivation').value = decimalToPercent(tradeExecutor.trailing_stop_activation_pct || 0.005);
     document.getElementById('ignoreBearSignals').checked = tradeExecutor.ignore_bear_signals || false;
 
     // Enter/Exit conditions
@@ -161,8 +175,8 @@ function renderDataConfiguration() {
 
     document.getElementById('dataStartDate').value = dataConfig.start_date || '';
     document.getElementById('dataEndDate').value = dataConfig.end_date || '';
-    // Default to checked (true) if not specified for backward compatibility
-    document.getElementById('dataExtendedHours').checked = dataConfig.include_extended_hours !== undefined ? dataConfig.include_extended_hours : true;
+    // Default to unchecked (false) - regular market hours only
+    document.getElementById('dataExtendedHours').checked = dataConfig.include_extended_hours !== undefined ? dataConfig.include_extended_hours : false;
 }
 
 // Reuse the same functions from monitor-config.js for consistency
@@ -218,11 +232,24 @@ function generateBarNameOptions(selectedName) {
     return options;
 }
 
-function generateIndicatorNameOptions(selectedName) {
+/**
+ * Generate indicator name options from current config.
+ * @param {string} selectedName - Currently selected indicator name
+ * @param {string} filterType - Optional: 'signal' or 'trend' to filter by type
+ */
+function generateIndicatorNameOptions(selectedName, filterType = null) {
     let options = '<option value="">-- Select Indicator --</option>';
 
     if (monitorConfig && monitorConfig.indicators) {
         for (const indicator of monitorConfig.indicators) {
+            // Filter by type if specified
+            if (filterType) {
+                const indType = IndicatorFormHandler.getIndicatorTypeForClass(indicator.indicator_class);
+                if (indType !== filterType) {
+                    continue;
+                }
+            }
+
             const indName = indicator.name;
             const isSelected = indName === selectedName ? 'selected' : '';
             options += `<option value="${indName}" ${isSelected}>${indName}</option>`;
@@ -232,12 +259,37 @@ function generateIndicatorNameOptions(selectedName) {
     return options;
 }
 
+/**
+ * Generate signal indicator name options (for bar signal indicators section).
+ */
+function generateSignalIndicatorNameOptions(selectedName) {
+    return generateIndicatorNameOptions(selectedName, 'signal');
+}
+
+/**
+ * Generate trend indicator name options (for bar trend indicators section).
+ */
+function generateTrendIndicatorNameOptions(selectedName) {
+    return generateIndicatorNameOptions(selectedName, 'trend');
+}
+
 function renderIndicators(indicators) {
-    const container = document.getElementById('indicatorsContainer');
-    container.innerHTML = '';
+    const signalContainer = document.getElementById('signalIndicatorsContainer');
+    const trendContainer = document.getElementById('trendIndicatorsContainer');
+    signalContainer.innerHTML = '';
+    trendContainer.innerHTML = '';
 
     indicators.forEach((indicator, index) => {
-        container.insertAdjacentHTML('beforeend', createIndicatorCard(indicator, index));
+        // Auto-detect indicator type from class
+        const indicatorType = IndicatorFormHandler.getIndicatorTypeForClass(indicator.indicator_class) || 'signal';
+        const indicatorHtml = createIndicatorCard(indicator, index, indicatorType);
+
+        // Add to appropriate container based on type
+        if (indicatorType === 'trend') {
+            trendContainer.insertAdjacentHTML('beforeend', indicatorHtml);
+        } else {
+            signalContainer.insertAdjacentHTML('beforeend', indicatorHtml);
+        }
 
         // Special handling for CDLPatternIndicator - initialize dual listbox
         if (indicator.indicator_class === 'CDLPatternIndicator') {
@@ -256,16 +308,33 @@ function renderIndicators(indicators) {
     });
 }
 
-function createIndicatorCard(indicator, index) {
+/**
+ * Create an indicator card HTML.
+ * @param {Object} indicator - Indicator configuration
+ * @param {number} index - Card index
+ * @param {string} indicatorType - 'signal', 'trend', or 'all' (auto-detect)
+ */
+function createIndicatorCard(indicator, index, indicatorType = 'all') {
     const params = indicator.parameters || {};
     const indicatorClass = indicator.indicator_class || '';
 
+    // Auto-detect type from indicator class if not specified
+    if (indicatorType === 'all' && indicatorClass) {
+        indicatorType = IndicatorFormHandler.getIndicatorTypeForClass(indicatorClass) || 'all';
+    }
+
+    // Generate type badge
+    const typeLabel = indicatorType === 'trend' ? '🔀 Trend' :
+                      indicatorType === 'signal' ? '📊 Signal' : '';
+    const typeBadge = typeLabel ? `<span class="badge bg-secondary ms-2">${typeLabel}</span>` : '';
+
     return `
-        <div class="indicator-card" data-indicator-index="${index}">
+        <div class="indicator-card" data-indicator-index="${index}" data-indicator-type="${indicatorType}">
             <div class="indicator-card-header" onclick="toggleIndicatorCard(${index})">
                 <span class="indicator-card-title">
                     <i class="fas fa-chevron-right collapse-icon" id="collapse-icon-${index}"></i>
                     <span id="indicator-title-${index}">${indicator.name || 'New Indicator'}</span>
+                    ${typeBadge}
                 </span>
                 <button class="btn-remove" onclick="event.stopPropagation(); removeIndicator(${index})">
                     <i class="fas fa-trash me-1"></i>Remove
@@ -284,7 +353,7 @@ function createIndicatorCard(indicator, index) {
                         <label class="form-label">Indicator Class</label>
                         <select class="form-select" data-indicator-field="indicator_class"
                                 onchange="updateIndicatorParams(${index}, this.value)">
-                            ${generateIndicatorClassOptions(indicatorClass)}
+                            ${generateIndicatorClassOptions(indicatorClass, indicatorType)}
                         </select>
                     </div>
                     <div class="col-md-4">
@@ -304,15 +373,14 @@ function createIndicatorCard(indicator, index) {
     `;
 }
 
-function generateIndicatorClassOptions(selectedClass) {
-    let options = '<option value="">-- Select Class --</option>';
-
-    for (const className of Object.keys(indicatorClasses)) {
-        const isSelected = className === selectedClass ? 'selected' : '';
-        options += `<option value="${className}" ${isSelected}>${className}</option>`;
-    }
-
-    return options;
+/**
+ * Generate indicator class options HTML.
+ * @param {string} selectedClass - Currently selected class
+ * @param {string} indicatorType - 'signal', 'trend', or 'all'
+ */
+function generateIndicatorClassOptions(selectedClass, indicatorType = 'all') {
+    // Use shared handler for filtered dropdown generation
+    return IndicatorFormHandler.generateIndicatorClassOptions(selectedClass, indicatorType);
 }
 
 function generateAggregatorOptions(selectedValue) {
@@ -526,24 +594,41 @@ function updateIndicatorParams(index, className, currentParams = {}) {
     return html;
 }
 
-function addIndicator() {
-    const container = document.getElementById('indicatorsContainer');
-    const index = container.querySelectorAll('.indicator-card').length;
+/**
+ * Add a new indicator of a specific type (signal or trend).
+ * @param {string} indicatorType - 'signal' or 'trend'
+ */
+function addIndicatorOfType(indicatorType = 'signal') {
+    // Use separate containers for signal and trend indicators
+    const containerId = indicatorType === 'trend' ? 'trendIndicatorsContainer' : 'signalIndicatorsContainer';
+    const container = document.getElementById(containerId);
 
+    // Calculate global index across both containers
+    const signalCount = document.querySelectorAll('#signalIndicatorsContainer .indicator-card').length;
+    const trendCount = document.querySelectorAll('#trendIndicatorsContainer .indicator-card').length;
+    const index = signalCount + trendCount;
+
+    const typeLabel = indicatorType === 'trend' ? 'trend' : 'signal';
     const newIndicator = {
-        name: 'new_indicator',
+        name: `new_${typeLabel}_indicator`,
         indicator_class: '',
         type: 'Indicator',
         function: '',
         agg_config: '1m-normal',
         calc_on_pip: false,
-        parameters: {}
+        parameters: {},
+        _indicatorType: indicatorType
     };
 
-    const indicatorHtml = createIndicatorCard(newIndicator, index);
+    const indicatorHtml = createIndicatorCard(newIndicator, index, indicatorType);
     container.insertAdjacentHTML('beforeend', indicatorHtml);
 
     refreshBarIndicatorDropdowns();
+}
+
+// Legacy function for backwards compatibility
+function addIndicator() {
+    addIndicatorOfType('signal');
 }
 
 function removeIndicator(index) {
@@ -569,7 +654,7 @@ function createBarCard(barName, barConfig) {
             <div class="row g-2 mb-2">
                 <div class="col-md-6">
                     <select class="form-select" data-bar-indicator-name>
-                        ${generateIndicatorNameOptions(indName)}
+                        ${generateSignalIndicatorNameOptions(indName)}
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -586,11 +671,12 @@ function createBarCard(barName, barConfig) {
     }
 
     // Generate trend indicators section using shared utility
+    // Use trend-filtered dropdown for trend indicators
     const trendIndicatorsHtml = generateTrendIndicatorsSectionHtml(
         barConfig.trend_indicators,
         barConfig.trend_logic || 'AND',
         barConfig.trend_threshold || 0.0,
-        generateIndicatorNameOptions
+        generateTrendIndicatorNameOptions
     );
 
     return `
@@ -706,7 +792,7 @@ function addBarIndicator(button) {
         <div class="row g-2 mb-2">
             <div class="col-md-6">
                 <select class="form-select" data-bar-indicator-name>
-                    ${generateIndicatorNameOptions('')}
+                    ${generateSignalIndicatorNameOptions('')}
                 </select>
             </div>
             <div class="col-md-4">
@@ -746,10 +832,18 @@ function refreshConditionDropdowns() {
 function refreshBarIndicatorDropdowns() {
     updateCurrentConfigIndicators();
 
+    // Refresh signal indicator dropdowns in bars
     const barIndicatorSelects = document.querySelectorAll('[data-bar-indicator-name]');
     barIndicatorSelects.forEach(select => {
         const currentValue = select.value;
-        select.innerHTML = generateIndicatorNameOptions(currentValue);
+        select.innerHTML = generateSignalIndicatorNameOptions(currentValue);
+    });
+
+    // Refresh trend indicator dropdowns in bars
+    const trendIndicatorSelects = document.querySelectorAll('[data-trend-indicator-name]');
+    trendIndicatorSelects.forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = generateTrendIndicatorNameOptions(currentValue);
     });
 }
 
@@ -903,13 +997,14 @@ function collectMonitorConfigData() {
     // Collect trade executor
     const te = monitorConfig.monitor.trade_executor;
     te.default_position_size = parseFloat(document.getElementById('positionSize').value);
-    te.stop_loss_pct = parseFloat(document.getElementById('stopLoss').value);
-    te.take_profit_pct = parseFloat(document.getElementById('takeProfit').value);
+    // Convert user-entered percentages (e.g., 2) to decimals (e.g., 0.02) for storage
+    te.stop_loss_pct = percentToDecimal(parseFloat(document.getElementById('stopLoss').value) || 2);
+    te.take_profit_pct = percentToDecimal(parseFloat(document.getElementById('takeProfit').value) || 4);
     te.take_profit_type = document.getElementById('takeProfitType').value;
     te.take_profit_dollars = parseFloat(document.getElementById('takeProfitDollars').value) || 0;
     te.trailing_stop_loss = document.getElementById('trailingStopEnabled').checked;
-    te.trailing_stop_distance_pct = parseFloat(document.getElementById('trailingDistance').value);
-    te.trailing_stop_activation_pct = parseFloat(document.getElementById('trailingActivation').value);
+    te.trailing_stop_distance_pct = percentToDecimal(parseFloat(document.getElementById('trailingDistance').value) || 1);
+    te.trailing_stop_activation_pct = percentToDecimal(parseFloat(document.getElementById('trailingActivation').value) || 0.5);
     te.ignore_bear_signals = document.getElementById('ignoreBearSignals').checked;
 
     // Update bars and indicators
@@ -1005,6 +1100,61 @@ function downloadConfig(config, filename) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+/**
+ * Send the current configuration to the Optimizer page.
+ * Collects current form data, stores in sessionStorage, and opens Optimizer in a new tab.
+ * Uses shared getDefaultDataConfig() from config-utils.js for data configuration.
+ */
+function sendToOptimizer() {
+    try {
+        // Check if a configuration is loaded
+        if (!monitorConfig) {
+            showAlert('Please load a monitor configuration first', 'warning');
+            return;
+        }
+
+        // Collect all data from the form
+        collectMonitorConfigData();
+        collectDataConfigData();
+
+        // The optimizer expects a full monitor config structure
+        const optimizerConfig = {
+            test_name: monitorConfig.test_name || 'replay-config',
+            monitor: {
+                name: monitorConfig.monitor.name,
+                description: monitorConfig.monitor.description,
+                trade_executor: monitorConfig.monitor.trade_executor,
+                bars: monitorConfig.monitor.bars,
+                enter_long: monitorConfig.monitor.enter_long,
+                exit_long: monitorConfig.monitor.exit_long
+            },
+            indicators: monitorConfig.indicators
+        };
+
+        // Use the current data config (already has dates set)
+        const optimizerDataConfig = dataConfig || getDefaultDataConfig();
+
+        // Store config in sessionStorage for Optimizer tab
+        sessionStorage.setItem('optimizerMonitorConfig', JSON.stringify(optimizerConfig));
+        sessionStorage.setItem('optimizerDataConfig', JSON.stringify(optimizerDataConfig));
+
+        // Open new Optimizer tab with unique name to ensure it always opens a new tab
+        const optimizerUrl = '/optimizer';
+        const uniqueTabName = `optimizer_tab_${Date.now()}`;
+        const optimizerWindow = window.open(optimizerUrl, uniqueTabName);
+
+        if (optimizerWindow) {
+            optimizerWindow.focus();
+            showAlert('Configuration sent to Optimizer tab', 'success');
+        } else {
+            showAlert('Please allow popups to open the Optimizer tab', 'warning');
+        }
+    } catch (error) {
+        console.error('Error sending to optimizer:', error);
+        showAlert('Error sending configuration to optimizer: ' + error.message, 'danger');
+    }
 }
 
 async function runReplay() {

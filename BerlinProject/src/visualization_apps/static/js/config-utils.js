@@ -149,7 +149,7 @@ function getDefaultDataConfig() {
         ticker: "NVDA",
         start_date: formatDateYYYYMMDD(twoWeeksAgo),
         end_date: formatDateYYYYMMDD(tomorrow),
-        include_extended_hours: true
+        include_extended_hours: false
     };
 }
 
@@ -310,8 +310,11 @@ function addTrendIndicator(button) {
     const barCard = button.closest('.bar-card');
     const container = barCard.querySelector('.trend-indicators-container');
 
-    // Get generateIndicatorNameOptions from the parent scope (varies by page)
-    const newRowHtml = generateTrendIndicatorRowHtml('', 1.0, 'soft', generateIndicatorNameOptions);
+    // Use trend-filtered dropdown if available, otherwise fall back to generic
+    const optionsFunc = typeof generateTrendIndicatorNameOptions === 'function'
+        ? generateTrendIndicatorNameOptions
+        : generateIndicatorNameOptions;
+    const newRowHtml = generateTrendIndicatorRowHtml('', 1.0, 'soft', optionsFunc);
     container.insertAdjacentHTML('beforeend', newRowHtml);
 }
 
