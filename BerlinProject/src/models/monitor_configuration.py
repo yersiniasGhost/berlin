@@ -25,6 +25,8 @@ class TradeExecutorConfig(BaseModel):
     take_profit_type: str = PydanticField(default="percent")
     # Dollar amount target for take profit (used when take_profit_type="dollars")
     take_profit_dollars: float = PydanticField(default=0.0)
+    # Halt trading after hitting dollar target (only applies when take_profit_type="dollars")
+    halt_after_target: bool = PydanticField(default=False)
 
     # Behavior flags
     ignore_bear_signals: bool = PydanticField(default=False)

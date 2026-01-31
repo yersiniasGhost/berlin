@@ -26,17 +26,18 @@
         </div>
         <div class="col-md-4" id="takeProfitPctContainer">
             <label for="takeProfit" class="form-label">Take Profit %</label>
-            <input type="number" class="form-control" id="takeProfit" step="0.001" style="{{ input_style }}">
+            <input type="number" class="form-control" id="takeProfit" step="0.1" placeholder="e.g., 4" style="{{ input_style }}">
+            <small class="form-text text-muted">Enter as percentage (4 = 4%)</small>
         </div>
         <div class="col-md-4" id="takeProfitDollarsContainer" style="display: none;">
             <label for="takeProfitDollars" class="form-label">Take Profit $</label>
-            <input type="number" class="form-control" id="takeProfitDollars" step="0.01" placeholder="e.g., 50.00" style="{{ input_style }}" oninput="updateRisePerShare()">
+            <input type="number" class="form-control" id="takeProfitDollars" step="0.01" placeholder="e.g., 50.00" style="{{ input_style }}" oninput="updateFromTakeProfitDollars()">
             <small class="form-text text-muted">Dollar profit target per trade</small>
         </div>
         <!-- Position Size (shown only in dollar mode) -->
         <div class="col-md-4" id="positionSizeContainer" style="display: none;">
             <label for="positionSize" class="form-label">Position Size (shares)</label>
-            <input type="number" class="form-control" id="positionSize" step="1" style="{{ input_style }}" oninput="updateRisePerShare()">
+            <input type="number" class="form-control" id="positionSize" step="1" style="{{ input_style }}" oninput="updateFromPositionSize()">
         </div>
         <!-- Rise Per Share calculation (shown only in dollar mode) -->
         <div class="col-md-4" id="risePerShareContainer" style="display: none;">
@@ -62,7 +63,7 @@
             <label class="form-label">Position Cost</label>
             <div class="input-group" style="{{ input_style }}">
                 <span class="input-group-text">$</span>
-                <input type="text" class="form-control" id="positionCost" readonly style="background-color: #e9ecef;">
+                <input type="number" class="form-control" id="positionCost" step="0.01" placeholder="e.g., 15000" oninput="updateFromPositionCost()">
             </div>
             <small class="form-text text-muted">Total cost to open position</small>
         </div>
@@ -75,6 +76,18 @@
             <small class="form-text text-muted">ROI on profit target</small>
         </div>
     </div>
+    <!-- Halt After Target (shown only in dollar mode) -->
+    <div class="row g-3 mt-2" id="haltAfterTargetSection" style="display: none;">
+        <div class="col-md-12">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="haltAfterTarget">
+                <label class="form-check-label" for="haltAfterTarget">
+                    Halt Trades after Target
+                </label>
+                <small class="form-text text-muted d-block">Stop making new trades for the day once profit target is reached. Trading resumes at next market open.</small>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Stop Loss -->
@@ -83,7 +96,8 @@
     <div class="row g-3">
         <div class="col-md-4">
             <label for="stopLoss" class="form-label">Stop Loss %</label>
-            <input type="number" class="form-control" id="stopLoss" step="0.001" style="{{ input_style }}">
+            <input type="number" class="form-control" id="stopLoss" step="0.1" placeholder="e.g., 2" style="{{ input_style }}">
+            <small class="form-text text-muted">Enter as percentage (2 = 2%)</small>
         </div>
         <div class="col-md-4">
             <div class="form-check mt-4">
@@ -95,11 +109,13 @@
         </div>
         <div class="col-md-4">
             <label for="trailingDistance" class="form-label">Trailing Distance %</label>
-            <input type="number" class="form-control" id="trailingDistance" step="0.001" style="{{ input_style }}">
+            <input type="number" class="form-control" id="trailingDistance" step="0.1" placeholder="e.g., 1" style="{{ input_style }}">
+            <small class="form-text text-muted">Enter as percentage (1 = 1%)</small>
         </div>
         <div class="col-md-4">
             <label for="trailingActivation" class="form-label">Trailing Activation %</label>
-            <input type="number" class="form-control" id="trailingActivation" step="0.001" style="{{ input_style }}">
+            <input type="number" class="form-control" id="trailingActivation" step="0.1" placeholder="e.g., 0.5" style="{{ input_style }}">
+            <small class="form-text text-muted">Enter as percentage (0.5 = 0.5%)</small>
         </div>
     </div>
 </div>

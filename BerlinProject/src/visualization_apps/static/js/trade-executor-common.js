@@ -4,6 +4,24 @@
  */
 
 /**
+ * Convert decimal to percentage for display (0.02 -> 2)
+ * @param {number} decimal - Decimal value (e.g., 0.02)
+ * @returns {number} Percentage value (e.g., 2)
+ */
+function decimalToPercent(decimal) {
+    return decimal * 100;
+}
+
+/**
+ * Convert percentage to decimal for storage (2 -> 0.02)
+ * @param {number} percent - Percentage value (e.g., 2)
+ * @returns {number} Decimal value (e.g., 0.02)
+ */
+function percentToDecimal(percent) {
+    return percent / 100;
+}
+
+/**
  * Toggle take profit input visibility based on selected type
  * Shows/hides: percentage input, dollar input, position size, rise per share calculation,
  * and the estimated price section with position cost and profit percentage
@@ -15,6 +33,7 @@ function toggleTakeProfitInputs() {
     const positionSizeContainer = document.getElementById('positionSizeContainer');
     const risePerShareContainer = document.getElementById('risePerShareContainer');
     const estimatedPriceSection = document.getElementById('estimatedPriceSection');
+    const haltAfterTargetSection = document.getElementById('haltAfterTargetSection');
 
     if (!takeProfitType || !pctContainer || !dollarsContainer) {
         return; // Elements not present on this page
@@ -28,6 +47,7 @@ function toggleTakeProfitInputs() {
         if (positionSizeContainer) positionSizeContainer.style.display = '';
         if (risePerShareContainer) risePerShareContainer.style.display = '';
         if (estimatedPriceSection) estimatedPriceSection.style.display = '';
+        if (haltAfterTargetSection) haltAfterTargetSection.style.display = '';
         updateRisePerShare();
         updateProfitCalculations();
     } else {
@@ -36,6 +56,7 @@ function toggleTakeProfitInputs() {
         if (positionSizeContainer) positionSizeContainer.style.display = 'none';
         if (risePerShareContainer) risePerShareContainer.style.display = 'none';
         if (estimatedPriceSection) estimatedPriceSection.style.display = 'none';
+        if (haltAfterTargetSection) haltAfterTargetSection.style.display = 'none';
     }
 }
 
@@ -56,46 +77,89 @@ function updateRisePerShare() {
     } else {
         risePerShareInput.value = '--';
     }
-
-    // Also update profit calculations when position size or dollars change
-    updateProfitCalculations();
 }
 
 /**
- * Calculate and display position cost and profit percentage based on estimated entry price
- * Formulas:
- *   position_cost = estimated_price * position_size
- *   profit_percent = (take_profit_dollars / position_cost) * 100
+ * Calculate and display profit percentage
+ * Formula: profit_percent = (take_profit_dollars / position_cost) * 100
  */
-function updateProfitCalculations() {
-    const estimatedPrice = parseFloat(document.getElementById('estimatedPrice')?.value) || 0;
-    const positionSize = parseFloat(document.getElementById('positionSize')?.value) || 0;
+function updateProfitPercent() {
+    const positionCost = parseFloat(document.getElementById('positionCost')?.value) || 0;
     const takeProfitDollars = parseFloat(document.getElementById('takeProfitDollars')?.value) || 0;
-
-    const positionCostInput = document.getElementById('positionCost');
     const profitPercentInput = document.getElementById('profitPercent');
 
-    if (!positionCostInput || !profitPercentInput) return;
+    if (!profitPercentInput) return;
 
-    if (estimatedPrice > 0 && positionSize > 0) {
-        // Calculate position cost
-        const positionCost = estimatedPrice * positionSize;
-        positionCostInput.value = positionCost.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
-
-        // Calculate profit percentage
-        if (takeProfitDollars > 0) {
-            const profitPercent = (takeProfitDollars / positionCost) * 100;
-            profitPercentInput.value = profitPercent.toFixed(2);
-        } else {
-            profitPercentInput.value = '--';
-        }
+    if (positionCost > 0 && takeProfitDollars > 0) {
+        const profitPercent = (takeProfitDollars / positionCost) * 100;
+        profitPercentInput.value = profitPercent.toFixed(2);
     } else {
-        positionCostInput.value = '--';
         profitPercentInput.value = '--';
     }
+}
+
+/**
+ * Handler when Position Size is changed by user
+ * Updates: Position Cost, Rise/Share, Profit %
+ */
+function updateFromPositionSize() {
+    const estimatedPrice = parseFloat(document.getElementById('estimatedPrice')?.value) || 0;
+    const positionSize = parseFloat(document.getElementById('positionSize')?.value) || 0;
+    const positionCostInput = document.getElementById('positionCost');
+
+    // Calculate and update Position Cost from Position Size
+    if (positionCostInput && estimatedPrice > 0 && positionSize > 0) {
+        const positionCost = estimatedPrice * positionSize;
+        positionCostInput.value = positionCost.toFixed(2);
+    } else if (positionCostInput) {
+        positionCostInput.value = '';
+    }
+
+    // Update dependent calculations
+    updateRisePerShare();
+    updateProfitPercent();
+}
+
+/**
+ * Handler when Position Cost is changed by user
+ * Updates: Position Size, Rise/Share, Profit %
+ */
+function updateFromPositionCost() {
+    const estimatedPrice = parseFloat(document.getElementById('estimatedPrice')?.value) || 0;
+    const positionCost = parseFloat(document.getElementById('positionCost')?.value) || 0;
+    const positionSizeInput = document.getElementById('positionSize');
+
+    // Calculate and update Position Size from Position Cost
+    if (positionSizeInput && estimatedPrice > 0 && positionCost > 0) {
+        const positionSize = positionCost / estimatedPrice;
+        // Round to whole shares
+        positionSizeInput.value = Math.round(positionSize);
+    } else if (positionSizeInput) {
+        positionSizeInput.value = '';
+    }
+
+    // Update dependent calculations
+    updateRisePerShare();
+    updateProfitPercent();
+}
+
+/**
+ * Handler when Take Profit Dollars is changed by user
+ * Updates: Rise/Share, Profit %
+ */
+function updateFromTakeProfitDollars() {
+    updateRisePerShare();
+    updateProfitPercent();
+}
+
+/**
+ * Handler when Estimated Price is changed by user
+ * Recalculates Position Size from Position Cost (keeps Position Cost as the anchor)
+ * Updates: Position Size, Rise/Share, Profit %
+ */
+function updateProfitCalculations() {
+    // When estimated price changes, recalculate position size from position cost
+    updateFromPositionCost();
 }
 
 /**
@@ -111,18 +175,23 @@ function loadTradeExecutorForm(tradeExecutor) {
     const takeProfit = document.getElementById('takeProfit');
 
     if (positionSize) positionSize.value = tradeExecutor.default_position_size || 100;
-    if (stopLoss) stopLoss.value = tradeExecutor.stop_loss_pct || 0.02;
-    if (takeProfit) takeProfit.value = tradeExecutor.take_profit_pct || 0.04;
+    // Convert decimal to percentage for display (0.02 -> 2)
+    if (stopLoss) stopLoss.value = decimalToPercent(tradeExecutor.stop_loss_pct || 0.02);
+    if (takeProfit) takeProfit.value = decimalToPercent(tradeExecutor.take_profit_pct || 0.04);
 
     // Take profit type and dollar amount
     const takeProfitType = document.getElementById('takeProfitType');
     const takeProfitDollars = document.getElementById('takeProfitDollars');
+    const haltAfterTarget = document.getElementById('haltAfterTarget');
 
     if (takeProfitType) {
         takeProfitType.value = tradeExecutor.take_profit_type || 'percent';
     }
     if (takeProfitDollars) {
         takeProfitDollars.value = tradeExecutor.take_profit_dollars || 0;
+    }
+    if (haltAfterTarget) {
+        haltAfterTarget.checked = tradeExecutor.halt_after_target || false;
     }
 
     // Estimated price (optional, for profit calculation display)
@@ -139,8 +208,9 @@ function loadTradeExecutorForm(tradeExecutor) {
     const trailingActivation = document.getElementById('trailingActivation');
 
     if (trailingStopEnabled) trailingStopEnabled.checked = tradeExecutor.trailing_stop_loss || false;
-    if (trailingDistance) trailingDistance.value = tradeExecutor.trailing_stop_distance_pct || 0.01;
-    if (trailingActivation) trailingActivation.value = tradeExecutor.trailing_stop_activation_pct || 0.005;
+    // Convert decimal to percentage for display (0.01 -> 1, 0.005 -> 0.5)
+    if (trailingDistance) trailingDistance.value = decimalToPercent(tradeExecutor.trailing_stop_distance_pct || 0.01);
+    if (trailingActivation) trailingActivation.value = decimalToPercent(tradeExecutor.trailing_stop_activation_pct || 0.005);
 
     // Behavior
     const ignoreBearSignals = document.getElementById('ignoreBearSignals');
@@ -152,15 +222,22 @@ function loadTradeExecutorForm(tradeExecutor) {
  * @returns {Object} Trade executor configuration object
  */
 function collectTradeExecutorForm() {
+    // Convert user-entered percentages (e.g., 2) to decimals (e.g., 0.02) for storage
+    const stopLossPercent = parseFloat(document.getElementById('stopLoss')?.value) || 2;
+    const takeProfitPercent = parseFloat(document.getElementById('takeProfit')?.value) || 4;
+    const trailingDistancePercent = parseFloat(document.getElementById('trailingDistance')?.value) || 1;
+    const trailingActivationPercent = parseFloat(document.getElementById('trailingActivation')?.value) || 0.5;
+
     const config = {
         default_position_size: parseFloat(document.getElementById('positionSize')?.value) || 100,
-        stop_loss_pct: parseFloat(document.getElementById('stopLoss')?.value) || 0.02,
-        take_profit_pct: parseFloat(document.getElementById('takeProfit')?.value) || 0.04,
+        stop_loss_pct: percentToDecimal(stopLossPercent),
+        take_profit_pct: percentToDecimal(takeProfitPercent),
         take_profit_type: document.getElementById('takeProfitType')?.value || 'percent',
         take_profit_dollars: parseFloat(document.getElementById('takeProfitDollars')?.value) || 0,
+        halt_after_target: document.getElementById('haltAfterTarget')?.checked || false,
         trailing_stop_loss: document.getElementById('trailingStopEnabled')?.checked || false,
-        trailing_stop_distance_pct: parseFloat(document.getElementById('trailingDistance')?.value) || 0.01,
-        trailing_stop_activation_pct: parseFloat(document.getElementById('trailingActivation')?.value) || 0.005,
+        trailing_stop_distance_pct: percentToDecimal(trailingDistancePercent),
+        trailing_stop_activation_pct: percentToDecimal(trailingActivationPercent),
         ignore_bear_signals: document.getElementById('ignoreBearSignals')?.checked || false
     };
 

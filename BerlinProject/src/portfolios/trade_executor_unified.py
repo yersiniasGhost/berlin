@@ -1,13 +1,14 @@
 # portfolios/trade_executor_unified.py
 
 from typing import Dict, Optional, List
-from datetime import datetime
+from datetime import datetime, date
 from collections import defaultdict
 
 from models.monitor_configuration import MonitorConfiguration
 from models.tick_data import TickData
 from portfolios.portfolio_tool import Portfolio, TradeReason
 from mlf_utils.log_manager import LogManager
+from mlf_utils.timezone_utils import is_market_hours, ET
 
 logger = LogManager().get_logger("TradeExecutorUnified")
 
@@ -58,6 +59,12 @@ class TradeExecutorUnified:
         # Take profit type configuration: "percent" or "dollars"
         self.take_profit_type = getattr(trade_exec_config, 'take_profit_type', 'percent')
         self.take_profit_dollars = getattr(trade_exec_config, 'take_profit_dollars', 0.0)
+        # Halt trading after hitting dollar target
+        self.halt_after_target = getattr(trade_exec_config, 'halt_after_target', False)
+
+        # Halt state tracking (reset at market open each day)
+        self._trading_halted = False
+        self._halt_date: Optional[date] = None  # The date when trading was halted
 
         # Behavior configuration
         self.ignore_bear_signals = trade_exec_config.ignore_bear_signals
@@ -89,6 +96,7 @@ class TradeExecutorUnified:
         logger.debug(f"  Stop loss: {self.stop_loss_pct:.2%}")
         if self.take_profit_type == "dollars":
             logger.debug(f"  Take profit: ${self.take_profit_dollars:.2f} (dollar-based)")
+            logger.debug(f"  Halt after target: {self.halt_after_target}")
         else:
             logger.debug(f"  Take profit: {self.take_profit_pct:.2%} (percent-based)")
         logger.debug(f"  Trailing stop: {self.trailing_stop_loss} "
@@ -110,9 +118,13 @@ class TradeExecutorUnified:
             current_price = tick.close  # TickData uses 'close' not 'price'
             bar_scores = defaultdict(float, bar_scores or {})
 
+            # Check if trading halt should be reset at market open
+            self._check_halt_reset(trade_time)
+
             # Log decision context at DEBUG level for detailed tracing
             logger.debug(f"[DECISION] time={tick.timestamp}, price=${current_price:.2f}, "
                          f"in_position={self.portfolio.is_in_position()}, "
+                         f"halted={self._trading_halted}, "
                          f"bar_scores=[{_format_bar_scores(bar_scores)}]")
 
             # Update trailing stop if in position
@@ -127,6 +139,11 @@ class TradeExecutorUnified:
 
             # Check entry conditions (if not in position)
             if not self.portfolio.is_in_position():
+                # Check if trading is halted (dollar target reached)
+                if self._trading_halted:
+                    logger.debug(f"[TRADING HALTED] No entries allowed - daily target reached on {self._halt_date}")
+                    return
+
                 # Always check for signal conflicts to prevent contradictory actions
                 if self._has_signal_conflicts(bar_scores):
                     logger.debug(f"[SIGNAL CONFLICT] No action taken - both bull and bear signals active")
@@ -371,6 +388,11 @@ class TradeExecutorUnified:
             self.portfolio.sell(timestamp, current_price, TradeReason.TAKE_PROFIT, self.portfolio.position_size)
             self._clear_exit_levels()
             self.trade_count += 1
+
+            # Activate trading halt if configured (dollar mode only)
+            if self.take_profit_type == "dollars" and self.halt_after_target:
+                self._activate_trading_halt(trade_time)
+
             return True
 
         return False
@@ -574,6 +596,57 @@ class TradeExecutorUnified:
         self.trailing_stop_price = None
         self.highest_price_since_entry = None
 
+    def _check_halt_reset(self, trade_time: Optional[datetime]) -> None:
+        """
+        Check if trading halt should be reset at the start of a new trading day.
+
+        Halt is reset when:
+        - We're in a new trading day (different date from when halt was set)
+        - Current time is during market hours (after 9:30 AM ET)
+        """
+        if not self._trading_halted or not self._halt_date or not trade_time:
+            return
+
+        # Convert trade time to ET for date comparison
+        try:
+            trade_time_et = trade_time.astimezone(ET)
+            current_date = trade_time_et.date()
+
+            # Check if it's a new trading day
+            if current_date > self._halt_date:
+                # Verify we're in market hours (after market open)
+                if is_market_hours(trade_time):
+                    logger.info(f"[HALT RESET] New trading day detected. "
+                               f"Halt date: {self._halt_date}, Current: {current_date}. "
+                               f"Trading resumed at {trade_time_et.strftime('%Y-%m-%d %H:%M:%S')} ET")
+                    self._trading_halted = False
+                    self._halt_date = None
+        except Exception as e:
+            logger.warning(f"Error checking halt reset: {e}")
+
+    def _activate_trading_halt(self, trade_time: Optional[datetime]) -> None:
+        """Activate trading halt after hitting dollar target."""
+        self._trading_halted = True
+
+        if trade_time:
+            try:
+                trade_time_et = trade_time.astimezone(ET)
+                self._halt_date = trade_time_et.date()
+                logger.info(f"[TRADING HALTED] Dollar profit target reached. "
+                           f"Trading halted for the rest of {self._halt_date}. "
+                           f"Will resume at next market open.")
+            except Exception as e:
+                self._halt_date = date.today()
+                logger.warning(f"Error setting halt date: {e}, using today's date")
+        else:
+            self._halt_date = date.today()
+            logger.info(f"[TRADING HALTED] Dollar profit target reached. "
+                       f"Trading halted for rest of day.")
+
+    def is_trading_halted(self) -> bool:
+        """Check if trading is currently halted."""
+        return self._trading_halted
+
     def get_status(self) -> Dict:
         """Get current executor status for debugging"""
         return {
@@ -587,6 +660,9 @@ class TradeExecutorUnified:
             'take_profit_pct': self.take_profit_pct,
             'take_profit_type': self.take_profit_type,
             'take_profit_dollars': self.take_profit_dollars,
+            'halt_after_target': self.halt_after_target,
+            'trading_halted': self._trading_halted,
+            'halt_date': str(self._halt_date) if self._halt_date else None,
             'trailing_stop_loss': self.trailing_stop_loss,
             'ignore_bear_signals': self.ignore_bear_signals,
             'total_trades': len(self.portfolio.trade_history)
