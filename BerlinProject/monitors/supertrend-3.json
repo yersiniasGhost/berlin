@@ -1,0 +1,115 @@
+{
+  "monitor": {
+    "name": "MACD and Super Trend",
+    "description": "Custom trading strategy configuration",
+    "trade_executor": {
+      "default_position_size": 500,
+      "stop_loss_pct": 0.01,
+      "take_profit_pct": 0.04,
+      "take_profit_type": "dollars",
+      "take_profit_dollars": 500,
+      "ignore_bear_signals": false,
+      "trailing_stop_loss": true,
+      "trailing_stop_distance_pct": 0.005,
+      "trailing_stop_activation_pct": 0.005
+    },
+    "bars": {
+      "Bull": {
+        "type": "bull",
+        "description": "New bar configuration",
+        "indicators": {
+          "MACD 1m": 1,
+          "MACD 5m": 1
+        },
+        "trend_indicators": {
+          "Super Trend Bull": {
+            "weight": 1,
+            "mode": "soft"
+          }
+        },
+        "trend_logic": "AND",
+        "trend_threshold": 0.2
+      },
+      "Bear": {
+        "type": "bear",
+        "description": "New bar configuration",
+        "indicators": {
+          "MACD5m Bear": 1
+        },
+        "trend_logic": "AND",
+        "trend_threshold": 0
+      }
+    },
+    "enter_long": [
+      {
+        "name": "Bull",
+        "threshold": 0.55
+      }
+    ],
+    "exit_long": [
+      {
+        "name": "Bear",
+        "threshold": 0.5
+      }
+    ]
+  },
+  "indicators": [
+    {
+      "name": "MACD 1m",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "type": "Indicator",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9,
+        "histogram_threshold": 0.001,
+        "trend": "bullish",
+        "lookback": 12
+      }
+    },
+    {
+      "name": "MACD 5m",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "type": "Indicator",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9,
+        "histogram_threshold": 0.001,
+        "trend": "bullish",
+        "lookback": 2
+      }
+    },
+    {
+      "name": "MACD5m Bear",
+      "indicator_class": "MACDHistogramCrossoverIndicator",
+      "type": "Indicator",
+      "agg_config": "5m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9,
+        "histogram_threshold": 0.001,
+        "trend": "bearish",
+        "lookback": 2
+      }
+    },
+    {
+      "name": "Super Trend Bull",
+      "indicator_class": "SuperTrendIndicator",
+      "type": "Indicator",
+      "agg_config": "1m-normal",
+      "calc_on_pip": false,
+      "parameters": {
+        "atr_period": 10,
+        "multiplier": 3,
+        "direction_filter": "Bull"
+      }
+    }
+  ]
+}
