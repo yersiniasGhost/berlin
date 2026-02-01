@@ -11,6 +11,10 @@ let testDataConfig = null;
 let gaConfig = null;
 let indicatorClasses = {};
 
+// Objective function metadata and schemas (fetched from backend)
+let availableObjectives = [];
+let objectiveSchemas = {};
+
 // Default GA configuration (from ga_config_example.json)
 const DEFAULT_GA_CONFIG = {
     objectives: [
@@ -39,14 +43,75 @@ const DEFAULT_GA_CONFIG = {
 // Default data configuration - uses shared getDefaultDataConfig() from config-utils.js
 // Note: DEFAULT_DATA_CONFIG is defined in config-utils.js (must be loaded first)
 
-const AVAILABLE_OBJECTIVES = [
+// AVAILABLE_OBJECTIVES is now fetched dynamically from the backend
+// This fallback is used if the fetch fails
+const FALLBACK_OBJECTIVES = [
     'MaximizeProfit',
     'MinimizeLosingTrades',
     'MinimizeLoss',
     'MinimizeTrades',
     'MaximizeNetPnL',
-    'MaximizeScaledNetPnL'
+    'MaximizeScaledNetPnL',
+    'MaximizeCashProfit'
 ];
+
+/**
+ * Fetch available objectives and their schemas from the backend.
+ * Called on page initialization.
+ */
+async function fetchObjectiveSchemas() {
+    try {
+        // Fetch available objectives
+        const availableResponse = await fetch('/optimizer/api/objectives/available');
+        const availableData = await availableResponse.json();
+
+        if (availableData.success) {
+            availableObjectives = availableData.objectives;
+            console.log('📊 Loaded', availableObjectives.length, 'objectives');
+        } else {
+            console.warn('⚠️ Failed to fetch objectives, using fallback:', availableData.error);
+            availableObjectives = FALLBACK_OBJECTIVES.map(name => ({
+                name: name,
+                display_name: name,
+                description: '',
+                has_parameters: false
+            }));
+        }
+
+        // Fetch all schemas
+        const schemasResponse = await fetch('/optimizer/api/objectives/schemas');
+        const schemasData = await schemasResponse.json();
+
+        if (schemasData.success) {
+            objectiveSchemas = schemasData.schemas;
+            console.log('📊 Loaded schemas for', Object.keys(objectiveSchemas).length, 'objectives');
+        } else {
+            console.warn('⚠️ Failed to fetch objective schemas:', schemasData.error);
+            objectiveSchemas = {};
+        }
+
+    } catch (error) {
+        console.error('❌ Error fetching objective schemas:', error);
+        // Use fallback
+        availableObjectives = FALLBACK_OBJECTIVES.map(name => ({
+            name: name,
+            display_name: name,
+            description: '',
+            has_parameters: false
+        }));
+        objectiveSchemas = {};
+    }
+}
+
+/**
+ * Get the list of available objective names for dropdown options.
+ */
+function getAvailableObjectiveNames() {
+    if (availableObjectives.length > 0) {
+        return availableObjectives.map(obj => obj.name);
+    }
+    return FALLBACK_OBJECTIVES;
+}
 
 // Default ranges for bar weights and thresholds
 const DEFAULT_WEIGHT_RANGE = [0.0, 10.0];
@@ -313,6 +378,10 @@ function collectTrendIndicatorDataWithRanges(barCard) {
 document.addEventListener('DOMContentLoaded', async function() {
     // Load all indicator types using shared handler
     await IndicatorFormHandler.loadAllIndicatorTypes('/monitor_config');
+
+    // Load objective function schemas for dynamic parameter forms
+    await fetchObjectiveSchemas();
+
     setupEventListeners();
 
     // Check if we received configs from Monitor Config or Replay via sessionStorage
@@ -947,19 +1016,24 @@ function renderObjectives(objectives) {
 }
 
 function createObjectiveCard(objective, index) {
+    const selectedObjective = objective.objective || '';
+    const schema = objectiveSchemas[selectedObjective];
+    const parametersHtml = generateObjectiveParametersHtml(schema, objective.parameters || {}, index);
+
     return `
-        <div class="objective-card" data-objective-index="${index}">
+        <div class="objective-card mb-3 p-3 border rounded" data-objective-index="${index}">
             <div class="row g-2 align-items-end">
                 <div class="col-md-5">
                     <label class="form-label">Objective</label>
-                    <select class="form-select" data-objective-field="objective">
-                        ${generateObjectiveOptions(objective.objective || '')}
+                    <select class="form-select" data-objective-field="objective"
+                            onchange="onObjectiveSelectionChange(${index})">
+                        ${generateObjectiveOptions(selectedObjective)}
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Weight</label>
                     <input type="number" class="form-control" value="${objective.weight || 1.0}"
-                           step="0.1" data-objective-field="weight">
+                           step="0.1" min="0" data-objective-field="weight">
                 </div>
                 <div class="col-md-2">
                     <button class="btn btn-danger w-100" onclick="removeObjective(${index})">
@@ -967,15 +1041,192 @@ function createObjectiveCard(objective, index) {
                     </button>
                 </div>
             </div>
+            <div class="objective-parameters-container mt-2" data-objective-params-index="${index}">
+                ${parametersHtml}
+            </div>
         </div>
     `;
 }
 
+/**
+ * Generate HTML for objective function parameters based on schema.
+ *
+ * @param {Object} schema - The UI schema from the backend
+ * @param {Object} currentParams - Current parameter values
+ * @param {number} index - Objective card index
+ * @returns {string} HTML for parameter inputs
+ */
+function generateObjectiveParametersHtml(schema, currentParams, index) {
+    if (!schema || !schema.parameter_groups || Object.keys(schema.parameter_groups).length === 0) {
+        return '';  // No parameters for this objective
+    }
+
+    let html = `
+        <div class="objective-params border-start border-3 border-primary ps-3 mt-2">
+            <small class="text-muted d-block mb-2">
+                <i class="fas fa-sliders-h me-1"></i>Parameters for ${schema.display_name}
+            </small>
+    `;
+
+    for (const [groupName, params] of Object.entries(schema.parameter_groups)) {
+        html += `<div class="param-group mb-2">`;
+        html += `<strong class="text-secondary small">${groupName}</strong>`;
+
+        for (const param of params) {
+            const currentValue = currentParams[param.name] !== undefined
+                ? currentParams[param.name]
+                : param.default;
+
+            html += generateParameterInputHtml(param, currentValue, index);
+        }
+
+        html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+/**
+ * Generate HTML for a single parameter input.
+ *
+ * @param {Object} param - Parameter specification from schema
+ * @param {*} value - Current value
+ * @param {number} index - Objective card index
+ * @returns {string} HTML for the input
+ */
+function generateParameterInputHtml(param, value, index) {
+    const inputId = `objective_${index}_param_${param.name}`;
+
+    let inputHtml = '';
+
+    if (param.type === 'float' || param.type === 'integer') {
+        const step = param.step || (param.type === 'integer' ? 1 : 0.01);
+        inputHtml = `
+            <div class="row g-2 align-items-center mt-1">
+                <div class="col-md-5">
+                    <label class="form-label small mb-0" for="${inputId}">
+                        ${param.display_name}
+                        ${param.description ? `<i class="fas fa-info-circle text-muted ms-1" title="${param.description}"></i>` : ''}
+                    </label>
+                </div>
+                <div class="col-md-4">
+                    <input type="number" class="form-control form-control-sm"
+                           id="${inputId}"
+                           value="${value}"
+                           min="${param.min !== undefined ? param.min : ''}"
+                           max="${param.max !== undefined ? param.max : ''}"
+                           step="${step}"
+                           data-objective-param="${param.name}">
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">
+                        ${param.min !== undefined && param.max !== undefined ? `(${param.min} - ${param.max})` : ''}
+                    </small>
+                </div>
+            </div>
+        `;
+    } else if (param.type === 'choice') {
+        const options = (param.choices || []).map(choice => {
+            const selected = choice === value ? 'selected' : '';
+            return `<option value="${choice}" ${selected}>${choice}</option>`;
+        }).join('');
+
+        inputHtml = `
+            <div class="row g-2 align-items-center mt-1">
+                <div class="col-md-5">
+                    <label class="form-label small mb-0" for="${inputId}">
+                        ${param.display_name}
+                        ${param.description ? `<i class="fas fa-info-circle text-muted ms-1" title="${param.description}"></i>` : ''}
+                    </label>
+                </div>
+                <div class="col-md-7">
+                    <select class="form-select form-select-sm" id="${inputId}"
+                            data-objective-param="${param.name}">
+                        ${options}
+                    </select>
+                </div>
+            </div>
+        `;
+    } else if (param.type === 'boolean') {
+        inputHtml = `
+            <div class="row g-2 align-items-center mt-1">
+                <div class="col-md-5">
+                    <label class="form-label small mb-0">
+                        ${param.display_name}
+                        ${param.description ? `<i class="fas fa-info-circle text-muted ms-1" title="${param.description}"></i>` : ''}
+                    </label>
+                </div>
+                <div class="col-md-7">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="${inputId}"
+                               ${value ? 'checked' : ''}
+                               data-objective-param="${param.name}">
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Default: text input
+        inputHtml = `
+            <div class="row g-2 align-items-center mt-1">
+                <div class="col-md-5">
+                    <label class="form-label small mb-0" for="${inputId}">
+                        ${param.display_name}
+                    </label>
+                </div>
+                <div class="col-md-7">
+                    <input type="text" class="form-control form-control-sm" id="${inputId}"
+                           value="${value}"
+                           data-objective-param="${param.name}">
+                </div>
+            </div>
+        `;
+    }
+
+    return inputHtml;
+}
+
+/**
+ * Handle objective selection change - update parameters panel.
+ *
+ * @param {number} index - Objective card index
+ */
+function onObjectiveSelectionChange(index) {
+    const card = document.querySelector(`[data-objective-index="${index}"]`);
+    if (!card) return;
+
+    const select = card.querySelector('[data-objective-field="objective"]');
+    const paramsContainer = card.querySelector(`[data-objective-params-index="${index}"]`);
+
+    if (!select || !paramsContainer) return;
+
+    const selectedObjective = select.value;
+    const schema = objectiveSchemas[selectedObjective];
+
+    // Update parameters panel
+    paramsContainer.innerHTML = generateObjectiveParametersHtml(schema, {}, index);
+}
+
 function generateObjectiveOptions(selected) {
     let options = '<option value="">-- Select Objective --</option>';
-    AVAILABLE_OBJECTIVES.forEach(obj => {
-        const isSelected = obj === selected ? 'selected' : '';
-        options += `<option value="${obj}" ${isSelected}>${obj}</option>`;
+
+    // Use fetched objectives if available, otherwise use fallback
+    const objectives = availableObjectives.length > 0 ? availableObjectives : FALLBACK_OBJECTIVES.map(name => ({
+        name: name,
+        display_name: name,
+        has_parameters: false
+    }));
+
+    objectives.forEach(obj => {
+        const name = typeof obj === 'string' ? obj : obj.name;
+        const displayName = typeof obj === 'string' ? obj : obj.display_name;
+        const hasParams = typeof obj === 'object' && obj.has_parameters;
+        const isSelected = name === selected ? 'selected' : '';
+
+        // Add indicator if objective has parameters
+        const paramIndicator = hasParams ? ' ⚙️' : '';
+        options += `<option value="${name}" ${isSelected}>${displayName}${paramIndicator}</option>`;
     });
     return options;
 }
@@ -1854,7 +2105,7 @@ function collectTestDataConfigData() {
 }
 
 function collectGAConfigData() {
-    // Collect objectives
+    // Collect objectives with their parameters
     const objectives = [];
     const objectiveCards = document.querySelectorAll('.objective-card');
 
@@ -1863,10 +2114,45 @@ function collectGAConfigData() {
         const weightInput = card.querySelector('[data-objective-field="weight"]');
 
         if (objectiveSelect && objectiveSelect.value) {
+            const objectiveName = objectiveSelect.value;
+            const parameters = {};
+
+            // Collect parameter values from inputs
+            const paramInputs = card.querySelectorAll('[data-objective-param]');
+            paramInputs.forEach(input => {
+                const paramName = input.getAttribute('data-objective-param');
+
+                if (input.type === 'checkbox') {
+                    parameters[paramName] = input.checked;
+                } else if (input.type === 'number') {
+                    // Determine if it should be integer or float based on schema
+                    const schema = objectiveSchemas[objectiveName];
+                    let paramType = 'float';
+
+                    if (schema && schema.parameter_groups) {
+                        for (const params of Object.values(schema.parameter_groups)) {
+                            const paramSpec = params.find(p => p.name === paramName);
+                            if (paramSpec) {
+                                paramType = paramSpec.type;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (paramType === 'integer') {
+                        parameters[paramName] = parseInt(input.value, 10);
+                    } else {
+                        parameters[paramName] = parseFloat(input.value);
+                    }
+                } else {
+                    parameters[paramName] = input.value;
+                }
+            });
+
             objectives.push({
-                objective: objectiveSelect.value,
+                objective: objectiveName,
                 weight: parseFloat(weightInput.value),
-                parameters: {} // Empty for now, can be extended
+                parameters: parameters
             });
         }
     });

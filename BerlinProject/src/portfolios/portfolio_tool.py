@@ -353,6 +353,66 @@ class Portfolio:
 
         return winning_count
 
+    def get_total_cash_profits(self) -> float:
+        """
+        Sum of all profitable trades as absolute dollar values.
+
+        Calculates (exit_price - entry_price) * size for each profitable trade.
+        Used for cash-based optimization objectives.
+        """
+        total_profits = 0.0
+
+        # Look for entry/exit pairs
+        i = 0
+        while i < len(self.trade_history) - 1:
+            entry_trade = self.trade_history[i]
+            exit_trade = self.trade_history[i + 1]
+
+            # Check if this is an entry followed by an exit
+            if entry_trade.reason.is_entry() and exit_trade.reason.is_exit():
+                # Calculate cash P&L
+                pnl_cash = (exit_trade.price - entry_trade.price) * entry_trade.size
+
+                # Add to profits if positive
+                if pnl_cash > 0:
+                    total_profits += pnl_cash
+
+                i += 2  # Skip both trades
+            else:
+                i += 1
+
+        return total_profits
+
+    def get_total_cash_losses(self) -> float:
+        """
+        Sum of all losing trades as absolute dollar values (returned as positive).
+
+        Calculates abs((exit_price - entry_price) * size) for each losing trade.
+        Used for cash-based optimization objectives.
+        """
+        total_losses = 0.0
+
+        # Look for entry/exit pairs
+        i = 0
+        while i < len(self.trade_history) - 1:
+            entry_trade = self.trade_history[i]
+            exit_trade = self.trade_history[i + 1]
+
+            # Check if this is an entry followed by an exit
+            if entry_trade.reason.is_entry() and exit_trade.reason.is_exit():
+                # Calculate cash P&L
+                pnl_cash = (exit_trade.price - entry_trade.price) * entry_trade.size
+
+                # Add to losses if negative (convert to positive)
+                if pnl_cash < 0:
+                    total_losses += abs(pnl_cash)
+
+                i += 2  # Skip both trades
+            else:
+                i += 1
+
+        return total_losses
+
     def reset(self) -> None:
         """Reset portfolio to initial state"""
         self.position_size = 0.0

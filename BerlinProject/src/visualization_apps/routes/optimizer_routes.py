@@ -1140,6 +1140,106 @@ def get_parameter_evolution():
 
 
 # =============================================================================
+# Objective Function API Endpoints
+# Provides dynamic discovery and parameter schemas for objective functions
+# =============================================================================
+
+
+@optimizer_bp.route('/api/objectives/available', methods=['GET'])
+def get_available_objectives():
+    """Get list of all available objective functions with metadata.
+
+    Returns:
+        JSON with list of objectives, each containing:
+        - name: Class name (e.g., 'MaximizeProfit')
+        - display_name: Human-readable name
+        - description: What the objective does
+        - has_parameters: Whether it has configurable parameters
+    """
+    try:
+        from optimization.genetic_optimizer.abstractions.objective_registry import ObjectiveRegistry
+
+        registry = ObjectiveRegistry()
+        objectives = registry.get_available_objectives()
+
+        logger.info(f"📊 Returning {len(objectives)} available objectives")
+        return jsonify({
+            'success': True,
+            'objectives': objectives
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error getting available objectives: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/objectives/schema/<objective_name>', methods=['GET'])
+def get_objective_schema(objective_name: str):
+    """Get UI schema for a specific objective function.
+
+    Args:
+        objective_name: The class name of the objective (e.g., 'MaximizeProfit')
+
+    Returns:
+        JSON with UI schema containing parameter groups for form generation
+    """
+    try:
+        from optimization.genetic_optimizer.abstractions.objective_registry import ObjectiveRegistry
+
+        registry = ObjectiveRegistry()
+        schema = registry.get_ui_schema(objective_name)
+
+        has_params = len(schema.get('parameter_groups', {})) > 0
+        logger.info(f"📊 Returning schema for objective '{objective_name}' (has_parameters: {has_params})")
+
+        return jsonify({
+            'success': True,
+            'schema': schema
+        })
+
+    except ValueError as e:
+        logger.warning(f"⚠️ Objective not found: {objective_name}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 404
+
+    except Exception as e:
+        logger.error(f"❌ Error getting objective schema: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@optimizer_bp.route('/api/objectives/schemas', methods=['GET'])
+def get_all_objective_schemas():
+    """Get UI schemas for all available objective functions.
+
+    Returns:
+        JSON with dict mapping objective name to UI schema
+    """
+    try:
+        from optimization.genetic_optimizer.abstractions.objective_registry import ObjectiveRegistry
+
+        registry = ObjectiveRegistry()
+        schemas = registry.get_ui_schemas()
+
+        logger.info(f"📊 Returning schemas for {len(schemas)} objectives")
+        return jsonify({
+            'success': True,
+            'schemas': schemas
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error getting objective schemas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =============================================================================
 # WebSocket Event Handlers
 # These need to be registered in the main app.py file with the socketio instance
 # =============================================================================
