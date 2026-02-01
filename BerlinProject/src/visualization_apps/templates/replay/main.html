@@ -167,7 +167,13 @@
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
                                     data-bs-target="#indicators-pane" type="button" role="tab">
-                                <i class="fas fa-chart-line me-2"></i>Indicators
+                                <i class="fas fa-chart-line me-2"></i>Signal Indicators
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="trend-indicators-tab" data-bs-toggle="tab"
+                                    data-bs-target="#trend-indicators-pane" type="button" role="tab">
+                                <i class="fas fa-trending-up me-2"></i>Trend Indicators
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
@@ -209,14 +215,24 @@
                             </div>
                         </div>
 
-                        <!-- Indicators Tab -->
+                        <!-- Signal Indicators Tab -->
                         <div class="tab-pane fade" id="indicators-pane" role="tabpanel">
                             <div class="mb-3">
-                                <button class="btn btn-success" id="addIndicatorBtn">
-                                    <i class="fas fa-plus me-2"></i>Add Indicator
+                                <button class="btn btn-success" id="addSignalIndicatorBtn">
+                                    <i class="fas fa-plus me-1"></i>Add Signal Indicator
                                 </button>
                             </div>
-                            <div id="indicatorsContainer"></div>
+                            <div id="signalIndicatorsContainer"></div>
+                        </div>
+
+                        <!-- Trend Indicators Tab -->
+                        <div class="tab-pane fade" id="trend-indicators-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <button class="btn btn-success" id="addTrendIndicatorBtn">
+                                    <i class="fas fa-plus me-1"></i>Add Trend Indicator
+                                </button>
+                            </div>
+                            <div id="trendIndicatorsContainer"></div>
                         </div>
 
                         <!-- Bars Tab -->
@@ -247,11 +263,14 @@
         </div>
     </div>
 
-    <!-- Run Button -->
+    <!-- Action Buttons -->
     <div class="row mb-4">
         <div class="col-12 text-center">
-            <button type="button" class="btn btn-success btn-lg" id="runReplayBtn" disabled>
+            <button type="button" class="btn btn-success btn-lg me-2" id="runReplayBtn" disabled>
                 <i class="fas fa-play me-2"></i>Run Replay
+            </button>
+            <button type="button" class="btn btn-primary" id="sendToOptimizerBtn" disabled>
+                <i class="fas fa-dna me-2"></i>Send to Optimizer
             </button>
         </div>
     </div>
@@ -505,6 +524,8 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- Shared indicator form handler (must be loaded first) -->
+<script src="{{ url_for('shared.static', filename='js/indicator-form-handler.js') }}"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/config-utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/trade-executor-common.js') }}"></script>
@@ -591,9 +612,10 @@ document.addEventListener('DOMContentLoaded', function() {
             renderMonitorConfiguration();
             renderDataConfiguration();
 
-            // Show editor and enable run button
+            // Show editor and enable buttons
             configEditor.style.display = 'block';
             runReplayBtn.disabled = false;
+            document.getElementById('sendToOptimizerBtn').disabled = false;
         } catch (error) {
             alert('Error loading configurations: ' + error.message);
         }
@@ -2412,7 +2434,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Ensure indicator classes are loaded first
                 if (!indicatorClasses || Object.keys(indicatorClasses).length === 0) {
                     console.log('⏳ Waiting for indicator classes to load...');
-                    await loadIndicatorClasses();
+                    await IndicatorFormHandler.loadAllIndicatorTypes('/monitor_config');
+                    indicatorClasses = IndicatorFormHandler.getIndicatorClasses('all');
                 }
 
                 // Parse configs
@@ -2448,16 +2471,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderMonitorConfiguration();
                 renderDataConfiguration();
 
-                // Show editor and enable run button
+                // Show editor and enable buttons
                 configEditor.style.display = 'block';
                 runReplayBtn.disabled = false;
+                document.getElementById('sendToOptimizerBtn').disabled = false;
 
                 showAlert('Elite configuration loaded from optimizer!', 'success');
 
                 console.log('✅ Configurations loaded and rendered');
             } catch (error) {
                 console.error('Error loading configs from sessionStorage:', error);
-                showAlert('Error loading configuration from optimizer', 'danger');
+                showAlert('Error loading configuration from optimizer: ' + error.message, 'danger');
+                // Clear stale sessionStorage data to prevent repeated errors
+                sessionStorage.removeItem('replayMonitorConfig');
+                sessionStorage.removeItem('replayDataConfig');
             }
         }
     }

@@ -30,6 +30,8 @@ class TradeExecutorConfig(BaseModel):
 
     # Behavior flags
     ignore_bear_signals: bool = PydanticField(default=False)
+    # Exit all positions by end of day (market close)
+    exit_by_end_of_day: bool = PydanticField(default=False)
     # Note: check_signal_conflicts is always True and not configurable
 
     # Trailing stop loss configuration

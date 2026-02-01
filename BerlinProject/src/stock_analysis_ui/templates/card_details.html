@@ -1044,6 +1044,13 @@
                     
                     // Initialize chart even if empty - candles will be added dynamically
                     initializeCandlestickChart();
+
+                    // Add market hours bands after chart initialization
+                    if (candlestickChart && candlestickData && candlestickData.length > 0) {
+                        if (typeof IndicatorCharts !== 'undefined') {
+                            IndicatorCharts.addMarketHoursBandsToChart(candlestickChart, candlestickData);
+                        }
+                    }
                 } else {
                     console.log('Failed to load candlestick endpoint, using mock data');
                     console.log('Response data:', data);
@@ -1077,6 +1084,13 @@
             }
 
             initializeCandlestickChart();
+
+            // Add market hours bands after mock chart initialization
+            if (candlestickChart && candlestickData && candlestickData.length > 0) {
+                if (typeof IndicatorCharts !== 'undefined') {
+                    IndicatorCharts.addMarketHoursBandsToChart(candlestickChart, candlestickData);
+                }
+            }
         }
 
         function initializeCandlestickChart() {
@@ -1609,6 +1623,13 @@
 
                     // Render indicator tabs and charts
                     renderIndicatorTabs();
+
+                    // Add market hours bands to candlestick chart (extended hours shading)
+                    if (candlestickChart && candlestickData && candlestickData.length > 0) {
+                        if (typeof IndicatorCharts !== 'undefined') {
+                            IndicatorCharts.addMarketHoursBandsToChart(candlestickChart, candlestickData);
+                        }
+                    }
 
                     // Add trade bands to candlestick chart if trades exist
                     if (chartData.trades && chartData.trades.length > 0 && candlestickChart) {

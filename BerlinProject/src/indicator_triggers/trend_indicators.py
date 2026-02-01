@@ -228,14 +228,18 @@ class EMASlopeTrendIndicator(BaseIndicator):
     - Negative slope = bearish trend
     - Steeper slope = stronger trend
 
-    The direction_filter parameter controls output:
-    - "Both": Signed output (-1 to +1), positive=bullish, negative=bearish
-    - "Bull": Only bullish trends, always positive (0 to +1), bearish zeroed
-    - "Bear": Only bearish trends, always positive (0 to +1), bullish zeroed
+    The direction_filter parameter allows filtering signals:
+    - "Both": Output all trend signals (default behavior)
+    - "Bull": Only output bullish trends (positive values), zero out bearish
+    - "Bear": Only output bearish trends (negative values), zero out bullish
 
-    Output with direction_filter:
-    - Bull/Bear filters always return positive values (0.0 to 1.0)
-    - Both filter returns signed values (-1.0 to +1.0)
+    Output:
+    - Positive values (0.0 to 1.0): Bullish trend with strength
+    - Negative values (-1.0 to 0.0): Bearish trend with strength
+    - Zero: No signal (filtered out or flat slope)
+
+    Note: The trend gate system expects negative values for bearish trends,
+    which it then inverts for bear bars. So Bear filter keeps values negative.
     """
 
     @classmethod
@@ -325,7 +329,7 @@ class EMASlopeTrendIndicator(BaseIndicator):
                 parameter_type=ParameterType.CHOICE,
                 default_value="Both",
                 choices=["Both", "Bull", "Bear"],
-                description="Filter signals: Bull (bullish only), Bear (bearish only), Both (all). Bull/Bear always output positive values.",
+                description="Filter signals: Bull (positive only), Bear (negative only), Both (all signals)",
                 ui_group="Slope Settings"
             ),
         ]
@@ -339,8 +343,11 @@ class EMASlopeTrendIndicator(BaseIndicator):
 
         When direction_filter is set:
             - "Bull": Positive values (0 to +1) when bullish (slope > 0), 0 otherwise
-            - "Bear": Positive values (0 to +1) when bearish (slope < 0), 0 otherwise
+            - "Bear": Negative values (-1 to 0) when bearish (slope < 0), 0 otherwise
             - "Both": Signed values (-1 to +1): positive=bullish, negative=bearish
+
+        Note: The trend gate system expects negative values for bearish trends,
+        which it then inverts for bear bars. So Bear filter keeps values negative.
         """
         period = self.get_parameter("period")
         slope_period = self.get_parameter("slope_period")
@@ -389,16 +396,19 @@ class EMASlopeTrendIndicator(BaseIndicator):
         result = np.clip(normalized, -1.0, 1.0)
 
         # Apply direction filter
-        # Bull: only positive values (bullish trends), always positive output
-        # Bear: only negative values become positive (bearish trends), always positive output
+        # Bull: only positive values (bullish trends), zero out bearish
+        # Bear: only negative values (bearish trends), zero out bullish
         # Both: keep signed values (positive=bullish, negative=bearish)
+        #
+        # Note: The trend gate expects negative values for bearish trends.
+        # For bear bars, it inverts negative → positive gate. So Bear filter
+        # must keep values negative (not convert to positive).
         if direction_filter == "Bull":
             # Keep positive values, zero out negative
             result = np.where(result > 0, result, 0.0)
         elif direction_filter == "Bear":
-            # Convert negative values to positive, zero out positive
-            # This ensures the trigger is always positive for bearish trends
-            result = np.where(result < 0, np.abs(result), 0.0)
+            # Keep negative values for bearish trends (trend gate will invert for bear bars)
+            result = np.where(result < 0, result, 0.0)
         # "Both" keeps all values unchanged (positive=bullish, negative=bearish)
 
         component_data = {
@@ -419,14 +429,18 @@ class SuperTrendIndicator(BaseIndicator):
     - Trend flips when price crosses the bands
     - Provides clear trend direction signals
 
-    The direction_filter parameter controls output:
-    - "Both": Signed output (+1 or -1), positive=bullish, negative=bearish
-    - "Bull": Only bullish trends, always positive (+1), bearish zeroed
-    - "Bear": Only bearish trends, always positive (+1), bullish zeroed
+    The direction_filter parameter allows filtering signals:
+    - "Both": Output all trend signals (default behavior)
+    - "Bull": Only output bullish trends (positive values), zero out bearish
+    - "Bear": Only output bearish trends (negative values), zero out bullish
 
-    Output with direction_filter:
-    - Bull/Bear filters always return positive values (0.0 or 1.0)
-    - Both filter returns signed values (-1.0 or +1.0)
+    Output:
+    - Positive values (+1.0): Bullish trend
+    - Negative values (-1.0): Bearish trend
+    - Zero: No signal (filtered out or below threshold)
+
+    Note: The trend gate system expects negative values for bearish trends,
+    which it then inverts for bear bars. So Bear filter keeps values negative.
     """
 
     @classmethod
@@ -495,7 +509,7 @@ class SuperTrendIndicator(BaseIndicator):
                 parameter_type=ParameterType.CHOICE,
                 default_value="Both",
                 choices=["Both", "Bull", "Bear"],
-                description="Filter signals: Bull (bullish only), Bear (bearish only), Both (all). Bull/Bear always output positive values.",
+                description="Filter signals: Bull (positive only), Bear (negative only), Both (all signals)",
                 ui_group="SuperTrend Settings"
             ),
         ]
@@ -509,8 +523,11 @@ class SuperTrendIndicator(BaseIndicator):
 
         When direction_filter is set:
             - "Bull": Positive value (+1) when bullish, 0 otherwise
-            - "Bear": Positive value (+1) when bearish, 0 otherwise
+            - "Bear": Negative value (-1) when bearish, 0 otherwise
             - "Both": Signed values (+1 bullish, -1 bearish)
+
+        Note: The trend gate system expects negative values for bearish trends,
+        which it then inverts for bear bars. So Bear filter keeps values negative.
         """
         atr_period = self.get_parameter("atr_period")
         multiplier = self.get_parameter("multiplier")
@@ -600,16 +617,19 @@ class SuperTrendIndicator(BaseIndicator):
         result = direction.copy()
 
         # Apply direction filter
-        # Bull: only positive values (bullish trends), always positive output
-        # Bear: only negative values become positive (bearish trends), always positive output
+        # Bull: only positive values (bullish trends), zero out bearish
+        # Bear: only negative values (bearish trends), zero out bullish
         # Both: keep signed values (positive=bullish, negative=bearish)
+        #
+        # Note: The trend gate expects negative values for bearish trends.
+        # For bear bars, it inverts negative → positive gate. So Bear filter
+        # must keep values negative (not convert to positive).
         if direction_filter == "Bull":
             # Keep positive values (+1), zero out negative (-1 becomes 0)
             result = np.where(result > 0, result, 0.0)
         elif direction_filter == "Bear":
-            # Convert negative values to positive, zero out positive
-            # This ensures the trigger is always positive for bearish trends
-            result = np.where(result < 0, np.abs(result), 0.0)
+            # Keep negative values for bearish trends (trend gate will invert for bear bars)
+            result = np.where(result < 0, result, 0.0)
         # "Both" keeps all values unchanged (+1=bullish, -1=bearish)
 
         component_data = {

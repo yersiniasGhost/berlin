@@ -215,6 +215,9 @@ function loadTradeExecutorForm(tradeExecutor) {
     // Behavior
     const ignoreBearSignals = document.getElementById('ignoreBearSignals');
     if (ignoreBearSignals) ignoreBearSignals.checked = tradeExecutor.ignore_bear_signals || false;
+
+    const exitByEndOfDay = document.getElementById('exitByEndOfDay');
+    if (exitByEndOfDay) exitByEndOfDay.checked = tradeExecutor.exit_by_end_of_day || false;
 }
 
 /**
@@ -238,7 +241,8 @@ function collectTradeExecutorForm() {
         trailing_stop_loss: document.getElementById('trailingStopEnabled')?.checked || false,
         trailing_stop_distance_pct: percentToDecimal(trailingDistancePercent),
         trailing_stop_activation_pct: percentToDecimal(trailingActivationPercent),
-        ignore_bear_signals: document.getElementById('ignoreBearSignals')?.checked || false
+        ignore_bear_signals: document.getElementById('ignoreBearSignals')?.checked || false,
+        exit_by_end_of_day: document.getElementById('exitByEndOfDay')?.checked || false
     };
 
     // Include estimated price if provided (optional, for profit calculation reference)

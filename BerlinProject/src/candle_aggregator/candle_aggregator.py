@@ -157,6 +157,25 @@ class CandleAggregator(ABC):
         """Get current open candle"""
         return self.current_candle
 
+    def finalize(self) -> Optional[TickData]:
+        """
+        Finalize the aggregator by completing any open candle.
+
+        This is critical for end-of-day processing:
+        - The last candle of the day (e.g., 15:59) is started when its tick arrives
+        - But it's never "completed" because the next tick (16:00) is filtered out
+        - Without finalize(), that candle is lost and EOD exit logic won't trigger
+
+        Returns:
+            The completed candle if one existed, None otherwise
+        """
+        if self.current_candle is not None:
+            self.history.append(self.current_candle)
+            completed = self.current_candle
+            self.current_candle = None
+            return completed
+        return None
+
     def get_history(self) -> List[TickData]:
         """Get completed candles"""
         return self.history.copy()

@@ -1,1 +1,1 @@
-../../../stock_analysis_ui/static/js/timezone-utils.js
+../../../shared/static/js/timezone-utils.js

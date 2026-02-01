@@ -19,7 +19,13 @@
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
                                     data-bs-target="#indicators-pane" type="button" role="tab">
-                                <i class="fas fa-chart-line me-2"></i>Indicators
+                                <i class="fas fa-chart-line me-2"></i>Signal Indicators
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="trend-indicators-tab" data-bs-toggle="tab"
+                                    data-bs-target="#trend-indicators-pane" type="button" role="tab">
+                                <i class="fas fa-trending-up me-2"></i>Trend Indicators
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
@@ -79,14 +85,24 @@
                             </div>
                         </div>
 
-                        <!-- Indicators Tab -->
+                        <!-- Signal Indicators Tab -->
                         <div class="tab-pane fade" id="indicators-pane" role="tabpanel">
                             <div class="mb-3">
-                                <button class="btn btn-success" id="addIndicatorBtn">
-                                    <i class="fas fa-plus me-2"></i>Add Indicator
+                                <button class="btn btn-success" id="addSignalIndicatorBtn">
+                                    <i class="fas fa-plus me-1"></i>Add Signal Indicator
                                 </button>
                             </div>
-                            <div id="indicatorsContainer"></div>
+                            <div id="signalIndicatorsContainer"></div>
+                        </div>
+
+                        <!-- Trend Indicators Tab -->
+                        <div class="tab-pane fade" id="trend-indicators-pane" role="tabpanel">
+                            <div class="mb-3">
+                                <button class="btn btn-success" id="addTrendIndicatorBtn">
+                                    <i class="fas fa-plus me-1"></i>Add Trend Indicator
+                                </button>
+                            </div>
+                            <div id="trendIndicatorsContainer"></div>
                         </div>
 
                         <!-- Bars Tab -->

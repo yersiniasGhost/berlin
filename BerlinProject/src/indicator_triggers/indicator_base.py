@@ -378,10 +378,26 @@ class IndicatorRegistry(metaclass=Singleton):
         """Get list of TREND type indicators (trend direction/strength)."""
         return self.get_available_indicators(IndicatorType.TREND)
     
-    def get_ui_schemas(self) -> Dict[str, Dict[str, Any]]:
-        """Get UI schemas for all registered indicators."""
+    def get_ui_schemas(self, indicator_type: Optional[IndicatorType] = None) -> Dict[str, Dict[str, Any]]:
+        """Get UI schemas for registered indicators.
+
+        Args:
+            indicator_type: Optional filter by IndicatorType (SIGNAL or TREND).
+                           If None, returns all indicators.
+        """
         schemas = {}
         for name, cls in self._indicators.items():
+            # Filter by type if specified
+            if indicator_type is not None and cls.get_indicator_type() != indicator_type:
+                continue
             temp_instance = cls()
             schemas[name] = temp_instance.get_ui_schema()
         return schemas
+
+    def get_signal_ui_schemas(self) -> Dict[str, Dict[str, Any]]:
+        """Get UI schemas for SIGNAL type indicators only."""
+        return self.get_ui_schemas(IndicatorType.SIGNAL)
+
+    def get_trend_ui_schemas(self) -> Dict[str, Dict[str, Any]]:
+        """Get UI schemas for TREND type indicators only."""
+        return self.get_ui_schemas(IndicatorType.TREND)

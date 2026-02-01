@@ -217,6 +217,11 @@ class MongoDBConnect:
 
             self.total_ticks_processed += 1
 
+        # Finalize all aggregators to complete the last candle
+        # This is critical for EOD exit logic - ensures the 15:59 candle is included
+        for timeframe, aggregator in self.aggregators.items():
+            aggregator.finalize()
+
         # Finished processing ticks
 
     def _report_results(self):

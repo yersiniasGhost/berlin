@@ -13,6 +13,9 @@ from routes.indicator_routes import indicator_bp
 from routes.indicator_route import indicator_api
 from routes.monitor_config_routes import monitor_config_bp
 
+# Import shared module for common static files
+from shared import shared_bp
+
 from mlf_utils.log_manager import LogManager
 from mlf_utils import sanitize_nan_values, FileUploadHandler
 from mlf_utils.timezone_utils import now_et
@@ -39,6 +42,9 @@ app.register_blueprint(replay_bp)
 app.register_blueprint(optimizer_bp)
 app.register_blueprint(indicator_bp)
 app.register_blueprint(monitor_config_bp)
+
+# Register shared static files blueprint
+app.register_blueprint(shared_bp)
 
 # Create upload handler with visualization_apps/uploads directory
 upload_handler = FileUploadHandler(

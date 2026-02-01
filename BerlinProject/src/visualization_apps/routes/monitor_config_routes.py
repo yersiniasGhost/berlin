@@ -135,3 +135,77 @@ def get_indicator_classes():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
+
+@monitor_config_bp.route('/api/indicators/signal', methods=['GET'])
+def get_signal_indicator_classes():
+    """Get SIGNAL type indicator classes (entry/exit triggers) with caching"""
+    try:
+        # Check cache first
+        cached_schemas = indicator_schema_cache.get('signal_indicator_schemas')
+        if cached_schemas:
+            logger.info(f"Retrieved {len(cached_schemas)} signal indicator classes from cache")
+            return jsonify({
+                'success': True,
+                'indicators': cached_schemas
+            })
+
+        # Import refactored_indicators to ensure registration happens
+        import indicator_triggers.refactored_indicators
+        from indicator_triggers.indicator_base import IndicatorRegistry
+
+        registry = IndicatorRegistry()
+        schemas = registry.get_signal_ui_schemas()
+
+        # Cache the schemas for 10 minutes
+        indicator_schema_cache.set('signal_indicator_schemas', schemas)
+
+        logger.info(f"Retrieved {len(schemas)} signal indicator classes and cached them")
+
+        return jsonify({
+            'success': True,
+            'indicators': schemas
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting signal indicator classes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@monitor_config_bp.route('/api/indicators/trend', methods=['GET'])
+def get_trend_indicator_classes():
+    """Get TREND type indicator classes (trend direction/strength) with caching"""
+    try:
+        # Check cache first
+        cached_schemas = indicator_schema_cache.get('trend_indicator_schemas')
+        if cached_schemas:
+            logger.info(f"Retrieved {len(cached_schemas)} trend indicator classes from cache")
+            return jsonify({
+                'success': True,
+                'indicators': cached_schemas
+            })
+
+        # Import refactored_indicators to ensure registration happens
+        import indicator_triggers.refactored_indicators
+        from indicator_triggers.indicator_base import IndicatorRegistry
+
+        registry = IndicatorRegistry()
+        schemas = registry.get_trend_ui_schemas()
+
+        # Cache the schemas for 10 minutes
+        indicator_schema_cache.set('trend_indicator_schemas', schemas)
+
+        logger.info(f"Retrieved {len(schemas)} trend indicator classes and cached them")
+
+        return jsonify({
+            'success': True,
+            'indicators': schemas
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting trend indicator classes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})

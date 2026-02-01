@@ -271,7 +271,13 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="indicators-tab" data-bs-toggle="tab"
                             data-bs-target="#indicators-pane" type="button" role="tab">
-                        <i class="fas fa-chart-line me-2"></i>Indicators
+                        <i class="fas fa-chart-line me-2"></i>Signal Indicators
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="trend-indicators-tab" data-bs-toggle="tab"
+                            data-bs-target="#trend-indicators-pane" type="button" role="tab">
+                        <i class="fas fa-trending-up me-2"></i>Trend Indicators
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -307,14 +313,24 @@
                     </div>
                 </div>
 
-                <!-- Indicators Tab -->
+                <!-- Signal Indicators Tab -->
                 <div class="tab-pane fade" id="indicators-pane" role="tabpanel">
                     <div class="mb-3">
-                        <button class="btn-add" id="addIndicatorBtn">
-                            <i class="fas fa-plus me-2"></i>Add Indicator
+                        <button class="btn btn-primary" id="addSignalIndicatorBtn">
+                            <i class="fas fa-plus me-1"></i>Add Signal Indicator
                         </button>
                     </div>
-                    <div id="indicatorsContainer"></div>
+                    <div id="signalIndicatorsContainer"></div>
+                </div>
+
+                <!-- Trend Indicators Tab -->
+                <div class="tab-pane fade" id="trend-indicators-pane" role="tabpanel">
+                    <div class="mb-3">
+                        <button class="btn btn-primary" id="addTrendIndicatorBtn">
+                            <i class="fas fa-plus me-1"></i>Add Trend Indicator
+                        </button>
+                    </div>
+                    <div id="trendIndicatorsContainer"></div>
                 </div>
 
                 <!-- Bars Tab -->
@@ -345,11 +361,16 @@
                 <button class="btn btn-info" id="sendToReplayBtn">
                     <i class="fas fa-paper-plane me-2"></i>Send to Replay
                 </button>
+                <button class="btn btn-primary" id="sendToOptimizerBtn">
+                    <i class="fas fa-dna me-2"></i>Send to Optimizer
+                </button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Shared indicator form handler (must be loaded first) -->
+<script src="{{ url_for('shared.static', filename='js/indicator-form-handler.js') }}"></script>
 <script src="{{ url_for('static', filename='js/config-utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/trade-executor-common.js') }}"></script>

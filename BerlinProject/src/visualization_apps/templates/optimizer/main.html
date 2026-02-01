@@ -39,6 +39,8 @@
 
 {% block extra_scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<!-- Shared indicator form handler (must be loaded first) -->
+<script src="{{ url_for('shared.static', filename='js/indicator-form-handler.js') }}"></script>
 <script src="{{ url_for('static', filename='js/talib-patterns.js') }}"></script>
 <script src="{{ url_for('static', filename='js/config-utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/trade-executor-common.js') }}"></script>
@@ -1894,11 +1896,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 });
             } else {
-                tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-warning">No elites available</td></tr>';
+                // Show the error message from the backend if available
+                const errorMsg = data.error || 'No elites available';
+                tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-warning">${errorMsg}</td></tr>`;
             }
         } catch (error) {
             console.error('Error loading elites:', error);
-            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading elites</td></tr>';
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error loading elites: ${error.message}</td></tr>`;
         }
 
         modal.show();
@@ -1935,11 +1939,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     showAlert('Please allow popups to open the Replay tab', 'warning');
                 }
             } else {
-                showAlert('Error loading elite configuration', 'danger');
+                // Show the actual error message from the backend
+                const errorMsg = data.error || 'Unknown error';
+                showAlert('Error loading elite configuration: ' + errorMsg, 'danger');
             }
         } catch (error) {
             console.error('Error sending to replay:', error);
-            showAlert('Error sending elite to replay', 'danger');
+            showAlert('Error sending elite to replay: ' + error.message, 'danger');
         }
     });
 });

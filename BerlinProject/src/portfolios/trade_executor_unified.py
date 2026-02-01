@@ -8,7 +8,7 @@ from models.monitor_configuration import MonitorConfiguration
 from models.tick_data import TickData
 from portfolios.portfolio_tool import Portfolio, TradeReason
 from mlf_utils.log_manager import LogManager
-from mlf_utils.timezone_utils import is_market_hours, ET
+from mlf_utils.timezone_utils import is_market_hours, get_market_close_today, ET
 
 logger = LogManager().get_logger("TradeExecutorUnified")
 
@@ -68,6 +68,8 @@ class TradeExecutorUnified:
 
         # Behavior configuration
         self.ignore_bear_signals = trade_exec_config.ignore_bear_signals
+        # Exit all positions by end of day
+        self.exit_by_end_of_day = getattr(trade_exec_config, 'exit_by_end_of_day', False)
         self.check_signal_conflicts = True  # Always check for signal conflicts
 
         # Trailing stop loss configuration
@@ -103,6 +105,7 @@ class TradeExecutorUnified:
                     f"(distance={self.trailing_stop_distance_pct:.2%}, "
                     f"activation={self.trailing_stop_activation_pct:.2%})")
         logger.debug(f"  Ignore bear signals: {self.ignore_bear_signals}")
+        logger.debug(f"  Exit by end of day: {self.exit_by_end_of_day}")
 
 
     def make_decision(self,
@@ -228,17 +231,21 @@ class TradeExecutorUnified:
                                bar_scores: Dict[str, float], trade_time: Optional[datetime] = None,
                                indicators: Optional[Dict[str, float]] = None) -> bool:
         """
-        Check all exit conditions: stop loss, take profit, and bear signals
+        Check all exit conditions: stop loss, take profit, end of day, and bear signals
 
         Returns:
             True if exit was executed
         """
-        # Check stop loss (fixed or trailing)
+        # Check stop loss (fixed or trailing) - highest priority
         if self._check_stop_loss(timestamp, current_price, trade_time, bar_scores, indicators):
             return True
 
         # Check take profit
         if self._check_take_profit(timestamp, current_price, trade_time, bar_scores, indicators):
+            return True
+
+        # Check end of day exit (if enabled)
+        if self._check_end_of_day_exit(timestamp, current_price, trade_time, bar_scores, indicators):
             return True
 
         # Check bear signal exits (unless disabled)
@@ -391,7 +398,12 @@ class TradeExecutorUnified:
 
             # Activate trading halt if configured (dollar mode only)
             if self.take_profit_type == "dollars" and self.halt_after_target:
+                logger.info(f"[HALT CHECK] take_profit_type={self.take_profit_type}, "
+                           f"halt_after_target={self.halt_after_target} - Activating halt")
                 self._activate_trading_halt(trade_time)
+            else:
+                logger.debug(f"[HALT CHECK] take_profit_type={self.take_profit_type}, "
+                            f"halt_after_target={self.halt_after_target} - Not activating halt")
 
             return True
 
@@ -647,6 +659,77 @@ class TradeExecutorUnified:
         """Check if trading is currently halted."""
         return self._trading_halted
 
+    def _check_end_of_day_exit(self, timestamp: int, current_price: float, trade_time: Optional[datetime],
+                                bar_scores: Optional[Dict[str, float]] = None,
+                                indicators: Optional[Dict[str, float]] = None) -> bool:
+        """
+        Check if we should exit position at end of day.
+
+        Exits position if:
+        - exit_by_end_of_day is enabled
+        - We're in a position
+        - Current time is within 1 minute of market close (3:59 PM - 4:00 PM ET)
+        """
+        if not self.exit_by_end_of_day or not trade_time:
+            return False
+
+        if not self.portfolio.is_in_position():
+            return False
+
+        try:
+            trade_time_et = trade_time.astimezone(ET)
+            market_close = get_market_close_today(trade_time)
+
+            # Calculate minutes until market close
+            time_diff = (market_close - trade_time_et).total_seconds()
+
+            # Exit if within last minute of trading (0 to 60 seconds before close)
+            # or if we've passed close (for data that includes after-hours)
+            if time_diff <= 60 and time_diff >= -60:
+                entry_price = self.portfolio.get_entry_price()
+                pnl_pct = ((current_price - entry_price) / entry_price * 100) if entry_price else 0
+                pnl_dollars = self.portfolio.position_size * (current_price - entry_price) if entry_price else 0
+                time_str = trade_time.strftime("%Y-%m-%d %H:%M:%S") if trade_time else "N/A"
+
+                logger.info(f"{'='*60}")
+                logger.info(f"[EXIT - END OF DAY] Position closed at market close")
+                logger.info(f"  Date/Time: {time_str}")
+                logger.info(f"  Market close: {market_close.strftime('%H:%M:%S')} ET")
+                logger.info(f"  Entry price: ${entry_price:.2f}" if entry_price else "  Entry price: N/A")
+                logger.info(f"  Exit price: ${current_price:.2f}")
+                logger.info(f"  P&L: {pnl_pct:+.2f}% (${pnl_dollars:+.2f})")
+                logger.info(f"  Position size: {self.portfolio.position_size}")
+                logger.info(f"{'='*60}")
+
+                # Store exit trade details for UI visualization
+                self.trade_details_history[timestamp] = {
+                    'type': 'exit',
+                    'action': 'EXIT - END OF DAY',
+                    'datetime': time_str,
+                    'entry_price': entry_price,
+                    'exit_price': current_price,
+                    'pnl_pct': pnl_pct,
+                    'pnl_dollars': pnl_dollars,
+                    'position_size': self.portfolio.position_size,
+                    'trigger_info': {
+                        'reason': 'END OF DAY',
+                        'market_close': market_close.strftime('%H:%M:%S'),
+                        'exit_time': time_str
+                    },
+                    'bar_scores': dict(bar_scores) if bar_scores else {},
+                    'indicators': dict(indicators) if indicators else {}
+                }
+
+                self.portfolio.sell(timestamp, current_price, TradeReason.END_OF_DAY, self.portfolio.position_size)
+                self._clear_exit_levels()
+                self.trade_count += 1
+                return True
+
+        except Exception as e:
+            logger.warning(f"Error checking end of day exit: {e}")
+
+        return False
+
     def get_status(self) -> Dict:
         """Get current executor status for debugging"""
         return {
@@ -663,6 +746,7 @@ class TradeExecutorUnified:
             'halt_after_target': self.halt_after_target,
             'trading_halted': self._trading_halted,
             'halt_date': str(self._halt_date) if self._halt_date else None,
+            'exit_by_end_of_day': self.exit_by_end_of_day,
             'trailing_stop_loss': self.trailing_stop_loss,
             'ignore_bear_signals': self.ignore_bear_signals,
             'total_trades': len(self.portfolio.trade_history)
