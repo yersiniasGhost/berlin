@@ -445,7 +445,7 @@ def extract_trade_history_and_pnl_from_portfolio(portfolio, backtest_streamer):
             for i, trade in enumerate(portfolio.trade_history):
                 # Determine trade type based on TradeReason
                 trade_type = 'buy'
-                if trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]:
+                if trade.reason.is_exit():
                     trade_type = 'sell'
 
                 # Convert timestamp to milliseconds for JavaScript

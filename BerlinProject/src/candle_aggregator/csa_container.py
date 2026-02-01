@@ -43,6 +43,10 @@ class CSAContainer:
             for tick in raw_ticks:
                 aggregator.process_tick(tick)
 
+            # Finalize the aggregator to complete the last candle
+            # This is critical for EOD exit logic - ensures the last candle (e.g., 15:59) is included in history
+            aggregator.finalize()
+
             self.aggregators[agg_key] = aggregator
 
         print(f"Created {len(self.aggregators)} aggregators for {self.ticker} {self.start_date} to {self.end_date} ({len(raw_ticks)} ticks)")

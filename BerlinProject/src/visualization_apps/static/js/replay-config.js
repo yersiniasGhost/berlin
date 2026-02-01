@@ -1006,6 +1006,7 @@ function collectMonitorConfigData() {
     te.trailing_stop_distance_pct = percentToDecimal(parseFloat(document.getElementById('trailingDistance').value) || 1);
     te.trailing_stop_activation_pct = percentToDecimal(parseFloat(document.getElementById('trailingActivation').value) || 0.5);
     te.ignore_bear_signals = document.getElementById('ignoreBearSignals').checked;
+    te.exit_by_end_of_day = document.getElementById('exitByEndOfDay').checked;
 
     // Update bars and indicators
     updateCurrentConfigBars();

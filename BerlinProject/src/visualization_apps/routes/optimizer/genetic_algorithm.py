@@ -482,8 +482,8 @@ def _evaluate_elites_on_test_data(test_data_config, config_data, elites, io, cur
                     trade_pairs = []
 
                     for trade in test_portfolio.trade_history:
-                        is_entry = trade.reason in [TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT]
-                        is_exit = trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]
+                        is_entry = trade.reason.is_entry()
+                        is_exit = trade.reason.is_exit()
 
                         if is_entry:
                             trade_pairs.append({'entry': trade, 'exit': None})

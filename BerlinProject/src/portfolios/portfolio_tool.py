@@ -11,6 +11,21 @@ class TradeReason(Enum):
     EXIT_SHORT = "exit_short"
     STOP_LOSS = "stop_loss"
     TAKE_PROFIT = "take_profit"
+    END_OF_DAY = "end_of_day"
+
+    def is_exit(self) -> bool:
+        """Check if this reason represents an exit/sell trade."""
+        return self in (
+            TradeReason.EXIT_LONG,
+            TradeReason.EXIT_SHORT,
+            TradeReason.STOP_LOSS,
+            TradeReason.TAKE_PROFIT,
+            TradeReason.END_OF_DAY
+        )
+
+    def is_entry(self) -> bool:
+        """Check if this reason represents an entry/buy trade."""
+        return self in (TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT)
 
 
 @dataclass
@@ -117,7 +132,7 @@ class Portfolio:
 
         # Find the most recent entry trade by looking backwards through trade history
         for trade in reversed(self.trade_history):
-            if trade.reason in [TradeReason.ENTER_LONG, TradeReason.ENTER_SHORT]:
+            if trade.reason.is_entry():
                 return trade.price
 
         # If no explicit entry trade found, look for any BUY trade while we're in position
@@ -225,8 +240,7 @@ class Portfolio:
             exit_trade = self.trade_history[i + 1]
 
             # Check if this is an entry followed by an exit
-            if (entry_trade.reason == TradeReason.ENTER_LONG and
-                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+            if entry_trade.reason.is_entry() and exit_trade.reason.is_exit():
 
                 # Calculate P&L percentage (as percentage, not decimal)
                 pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
@@ -262,8 +276,7 @@ class Portfolio:
             exit_trade = self.trade_history[i + 1]
 
             # Check if this is an entry followed by an exit
-            if (entry_trade.reason == TradeReason.ENTER_LONG and
-                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+            if entry_trade.reason.is_entry() and exit_trade.reason.is_exit():
 
                 # Calculate P&L percentage (as percentage, not decimal)
                 pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
@@ -297,8 +310,7 @@ class Portfolio:
             exit_trade = self.trade_history[i + 1]
 
             # Check if this is an entry followed by an exit
-            if (entry_trade.reason == TradeReason.ENTER_LONG and
-                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+            if entry_trade.reason.is_entry() and exit_trade.reason.is_exit():
 
                 # Calculate P&L percentage
                 pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
@@ -326,8 +338,7 @@ class Portfolio:
             exit_trade = self.trade_history[i + 1]
 
             # Check if this is an entry followed by an exit
-            if (entry_trade.reason == TradeReason.ENTER_LONG and
-                    exit_trade.reason in [TradeReason.EXIT_LONG, TradeReason.STOP_LOSS, TradeReason.TAKE_PROFIT]):
+            if entry_trade.reason.is_entry() and exit_trade.reason.is_exit():
 
                 # Calculate P&L percentage
                 pnl_percent = ((exit_trade.price - entry_trade.price) / entry_trade.price) * 100.0
