@@ -1019,3 +1019,67 @@ def _sanitize_chart_data(data):
     elif isinstance(data, np.ndarray):
         return _sanitize_chart_data(data.tolist())
     return data
+
+
+# PIP SAVER ENDPOINTS
+@api_bp.route('/pip-saver/status')
+@require_session_auth
+def get_pip_saver_status():
+    """Get current pip saver status - session-based"""
+    try:
+        app_service = get_session_app_service()
+        status = app_service.get_pip_saver_status()
+
+        return jsonify({
+            'success': True,
+            **status
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting pip saver status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/pip-saver/toggle', methods=['POST'])
+@require_session_auth
+def toggle_pip_saver():
+    """Toggle pip saving on/off - session-based"""
+    try:
+        app_service = get_session_app_service()
+        result = app_service.toggle_pip_saving()
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Error toggling pip saver: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/pip-saver/enable', methods=['POST'])
+@require_session_auth
+def enable_pip_saver():
+    """Enable pip saving - session-based"""
+    try:
+        app_service = get_session_app_service()
+        result = app_service.enable_pip_saving()
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Error enabling pip saver: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/pip-saver/disable', methods=['POST'])
+@require_session_auth
+def disable_pip_saver():
+    """Disable pip saving - session-based"""
+    try:
+        app_service = get_session_app_service()
+        result = app_service.disable_pip_saving()
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Error disabling pip saver: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

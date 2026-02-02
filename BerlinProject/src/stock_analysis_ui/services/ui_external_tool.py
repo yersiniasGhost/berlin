@@ -1,10 +1,10 @@
 """
-Enhanced UIExternalTool with candlestick chart support and minimal logging
+Enhanced UIExternalTool with candlestick chart support, minimal logging, and pip saving
 """
 
 import time
 import math
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any, List, TYPE_CHECKING
 from datetime import datetime
 from collections import defaultdict
 
@@ -15,6 +15,9 @@ from data_streamer import ExternalTool
 from models.tick_data import TickData
 from mlf_utils.log_manager import LogManager
 from mlf_utils.timezone_utils import now_utc, isoformat_et
+
+if TYPE_CHECKING:
+    from stock_analysis_ui.services.pip_saver import PipSaver
 
 logger = LogManager().get_logger("UIExternalTool")
 
@@ -64,6 +67,9 @@ class UIExternalTool(ExternalTool):
         self.total_emits: int = 0
         self.failed_emits: int = 0
         self.max_failed_emits: int = 10
+
+        # Pip saver reference (set by app_service)
+        self.pip_saver: Optional["PipSaver"] = None
 
     # Required abstract methods from ExternalTool base class
     def feature_vector(self, tick_data: TickData) -> np.ndarray:
@@ -163,6 +169,17 @@ class UIExternalTool(ExternalTool):
             if success and self.failed_emit_counter[card_id] > 0:
                 self.failed_emit_counter[card_id] = 0
                 self.min_update_interval = 0.05  # Reset to normal rate
+
+            # Save pip to file if pip saver is enabled
+            if self.pip_saver and self.pip_saver.is_enabled:
+                self.pip_saver.save_pip(
+                    card_id=card_id,
+                    symbol=symbol,
+                    tick_data=tick_data,
+                    indicators=indicators,
+                    raw_indicators=raw_indicators,
+                    bar_scores=bar_scores
+                )
 
         except Exception as e:
             logger.error(f"Error processing tick for card {card_id}: {e}")

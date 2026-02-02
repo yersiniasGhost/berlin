@@ -13,6 +13,7 @@ from data_streamer.cs_replay_data_link import CSReplayDataLink
 from data_streamer.data_streamer import DataStreamer
 from models.monitor_configuration import MonitorConfiguration, load_monitor_config
 from stock_analysis_ui.services.ui_external_tool import UIExternalTool
+from stock_analysis_ui.services.pip_saver import PipSaver
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
 from mlf_utils.log_manager import LogManager
 from mlf_utils.timezone_utils import now_utc, isoformat_et
@@ -41,6 +42,10 @@ class AppService:
         # MODIFIED: Pass self to UIExternalTool so it can access combination data
         self.ui_tool: UIExternalTool = UIExternalTool(socketio, app_service=self)
 
+        # Initialize pip saver and connect to ui_tool
+        self.pip_saver: PipSaver = PipSaver(session_id=session_id)
+        self.ui_tool.pip_saver = self.pip_saver
+
         # State tracking
         self.is_streaming: bool = False
         self.combinations: Dict[str, Dict[str, Any]] = {}
@@ -63,6 +68,10 @@ class AppService:
             if self.data_link:
                 if hasattr(self.data_link, 'disconnect'):
                     self.data_link.disconnect()
+
+            # Cleanup pip saver
+            if self.pip_saver:
+                self.pip_saver.cleanup()
 
             self.combinations.clear()
             self.logger.info(f"AppService cleanup completed for session {self.session_id}")
@@ -282,6 +291,10 @@ class AppService:
             # Clear UI tool data for this card
             self.ui_tool.clear_meaningful_data(card_id)
 
+            # Close pip saver file for this card
+            if self.pip_saver:
+                self.pip_saver.close_card_file(card_id)
+
             # Remove from combinations
             del self.combinations[card_id]
 
@@ -368,7 +381,8 @@ class AppService:
             "mode": self.get_mode(),
             "is_streaming": self.is_streaming,
             "combinations_count": len(self.combinations),
-            "subscribed_symbols": list(self.subscribed_symbols)
+            "subscribed_symbols": list(self.subscribed_symbols),
+            "pip_saver": self.pip_saver.get_status() if self.pip_saver else None
         }
 
         # Add mode-specific info
@@ -378,3 +392,65 @@ class AppService:
             status["authenticated"] = self.auth_manager.is_authenticated()
 
         return status
+
+    # Pip saver management methods
+    def toggle_pip_saving(self) -> Dict[str, Any]:
+        """Toggle pip saving on/off. Returns new status."""
+        if not self.pip_saver:
+            return {"success": False, "error": "Pip saver not initialized"}
+
+        new_state = self.pip_saver.toggle()
+
+        # Emit status update to connected clients
+        self._emit_pip_saver_status()
+
+        return {
+            "success": True,
+            "enabled": new_state,
+            "status": self.pip_saver.get_status()
+        }
+
+    def enable_pip_saving(self) -> Dict[str, Any]:
+        """Enable pip saving. Returns status."""
+        if not self.pip_saver:
+            return {"success": False, "error": "Pip saver not initialized"}
+
+        success = self.pip_saver.enable()
+        if success:
+            self._emit_pip_saver_status()
+
+        return {
+            "success": success,
+            "enabled": self.pip_saver.is_enabled,
+            "status": self.pip_saver.get_status()
+        }
+
+    def disable_pip_saving(self) -> Dict[str, Any]:
+        """Disable pip saving. Returns status."""
+        if not self.pip_saver:
+            return {"success": False, "error": "Pip saver not initialized"}
+
+        success = self.pip_saver.disable()
+        if success:
+            self._emit_pip_saver_status()
+
+        return {
+            "success": success,
+            "enabled": self.pip_saver.is_enabled,
+            "status": self.pip_saver.get_status()
+        }
+
+    def get_pip_saver_status(self) -> Dict[str, Any]:
+        """Get current pip saver status."""
+        if not self.pip_saver:
+            return {"enabled": False, "error": "Pip saver not initialized"}
+        return self.pip_saver.get_status()
+
+    def _emit_pip_saver_status(self):
+        """Emit pip saver status to connected clients via WebSocket."""
+        try:
+            status = self.pip_saver.get_status() if self.pip_saver else {"enabled": False}
+            self.ui_tool.emit_to_session('pip_saver_status', status, self.session_id)
+            self.logger.info(f"Emitted pip saver status: enabled={status.get('enabled')}")
+        except Exception as e:
+            self.logger.error(f"Error emitting pip saver status: {e}")

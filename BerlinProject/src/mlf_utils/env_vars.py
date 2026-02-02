@@ -45,6 +45,9 @@ class EnvVars(metaclass=Singleton):
         self.debug = self.get_bool('DEBUG', "False")
         self.log_level = self.get_env('LOG_LEVEL', 'INFO')
 
+        # Pip data settings
+        self.pip_data_path = self.get_env('PIP_DATA_PATH')
+
 
 
     def get_env(self, variable: str, default: Optional[str] = None) -> Optional[str]:
