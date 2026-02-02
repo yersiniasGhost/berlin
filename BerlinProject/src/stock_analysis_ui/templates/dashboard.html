@@ -695,16 +695,6 @@
             border-radius: 5px;
         }
 
-        .indicators-summary {
-            font-size: 0.875rem;
-            color: #7d8590;
-            text-align: center;
-            padding: 1rem;
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
-        }
-
         /* Messages */
         .success-message, .error-message, .info-message {
             position: fixed;
@@ -1036,7 +1026,6 @@
                 </div>
                 <div class="portfolio-container"></div>
                 <div class="bars-container"></div>
-                <div class="indicators-summary">0 Active Indicators</div>
             `;
 
             container.appendChild(card);
@@ -1192,13 +1181,6 @@
             if (barsContainer && data.bar_scores) {
                 console.log("UPDATE CARD DATA - Updating bars with:", data.bar_scores);
                 barsContainer.innerHTML = renderBarScores(data.bar_scores);
-            }
-
-            // Update indicators summary
-            const indicatorsSummary = card.querySelector('.indicators-summary');
-            if (indicatorsSummary && data.indicators) {
-                const count = Object.keys(data.indicators).length;
-                indicatorsSummary.textContent = `${count} Active Indicator${count !== 1 ? 's' : ''}`;
             }
 
             // Update data warning for insufficient ticks
