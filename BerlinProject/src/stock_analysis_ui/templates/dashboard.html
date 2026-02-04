@@ -460,30 +460,117 @@
             justify-content: center;
         }
 
-        .controls {
-            padding: 1rem;
-            background: #0d1117;
-            border-bottom: 1px solid #21262d;
-            text-align: center;
+        /* Header action buttons */
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: auto;
         }
 
-        .add-card-button {
-            background: #238636;
-            color: #ffffff;
+        .header-btn {
             border: none;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            font-size: 1.125rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);
+            white-space: nowrap;
         }
 
-        .add-card-button:hover {
+        .header-btn.add-card {
+            background: #238636;
+            color: #ffffff;
+        }
+
+        .header-btn.add-card:hover {
             background: #2ea043;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
+        }
+
+        .header-btn.save-session {
+            background: #1f6feb;
+            color: #ffffff;
+        }
+
+        .header-btn.save-session:hover {
+            background: #388bfd;
+        }
+
+        .header-btn.load-session {
+            background: #8957e5;
+            color: #ffffff;
+        }
+
+        .header-btn.load-session:hover {
+            background: #a371f7;
+        }
+
+        /* Session List Styles */
+        .session-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            margin: 1rem 0;
+        }
+
+        .session-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #21262d;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .session-item:last-child {
+            border-bottom: none;
+        }
+
+        .session-item:hover {
+            background: #21262d;
+        }
+
+        .session-item.selected {
+            background: #1f6feb33;
+            border-left: 3px solid #1f6feb;
+        }
+
+        .session-info {
+            flex: 1;
+        }
+
+        .session-name {
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 0.25rem;
+        }
+
+        .session-meta {
+            font-size: 0.75rem;
+            color: #7d8590;
+        }
+
+        .session-delete {
+            background: none;
+            border: none;
+            color: #7d8590;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .session-delete:hover {
+            background: #f8514933;
+            color: #f85149;
+        }
+
+        .no-sessions {
+            padding: 2rem;
+            text-align: center;
+            color: #7d8590;
         }
 
         /* Modal Styles */
@@ -1151,6 +1238,11 @@
                             <button class="size-btn" data-size="small" title="Small View">S</button>
                         </div>
                     </div>
+                    <div class="header-actions">
+                        <button class="header-btn add-card" onclick="openAddCardModal()">+ Add Card</button>
+                        <button class="header-btn save-session" onclick="openSaveSessionModal()">💾 Save</button>
+                        <button class="header-btn load-session" onclick="openLoadSessionModal()">📂 Load</button>
+                    </div>
                 </div>
             </div>
 
@@ -1207,12 +1299,6 @@
                 </div>
             </div>
 
-            <div class="controls">
-                <button class="add-card-button" onclick="openAddCardModal()">
-                    + Add New Trading Card
-                </button>
-            </div>
-
             <!-- Modal for adding cards -->
             <div class="modal-overlay" id="modalOverlay">
                 <div class="modal">
@@ -1252,6 +1338,58 @@
                 </div>
             </div>
 
+            <!-- Modal for saving session -->
+            <div class="modal-overlay" id="saveSessionModalOverlay">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2 class="modal-title">💾 Save Session</h2>
+                        <button class="modal-close" onclick="closeSaveSessionModal()">&times;</button>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Session Name</h3>
+                        <div class="form-group">
+                            <label for="sessionNameInput">Enter a name for this session</label>
+                            <input type="text" id="sessionNameInput" placeholder="e.g., Morning Trading Setup" maxlength="50">
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Current Configuration</h3>
+                        <div id="sessionPreview" style="font-size: 0.875rem; color: #7d8590; padding: 0.5rem; background: #21262d; border-radius: 4px; max-height: 150px; overflow-y: auto;">
+                            No cards to save
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" onclick="closeSaveSessionModal()">Cancel</button>
+                        <button class="btn btn-primary" id="saveSessionButton" onclick="saveSession()" disabled>Save Session</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal for loading session -->
+            <div class="modal-overlay" id="loadSessionModalOverlay">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2 class="modal-title">📂 Load Session</h2>
+                        <button class="modal-close" onclick="closeLoadSessionModal()">&times;</button>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Saved Sessions</h3>
+                        <div class="session-list" id="sessionList">
+                            <div class="no-sessions">No saved sessions found</div>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" onclick="closeLoadSessionModal()">Cancel</button>
+                        <button class="btn btn-primary" id="loadSessionButton" onclick="loadSelectedSession()" disabled>Load Session</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="messages"></div>
 
             <div class="cards-container" id="cardsContainer">
@@ -1270,6 +1408,9 @@
 
         // Modal state
         let modalSelectedFile = null;
+
+        // Pending card configs (stores config_content before WebSocket update)
+        let pendingCardConfigs = {};
 
         // Pip saver state
         let pipSaverEnabled = false;
@@ -1735,8 +1876,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Navigate to details page
-                    window.location.href = `/card-details.html?card_id=${cardId}`;
+                    // Open details page in new tab
+                    window.open(`/card-details.html?card_id=${cardId}`, '_blank');
                 } else {
                     showMessage(`Error loading details: ${data.error}`, 'error');
                 }
@@ -1803,6 +1944,13 @@
             // Add updating animation
             card.classList.add('updating');
             setTimeout(() => card.classList.remove('updating'), 1000);
+
+            // Merge pending config data if available
+            if (pendingCardConfigs[card.id]) {
+                data.config_content = pendingCardConfigs[card.id].config_content;
+                data.config_name = pendingCardConfigs[card.id].config_name;
+                // Keep pending data for future saves (don't delete it)
+            }
 
             // Store card data
             cards[card.id] = data;
@@ -1945,6 +2093,7 @@
                         card.remove();
                         delete cards[cardId];
                         delete priceStreaks[cardId];  // Clean up price streak data
+                        delete pendingCardConfigs[cardId];  // Clean up pending config data
                         updateCardsCount();
 
                         // Clean up localStorage
@@ -2056,6 +2205,14 @@
                 const result = await response.json();
 
                 if (result.success) {
+                    // Store config content for session saving
+                    const cardId = result.card_id;
+                    if (cardId) {
+                        pendingCardConfigs[cardId] = {
+                            config_content: configContent,
+                            config_name: configName
+                        };
+                    }
                     showMessage(`Added ${symbol} successfully!`, 'success');
                     closeAddCardModal();
                 } else {
@@ -2074,6 +2231,288 @@
                 reader.readAsText(file);
             });
         }
+
+        // ===== SESSION MANAGEMENT =====
+        const SESSION_STORAGE_KEY = 'mlf_trading_sessions';
+        let selectedSessionId = null;
+
+        // Get all saved sessions from localStorage
+        function getSavedSessions() {
+            try {
+                const data = localStorage.getItem(SESSION_STORAGE_KEY);
+                return data ? JSON.parse(data) : {};
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                return {};
+            }
+        }
+
+        // Save sessions to localStorage
+        function saveSessions(sessions) {
+            try {
+                localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessions));
+            } catch (e) {
+                console.error('Error saving sessions:', e);
+                showMessage('Error saving session: Storage quota exceeded', 'error');
+            }
+        }
+
+        // Get current card configurations for saving
+        function getCurrentCardConfigs() {
+            const configs = [];
+            for (const [cardId, cardData] of Object.entries(cards)) {
+                // Check both card data and pendingCardConfigs for config_content
+                const configContent = cardData.config_content ||
+                    (pendingCardConfigs[cardId] && pendingCardConfigs[cardId].config_content);
+                const configName = cardData.config_name ||
+                    (pendingCardConfigs[cardId] && pendingCardConfigs[cardId].config_name) ||
+                    'config.json';
+
+                if (cardData.symbol && configContent) {
+                    configs.push({
+                        symbol: cardData.symbol,
+                        monitor_name: cardData.monitor_config_name || cardData.test_name || 'Unknown',
+                        config_content: configContent,
+                        config_name: configName
+                    });
+                }
+            }
+            return configs;
+        }
+
+        // Open Save Session Modal
+        function openSaveSessionModal() {
+            const configs = getCurrentCardConfigs();
+            const previewDiv = document.getElementById('sessionPreview');
+            const saveButton = document.getElementById('saveSessionButton');
+
+            if (configs.length === 0) {
+                previewDiv.innerHTML = '<em>No cards to save. Add some trading cards first.</em>';
+                saveButton.disabled = true;
+            } else {
+                const previewHtml = configs.map(c =>
+                    `<div style="margin-bottom: 0.5rem;">
+                        <strong>${c.symbol}</strong> - ${c.monitor_name}
+                    </div>`
+                ).join('');
+                previewDiv.innerHTML = previewHtml;
+                saveButton.disabled = false;
+            }
+
+            document.getElementById('sessionNameInput').value = '';
+            document.getElementById('saveSessionModalOverlay').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+
+            // Update button state based on input
+            updateSaveSessionButton();
+        }
+
+        function closeSaveSessionModal() {
+            document.getElementById('saveSessionModalOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            document.getElementById('sessionNameInput').value = '';
+        }
+
+        function updateSaveSessionButton() {
+            const nameInput = document.getElementById('sessionNameInput').value.trim();
+            const configs = getCurrentCardConfigs();
+            const button = document.getElementById('saveSessionButton');
+            button.disabled = !nameInput || configs.length === 0;
+        }
+
+        // Save session to localStorage
+        function saveSession() {
+            const sessionName = document.getElementById('sessionNameInput').value.trim();
+            if (!sessionName) {
+                showMessage('Please enter a session name', 'error');
+                return;
+            }
+
+            const configs = getCurrentCardConfigs();
+            if (configs.length === 0) {
+                showMessage('No cards to save', 'error');
+                return;
+            }
+
+            const sessions = getSavedSessions();
+            const sessionId = 'session_' + Date.now();
+
+            sessions[sessionId] = {
+                id: sessionId,
+                name: sessionName,
+                savedAt: new Date().toISOString(),
+                cards: configs
+            };
+
+            saveSessions(sessions);
+            closeSaveSessionModal();
+            showMessage(`Session "${sessionName}" saved with ${configs.length} card(s)`, 'success');
+        }
+
+        // Open Load Session Modal
+        function openLoadSessionModal() {
+            selectedSessionId = null;
+            renderSessionList();
+            document.getElementById('loadSessionModalOverlay').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            document.getElementById('loadSessionButton').disabled = true;
+        }
+
+        function closeLoadSessionModal() {
+            document.getElementById('loadSessionModalOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            selectedSessionId = null;
+        }
+
+        // Render the session list in the modal
+        function renderSessionList() {
+            const sessions = getSavedSessions();
+            const sessionList = document.getElementById('sessionList');
+            const sessionIds = Object.keys(sessions).sort((a, b) => {
+                // Sort by saved date, newest first
+                return new Date(sessions[b].savedAt) - new Date(sessions[a].savedAt);
+            });
+
+            if (sessionIds.length === 0) {
+                sessionList.innerHTML = '<div class="no-sessions">No saved sessions found</div>';
+                return;
+            }
+
+            sessionList.innerHTML = sessionIds.map(id => {
+                const session = sessions[id];
+                const date = new Date(session.savedAt);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                const cardCount = session.cards ? session.cards.length : 0;
+
+                return `
+                    <div class="session-item" data-session-id="${id}" onclick="selectSession('${id}')">
+                        <div class="session-info">
+                            <div class="session-name">${escapeHtml(session.name)}</div>
+                            <div class="session-meta">${cardCount} card(s) • ${dateStr}</div>
+                        </div>
+                        <button class="session-delete" onclick="event.stopPropagation(); deleteSession('${id}')" title="Delete session">
+                            🗑️
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Select a session in the list
+        function selectSession(sessionId) {
+            selectedSessionId = sessionId;
+
+            // Update visual selection
+            document.querySelectorAll('.session-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const selectedItem = document.querySelector(`[data-session-id="${sessionId}"]`);
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+
+            document.getElementById('loadSessionButton').disabled = false;
+        }
+
+        // Delete a saved session
+        function deleteSession(sessionId) {
+            if (!confirm('Are you sure you want to delete this session?')) {
+                return;
+            }
+
+            const sessions = getSavedSessions();
+            const sessionName = sessions[sessionId]?.name || 'Session';
+            delete sessions[sessionId];
+            saveSessions(sessions);
+
+            if (selectedSessionId === sessionId) {
+                selectedSessionId = null;
+                document.getElementById('loadSessionButton').disabled = true;
+            }
+
+            renderSessionList();
+            showMessage(`Session "${sessionName}" deleted`, 'success');
+        }
+
+        // Load the selected session
+        async function loadSelectedSession() {
+            if (!selectedSessionId) {
+                showMessage('Please select a session to load', 'error');
+                return;
+            }
+
+            const sessions = getSavedSessions();
+            const session = sessions[selectedSessionId];
+
+            if (!session || !session.cards || session.cards.length === 0) {
+                showMessage('Selected session has no cards', 'error');
+                return;
+            }
+
+            closeLoadSessionModal();
+            showMessage(`Loading session "${session.name}"...`, 'info');
+
+            // Load each card sequentially
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const cardConfig of session.cards) {
+                try {
+                    const response = await fetch('/api/combinations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            symbol: cardConfig.symbol,
+                            config_content: cardConfig.config_content,
+                            config_name: cardConfig.config_name || 'config.json'
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        // Store config content for session saving
+                        const cardId = result.card_id;
+                        if (cardId) {
+                            pendingCardConfigs[cardId] = {
+                                config_content: cardConfig.config_content,
+                                config_name: cardConfig.config_name || 'config.json'
+                            };
+                        }
+                        successCount++;
+                    } else {
+                        console.error(`Failed to load ${cardConfig.symbol}:`, result.error);
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error loading ${cardConfig.symbol}:`, error);
+                    errorCount++;
+                }
+            }
+
+            if (errorCount === 0) {
+                showMessage(`Session loaded successfully! ${successCount} card(s) added.`, 'success');
+            } else {
+                showMessage(`Session loaded with issues: ${successCount} success, ${errorCount} failed.`, 'warning');
+            }
+        }
+
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Event listeners for session modals
+        document.addEventListener('DOMContentLoaded', function() {
+            // Session name input listener
+            const sessionNameInput = document.getElementById('sessionNameInput');
+            if (sessionNameInput) {
+                sessionNameInput.addEventListener('input', updateSaveSessionButton);
+            }
+        });
 
         // Mobile sidebar toggle
         function toggleSidebar() {
