@@ -151,13 +151,13 @@ class AppService:
             self.card_counter += 1
             card_id: str = f"card{self.card_counter}"
 
-            # Extract test_name from config file
+            # Extract monitor name from config file
             test_name = "Unknown Config"
             try:
                 with open(config_file, 'r') as f:
                     config_data = json.load(f)
-                    test_name = config_data.get('test_name', 'Unknown Config')
-                    self.logger.info(f"Extracted test_name: '{test_name}' from config file")
+                    test_name = config_data.get('monitor', {}).get('name', 'Unknown Config')
+                    self.logger.info(f"Extracted monitor name: '{test_name}' from config file")
             except Exception as e:
                 self.logger.error(f"Error reading config file for test_name: {e}")
 
