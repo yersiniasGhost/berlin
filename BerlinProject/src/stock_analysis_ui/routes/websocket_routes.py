@@ -257,4 +257,147 @@ def register_websocket_events(socketio, initial_app_service):
         """Handle ping for connection testing"""
         emit('pong', {'message': 'Connection is active'})
 
+    # ============================================
+    # Replay Mode WebSocket Events
+    # ============================================
+
+    @socketio.on('replay_pause')
+    def handle_replay_pause():
+        """Handle replay pause request"""
+        try:
+            session_id, authenticated = get_session_from_websocket()
+            if not authenticated or not session_id:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            app_service = get_session_app_service(session_id)
+            if not app_service or not hasattr(app_service, 'data_link'):
+                emit('error', {'message': 'No active replay session'})
+                return
+
+            if hasattr(app_service.data_link, 'pause'):
+                app_service.data_link.pause()
+                emit('replay_state', {'paused': True})
+                logger.info(f"Replay paused for session {session_id}")
+            else:
+                emit('error', {'message': 'Pause not supported for this data source'})
+
+        except Exception as e:
+            logger.error(f"Error pausing replay: {e}")
+            emit('error', {'message': str(e)})
+
+    @socketio.on('replay_resume')
+    def handle_replay_resume():
+        """Handle replay resume request"""
+        try:
+            session_id, authenticated = get_session_from_websocket()
+            if not authenticated or not session_id:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            app_service = get_session_app_service(session_id)
+            if not app_service or not hasattr(app_service, 'data_link'):
+                emit('error', {'message': 'No active replay session'})
+                return
+
+            if hasattr(app_service.data_link, 'resume'):
+                app_service.data_link.resume()
+                emit('replay_state', {'paused': False})
+                logger.info(f"Replay resumed for session {session_id}")
+            else:
+                emit('error', {'message': 'Resume not supported for this data source'})
+
+        except Exception as e:
+            logger.error(f"Error resuming replay: {e}")
+            emit('error', {'message': str(e)})
+
+    @socketio.on('replay_stop')
+    def handle_replay_stop():
+        """Handle replay stop request"""
+        try:
+            session_id, authenticated = get_session_from_websocket()
+            if not authenticated or not session_id:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            app_service = get_session_app_service(session_id)
+            if not app_service or not hasattr(app_service, 'data_link'):
+                emit('error', {'message': 'No active replay session'})
+                return
+
+            if hasattr(app_service.data_link, 'stop_streaming'):
+                app_service.data_link.stop_streaming()
+                emit('replay_state', {'stopped': True})
+                logger.info(f"Replay stopped for session {session_id}")
+
+                # Clear replay mode from session
+                from flask import session
+                session.pop('replay_mode', None)
+                session.pop('replay_config', None)
+            else:
+                emit('error', {'message': 'Stop not supported for this data source'})
+
+        except Exception as e:
+            logger.error(f"Error stopping replay: {e}")
+            emit('error', {'message': str(e)})
+
+    @socketio.on('replay_speed')
+    def handle_replay_speed(data):
+        """Handle replay speed change request"""
+        try:
+            session_id, authenticated = get_session_from_websocket()
+            if not authenticated or not session_id:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            app_service = get_session_app_service(session_id)
+            if not app_service or not hasattr(app_service, 'data_link'):
+                emit('error', {'message': 'No active replay session'})
+                return
+
+            speed = data.get('speed', 1.0)
+
+            if hasattr(app_service.data_link, 'set_playback_speed'):
+                if app_service.data_link.set_playback_speed(speed):
+                    emit('replay_state', {'speed': speed})
+                    logger.info(f"Replay speed changed to {speed}x for session {session_id}")
+                else:
+                    emit('error', {'message': f'Invalid speed: {speed}'})
+            elif hasattr(app_service.data_link, 'playback_speed'):
+                # For CSReplayDataLink which has playback_speed attribute
+                app_service.data_link.playback_speed = speed
+                emit('replay_state', {'speed': speed})
+                logger.info(f"Replay speed changed to {speed}x for session {session_id}")
+            else:
+                emit('error', {'message': 'Speed change not supported for this data source'})
+
+        except Exception as e:
+            logger.error(f"Error changing replay speed: {e}")
+            emit('error', {'message': str(e)})
+
+    @socketio.on('replay_restart')
+    def handle_replay_restart():
+        """Handle replay restart request"""
+        try:
+            session_id, authenticated = get_session_from_websocket()
+            if not authenticated or not session_id:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            app_service = get_session_app_service(session_id)
+            if not app_service or not hasattr(app_service, 'data_link'):
+                emit('error', {'message': 'No active replay session'})
+                return
+
+            if hasattr(app_service.data_link, 'restart'):
+                app_service.data_link.restart()
+                emit('replay_state', {'restarted': True, 'paused': False})
+                logger.info(f"Replay restarted for session {session_id}")
+            else:
+                emit('error', {'message': 'Restart not supported for this data source'})
+
+        except Exception as e:
+            logger.error(f"Error restarting replay: {e}")
+            emit('error', {'message': str(e)})
+
     logger.info("WebSocket events registered with session-based routing")
