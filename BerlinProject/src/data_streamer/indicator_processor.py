@@ -4,6 +4,7 @@ Enhanced IndicatorProcessor with proper history tracking - Refactored to use Ind
 
 from typing import Tuple, Dict, List
 from datetime import datetime
+import math
 import numpy as np
 
 from candle_aggregator.candle_aggregator import CandleAggregator
@@ -32,8 +33,9 @@ class IndicatorProcessor:
         # Add history tracking
         self.indicator_history: Dict[str, List[float]] = {}
         self.bar_history: Dict[str, List[float]] = {}
+        self.component_history: Dict[str, List[float]] = {}  # Historical component data for charts
         self.timestamp_history: List[datetime] = []
-        self.max_history_length: int = 100  # Keep last 100 data points
+        self.max_history_length: int = 1000  # Keep last 1000 data points
         self.indicators: Dict[str, float] = {}
         self.raw_indicators: Dict[str, float] = {}
         self.component_data: Dict[str, float] = {}  # Store component data (MACD, SMA values, etc.)
@@ -293,6 +295,9 @@ class IndicatorProcessor:
         # Log summary
         active_indicators = len([v for v in self.indicators.values() if v > 0])
         # logger.info(f"Calculated {len(self.indicators)} indicators, {active_indicators} active")
+
+        # Store history snapshot for chart visualization (matches Replay tool behavior)
+        self._store_history_snapshot(self.indicators, bar_scores)
 
         return self.indicators, self.raw_indicators, bar_scores
 
@@ -656,7 +661,7 @@ class IndicatorProcessor:
         return gate
 
     def _store_history_snapshot(self, indicators: Dict[str, float], bar_scores: Dict[str, float]) -> None:
-        """Store current indicator and bar values in history"""
+        """Store current indicator, bar, and component values in history"""
         current_time = datetime.now()
 
         # Add timestamp to history
@@ -674,6 +679,24 @@ class IndicatorProcessor:
                 self.bar_history[bar_name] = []
             self.bar_history[bar_name].append(value)
 
+        # Store component data (MACD line, signal, histogram, SMA values, etc.)
+        # Sanitize NaN/Inf values for JSON compatibility
+        for comp_name, value in self.component_data.items():
+            if comp_name not in self.component_history:
+                self.component_history[comp_name] = []
+            # Sanitize value before storing
+            sanitized_value = None
+            if value is not None:
+                try:
+                    if isinstance(value, (float, np.floating)):
+                        if not (np.isnan(value) or np.isinf(value)):
+                            sanitized_value = float(value)
+                    else:
+                        sanitized_value = float(value)
+                except (ValueError, TypeError):
+                    pass
+            self.component_history[comp_name].append(sanitized_value)
+
         # Trim history to max length
         if len(self.timestamp_history) > self.max_history_length:
             # Remove oldest entries
@@ -686,6 +709,9 @@ class IndicatorProcessor:
             for bar_name in self.bar_history:
                 self.bar_history[bar_name] = self.bar_history[bar_name][excess:]
 
+            for comp_name in self.component_history:
+                self.component_history[comp_name] = self.component_history[comp_name][excess:]
+
     def get_history_data(self) -> Dict:
         """Get formatted history data for UI"""
         if not self.timestamp_history:
@@ -693,6 +719,7 @@ class IndicatorProcessor:
                 'timestamps': [],
                 'indicators': {},
                 'bar_scores': {},
+                'components': {},
                 'periods': 0
             }
 
@@ -700,5 +727,109 @@ class IndicatorProcessor:
             'timestamps': [ts.isoformat() for ts in self.timestamp_history],
             'indicators': self.indicator_history.copy(),
             'bar_scores': self.bar_history.copy(),
+            'components': self.component_history.copy(),
             'periods': len(self.timestamp_history)
         }
+
+    def seed_history_from_aggregators(self, aggregators: Dict[str, CandleAggregator]) -> None:
+        """
+        Seed indicator, bar score, and component histories from historical aggregator data.
+        Uses IndicatorProcessorHistoricalNew to calculate all historical values at once.
+
+        This should be called after loading historical data to populate the histories
+        for chart visualization.
+
+        Args:
+            aggregators: Dict of aggregator_key -> CandleAggregator with historical data
+        """
+        try:
+            from optimization.calculators.indicator_processor_historical_new import IndicatorProcessorHistoricalNew
+
+            logger.info("Seeding history from historical aggregator data...")
+
+            # Use historical processor to calculate all indicators at once
+            historical_processor = IndicatorProcessorHistoricalNew(self.config)
+            (indicator_history, raw_indicator_history, bar_score_history,
+             component_history, indicator_agg_mapping) = historical_processor.calculate_indicators(aggregators)
+
+            # Get timestamps from primary aggregator (shortest timeframe)
+            primary_agg_key = None
+            primary_candles = []
+            for agg_key, aggregator in aggregators.items():
+                candles = aggregator.get_history()
+                if candles and (not primary_candles or len(candles) > len(primary_candles)):
+                    primary_agg_key = agg_key
+                    primary_candles = candles
+
+            if not primary_candles:
+                logger.warning("No historical candles found for seeding history")
+                return
+
+            # Build timestamps from candles (limit to max_history_length)
+            candles_to_use = primary_candles[-self.max_history_length:]
+            self.timestamp_history = [c.timestamp for c in candles_to_use]
+
+            # Seed indicator history (time-decayed trigger values)
+            for ind_name, values in indicator_history.items():
+                # Trim to match timestamp length
+                trimmed_values = values[-len(self.timestamp_history):]
+                self.indicator_history[ind_name] = list(trimmed_values)
+                # Also update current indicators dict
+                if trimmed_values:
+                    self.indicators[ind_name] = float(trimmed_values[-1])
+
+            # Seed raw indicator history (for trigger charts)
+            for ind_name, values in raw_indicator_history.items():
+                trimmed_values = values[-len(self.timestamp_history):]
+                # Store in indicator_trigger_history for raw trigger display
+                self.indicator_trigger_history[ind_name] = list(trimmed_values)
+                if trimmed_values:
+                    self.raw_indicators[ind_name] = float(trimmed_values[-1])
+
+            # Seed bar score history
+            for bar_name, values in bar_score_history.items():
+                trimmed_values = values[-len(self.timestamp_history):]
+                self.bar_history[bar_name] = list(trimmed_values)
+
+            # Seed component history (MACD line, signal, histogram, etc.)
+            # Note: Early values may be NaN when there's insufficient lookback data
+            for comp_name, values in component_history.items():
+                trimmed_values = values[-len(self.timestamp_history):]
+                # Sanitize NaN values - replace with None for JSON compatibility
+                sanitized_values = []
+                for v in trimmed_values:
+                    try:
+                        if v is None:
+                            sanitized_values.append(None)
+                        elif isinstance(v, (float, np.floating)):
+                            if np.isnan(v) or np.isinf(v):
+                                sanitized_values.append(None)
+                            else:
+                                sanitized_values.append(float(v))
+                        else:
+                            sanitized_values.append(float(v))
+                    except (ValueError, TypeError):
+                        sanitized_values.append(None)
+                self.component_history[comp_name] = sanitized_values
+                # Also update current component_data with last non-None value
+                non_none_values = [v for v in sanitized_values if v is not None]
+                if non_none_values:
+                    self.component_data[comp_name] = non_none_values[-1]
+
+            logger.info(f"Seeded history: {len(self.timestamp_history)} timestamps, "
+                       f"{len(self.indicator_history)} indicators, "
+                       f"{len(self.bar_history)} bar scores, "
+                       f"{len(self.component_history)} components")
+
+            # Debug: Log component keys for troubleshooting
+            if self.component_history:
+                logger.info(f"Component history keys: {list(self.component_history.keys())}")
+                for k, v in list(self.component_history.items())[:3]:  # First 3
+                    logger.info(f"  {k}: {len(v)} values, last={v[-1] if v else 'N/A'}")
+            else:
+                logger.warning("No component history was seeded!")
+
+        except Exception as e:
+            logger.error(f"Error seeding history from aggregators: {e}")
+            import traceback
+            traceback.print_exc()

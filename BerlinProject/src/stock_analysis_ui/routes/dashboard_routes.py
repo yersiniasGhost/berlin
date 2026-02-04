@@ -2,6 +2,8 @@
 Dashboard routes for the main UI pages
 """
 
+import uuid
+from datetime import datetime
 from flask import Blueprint, render_template, current_app, redirect, session
 from mlf_utils.log_manager import LogManager
 
@@ -19,6 +21,105 @@ def get_session_app_service():
     return current_app.session_app_services.get(session_id)
 
 
+def initialize_replay_session(replay_config):
+    """Initialize a replay session with the given configuration"""
+    from services.app_service import AppService
+
+    session_id = str(uuid.uuid4())
+    session['session_id'] = session_id
+    session['authenticated'] = True
+
+    # Create app service without auth manager (replay mode)
+    app_service = AppService(current_app.socketio, auth_manager=None)
+
+    source_type = replay_config.get('source_type')
+    playback_speed = replay_config.get('playback_speed', 1.0)
+
+    if source_type == 'pip':
+        # Use existing CSReplayDataLink
+        from data_streamer.cs_replay_data_link import CSReplayDataLink
+
+        pip_file = replay_config.get('pip_file')
+        ticker = replay_config.get('ticker', 'UNKNOWN')
+
+        cs_replay_link = CSReplayDataLink(playback_speed=playback_speed)
+
+        if not cs_replay_link.add_symbol_file(ticker, pip_file):
+            logger.error(f"Failed to load PIP data for {ticker}")
+            return None
+
+        app_service.data_link = cs_replay_link
+        logger.info(f"Initialized PIP replay: {ticker} from {pip_file}")
+
+    elif source_type == 'mongodb':
+        # Use new MongoReplayDataLink
+        from data_streamer.mongo_replay_data_link import MongoReplayDataLink
+
+        ticker = replay_config.get('ticker')
+        date_str = replay_config.get('date')
+        replay_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+        mongo_replay_link = MongoReplayDataLink(playback_speed=playback_speed)
+
+        if not mongo_replay_link.load_data(ticker, replay_date):
+            logger.error(f"Failed to load MongoDB data for {ticker} on {date_str}")
+            return None
+
+        # Set up callbacks for WebSocket events
+        # IMPORTANT: Capture socketio reference now since callbacks run in background thread
+        # where current_app context is not available
+        socketio = current_app.socketio
+        room = f"session_{session_id}"
+
+        def on_progress(current, total, progress):
+            try:
+                socketio.emit('replay_progress', {
+                    'current': current,
+                    'total': total,
+                    'progress': progress
+                }, room=room)
+            except Exception as e:
+                logger.error(f"Error emitting replay_progress: {e}")
+
+        def on_complete():
+            try:
+                socketio.emit('replay_complete', room=room)
+            except Exception as e:
+                logger.error(f"Error emitting replay_complete: {e}")
+
+        mongo_replay_link.on_tick_processed = on_progress
+        mongo_replay_link.on_replay_complete = on_complete
+
+        app_service.data_link = mongo_replay_link
+        logger.info(f"Initialized MongoDB replay: {ticker} on {date_str}")
+
+    else:
+        logger.error(f"Unknown replay source type: {source_type}")
+        return None
+
+    # Register app service for this session
+    current_app.session_app_services[session_id] = app_service
+
+    # Add the trading card with the monitor config
+    monitor_config = replay_config.get('monitor_config')
+    ticker = replay_config.get('ticker')
+
+    if monitor_config and ticker:
+        result = app_service.add_combination(ticker, monitor_config)
+        if result.get('success'):
+            logger.info(f"Added trading card: {result.get('card_id')} for {ticker}")
+        else:
+            logger.error(f"Failed to add trading card: {result.get('error')}")
+
+    # Start streaming
+    if not app_service.start_streaming():
+        logger.error("Failed to start replay streaming")
+        return None
+
+    logger.info(f"Replay session initialized: {session_id}")
+    return session_id
+
+
 @dashboard_bp.route('/')
 def home():
     """Home page - always show this first"""
@@ -28,19 +129,30 @@ def home():
 @dashboard_bp.route('/dashboard')
 def dashboard():
     """Main dashboard page - requires session-based authentication"""
-    # Check if we're in replay mode with a global app_service
+    # Check if this is a new replay session
+    replay_config = session.get('replay_config')
+    is_replay_mode = session.get('replay_mode', False)
+
+    if is_replay_mode and replay_config and not session.get('session_id'):
+        # Initialize new replay session
+        session_id = initialize_replay_session(replay_config)
+        if not session_id:
+            # Failed to initialize replay
+            session.clear()
+            return redirect('/replay?error=initialization_failed')
+
+    # Check if we're in replay mode with a global app_service (CLI mode)
     global_app_service = current_app.app_service
 
-    # If in replay mode (global app_service exists) and no session, create one
+    # If in CLI replay mode (global app_service exists) and no session, create one
     if global_app_service is not None and (not session.get('authenticated') or not session.get('session_id')):
-        import uuid
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
         session['authenticated'] = True
 
         # Register the global app_service for this session
         current_app.session_app_services[session_id] = global_app_service
-        logger.info(f"Replay mode: Auto-created session {session_id}")
+        logger.info(f"CLI Replay mode: Auto-created session {session_id}")
 
     # Check if user has valid session
     if not session.get('authenticated') or not session.get('session_id'):
@@ -62,66 +174,6 @@ def dashboard():
 
     return render_template('dashboard.html',
                            available_configs=available_configs,
-                           session_id=session.get('session_id'))
-
-
-@dashboard_bp.route('/monitor-creation')
-def monitor_creation():
-    """Monitor creation page - requires session-based authentication"""
-    # [existing auth code...]
-
-    # Define available indicator functions with their parameter schemas
-    available_indicators = {
-        'sma_crossover': {
-            'name': 'SMA Crossover',
-            'parameters': {
-                'period': {'type': 'number', 'default': 20, 'min': 1, 'max': 200},
-                'trend': {'type': 'select', 'options': ['bullish', 'bearish'], 'default': 'bullish'},
-                'crossover_value': {'type': 'number', 'default': 0.001, 'min': 0, 'max': 1, 'step': 0.0001},
-                'lookback': {'type': 'number', 'default': 10, 'min': 1, 'max': 100}
-            }
-        },
-        'macd_histogram_crossover': {
-            'name': 'MACD Histogram Crossover',
-            'parameters': {
-                'slow': {'type': 'number', 'default': 26, 'min': 1, 'max': 100},
-                'fast': {'type': 'number', 'default': 12, 'min': 1, 'max': 100},
-                'signal': {'type': 'number', 'default': 9, 'min': 1, 'max': 50},
-                'histogram_threshold': {'type': 'number', 'default': 0.001, 'min': 0, 'max': 1, 'step': 0.0001},
-                'lookback': {'type': 'number', 'default': 10, 'min': 1, 'max': 100},
-                'trend': {'type': 'select', 'options': ['bullish', 'bearish'], 'default': 'bullish'}
-            }
-        },
-        'bol_bands_lower_band_bounce': {
-            'name': 'Bollinger Bands Lower Band Bounce',
-            'parameters': {
-                'period': {'type': 'number', 'default': 20, 'min': 1, 'max': 100},
-                'sd': {'type': 'number', 'default': 2.0, 'min': 0.1, 'max': 5.0, 'step': 0.1},
-                'candle_bounce_number': {'type': 'number', 'default': 1, 'min': 1, 'max': 10},
-                'bounce_trigger': {'type': 'number', 'default': 0.05, 'min': 0, 'max': 1, 'step': 0.01},
-                'lookback': {'type': 'number', 'default': 10, 'min': 1, 'max': 100},
-                'trend': {'type': 'select', 'options': ['bullish', 'bearish'], 'default': 'bullish'}
-            }
-        }
-    }
-
-    # Available aggregation configs
-    aggregation_configs = [
-        {'value': '1m-normal', 'label': '1m Normal'},
-        {'value': '1m-Heiken', 'label': '1m Heiken Ashi'},
-        {'value': '5m-normal', 'label': '5m Normal'},
-        {'value': '5m-Heiken', 'label': '5m Heiken Ashi'},
-        {'value': '15m-normal', 'label': '15m Normal'},
-        {'value': '15m-Heiken', 'label': '15m Heiken Ashi'},
-        {'value': '30m-normal', 'label': '30m Normal'},
-        {'value': '30m-Heiken', 'label': '30m Heiken Ashi'},
-        {'value': '1h-normal', 'label': '1h Normal'},
-        {'value': '1h-Heiken', 'label': '1h Heiken Ashi'}
-    ]
-
-    return render_template('monitor_creation.html',
-                           available_indicators=available_indicators,
-                           aggregation_configs=aggregation_configs,
                            session_id=session.get('session_id'))
 
 

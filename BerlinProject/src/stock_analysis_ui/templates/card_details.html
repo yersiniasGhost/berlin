@@ -4,14 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Details - Trading Dashboard</title>
+
+    <!-- External Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <!-- Highcharts for candlestick chart -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/highcharts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0/modules/stock.min.js"></script>
-    <!-- Shared indicator charts module -->
-    <script src="{{ url_for('static', filename='js/indicator-charts.js') }}"></script>
-    <!-- Shared timezone utilities -->
-    <script src="{{ url_for('static', filename='js/timezone-utils.js') }}"></script>
+
+    <!-- Shared CSS: Theme + Components -->
+    <link rel="stylesheet" href="{{ url_for('shared.static', filename='css/themes/dark.css') }}">
+    <link rel="stylesheet" href="{{ url_for('shared.static', filename='css/chart-components.css') }}">
+
+    <!-- Shared JavaScript Modules -->
+    <script src="{{ url_for('shared.static', filename='js/indicator-charts.js') }}"></script>
+    <script src="{{ url_for('shared.static', filename='js/timezone-utils.js') }}"></script>
+    <script src="{{ url_for('shared.static', filename='js/trade-history-table.js') }}"></script>
+    <script src="{{ url_for('shared.static', filename='js/bar-scores-chart.js') }}"></script>
+    <script src="{{ url_for('shared.static', filename='js/chart-dashboard.js') }}"></script>
+
+    <!-- Page-specific styles (layout only - colors from theme) -->
     <style>
         * {
             margin: 0;
@@ -20,9 +30,9 @@
         }
 
         body {
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0f1419;
-            color: #e6edf3;
+            font-family: var(--font-sans);
+            background: var(--bg-body);
+            color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
         }
@@ -36,8 +46,8 @@
         /* Sidebar Styles */
         .sidebar {
             width: 250px;
-            background: #161b22;
-            border-right: 1px solid #30363d;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-primary);
             position: fixed;
             height: 100vh;
             overflow-y: auto;
@@ -46,19 +56,19 @@
 
         .sidebar-header {
             padding: 1.5rem;
-            border-bottom: 1px solid #30363d;
+            border-bottom: 1px solid var(--border-primary);
         }
 
         .sidebar-title {
             font-size: 1.25rem;
             font-weight: 600;
-            color: #f0f6fc;
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
         }
 
         .sidebar-subtitle {
             font-size: 0.875rem;
-            color: #7d8590;
+            color: var(--text-secondary);
         }
 
         .sidebar-nav {
@@ -74,7 +84,7 @@
             align-items: center;
             gap: 0.75rem;
             padding: 0.875rem 1.5rem;
-            color: #e6edf3;
+            color: var(--text-primary);
             text-decoration: none;
             border-radius: 0 6px 6px 0;
             margin-right: 0.75rem;
@@ -83,24 +93,14 @@
         }
 
         .nav-link:hover {
-            background: #21262d;
-            color: #58a6ff;
+            background: var(--bg-tertiary);
+            color: var(--color-link);
         }
 
         .nav-link.active {
-            background: #1f2937;
-            color: #58a6ff;
-            border-right: 3px solid #58a6ff;
-        }
-
-        .nav-link.active::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: #58a6ff;
+            background: var(--bg-tertiary);
+            color: var(--color-link);
+            border-right: 3px solid var(--color-link);
         }
 
         .nav-icon {
@@ -122,21 +122,21 @@
             display: none;
         }
 
-        /* Header Bar Styles */
+        /* Header Bar */
         .header-bar {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
             padding: 1.5rem 2rem;
             margin: 2rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-card);
         }
 
         .header-content {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -155,13 +155,13 @@
         .symbol-name {
             font-size: 2rem;
             font-weight: 700;
-            color: #f0f6fc;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
         }
 
         .symbol-subtitle {
             font-size: 0.875rem;
-            color: #7d8590;
+            color: var(--text-secondary);
         }
 
         .config-section {
@@ -169,12 +169,12 @@
             flex-direction: column;
             gap: 0.5rem;
             padding-left: 2rem;
-            border-left: 1px solid #30363d;
+            border-left: 1px solid var(--border-primary);
         }
 
         .config-label {
             font-size: 0.75rem;
-            color: #7d8590;
+            color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -182,7 +182,7 @@
         .config-name {
             font-size: 1rem;
             font-weight: 600;
-            color: #e6edf3;
+            color: var(--text-primary);
         }
 
         .price-section {
@@ -195,8 +195,8 @@
         .live-price {
             font-size: 2.5rem;
             font-weight: 700;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-            color: #e6edf3;
+            font-family: var(--font-mono);
+            color: var(--text-primary);
         }
 
         .price-change {
@@ -206,18 +206,19 @@
 
         .price-timestamp {
             font-size: 0.75rem;
-            color: #7d8590;
+            color: var(--text-secondary);
         }
 
-        .price-positive { color: #238636; }
-        .price-negative { color: #da3633; }
+        .price-positive { color: var(--color-success); }
+        .price-negative { color: var(--color-danger); }
 
-        /* Content */
+        /* Content Area */
         .content {
             flex: 1;
             padding: 0 2rem 2rem;
         }
 
+        /* Two-column layout for indicators/trades */
         .two-column-layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -226,35 +227,34 @@
             margin: 0 auto;
         }
 
-        /* Section Styles */
+        /* Indicators Section (Left Column) */
+        .indicators-section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-card);
+        }
+
         .section-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 1.5rem;
             padding-bottom: 1rem;
-            border-bottom: 1px solid #30363d;
+            border-bottom: 1px solid var(--border-secondary);
         }
 
         .section-title {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 600;
-            color: #f0f6fc;
+            color: var(--text-primary);
             margin-bottom: 0.25rem;
         }
 
         .section-subtitle {
             font-size: 0.875rem;
-            color: #7d8590;
-        }
-
-        /* Indicators Section (Left Column) */
-        .indicators-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            color: var(--text-secondary);
         }
 
         .indicators-list,
@@ -267,6 +267,13 @@
             margin-bottom: 0;
         }
 
+        .subsection-title {
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
         .indicators-grid {
             display: grid;
             gap: 0.75rem;
@@ -277,41 +284,41 @@
             justify-content: space-between;
             align-items: center;
             padding: 0.75rem;
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 6px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            border-radius: var(--radius-md);
             transition: all 0.2s ease;
         }
 
         .indicator-item:hover {
-            border-color: #30363d;
+            border-color: var(--border-primary);
             transform: translateY(-1px);
         }
 
         .indicator-name {
             font-size: 0.875rem;
             font-weight: 500;
-            color: #e6edf3;
+            color: var(--text-primary);
         }
 
         .indicator-value {
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-family: var(--font-mono);
             font-weight: 600;
             font-size: 0.875rem;
         }
 
         .indicator-details {
             font-size: 0.75rem;
-            color: #7d8590;
+            color: var(--text-secondary);
             margin-top: 0.25rem;
         }
 
         /* Bar items */
         .bar-item {
             padding: 1rem;
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            border-radius: var(--radius-md);
             margin-bottom: 0.75rem;
         }
 
@@ -329,301 +336,52 @@
         .bar-name {
             font-size: 0.875rem;
             font-weight: 600;
-            color: #e6edf3;
+            color: var(--text-primary);
         }
 
         .bar-score {
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            font-family: var(--font-mono);
             font-weight: 700;
             font-size: 1rem;
         }
 
         .bar-calculation {
             font-size: 0.75rem;
-            color: #7d8590;
+            color: var(--text-secondary);
             line-height: 1.4;
-            background: rgba(125, 133, 144, 0.1);
+            background: var(--bg-tertiary);
             padding: 0.5rem;
-            border-radius: 4px;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
         }
 
         /* Value color coding */
-        .value-high { color: #56d364; }
-        .value-medium { color: #d29922; }
-        .value-low { color: #f85149; }
+        .value-high { color: var(--color-success); }
+        .value-medium { color: var(--color-warning); }
+        .value-low { color: var(--color-danger); }
 
-        /* Trade History Section (Right Column) */
-        .trades-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        /* Excel-like Trade History Table */
-        .trades-table-container {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            background: #0d1117;
-        }
-
-        .trades-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.75rem;
-            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-        }
-
-        .trades-table thead {
-            background: #21262d;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        .trades-table th {
-            padding: 0.75rem 0.5rem;
-            text-align: left;
-            font-weight: 600;
-            color: #f0f6fc;
-            border-bottom: 2px solid #30363d;
-            border-right: 1px solid #30363d;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-size: 0.625rem;
-        }
-
-        .trades-table th:last-child {
-            border-right: none;
-        }
-
-        .trades-table tbody tr {
-            transition: all 0.2s ease;
-        }
-
-        .trades-table tbody tr:hover {
-            background: #161b22;
-        }
-
-        .trades-table tbody tr:nth-child(even) {
-            background: rgba(125, 133, 144, 0.05);
-        }
-
-        .trades-table td {
-            padding: 0.75rem 0.5rem;
-            border-bottom: 1px solid #30363d;
-            border-right: 1px solid #30363d;
-            color: #e6edf3;
-        }
-
-        .trades-table td:last-child {
-            border-right: none;
-        }
-
-        /* Trade-specific styles */
-        .trade-type.long { color: #56d364; font-weight: 600; }
-        .trade-type.short { color: #f85149; font-weight: 600; }
-
-        .pnl-positive { color: #56d364; font-weight: 600; }
-        .pnl-negative { color: #f85149; font-weight: 600; }
-
-        .exit-reason {
-            font-size: 0.7rem;
-            padding: 0.125rem 0.25rem;
-            border-radius: 3px;
-            background: rgba(125, 133, 144, 0.2);
-            color: #7d8590;
+        /* Full-width chart sections */
+        .full-width-section {
+            grid-column: 1 / -1;
         }
 
         /* Empty state */
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
-            color: #7d8590;
+            color: var(--text-secondary);
         }
 
         .empty-state-icon {
             width: 48px;
             height: 48px;
             margin: 0 auto 1rem;
-            background: rgba(125, 133, 144, 0.1);
+            background: var(--bg-tertiary);
             border-radius: 50%;
         }
 
         .empty-state-text {
             font-size: 0.875rem;
-        }
-
-        /* Indicator Charts Section with Tabs */
-        .indicator-charts-section {
-            margin-top: 2rem;
-            padding: 2rem;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            grid-column: 1 / -1;
-        }
-
-        .chart-tabs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-            border-bottom: 1px solid #30363d;
-            padding-bottom: 1rem;
-        }
-
-        .chart-tab {
-            padding: 0.5rem 1rem;
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #7d8590;
-            border-radius: 6px 6px 0 0;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
-        }
-
-        .chart-tab:hover {
-            background: #30363d;
-            color: #e6edf3;
-        }
-
-        .chart-tab.active {
-            background: #238636;
-            border-color: #238636;
-            color: #ffffff;
-        }
-
-        .chart-tab-content {
-            display: none;
-        }
-
-        .chart-tab-content.active {
-            display: block;
-        }
-
-        .indicator-chart-container {
-            height: 400px;
-            width: 100%;
-            margin-bottom: 1rem;
-        }
-
-        /* Loading Spinner */
-        .chart-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 300px;
-            color: #7d8590;
-            font-size: 0.875rem;
-        }
-
-        .chart-loading::after {
-            content: '';
-            width: 20px;
-            height: 20px;
-            border: 2px solid #30363d;
-            border-top-color: #58a6ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-left: 0.5rem;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Candlestick Chart Section */
-        .candlestick-chart-section {
-            margin-top: 2rem;
-            padding: 2rem;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            grid-column: 1 / -1; /* Span both columns */
-        }
-
-        .chart-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .chart-title {
-            color: #e6edf3;
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
-        .chart-controls {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-        }
-
-        .timezone-selector {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-left: 1rem;
-            padding-left: 1rem;
-            border-left: 1px solid #30363d;
-        }
-
-        .timezone-label {
-            color: #7d8590;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .timezone-select {
-            padding: 0.4rem 0.75rem;
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #e6edf3;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
-        }
-
-        .timezone-select:hover {
-            background: #30363d;
-            border-color: #484f58;
-        }
-
-        .timezone-select:focus {
-            outline: none;
-            border-color: #58a6ff;
-            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
-        }
-
-        .chart-btn {
-            padding: 0.5rem 1rem;
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #e6edf3;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
-        }
-
-        .chart-btn:hover {
-            background: #30363d;
-        }
-
-        .chart-btn.active {
-            background: #238636;
-            border-color: #238636;
         }
 
         /* Responsive Design */
@@ -647,12 +405,13 @@
                 top: 1rem;
                 left: 1rem;
                 z-index: 200;
-                background: #161b22;
-                border: 1px solid #30363d;
-                color: #e6edf3;
+                background: var(--bg-primary);
+                border: 1px solid var(--border-primary);
+                color: var(--text-primary);
                 padding: 0.5rem;
-                border-radius: 6px;
+                border-radius: var(--radius-md);
                 font-size: 1.25rem;
+                cursor: pointer;
             }
 
             .two-column-layout {
@@ -674,7 +433,7 @@
             .config-section {
                 padding-left: 0;
                 border-left: none;
-                border-top: 1px solid #30363d;
+                border-top: 1px solid var(--border-primary);
                 padding-top: 1rem;
             }
         }
@@ -693,12 +452,6 @@
                     <a href="/dashboard" class="nav-link">
                         <span class="nav-icon">📊</span>
                         <span>Dashboard</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="/monitor-creation" class="nav-link">
-                        <span class="nav-icon">⚙️</span>
-                        <span>Monitor Creation</span>
                     </a>
                 </div>
                 <div class="nav-item">
@@ -735,10 +488,10 @@
                 </div>
             </div>
 
-            <!-- Main Content -->
+            <!-- Main Content Grid -->
             <div class="content">
                 <div class="two-column-layout">
-                    <!-- Left Column: Indicators and Bar Calculations -->
+                    <!-- Left Column: Live Indicators and Bar Calculations -->
                     <div class="indicators-section">
                         <div class="section-header">
                             <div>
@@ -747,11 +500,10 @@
                             </div>
                         </div>
 
-                        <!-- Individual Indicators -->
+                        <!-- Individual Indicators (Live Values) -->
                         <div class="indicators-list">
-                            <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600;">Individual Indicators</h4>
+                            <h4 class="subsection-title">Individual Indicators</h4>
                             <div id="indicatorsList" class="indicators-grid">
-                                <!-- Will be populated by JavaScript -->
                                 <div class="empty-state">
                                     <div class="empty-state-icon"></div>
                                     <div class="empty-state-text">Loading indicator data...</div>
@@ -759,11 +511,10 @@
                             </div>
                         </div>
 
-                        <!-- Bar Calculations -->
+                        <!-- Bar Calculations (Live Values) -->
                         <div class="bars-list">
-                            <h4 style="color: #e6edf3; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600;">Composite Calculations</h4>
+                            <h4 class="subsection-title">Composite Calculations</h4>
                             <div id="barsList">
-                                <!-- Will be populated by JavaScript -->
                                 <div class="empty-state">
                                     <div class="empty-state-icon"></div>
                                     <div class="empty-state-text">Loading bar calculations...</div>
@@ -772,209 +523,118 @@
                         </div>
                     </div>
 
-                    <!-- Right Column: Trade History -->
-                    <div class="trades-section">
-                        <div class="section-header">
-                            <div>
-                                <div class="section-title">Trade History</div>
-                                <div class="section-subtitle">Portfolio trading decisions and performance</div>
-                            </div>
-                        </div>
-
-                        <div id="tradesList">
-                            <!-- Will be populated by JavaScript -->
-                            <div class="empty-state">
-                                <div class="empty-state-icon"></div>
-                                <div class="empty-state-text">No trades executed yet</div>
-                            </div>
-                        </div>
+                    <!-- Right Column: Trade History Table (Shared Component) -->
+                    <div id="tradeHistorySection">
+                        {% set table_id = "tradeHistoryTable" %}
+                        {% set theme = "dark" %}
+                        {% set show_cumulative = true %}
+                        {% set show_signal = true %}
+                        {% set show_details = true %}
+                        {% include 'shared/components/_trade_history_table.html' %}
                     </div>
 
-                    <!-- Candlestick Chart Section - REPLACES THE PLACEHOLDER -->
-                    <div class="candlestick-chart-section">
-                        <div class="chart-header">
-                            <h3 class="chart-title">Candlestick Chart</h3>
-                            <div class="chart-controls">
-                                <button class="chart-btn active" onclick="loadCandlestickData('1m')" data-timeframe="1m">1M</button>
-                                <button class="chart-btn" onclick="loadCandlestickData('5m')" data-timeframe="5m">5M</button>
-                                <button class="chart-btn" onclick="loadCandlestickData('15m')" data-timeframe="15m">15M</button>
-                                <button class="chart-btn" onclick="loadCandlestickData('1h')" data-timeframe="1h">1H</button>
-                                <div class="timezone-selector">
-                                    <span class="timezone-label">TZ</span>
-                                    <select id="timezoneSelect" class="timezone-select" onchange="handleTimezoneChange(this.value)">
-                                        <option value="America/New_York">ET</option>
-                                        <option value="America/Los_Angeles">PT</option>
-                                        <option value="UTC">UTC</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="candlestickChart" style="height: 500px; width: 100%;"></div>
+                    <!-- Candlestick Chart (Full Width) -->
+                    <div class="full-width-section">
+                        {% set container_id = "candlestickChart" %}
+                        {% set section_id = "candlestickSection" %}
+                        {% set title = "Price Chart" %}
+                        {% set height = 500 %}
+                        {% set theme = "dark" %}
+                        {% include 'shared/components/_candlestick_chart.html' %}
                     </div>
 
-                    <!-- Indicator Charts Section with Tabs -->
-                    <div class="indicator-charts-section">
-                        <div class="section-header">
-                            <div>
-                                <div class="section-title">Indicator History Charts</div>
-                                <div class="section-subtitle">Historical indicator values and trigger signals</div>
-                            </div>
-                        </div>
-
-                        <!-- Indicator Tabs -->
-                        <div class="chart-tabs" id="indicatorTabs">
-                            <!-- Tabs will be dynamically generated -->
-                            <div class="chart-loading">Loading indicator charts...</div>
-                        </div>
-
-                        <!-- Tab Content Containers -->
-                        <div id="indicatorTabContents">
-                            <!-- Tab content will be dynamically generated -->
-                        </div>
+                    <!-- Bar Scores Chart (Full Width - NEW) -->
+                    <div class="full-width-section">
+                        {% set container_id = "barScoresChart" %}
+                        {% set section_id = "barScoresSection" %}
+                        {% set title = "Bar Scores Analysis" %}
+                        {% set height = 280 %}
+                        {% set theme = "dark" %}
+                        {% include 'shared/components/_bar_scores_chart.html' %}
                     </div>
 
+                    <!-- Indicator Charts with Tabs (Full Width) -->
+                    <div class="full-width-section">
+                        {% set tabs_id = "indicatorTabs" %}
+                        {% set contents_id = "indicatorTabContents" %}
+                        {% set section_id = "indicatorChartsSection" %}
+                        {% set chart_height = 400 %}
+                        {% set theme = "dark" %}
+                        {% include 'shared/components/_indicator_tabs.html' %}
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- Trade Details Modal (Shared Component) -->
+    {% set modal_id = "tradeDetailsModal" %}
+    {% set theme = "dark" %}
+    {% include 'shared/components/_trade_details_modal.html' %}
+
     <script>
+        // ========================================
+        // Card Details Page Controller
+        // ========================================
+
         // Get card_id from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const cardId = urlParams.get('card_id');
 
-        // WebSocket connection
+        // Global state
+        let dashboard = null;
+        let currentMonitorConfig = null;
         const socket = io();
 
-        // Global variables for monitor configuration
-        let currentMonitorConfig = null;
+        // ========================================
+        // Initialization
+        // ========================================
 
-        // Candlestick chart variables
-        let candlestickChart = null;
-        let candlestickData = [];
-        let currentTimeframe = '1m';
-
-        // Page-specific timezone change handler (wraps shared utility)
-        function handleTimezoneChange(timezone) {
-            // Call shared handler (updates Highcharts, localStorage, etc.)
-            onTimezoneChange(timezone);
-
-            // Redraw page-specific charts
-            if (candlestickChart) {
-                candlestickChart.redraw();
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize timezone settings
+            if (typeof initializeTimezone === 'function') {
+                initializeTimezone();
             }
-            allCharts.forEach(chart => {
-                if (chart && chart.redraw) {
-                    chart.redraw();
+
+            // Initialize ChartDashboard orchestrator
+            dashboard = new ChartDashboard({
+                theme: 'dark',
+                apiBaseUrl: '/api',
+                containers: {
+                    candlestick: 'candlestickChart',
+                    barScores: 'barScoresChart',
+                    indicatorTabs: 'indicatorTabs',
+                    indicatorContents: 'indicatorTabContents',
+                    tradeTable: 'tradeHistoryTable'
                 }
             });
 
-            // Re-render trade history with new timezone
-            if (chartData && chartData.trades) {
-                updateTradesSection(chartData.trades);
-            }
-        }
-
-        // Chart data storage
-        let chartData = null;
-        let indicatorCharts = {};
-        let allCharts = [];  // For synchronization
-
-        // Sidebar toggle function
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('open');
-        }
-
-        // Connect to the card's data stream
-        socket.on('connect', function() {
-            console.log('Connected to server');
-
-            // Initialize timezone settings before loading data
-            initializeTimezone();
-
+            // Load card details if card_id present
             if (cardId) {
                 loadCardDetails(cardId);
             }
         });
 
-        // Listen for real-time updates
-        socket.on('card_update', function(data) {
-            if (data.card_id === cardId) {
-                console.log('Received real-time update for card:', data);
-
-                // Update header bar
-                updateHeaderBar(data);
-
-                // Update indicators and bars
-                updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
-
-                // Update current candle high/low with live price (for real-time feedback)
-                updateLivePriceOnChart(data);
-
-                // Update trade history from portfolio data - check both possible locations
-                if (data.portfolio && data.portfolio.trade_history) {
-                    updateTradesSection(data.portfolio.trade_history);
-                } else if (data.portfolio_data && data.portfolio_data.trade_history) {
-                    updateTradesSection(data.portfolio_data.trade_history);
-                }
-            }
-        });
-
-        // Listen for completed candles
-        socket.on('candle_completed', function(data) {
-            if (data.card_id === cardId) {
-                console.log('Received completed candle:', data);
-                addCompletedCandleToChart(data);
-            }
-        });
-
-        function updateHeaderBar(data) {
-            // Update price
-            const priceElement = document.getElementById('livePrice');
-            if (priceElement && data.price !== undefined && data.price !== null) {
-                priceElement.textContent = `${data.price.toFixed(2)}`;
-                priceElement.className = data.price >= 0 ? 'live-price price-positive' : 'live-price price-negative';
-            }
-
-            // Update timestamp using selected timezone (from shared timezone-utils.js)
-            const timestampElement = document.getElementById('priceTimestamp');
-            if (timestampElement) {
-                const now = new Date();
-                timestampElement.textContent = `Last updated: ${formatTimeInTimezone(now, window.currentTimezone)}`;
-            }
-        }
+        // ========================================
+        // Data Loading
+        // ========================================
 
         async function loadCardDetails(cardId) {
             try {
                 console.log(`Loading card details for: ${cardId}`);
 
-                // Request card details
+                // Fetch card details for header info
                 const response = await fetch(`/api/combinations/${cardId}/details`);
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log('Card details loaded:', data);
-
-                    // Store monitor config for calculations
+                    // Store monitor config
                     currentMonitorConfig = data.monitor_config;
 
-                    // Update header info using the correct structure from API
-                    if (data.card_info && data.card_info.symbol) {
-                        document.getElementById('symbolName').textContent = data.card_info.symbol;
-                    } else {
-                        document.getElementById('symbolName').textContent = cardId;
-                    }
+                    // Update header info
+                    updateHeaderInfo(data);
 
-                    if (data.card_info && data.card_info.config_name) {
-                        document.getElementById('configName').textContent = data.card_info.config_name;
-                    } else if (data.monitor_config && data.monitor_config.name) {
-                        document.getElementById('configName').textContent = data.monitor_config.name;
-                    } else {
-                        document.getElementById('configName').textContent = 'Configuration';
-                    }
-
-                    // Update indicators and bars if we have current values
+                    // Update live indicator values
                     if (data.current_values) {
                         updateIndicatorsSection(
                             data.current_values.indicators,
@@ -983,23 +643,16 @@
                         );
                     }
 
-                    // Load initial candlestick data
-                    await loadCandlestickData(currentTimeframe);
+                    // Initialize dashboard with chart data
+                    await dashboard.initialize(cardId);
 
-                    // Load comprehensive chart data for indicators, P&L, and trade bands
-                    await loadChartData();
-
-                    // Check for portfolio data with trade history - check both possible locations
-                    if (data.portfolio_data && data.portfolio_data.trade_history) {
-                        updateTradesSection(data.portfolio_data.trade_history);
-                    } else if (data.portfolio && data.portfolio.trade_history) {
-                        updateTradesSection(data.portfolio.trade_history);
-                    } else {
-                        console.log('No trade history found in response');
+                    // Update candlestick title with symbol
+                    if (data.card_info?.symbol) {
+                        updateCandlestickTitle(data.card_info.symbol, '1m');
                     }
 
                 } else {
-                    throw new Error(data.error);
+                    throw new Error(data.error || 'Failed to load card details');
                 }
 
             } catch (error) {
@@ -1008,311 +661,73 @@
             }
         }
 
-        async function loadCandlestickData(timeframe) {
-            try {
-                console.log(`Loading candlestick data for timeframe: ${timeframe}`);
+        function updateHeaderInfo(data) {
+            // Update symbol name
+            if (data.card_info?.symbol) {
+                document.getElementById('symbolName').textContent = data.card_info.symbol;
+            } else {
+                document.getElementById('symbolName').textContent = cardId;
+            }
 
-                // Update active button
-                document.querySelectorAll('.chart-btn').forEach(btn => btn.classList.remove('active'));
-                document.querySelector(`[data-timeframe="${timeframe}"]`)?.classList.add('active');
-
-                currentTimeframe = timeframe;
-
-                // Fetch candlestick data from API
-                const response = await fetch(`/api/combinations/${cardId}/candlestick?timeframe=${timeframe}`);
-
-                if (!response.ok) {
-                    console.log('API endpoint not available, using mock data for development');
-                    generateMockCandlestickData();
-                    return;
-                }
-
-                const data = await response.json();
-
-                if (data.success) {
-                    candlestickData = data.candlestick_data || [];
-                    console.log(`Loaded ${candlestickData.length} candles for ${timeframe}`);
-                    
-                    // Log debug information
-                    if (data.debug) {
-                        console.log('Candlestick Data Debug:', data.debug);
-                        console.log(`Data source: ${data.debug.data_source}`);
-                        console.log(`Message: ${data.debug.message}`);
-                        console.log(`Initial candles: ${data.debug.initial_candles}`);
-                        console.log(`Current price: $${data.debug.current_price}`);
-                    }
-                    
-                    // Initialize chart even if empty - candles will be added dynamically
-                    initializeCandlestickChart();
-
-                    // Add market hours bands after chart initialization
-                    if (candlestickChart && candlestickData && candlestickData.length > 0) {
-                        if (typeof IndicatorCharts !== 'undefined') {
-                            IndicatorCharts.addMarketHoursBandsToChart(candlestickChart, candlestickData);
-                        }
-                    }
-                } else {
-                    console.log('Failed to load candlestick endpoint, using mock data');
-                    console.log('Response data:', data);
-                    generateMockCandlestickData();
-                }
-            } catch (error) {
-                console.error('Error loading candlestick data:', error);
-                generateMockCandlestickData();
+            // Update config name
+            if (data.card_info?.config_name) {
+                document.getElementById('configName').textContent = data.card_info.config_name;
+            } else if (data.monitor_config?.name) {
+                document.getElementById('configName').textContent = data.monitor_config.name;
             }
         }
 
-        function generateMockCandlestickData() {
-            // Generate mock data for development
-            console.log('Generating mock candlestick data...');
-            const now = new Date();
-            const dataPoints = 100;
-            candlestickData = [];
+        // ========================================
+        // WebSocket Real-time Updates
+        // ========================================
 
-            let basePrice = 150;
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
 
-            for (let i = 0; i < dataPoints; i++) {
-                const timestamp = new Date(now.getTime() - (dataPoints - i) * 60000).getTime(); // 1 minute intervals
+        socket.on('card_update', function(data) {
+            if (data.card_id !== cardId) return;
 
-                const open = basePrice + (Math.random() - 0.5) * 2;
-                const close = open + (Math.random() - 0.5) * 3;
-                const high = Math.max(open, close) + Math.random() * 2;
-                const low = Math.min(open, close) - Math.random() * 2;
+            // Update header bar with live price
+            updateLivePrice(data);
 
-                candlestickData.push([timestamp, open, high, low, close]);
-                basePrice = close;
+            // Update live indicator values
+            updateIndicatorsSection(data.indicators, data.raw_indicators, data.bar_scores);
+
+            // Update current candle on chart
+            if (data.ohlc && data.timestamp && typeof updateCurrentCandle === 'function') {
+                updateCurrentCandle(data.ohlc, data.timestamp);
+            }
+        });
+
+        socket.on('candle_completed', function(data) {
+            if (data.card_id !== cardId) return;
+
+            // Add completed candle to chart
+            if (data.completed_candle && typeof addCandleToChart === 'function') {
+                addCandleToChart(data.completed_candle);
+            }
+        });
+
+        // ========================================
+        // UI Update Functions
+        // ========================================
+
+        function updateLivePrice(data) {
+            const priceElement = document.getElementById('livePrice');
+            if (priceElement && data.price !== undefined && data.price !== null) {
+                priceElement.textContent = `$${data.price.toFixed(2)}`;
+                priceElement.className = 'live-price ' + (data.price >= 0 ? 'price-positive' : 'price-negative');
             }
 
-            initializeCandlestickChart();
-
-            // Add market hours bands after mock chart initialization
-            if (candlestickChart && candlestickData && candlestickData.length > 0) {
-                if (typeof IndicatorCharts !== 'undefined') {
-                    IndicatorCharts.addMarketHoursBandsToChart(candlestickChart, candlestickData);
-                }
+            const timestampElement = document.getElementById('priceTimestamp');
+            if (timestampElement) {
+                const now = new Date();
+                const timeStr = typeof formatTimeInTimezone === 'function'
+                    ? formatTimeInTimezone(now, window.currentTimezone)
+                    : now.toLocaleTimeString();
+                timestampElement.textContent = `Last updated: ${timeStr}`;
             }
-        }
-
-        function initializeCandlestickChart() {
-            const container = document.getElementById('candlestickChart');
-
-            if (candlestickChart) {
-                candlestickChart.destroy();
-            }
-
-            candlestickChart = Highcharts.stockChart(container, {
-                chart: {
-                    backgroundColor: '#161b22',
-                    borderColor: '#30363d',
-                    borderWidth: 1,
-                    borderRadius: 8,
-                    style: {
-                        fontFamily: 'Inter, Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
-                    }
-                },
-
-                title: {
-                    text: `${document.getElementById('symbolName').textContent} - ${currentTimeframe.toUpperCase()} Candlesticks`,
-                    style: {
-                        color: '#e6edf3'
-                    }
-                },
-
-                rangeSelector: {
-                    selected: 1,
-                    inputStyle: {
-                        color: '#e6edf3',
-                        backgroundColor: '#21262d'
-                    },
-                    labelStyle: {
-                        color: '#7d8590'
-                    },
-                    buttonTheme: {
-                        fill: '#21262d',
-                        stroke: '#30363d',
-                        style: {
-                            color: '#e6edf3'
-                        },
-                        states: {
-                            hover: {
-                                fill: '#30363d'
-                            },
-                            select: {
-                                fill: '#238636',
-                                stroke: '#238636'
-                            }
-                        }
-                    }
-                },
-
-                navigator: {
-                    maskFill: 'rgba(255, 255, 255, 0.1)',
-                    outlineColor: '#30363d',
-                    series: {
-                        color: '#7d8590',
-                        lineColor: '#7d8590'
-                    }
-                },
-
-                scrollbar: {
-                    barBackgroundColor: '#30363d',
-                    barBorderColor: '#30363d',
-                    buttonBackgroundColor: '#21262d',
-                    buttonBorderColor: '#30363d',
-                    rifleColor: '#7d8590',
-                    trackBackgroundColor: '#161b22',
-                    trackBorderColor: '#30363d'
-                },
-
-                plotOptions: {
-                    candlestick: {
-                        dataGrouping: {
-                            enabled: false
-                        },
-                        color: '#da3633',
-                        upColor: '#238636',
-                        lineColor: '#da3633',
-                        upLineColor: '#238636'
-                    }
-                },
-
-                xAxis: {
-                    gridLineColor: '#30363d',
-                    lineColor: '#30363d',
-                    tickColor: '#30363d',
-                    labels: {
-                        style: {
-                            color: '#7d8590'
-                        }
-                    }
-                },
-
-                yAxis: {
-                    gridLineColor: '#30363d',
-                    lineColor: '#30363d',
-                    tickColor: '#30363d',
-                    labels: {
-                        style: {
-                            color: '#7d8590'
-                        }
-                    },
-                    title: {
-                        text: 'Price ($)',
-                        style: {
-                            color: '#7d8590'
-                        }
-                    }
-                },
-
-                tooltip: {
-                    backgroundColor: '#21262d',
-                    borderColor: '#30363d',
-                    style: {
-                        color: '#e6edf3'
-                    },
-                    split: false,
-                    shared: true
-                },
-
-                legend: {
-                    itemStyle: {
-                        color: '#e6edf3'
-                    }
-                },
-
-                series: [{
-                    type: 'candlestick',
-                    name: document.getElementById('symbolName').textContent || 'Symbol',
-                    data: candlestickData,
-                    dataGrouping: {
-                        enabled: false
-                    }
-                }]
-            });
-
-            console.log(`Candlestick chart initialized with ${candlestickData.length} candles`);
-
-            // Add to allCharts for synchronization
-            if (candlestickChart) {
-                allCharts.push(candlestickChart);
-            }
-        }
-
-        function updateLivePriceOnChart(data) {
-            if (!candlestickChart || !data.ohlc || !data.timestamp) {
-                return;
-            }
-
-            try {
-                const timestamp = new Date(data.timestamp).getTime();
-                const [open, high, low, close] = data.ohlc;
-
-                const series = candlestickChart.series[0];
-                const existingData = series.data;
-
-                // Only update if we have existing candles
-                if (existingData.length > 0) {
-                    const lastCandle = existingData[existingData.length - 1];
-                    const lastCandleTime = lastCandle.x;
-
-                    // Get the timeframe in milliseconds for comparison
-                    const timeframeMs = getTimeframeInMs(currentTimeframe);
-
-                    // If timestamps are within the same timeframe period, update the current candle
-                    if (Math.floor(timestamp / timeframeMs) === Math.floor(lastCandleTime / timeframeMs)) {
-                        // Update the current incomplete candle with live data
-                        const currentCandle = lastCandle.options;
-                        const updatedHigh = Math.max(currentCandle.high, close);
-                        const updatedLow = Math.min(currentCandle.low, close);
-                        
-                        lastCandle.update([
-                            lastCandleTime, // Keep original candle time
-                            currentCandle.open, // Keep original open
-                            updatedHigh, // Update high if current price is higher
-                            updatedLow,  // Update low if current price is lower
-                            close // Update close to current price
-                        ], true);
-                    }
-                    // If it's a new timeframe period, wait for completed candle event
-                }
-
-            } catch (error) {
-                console.error('Error updating live price on chart:', error);
-            }
-        }
-
-        function addCompletedCandleToChart(data) {
-            if (!candlestickChart || !data.completed_candle) {
-                return;
-            }
-
-            try {
-                const series = candlestickChart.series[0];
-                const newCandle = data.completed_candle;
-
-                // Add the completed candle
-                series.addPoint(newCandle, true, false);
-
-                // Keep only last 200 candles for performance
-                if (series.data.length > 200) {
-                    series.removePoint(0, false);
-                }
-
-                console.log(`Added completed candle for ${data.symbol} ${data.timeframe}`);
-
-            } catch (error) {
-                console.error('Error adding completed candle:', error);
-            }
-        }
-
-        function getTimeframeInMs(timeframe) {
-            const timeframeMap = {
-                '1m': 60 * 1000,
-                '5m': 5 * 60 * 1000,
-                '15m': 15 * 60 * 1000,
-                '1h': 60 * 60 * 1000
-            };
-            return timeframeMap[timeframe] || 60 * 1000;
         }
 
         function updateIndicatorsSection(indicators, rawIndicators, barScores) {
@@ -1322,14 +737,8 @@
 
         function updateIndicatorsList(indicators, rawIndicators) {
             const container = document.getElementById('indicatorsList');
-
             if (!indicators || Object.keys(indicators).length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon"></div>
-                        <div class="empty-state-text">No indicator data available</div>
-                    </div>
-                `;
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-text">No indicator data available</div></div>';
                 return;
             }
 
@@ -1337,18 +746,17 @@
             for (const [name, value] of Object.entries(indicators)) {
                 if (value === undefined || value === null) continue;
 
-                const displayName = name.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                const rawValue = rawIndicators && rawIndicators[name] !== undefined ? rawIndicators[name] : null;
+                const displayName = name.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                const rawValue = rawIndicators?.[name];
 
                 let valueClass = 'indicator-value';
                 if (value > 0.7) valueClass += ' value-high';
                 else if (value > 0.3) valueClass += ' value-medium';
                 else valueClass += ' value-low';
 
-                let detailsHtml = '';
-                if (rawValue !== null && rawValue !== undefined) {
-                    detailsHtml = `<div class="indicator-details">Raw: ${typeof rawValue === 'number' ? rawValue.toFixed(4) : rawValue}</div>`;
-                }
+                const detailsHtml = rawValue !== null && rawValue !== undefined
+                    ? `<div class="indicator-details">Raw: ${typeof rawValue === 'number' ? rawValue.toFixed(4) : rawValue}</div>`
+                    : '';
 
                 html += `
                     <div class="indicator-item">
@@ -1360,20 +768,13 @@
                     </div>
                 `;
             }
-
             container.innerHTML = html;
         }
 
         function updateBarsList(barScores, indicators) {
             const container = document.getElementById('barsList');
-
             if (!barScores || Object.keys(barScores).length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon"></div>
-                        <div class="empty-state-text">No bar calculations available</div>
-                    </div>
-                `;
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-text">No bar calculations available</div></div>';
                 return;
             }
 
@@ -1381,7 +782,7 @@
             for (const [barName, score] of Object.entries(barScores)) {
                 if (score === undefined || score === null) continue;
 
-                const displayName = barName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const displayName = barName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
 
                 let scoreClass = 'bar-score';
                 if (score > 0.7) scoreClass += ' value-high';
@@ -1390,7 +791,7 @@
 
                 // Generate calculation breakdown if we have monitor config
                 let calculationHtml = '';
-                if (currentMonitorConfig && currentMonitorConfig.bars && currentMonitorConfig.bars[barName]) {
+                if (currentMonitorConfig?.bars?.[barName]) {
                     const calculation = calculateBarMath(barName, score, indicators);
                     calculationHtml = `<div class="bar-calculation">${calculation.math}</div>`;
                 }
@@ -1405,13 +806,12 @@
                     </div>
                 `;
             }
-
             container.innerHTML = html;
         }
 
         function calculateBarMath(barName, actualScore, indicators) {
-            if (!currentMonitorConfig || !currentMonitorConfig.bars || !currentMonitorConfig.bars[barName]) {
-                return { math: 'Calculation details not available', totalWeight: '0' };
+            if (!currentMonitorConfig?.bars?.[barName]) {
+                return { math: 'Calculation details not available' };
             }
 
             const barConfig = currentMonitorConfig.bars[barName];
@@ -1422,459 +822,81 @@
             const mathParts = [];
 
             Object.entries(weights).forEach(([indName, weight]) => {
-                const indValue = indicators && indicators[indName] !== undefined ? indicators[indName] : 0;
-                const contribution = indValue * weight;
-                weightedSum += contribution;
+                const indValue = indicators?.[indName] || 0;
+                weightedSum += indValue * weight;
                 totalWeight += weight;
-
                 mathParts.push(`(${indValue.toFixed(3)} × ${weight})`);
             });
 
             const calculatedScore = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
             const math = `${mathParts.join(' + ')} = ${weightedSum.toFixed(2)} ÷ ${totalWeight.toFixed(1)} = ${calculatedScore.toFixed(3)}`;
 
-            return {
-                math,
-                totalWeight: totalWeight.toFixed(1)
-            };
-        }
-
-        // ENHANCED: Excel-like Trade History Table with Exit Time
-        function updateTradesSection(tradeHistory) {
-            const container = document.getElementById('tradesList');
-
-            if (!tradeHistory || tradeHistory.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon"></div>
-                        <div class="empty-state-text">No trades executed yet</div>
-                    </div>
-                `;
-                return;
-            }
-
-            // Process trades into position pairs
-            const positionPairs = processTradeHistory(tradeHistory);
-
-            // Create table HTML with Exit Time column added
-            const tableHTML = `
-                <div class="trades-table-container">
-                    <table class="trades-table">
-                        <thead>
-                            <tr>
-                                <th>Entry Time</th>
-                                <th>Exit Time</th>
-                                <th>Type</th>
-                                <th>Enter Price</th>
-                                <th>Exit Price</th>
-                                <th>Exit Reason</th>
-                                <th>P&L %</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${positionPairs.map(pair => createTradeRow(pair)).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-
-            container.innerHTML = tableHTML;
-        }
-
-        function processTradeHistory(tradeHistory) {
-            const pairs = [];
-            let openPosition = null;
-
-            // Sort trades by timestamp (oldest first for processing)
-            const sortedTrades = [...tradeHistory].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-            for (const trade of sortedTrades) {
-                if (trade.action.includes('enter')) {
-                    // Starting a new position
-                    if (openPosition) {
-                        // Close previous position without exit (shouldn't happen, but handle gracefully)
-                        pairs.push({
-                            ...openPosition,
-                            exitPrice: null,
-                            exitReason: null,
-                            exitTime: null,
-                            pnlPercent: null,
-                            isOpen: true
-                        });
-                    }
-
-                    openPosition = {
-                        type: trade.action.includes('long') ? 'LONG' : 'SHORT',
-                        enterTime: trade.timestamp,
-                        enterPrice: trade.price,
-                        size: trade.size,
-                        exitPrice: null,
-                        exitReason: null,
-                        exitTime: null,
-                        pnlPercent: null,
-                        isOpen: true
-                    };
-                } else if (trade.action.includes('exit') || trade.action.includes('stop')) {
-                    // Closing a position
-                    if (openPosition) {
-                        const exitReason = trade.reason || trade.action;
-                        const pnlPercent = calculatePnlPercent(openPosition.enterPrice, trade.price, openPosition.type);
-
-                        pairs.push({
-                            ...openPosition,
-                            exitPrice: trade.price,
-                            exitReason: exitReason,
-                            exitTime: trade.timestamp,
-                            pnlPercent: pnlPercent,
-                            isOpen: false
-                        });
-
-                        openPosition = null;
-                    }
-                }
-            }
-
-            // Add any remaining open position
-            if (openPosition) {
-                pairs.push(openPosition);
-            }
-
-            // Return most recent trades first
-            return pairs.reverse();
-        }
-
-        function calculatePnlPercent(enterPrice, exitPrice, type) {
-            if (!enterPrice || !exitPrice) return null;
-
-            let pnlPercent;
-            if (type === 'LONG') {
-                pnlPercent = ((exitPrice - enterPrice) / enterPrice) * 100;
-            } else {
-                pnlPercent = ((enterPrice - exitPrice) / enterPrice) * 100;
-            }
-
-            return pnlPercent;
-        }
-
-        function createTradeRow(pair) {
-            // Format times using selected timezone (from shared timezone-utils.js)
-            const enterTime = formatTimeInTimezone(pair.enterTime, window.currentTimezone);
-            const exitTime = pair.exitTime ? formatTimeInTimezone(pair.exitTime, window.currentTimezone) : '--';
-
-            // Format prices
-            const enterPrice = `${pair.enterPrice.toFixed(2)}`;
-            const exitPrice = pair.exitPrice ? `${pair.exitPrice.toFixed(2)}` : '--';
-
-            // Format exit reason
-            let exitReasonHTML = '--';
-            if (pair.exitReason) {
-                const reasonClass = pair.exitReason.toLowerCase().replace(/[^a-z]/g, '-');
-                const reasonText = pair.exitReason.replace(/_/g, ' ').toUpperCase();
-                exitReasonHTML = `<span class="exit-reason ${reasonClass}">${reasonText}</span>`;
-            }
-
-            // Format P&L
-            let pnlHTML = '--';
-            if (pair.pnlPercent !== null && pair.pnlPercent !== undefined) {
-                const pnlClass = pair.pnlPercent >= 0 ? 'pnl-positive' : 'pnl-negative';
-                const pnlSign = pair.pnlPercent >= 0 ? '+' : '';
-                pnlHTML = `<span class="${pnlClass}">${pnlSign}${pair.pnlPercent.toFixed(2)}%</span>`;
-            }
-
-            // Format trade type
-            const typeHTML = `<span class="trade-type ${pair.type.toLowerCase()}">${pair.type}</span>`;
-
-            return `
-                <tr>
-                    <td>${enterTime}</td>
-                    <td>${exitTime}</td>
-                    <td>${typeHTML}</td>
-                    <td>${enterPrice}</td>
-                    <td>${exitPrice}</td>
-                    <td>${exitReasonHTML}</td>
-                    <td>${pnlHTML}</td>
-                </tr>
-            `;
+            return { math };
         }
 
         // ========================================
-        // Chart Data Loading and Rendering
+        // Event Handlers
         // ========================================
 
-        async function loadChartData() {
-            try {
-                console.log(`Loading chart data for card: ${cardId}`);
-
-                const response = await fetch(`/api/combinations/${cardId}/chart-data`);
-
-                if (!response.ok) {
-                    console.log('Chart data API not available');
-                    showChartError('Chart data not available');
-                    return;
-                }
-
-                chartData = await response.json();
-
-                if (chartData.success) {
-                    console.log('Chart data loaded:', {
-                        indicators: Object.keys(chartData.indicator_history || {}),
-                        trades: chartData.trades?.length || 0
-                    });
-
-                    // Render indicator tabs and charts
-                    renderIndicatorTabs();
-
-                    // Add market hours bands to candlestick chart (extended hours shading)
-                    if (candlestickChart && candlestickData && candlestickData.length > 0) {
-                        if (typeof IndicatorCharts !== 'undefined') {
-                            IndicatorCharts.addMarketHoursBandsToChart(candlestickChart, candlestickData);
-                        }
-                    }
-
-                    // Add trade bands to candlestick chart if trades exist
-                    if (chartData.trades && chartData.trades.length > 0 && candlestickChart) {
-                        addTradeBandsToCandlestick();
-                    }
-
-                    // Enable chart synchronization
-                    if (typeof IndicatorCharts !== 'undefined') {
-                        IndicatorCharts.enableChartSynchronization(allCharts);
-                    }
-
-                } else {
-                    console.log('Failed to load chart data:', chartData.error);
-                    showChartError(chartData.error || 'Failed to load chart data');
-                }
-
-            } catch (error) {
-                console.error('Error loading chart data:', error);
-                showChartError('Error loading chart data');
-            }
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
         }
 
-        function showChartError(message) {
-            document.getElementById('indicatorTabs').innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-text">${message}</div>
-                </div>
-            `;
-        }
+        // Timeframe change handler for candlestick chart
+        async function loadCandlestickData(timeframe) {
+            if (!dashboard || !cardId) return;
 
-        function renderIndicatorTabs() {
-            const tabsContainer = document.getElementById('indicatorTabs');
-            const contentsContainer = document.getElementById('indicatorTabContents');
-
-            if (!chartData || !chartData.indicator_history) {
-                tabsContainer.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-text">No indicator history available</div>
-                    </div>
-                `;
-                return;
-            }
-
-            const indicatorHistory = chartData.indicator_history;
-            const classToLayout = chartData.class_to_layout || {};
-            const componentHistory = chartData.component_history || {};
-            const rawIndicatorHistory = chartData.raw_indicator_history || {};
-            const indicatorNames = Object.keys(indicatorHistory);
-
-            if (indicatorNames.length === 0) {
-                tabsContainer.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-text">No indicator history available</div>
-                    </div>
-                `;
-                return;
-            }
-
-            // Generate tabs
-            let tabsHtml = '';
-            let contentsHtml = '';
-
-            indicatorNames.forEach((name, index) => {
-                const isActive = index === 0 ? ' active' : '';
-                const displayName = name.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
-
-                tabsHtml += `
-                    <button class="chart-tab${isActive}" onclick="switchIndicatorTab('${name}')" data-indicator="${name}">
-                        ${displayName}
-                    </button>
-                `;
-
-                contentsHtml += `
-                    <div class="chart-tab-content${isActive}" id="tab-${name}">
-                        <div class="indicator-chart-container" id="chart-${name}">
-                            <div class="chart-loading">Rendering ${displayName} chart...</div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            tabsContainer.innerHTML = tabsHtml;
-            contentsContainer.innerHTML = contentsHtml;
-
-            // Render charts for all indicators (only first one visible initially)
-            indicatorNames.forEach((name, index) => {
-                setTimeout(() => {
-                    renderIndicatorChart(name, indicatorHistory, classToLayout, componentHistory, rawIndicatorHistory);
-                }, index * 50);  // Stagger chart creation
-            });
-        }
-
-        function switchIndicatorTab(indicatorName) {
-            // Update tab active state
-            document.querySelectorAll('.chart-tab').forEach(tab => {
-                tab.classList.remove('active');
-                if (tab.dataset.indicator === indicatorName) {
-                    tab.classList.add('active');
+            // Update button states
+            document.querySelectorAll('[data-timeframe]').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.timeframe === timeframe) {
+                    btn.classList.add('active');
                 }
             });
 
-            // Update content visibility
-            document.querySelectorAll('.chart-tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            const targetContent = document.getElementById(`tab-${indicatorName}`);
-            if (targetContent) {
-                targetContent.classList.add('active');
-            }
+            // Reload data with new timeframe
+            // Note: This would need API support for timeframe parameter
+            console.log(`Timeframe changed to: ${timeframe}`);
+            window.currentTimeframe = timeframe;
 
-            // Reflow chart if it exists
-            if (indicatorCharts[indicatorName]) {
-                indicatorCharts[indicatorName].reflow();
+            // Update chart title
+            const symbol = document.getElementById('symbolName').textContent;
+            if (typeof updateCandlestickTitle === 'function') {
+                updateCandlestickTitle(symbol, timeframe);
             }
         }
 
-        function renderIndicatorChart(indicatorName, indicatorHistory, classToLayout, componentHistory, rawIndicatorHistory) {
-            const containerId = `chart-${indicatorName}`;
-            const container = document.getElementById(containerId);
-
-            if (!container) {
-                console.error(`Container not found: ${containerId}`);
-                return;
+        // Timezone change handler
+        function handleTimezoneChange(timezone) {
+            // Call shared handler
+            if (typeof onTimezoneChange === 'function') {
+                onTimezoneChange(timezone);
             }
 
-            const history = indicatorHistory[indicatorName];
-            if (!history || history.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-text">No data available for ${indicatorName}</div>
-                    </div>
-                `;
-                return;
-            }
-
-            // Check if this is a trigger chart (values between 0 and ~1)
-            const values = history.map(p => p[1]).filter(v => v !== null);
-            const maxValue = Math.max(...values);
-            const minValue = Math.min(...values);
-            const isTriggerChart = maxValue <= 1.5 && minValue >= 0;
-
-            // Determine chart type based on class_to_layout mapping
-            const layout = classToLayout[indicatorName] || 'line';
-
-            let chart;
-            if (typeof IndicatorCharts !== 'undefined') {
-                if (layout === 'stacked' && indicatorName.toLowerCase().includes('macd')) {
-                    // MACD-style stacked chart with histogram
-                    chart = IndicatorCharts.createMACDChart(
-                        containerId,
-                        history,
-                        componentHistory,
-                        indicatorName
-                    );
-                } else if (isTriggerChart) {
-                    // Trigger chart with 0-1 range and reference line at 1
-                    chart = IndicatorCharts.createTriggerChart(
-                        containerId,
-                        history,
-                        indicatorName
-                    );
-                } else {
-                    // Generic line chart for other indicators
-                    chart = IndicatorCharts.createGenericIndicatorChart(
-                        containerId,
-                        history,
-                        indicatorName,
-                        rawIndicatorHistory[indicatorName]
-                    );
-                }
-            } else {
-                // Fallback to basic Highcharts if IndicatorCharts module not loaded
-                chart = createBasicChart(containerId, history, indicatorName);
-            }
-
-            if (chart) {
-                indicatorCharts[indicatorName] = chart;
-                allCharts.push(chart);
-            }
-        }
-
-        function createBasicChart(containerId, data, title) {
-            return Highcharts.chart(containerId, {
-                chart: {
-                    backgroundColor: '#161b22',
-                    style: { fontFamily: 'Inter, sans-serif' }
-                },
-                title: {
-                    text: title,
-                    style: { color: '#e6edf3' }
-                },
-                xAxis: {
-                    type: 'datetime',
-                    gridLineColor: '#30363d',
-                    labels: { style: { color: '#7d8590' } }
-                },
-                yAxis: {
-                    gridLineColor: '#30363d',
-                    labels: { style: { color: '#7d8590' } },
-                    title: { text: '', style: { color: '#7d8590' } }
-                },
-                legend: { enabled: false },
-                tooltip: {
-                    backgroundColor: '#21262d',
-                    borderColor: '#30363d',
-                    style: { color: '#e6edf3' }
-                },
-                series: [{
-                    name: title,
-                    data: data,
-                    color: '#58a6ff',
-                    lineWidth: 2
-                }]
-            });
-        }
-
-        function addTradeBandsToCandlestick() {
-            if (!candlestickChart || !chartData.trades) {
-                return;
-            }
-
-            const trades = chartData.trades;
-
-            if (typeof IndicatorCharts !== 'undefined') {
-                IndicatorCharts.addTradeBandsToChart(candlestickChart, trades);
-            } else {
-                // Fallback: Add simple plot bands
-                trades.forEach(trade => {
-                    if (!trade.entry_time || !trade.exit_time) return;
-
-                    const entryTime = new Date(trade.entry_time).getTime();
-                    const exitTime = new Date(trade.exit_time).getTime();
-                    const isProfit = trade.pnl_percent > 0;
-
-                    candlestickChart.xAxis[0].addPlotBand({
-                        from: entryTime,
-                        to: exitTime,
-                        color: isProfit ? 'rgba(35, 134, 54, 0.15)' : 'rgba(218, 54, 51, 0.15)',
-                        zIndex: 0
-                    });
+            // Redraw all charts
+            if (dashboard) {
+                Object.values(dashboard.getCharts()).forEach(chart => {
+                    if (chart?.redraw) chart.redraw();
                 });
             }
+
+            // Re-render trade history with new timezone
+            if (window.tradeHistoryTable && dashboard?.getData()?.trades) {
+                window.tradeHistoryTable.render(
+                    dashboard.getData().trades,
+                    dashboard.getData().trade_details || {}
+                );
+            }
         }
 
-        console.log('Card details page initialized for real data streaming.');
+        // Global chart zoom sync function (used by trade details)
+        window.syncAllChartsFromDetails = function(min, max) {
+            if (dashboard) {
+                dashboard.syncAllChartsFromDetails(min, max);
+            }
+        };
+
+        console.log('Card details page initialized');
     </script>
 </body>
 </html>

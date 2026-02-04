@@ -210,6 +210,256 @@
             font-size: 0.75rem;
         }
 
+        /* Replay Controls Bar */
+        .replay-controls-bar {
+            display: none;
+            background: linear-gradient(135deg, #1a1f29 0%, #161b22 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 0.75rem 1.5rem;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .replay-controls-bar.active {
+            display: flex;
+        }
+
+        .replay-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .replay-badge {
+            background: #1f6feb;
+            color: #fff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .replay-ticker {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .replay-date {
+            color: #7d8590;
+            font-size: 0.875rem;
+        }
+
+        .replay-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .replay-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .replay-btn:hover {
+            background: #30363d;
+            border-color: #484f58;
+        }
+
+        .replay-btn.primary {
+            background: #238636;
+            border-color: #238636;
+        }
+
+        .replay-btn.primary:hover {
+            background: #2ea043;
+        }
+
+        .replay-btn.danger {
+            background: #da3633;
+            border-color: #da3633;
+        }
+
+        .replay-btn.danger:hover {
+            background: #f85149;
+        }
+
+        .replay-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .replay-speed-select {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .replay-speed-select:focus {
+            outline: none;
+            border-color: #1f6feb;
+        }
+
+        /* Pause on Trade Toggle */
+        .pause-on-trade-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0 0.5rem;
+        }
+
+        .pause-on-trade-toggle label {
+            font-size: 0.75rem;
+            color: #7d8590;
+            white-space: nowrap;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            transition: 0.3s;
+            border-radius: 20px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: #7d8590;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #238636;
+            border-color: #238636;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(16px);
+            background-color: #ffffff;
+        }
+
+        .trade-flash {
+            animation: tradeFlash 0.5s ease-out;
+        }
+
+        @keyframes tradeFlash {
+            0% { background-color: #f0ad4e; }
+            100% { background-color: transparent; }
+        }
+
+        .replay-progress {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #7d8590;
+            font-size: 0.8rem;
+        }
+
+        .replay-progress-bar {
+            width: 100px;
+            height: 6px;
+            background: #21262d;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .replay-progress-fill {
+            height: 100%;
+            background: #238636;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        /* Replay Complete Overlay */
+        .replay-complete-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .replay-complete-overlay.active {
+            display: flex;
+        }
+
+        .replay-complete-modal {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 2.5rem;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .replay-complete-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .replay-complete-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #f0f6fc;
+            margin-bottom: 0.5rem;
+        }
+
+        .replay-complete-subtitle {
+            color: #7d8590;
+            margin-bottom: 1.5rem;
+        }
+
+        .replay-complete-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
         .controls {
             padding: 1rem;
             background: #0d1117;
@@ -856,12 +1106,6 @@
                         <span>Dashboard</span>
                     </a>
                 </div>
-                <div class="nav-item">
-                    <a href="/monitor-creation" class="nav-link">
-                        <span class="nav-icon"></span>
-                        <span>Monitor Creation</span>
-                    </a>
-                </div>
             </div>
         </nav>
 
@@ -896,6 +1140,59 @@
                             <button class="size-btn" data-size="medium" title="Medium View">M</button>
                             <button class="size-btn" data-size="small" title="Small View">S</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Replay Controls Bar (only visible in replay mode) -->
+            <div class="replay-controls-bar" id="replayControlsBar">
+                <div class="replay-info">
+                    <span class="replay-badge">Replay</span>
+                    <span class="replay-ticker" id="replayTicker">--</span>
+                    <span class="replay-date" id="replayDate">--</span>
+                </div>
+                <div class="replay-controls">
+                    <div class="replay-progress">
+                        <div class="replay-progress-bar">
+                            <div class="replay-progress-fill" id="replayProgressFill"></div>
+                        </div>
+                        <span id="replayProgressText">0%</span>
+                    </div>
+                    <select class="replay-speed-select" id="replaySpeedSelect" onchange="changeReplaySpeed(this.value)">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                        <option value="5">5x</option>
+                        <option value="10">10x</option>
+                        <option value="20">20x</option>
+                        <option value="100">100x</option>
+                    </select>
+                    <div class="pause-on-trade-toggle">
+                        <label class="toggle-switch" title="Pause playback when a trade occurs">
+                            <input type="checkbox" id="pauseOnTradeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <label for="pauseOnTradeToggle" title="Pause playback when a trade occurs">Pause on Trade</label>
+                    </div>
+                    <button class="replay-btn primary" id="replayPlayPauseBtn" onclick="toggleReplayPlayPause()">
+                        <span id="playPauseIcon">⏸</span>
+                        <span id="playPauseText">Pause</span>
+                    </button>
+                    <button class="replay-btn danger" onclick="stopReplay()">
+                        ⏹ Stop
+                    </button>
+                </div>
+            </div>
+
+            <!-- Replay Complete Overlay -->
+            <div class="replay-complete-overlay" id="replayCompleteOverlay">
+                <div class="replay-complete-modal">
+                    <div class="replay-complete-icon">🎬</div>
+                    <h2 class="replay-complete-title">Replay Complete</h2>
+                    <p class="replay-complete-subtitle">All historical data has been processed</p>
+                    <div class="replay-complete-actions">
+                        <button class="replay-btn" onclick="restartReplay()">Restart</button>
+                        <a href="/replay" class="replay-btn primary">New Replay</a>
                     </div>
                 </div>
             </div>
@@ -983,6 +1280,14 @@
             const cardId = data.card_id;
             if (cardId) {
                 updateOrCreateCard(cardId, data);
+
+                // Check for new trades and handle pause-on-trade
+                if (data.portfolio) {
+                    const newTradeDetected = checkForNewTrade(cardId, data.portfolio);
+                    if (newTradeDetected) {
+                        handleTradeDetected(cardId, data.portfolio);
+                    }
+                }
             }
         });
 
@@ -1631,6 +1936,9 @@
             // Initialize global size controls
             initializeGlobalSizeControls();
 
+            // Initialize pause-on-trade toggle
+            initPauseOnTrade();
+
             // Fetch initial pip saver status
             fetchPipSaverStatus();
             // Add input listener for symbol field
@@ -1690,7 +1998,195 @@
                     closeAddCardModal();
                 }
             });
+
+            // Check if in replay mode and initialize replay controls
+            initializeReplayMode();
         });
+
+        // ============================================
+        // Replay Mode Functions
+        // ============================================
+
+        let isReplayMode = false;
+        let isReplayPaused = false;
+        let pauseOnTradeEnabled = false;
+        let lastTradeCountByCard = {};  // Track trade count per card to detect new trades
+
+        // Initialize pause on trade toggle from localStorage
+        function initPauseOnTrade() {
+            const saved = localStorage.getItem('pauseOnTradeEnabled');
+            pauseOnTradeEnabled = saved === 'true';
+            const toggle = document.getElementById('pauseOnTradeToggle');
+            if (toggle) {
+                toggle.checked = pauseOnTradeEnabled;
+                toggle.addEventListener('change', function() {
+                    pauseOnTradeEnabled = this.checked;
+                    localStorage.setItem('pauseOnTradeEnabled', pauseOnTradeEnabled);
+                    console.log('Pause on Trade:', pauseOnTradeEnabled ? 'enabled' : 'disabled');
+                });
+            }
+        }
+
+        // Check if a new trade occurred and handle pause-on-trade
+        function checkForNewTrade(cardId, portfolioData) {
+            if (!portfolioData || !portfolioData.trade_history) return false;
+
+            const currentTradeCount = portfolioData.trade_history.length;
+            const previousTradeCount = lastTradeCountByCard[cardId] || 0;
+
+            // Update tracked count
+            lastTradeCountByCard[cardId] = currentTradeCount;
+
+            // Check if new trade occurred
+            if (currentTradeCount > previousTradeCount && previousTradeCount > 0) {
+                console.log(`🔔 New trade detected for ${cardId}! Trade count: ${previousTradeCount} → ${currentTradeCount}`);
+
+                // Flash the card to indicate a trade
+                const cardElement = document.getElementById(`card-${cardId}`);
+                if (cardElement) {
+                    cardElement.classList.add('trade-flash');
+                    setTimeout(() => cardElement.classList.remove('trade-flash'), 500);
+                }
+
+                return true;
+            }
+            return false;
+        }
+
+        // Handle pause-on-trade when a trade is detected
+        function handleTradeDetected(cardId, tradeInfo) {
+            if (!pauseOnTradeEnabled || !isReplayMode || isReplayPaused) return;
+
+            console.log(`⏸️ Pausing replay due to trade on ${cardId}`);
+
+            // Pause the replay
+            socket.emit('replay_pause');
+            isReplayPaused = true;
+            updatePlayPauseButton();
+
+            // Show a notification
+            const lastTrade = tradeInfo?.trade_history?.[tradeInfo.trade_history.length - 1];
+            const action = lastTrade?.action || 'Trade';
+            const price = lastTrade?.price ? `@ $${lastTrade.price.toFixed(2)}` : '';
+            showMessage(`${action} executed ${price} - Playback paused`, 'info');
+        }
+
+        function initializeReplayMode() {
+            // Check session for replay mode
+            fetch('/api/replay_status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.is_replay_mode) {
+                        isReplayMode = true;
+                        showReplayControls(data);
+
+                        // Set up socket listeners for replay events
+                        setupReplaySocketListeners();
+                    }
+                })
+                .catch(error => {
+                    console.log('Not in replay mode or error checking:', error);
+                });
+        }
+
+        function showReplayControls(data) {
+            const controlsBar = document.getElementById('replayControlsBar');
+            controlsBar.classList.add('active');
+
+            // Update replay info
+            if (data.ticker) {
+                document.getElementById('replayTicker').textContent = data.ticker;
+            }
+            if (data.date) {
+                document.getElementById('replayDate').textContent = data.date;
+            }
+            if (data.playback_speed) {
+                document.getElementById('replaySpeedSelect').value = data.playback_speed;
+            }
+        }
+
+        function setupReplaySocketListeners() {
+            // Listen for replay progress updates
+            socket.on('replay_progress', function(data) {
+                updateReplayProgress(data.current, data.total, data.progress);
+            });
+
+            // Listen for replay complete
+            socket.on('replay_complete', function() {
+                showReplayComplete();
+            });
+
+            // Listen for replay state changes
+            socket.on('replay_state', function(data) {
+                if (data.paused !== undefined) {
+                    isReplayPaused = data.paused;
+                    updatePlayPauseButton();
+                }
+            });
+        }
+
+        function updateReplayProgress(current, total, progress) {
+            const progressFill = document.getElementById('replayProgressFill');
+            const progressText = document.getElementById('replayProgressText');
+
+            if (progressFill) {
+                progressFill.style.width = progress + '%';
+            }
+            if (progressText) {
+                progressText.textContent = Math.round(progress) + '%';
+            }
+        }
+
+        function toggleReplayPlayPause() {
+            if (isReplayPaused) {
+                socket.emit('replay_resume');
+                isReplayPaused = false;
+            } else {
+                socket.emit('replay_pause');
+                isReplayPaused = true;
+            }
+            updatePlayPauseButton();
+        }
+
+        function updatePlayPauseButton() {
+            const icon = document.getElementById('playPauseIcon');
+            const text = document.getElementById('playPauseText');
+            const btn = document.getElementById('replayPlayPauseBtn');
+
+            if (isReplayPaused) {
+                icon.textContent = '▶';
+                text.textContent = 'Resume';
+                btn.classList.remove('primary');
+                btn.classList.add('primary');
+            } else {
+                icon.textContent = '⏸';
+                text.textContent = 'Pause';
+                btn.classList.add('primary');
+            }
+        }
+
+        function changeReplaySpeed(speed) {
+            socket.emit('replay_speed', { speed: parseFloat(speed) });
+        }
+
+        function stopReplay() {
+            if (confirm('Are you sure you want to stop the replay? This will end the current session.')) {
+                socket.emit('replay_stop');
+                // Redirect to replay setup
+                window.location.href = '/replay';
+            }
+        }
+
+        function showReplayComplete() {
+            document.getElementById('replayCompleteOverlay').classList.add('active');
+        }
+
+        function restartReplay() {
+            document.getElementById('replayCompleteOverlay').classList.remove('active');
+            socket.emit('replay_restart');
+            // Reset progress
+            updateReplayProgress(0, 100, 0);
+        }
     </script>
 </body>
 </html>
