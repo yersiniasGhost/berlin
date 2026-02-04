@@ -1,0 +1,273 @@
+/**
+ * Dark Theme Variables
+ *
+ * GitHub-inspired dark theme for chart components.
+ * Used by stock_analysis_ui (Card Details page).
+ *
+ * Color palette based on GitHub's dark theme with trading-specific accents.
+ */
+
+:root {
+    /* ===========================================
+       TYPOGRAPHY
+       =========================================== */
+    --font-sans: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace;
+
+    /* ===========================================
+       SPACING & RADIUS
+       =========================================== */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 12px;
+
+    /* ===========================================
+       BACKGROUND COLORS
+       =========================================== */
+    --bg-primary: #161b22;      /* Main card/section background */
+    --bg-secondary: #0d1117;    /* Nested elements, inputs */
+    --bg-tertiary: #21262d;     /* Headers, hover states */
+    --bg-hover: #30363d;        /* Interactive hover */
+    --bg-stripe: rgba(125, 133, 144, 0.05);  /* Table row striping */
+    --bg-body: #0f1419;         /* Page background */
+
+    /* ===========================================
+       BORDER COLORS
+       =========================================== */
+    --border-primary: #30363d;   /* Main borders */
+    --border-secondary: #21262d; /* Subtle borders */
+    --border-hover: #484f58;     /* Border on hover */
+
+    /* ===========================================
+       TEXT COLORS
+       =========================================== */
+    --text-primary: #e6edf3;     /* Primary text */
+    --text-secondary: #7d8590;   /* Secondary/muted text */
+    --text-tertiary: #484f58;    /* Disabled/very muted */
+    --text-inverse: #0d1117;     /* Text on accent backgrounds */
+
+    /* ===========================================
+       ACCENT & STATUS COLORS
+       =========================================== */
+    /* Primary accent (blue) */
+    --color-accent: #238636;     /* Green for primary actions (trading context) */
+    --color-accent-text: #ffffff;
+    --color-accent-shadow: rgba(35, 134, 54, 0.25);
+
+    /* Link color */
+    --color-link: #58a6ff;
+    --color-link-hover: #79b8ff;
+
+    /* Success (green - profit) */
+    --color-success: #3fb950;
+    --color-success-bg: rgba(63, 185, 80, 0.15);
+    --color-success-border: rgba(63, 185, 80, 0.4);
+
+    /* Danger (red - loss) */
+    --color-danger: #f85149;
+    --color-danger-bg: rgba(248, 81, 73, 0.15);
+    --color-danger-border: rgba(248, 81, 73, 0.4);
+
+    /* Warning (yellow/orange) */
+    --color-warning: #d29922;
+    --color-warning-bg: rgba(210, 153, 34, 0.15);
+    --color-warning-border: rgba(210, 153, 34, 0.4);
+
+    /* Info (blue) */
+    --color-info: #58a6ff;
+    --color-info-bg: rgba(88, 166, 255, 0.15);
+    --color-info-border: rgba(88, 166, 255, 0.4);
+
+    /* ===========================================
+       CHART-SPECIFIC COLORS
+       =========================================== */
+    /* Candlestick */
+    --chart-candle-up: #238636;
+    --chart-candle-down: #da3633;
+    --chart-candle-up-line: #238636;
+    --chart-candle-down-line: #da3633;
+
+    /* Grid and axes */
+    --chart-grid: #30363d;
+    --chart-axis-line: #30363d;
+    --chart-axis-text: #7d8590;
+
+    /* Tooltip */
+    --chart-tooltip-bg: #21262d;
+    --chart-tooltip-border: #30363d;
+    --chart-tooltip-text: #e6edf3;
+
+    /* Navigator and scrollbar */
+    --chart-navigator-mask: rgba(255, 255, 255, 0.1);
+    --chart-navigator-outline: #30363d;
+
+    /* Trade bands */
+    --chart-trade-profit-bg: rgba(35, 134, 54, 0.15);
+    --chart-trade-loss-bg: rgba(218, 54, 51, 0.15);
+
+    /* Market hours bands */
+    --chart-premarket-bg: rgba(88, 166, 255, 0.05);
+    --chart-afterhours-bg: rgba(210, 153, 34, 0.05);
+
+    /* Bar scores - bull colors */
+    --bar-bull-1: #4CAF50;
+    --bar-bull-2: #8BC34A;
+    --bar-bull-3: #CDDC39;
+    --bar-bull-4: #00BCD4;
+
+    /* Bar scores - bear colors */
+    --bar-bear-1: #ef5350;
+    --bar-bear-2: #E91E63;
+    --bar-bear-3: #FF5722;
+    --bar-bear-4: #FF9800;
+
+    /* Bar scores - default colors */
+    --bar-default-1: #42A5F5;
+    --bar-default-2: #AB47BC;
+    --bar-default-3: #78909C;
+    --bar-default-4: #8D6E63;
+
+    /* Threshold lines */
+    --threshold-entry: #3fb950;
+    --threshold-exit: #f85149;
+
+    /* ===========================================
+       SHADOWS
+       =========================================== */
+    --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+    /* ===========================================
+       OVERLAY
+       =========================================== */
+    --overlay-bg: rgba(13, 17, 23, 0.8);
+
+    /* ===========================================
+       SCROLLBAR
+       =========================================== */
+    --scrollbar-thumb: #30363d;
+    --scrollbar-thumb-hover: #484f58;
+    --scrollbar-track: #161b22;
+
+    /* ===========================================
+       HIGHCHARTS SPECIFIC OVERRIDES
+       =========================================== */
+    --highcharts-background: #161b22;
+    --highcharts-title: #e6edf3;
+    --highcharts-subtitle: #7d8590;
+    --highcharts-legend-item: #e6edf3;
+    --highcharts-legend-item-hover: #ffffff;
+    --highcharts-button: #21262d;
+    --highcharts-button-hover: #30363d;
+    --highcharts-button-select: #238636;
+    --highcharts-input-bg: #21262d;
+    --highcharts-input-text: #e6edf3;
+}
+
+/* ===========================================
+   HIGHCHARTS DARK THEME OVERRIDES
+   =========================================== */
+
+/* Chart container backgrounds */
+.highcharts-container {
+    background: var(--highcharts-background) !important;
+}
+
+.highcharts-background {
+    fill: var(--highcharts-background);
+}
+
+/* Title and subtitle */
+.highcharts-title,
+.highcharts-subtitle {
+    fill: var(--highcharts-title) !important;
+}
+
+/* Axis labels and titles */
+.highcharts-axis-labels text,
+.highcharts-axis-title {
+    fill: var(--chart-axis-text) !important;
+}
+
+/* Grid lines */
+.highcharts-grid-line {
+    stroke: var(--chart-grid) !important;
+}
+
+.highcharts-axis-line {
+    stroke: var(--chart-axis-line) !important;
+}
+
+/* Legend */
+.highcharts-legend-item text {
+    fill: var(--highcharts-legend-item) !important;
+}
+
+.highcharts-legend-item:hover text {
+    fill: var(--highcharts-legend-item-hover) !important;
+}
+
+/* Tooltip */
+.highcharts-tooltip-box {
+    fill: var(--chart-tooltip-bg) !important;
+    stroke: var(--chart-tooltip-border) !important;
+}
+
+.highcharts-tooltip text {
+    fill: var(--chart-tooltip-text) !important;
+}
+
+/* Navigator */
+.highcharts-navigator-mask-inside {
+    fill: var(--chart-navigator-mask) !important;
+}
+
+.highcharts-navigator-outline {
+    stroke: var(--chart-navigator-outline) !important;
+}
+
+/* Scrollbar */
+.highcharts-scrollbar-track {
+    fill: var(--scrollbar-track) !important;
+    stroke: var(--scrollbar-track) !important;
+}
+
+.highcharts-scrollbar-thumb {
+    fill: var(--scrollbar-thumb) !important;
+    stroke: var(--scrollbar-thumb) !important;
+}
+
+/* Range selector buttons */
+.highcharts-button-box {
+    fill: var(--highcharts-button) !important;
+    stroke: var(--border-primary) !important;
+}
+
+.highcharts-button text {
+    fill: var(--text-primary) !important;
+}
+
+.highcharts-button:hover .highcharts-button-box {
+    fill: var(--highcharts-button-hover) !important;
+}
+
+.highcharts-button-pressed .highcharts-button-box,
+.highcharts-button-hover .highcharts-button-box {
+    fill: var(--highcharts-button-select) !important;
+}
+
+/* Range selector inputs */
+.highcharts-range-input text {
+    fill: var(--highcharts-input-text) !important;
+}
+
+/* Crosshair */
+.highcharts-crosshair {
+    stroke: var(--text-secondary) !important;
+}
+
+/* Credits */
+.highcharts-credits {
+    fill: var(--text-tertiary) !important;
+}

@@ -1,0 +1,97 @@
+{#
+    Trade History Table Component
+
+    A reusable trade history table with P&L toggle, sorting, and Details button.
+    Used by both Card Details (stock_analysis_ui) and Replay (visualization_apps).
+
+    Usage:
+        {% include 'shared/components/_trade_history_table.html' %}
+
+    Required JavaScript:
+        - TradeHistoryTable class from trade-history-table.js
+        - TimezoneUtils from timezone-utils.js
+
+    Optional Jinja2 variables:
+        - table_id: ID for the table body element (default: "tradeHistoryTable")
+        - container_id: ID for the outer container (default: "tradeHistoryContainer")
+        - show_pnl_toggle: Show P&L format toggle buttons (default: true)
+        - show_cumulative: Show cumulative P&L columns (default: true)
+        - show_details: Show Details button column (default: true)
+        - show_signal: Show Signal column (default: true)
+        - max_height: Max height of scrollable area (default: "400px")
+        - theme: Theme name for styling context (default: "dark")
+#}
+
+{% set table_id = table_id | default("tradeHistoryTable") %}
+{% set container_id = container_id | default("tradeHistoryContainer") %}
+{% set show_pnl_toggle = show_pnl_toggle | default(true) %}
+{% set show_cumulative = show_cumulative | default(true) %}
+{% set show_details = show_details | default(true) %}
+{% set show_signal = show_signal | default(true) %}
+{% set max_height = max_height | default("400px") %}
+{% set theme = theme | default("dark") %}
+
+<div class="chart-section" id="{{ container_id }}">
+    <div class="chart-section-header">
+        <div>
+            <h3 class="chart-section-title">Trade History</h3>
+            <p class="chart-section-subtitle">Executed trades and performance</p>
+        </div>
+
+        {% if show_pnl_toggle %}
+        <div class="pnl-toggle" id="pnlToggle">
+            <button type="button" class="pnl-toggle-btn active" data-mode="percent" onclick="window.tradeHistoryTable?.updatePnLDisplay('percent')">%</button>
+            <button type="button" class="pnl-toggle-btn" data-mode="dollars" onclick="window.tradeHistoryTable?.updatePnLDisplay('dollars')">$</button>
+            <button type="button" class="pnl-toggle-btn" data-mode="both" onclick="window.tradeHistoryTable?.updatePnLDisplay('both')">Both</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="trade-table-container" style="max-height: {{ max_height }};">
+        <table class="trade-table" id="{{ table_id }}Table">
+            <thead>
+                <tr>
+                    <th class="sortable" data-sort="time">Time</th>
+                    <th class="sortable" data-sort="type">Type</th>
+                    <th class="sortable" data-sort="price">Price</th>
+                    <th class="sortable" data-sort="size">Size</th>
+                    <th class="sortable pnl-col pnl-col-pct" data-sort="pnl_pct">P&L %</th>
+                    <th class="sortable pnl-col pnl-col-dollars" data-sort="pnl_dollars">P&L $</th>
+                    {% if show_cumulative %}
+                    <th class="pnl-col pnl-col-pct">Cum. %</th>
+                    <th class="pnl-col pnl-col-dollars">Cum. $</th>
+                    {% endif %}
+                    {% if show_signal %}
+                    <th>Signal</th>
+                    {% endif %}
+                    {% if show_details %}
+                    <th>Details</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody id="{{ table_id }}">
+                <tr>
+                    <td colspan="{{ 10 if show_cumulative and show_signal and show_details else 6 }}" class="text-center" style="color: var(--text-secondary); padding: 2rem;">
+                        No trades to display
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Initialization script for standalone usage #}
+<script>
+(function() {
+    // Initialize TradeHistoryTable if class is available
+    if (typeof TradeHistoryTable !== 'undefined' && !window.tradeHistoryTable) {
+        window.tradeHistoryTable = new TradeHistoryTable({
+            tableBodyId: '{{ table_id }}',
+            theme: '{{ theme }}',
+            showCumulative: {{ 'true' if show_cumulative else 'false' }},
+            showSignal: {{ 'true' if show_signal else 'false' }},
+            showDetails: {{ 'true' if show_details else 'false' }}
+        });
+    }
+})();
+</script>

@@ -1,0 +1,157 @@
+{#
+    Trade Details Modal Component
+
+    A modal dialog for displaying detailed trade information.
+    Used by both Card Details (stock_analysis_ui) and Replay (visualization_apps).
+
+    Usage:
+        {% include 'shared/components/_trade_details_modal.html' %}
+
+    Required JavaScript:
+        - Called by TradeHistoryTable.showTradeDetails() method
+
+    Optional Jinja2 variables:
+        - modal_id: ID for the modal overlay (default: "tradeDetailsModal")
+        - title: Modal title (default: "Trade Details")
+        - theme: Theme name for styling (default: "dark")
+#}
+
+{% set modal_id = modal_id | default("tradeDetailsModal") %}
+{% set title = title | default("Trade Details") %}
+{% set theme = theme | default("dark") %}
+
+<div class="chart-modal-overlay" id="{{ modal_id }}">
+    <div class="chart-modal" style="width: 600px;">
+        <div class="chart-modal-header">
+            <h4 class="chart-modal-title">{{ title }}</h4>
+            <button class="chart-modal-close" onclick="closeTradeDetailsModal()">&times;</button>
+        </div>
+        <div class="chart-modal-body" id="{{ modal_id }}Body">
+            {# Content will be dynamically populated #}
+            <div class="trade-details-grid">
+                <div class="trade-detail-item">
+                    <div class="trade-detail-label">Loading...</div>
+                    <div class="trade-detail-value">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="chart-modal-footer">
+            <button class="chart-btn" onclick="zoomToTrade()">Zoom to Trade</button>
+            <button class="chart-btn" onclick="closeTradeDetailsModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+{# Modal control functions #}
+<script>
+(function() {
+    let currentTradeTimestamp = null;
+
+    // Show the trade details modal with data
+    window.showTradeDetailsModal = function(tradeData) {
+        const modal = document.getElementById('{{ modal_id }}');
+        const body = document.getElementById('{{ modal_id }}Body');
+
+        if (!modal || !body) return;
+
+        currentTradeTimestamp = tradeData.timestamp || tradeData.entry_time;
+
+        // Build the details grid HTML
+        const detailsHtml = buildTradeDetailsHtml(tradeData);
+        body.innerHTML = detailsHtml;
+
+        // Show modal
+        modal.classList.add('visible');
+
+        // Close on escape key
+        document.addEventListener('keydown', handleEscapeKey);
+
+        // Close on overlay click
+        modal.addEventListener('click', handleOverlayClick);
+    };
+
+    // Close the modal
+    window.closeTradeDetailsModal = function() {
+        const modal = document.getElementById('{{ modal_id }}');
+        if (modal) {
+            modal.classList.remove('visible');
+            document.removeEventListener('keydown', handleEscapeKey);
+            modal.removeEventListener('click', handleOverlayClick);
+        }
+    };
+
+    // Zoom charts to the current trade
+    window.zoomToTrade = function() {
+        if (currentTradeTimestamp && typeof window.syncAllChartsFromDetails === 'function') {
+            const timestamp = new Date(currentTradeTimestamp).getTime();
+            const padding = 5 * 60 * 1000; // 5 minutes padding
+            window.syncAllChartsFromDetails(timestamp - padding, timestamp + padding);
+        }
+        closeTradeDetailsModal();
+    };
+
+    function handleEscapeKey(e) {
+        if (e.key === 'Escape') {
+            closeTradeDetailsModal();
+        }
+    }
+
+    function handleOverlayClick(e) {
+        if (e.target.classList.contains('chart-modal-overlay')) {
+            closeTradeDetailsModal();
+        }
+    }
+
+    function buildTradeDetailsHtml(trade) {
+        const formatPrice = (price) => price !== null && price !== undefined ? `$${parseFloat(price).toFixed(2)}` : '-';
+        const formatPercent = (pct) => {
+            if (pct === null || pct === undefined) return '-';
+            const sign = pct >= 0 ? '+' : '';
+            const colorClass = pct >= 0 ? 'pnl-positive' : 'pnl-negative';
+            return `<span class="${colorClass}">${sign}${parseFloat(pct).toFixed(2)}%</span>`;
+        };
+        const formatTime = (timestamp) => {
+            if (!timestamp) return '-';
+            const tz = window.currentTimezone || 'America/New_York';
+            if (typeof formatTimeInTimezone === 'function') {
+                return formatTimeInTimezone(timestamp, tz);
+            }
+            return new Date(timestamp).toLocaleString();
+        };
+
+        const items = [
+            { label: 'Trade Type', value: `<span class="trade-type ${(trade.type || trade.trade_type || '').toLowerCase()}">${(trade.type || trade.trade_type || '-').toUpperCase()}</span>` },
+            { label: 'Entry Time', value: formatTime(trade.entry_time || trade.timestamp) },
+            { label: 'Exit Time', value: formatTime(trade.exit_time) },
+            { label: 'Entry Price', value: formatPrice(trade.entry_price || trade.price) },
+            { label: 'Exit Price', value: formatPrice(trade.exit_price) },
+            { label: 'Position Size', value: trade.size || trade.position_size || '-' },
+            { label: 'P&L %', value: formatPercent(trade.pnl_percent || trade.pnl_pct) },
+            { label: 'P&L $', value: formatPrice(trade.pnl_dollars || trade.pnl_amount) },
+            { label: 'Exit Signal', value: trade.exit_signal || trade.signal || trade.reason || '-' }
+        ];
+
+        // Add any additional details from trade_details
+        if (trade.details || trade.trade_details) {
+            const details = trade.details || trade.trade_details;
+            if (details.entry_indicators) {
+                items.push({ label: 'Entry Indicators', value: `<small>${JSON.stringify(details.entry_indicators)}</small>` });
+            }
+            if (details.exit_indicators) {
+                items.push({ label: 'Exit Indicators', value: `<small>${JSON.stringify(details.exit_indicators)}</small>` });
+            }
+        }
+
+        return `
+            <div class="trade-details-grid">
+                ${items.map(item => `
+                    <div class="trade-detail-item">
+                        <div class="trade-detail-label">${item.label}</div>
+                        <div class="trade-detail-value">${item.value}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+})();
+</script>

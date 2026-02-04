@@ -1,0 +1,675 @@
+/**
+ * Chart Components Base Styles
+ *
+ * Reusable styles for chart dashboard components using CSS variables.
+ * Variables are defined in theme files (dark.css, light.css).
+ *
+ * Components:
+ * - Trade History Table
+ * - Bar Scores Chart
+ * - Indicator Charts
+ * - Chart Synchronization UI
+ * - Modal Dialogs
+ *
+ * Used by both stock_analysis_ui (Card Details) and visualization_apps (Replay).
+ */
+
+/* ===========================================
+   BASE LAYOUT & CONTAINERS
+   =========================================== */
+
+.chart-section {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-card);
+}
+
+.chart-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.chart-section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.chart-section-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.chart-container {
+    width: 100%;
+    min-height: 300px;
+    position: relative;
+}
+
+/* ===========================================
+   TRADE HISTORY TABLE
+   =========================================== */
+
+.trade-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+
+.trade-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+}
+
+.trade-table thead {
+    background: var(--bg-tertiary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.trade-table th {
+    padding: 0.75rem 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-primary);
+    border-right: 1px solid var(--border-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.625rem;
+    white-space: nowrap;
+}
+
+.trade-table th:last-child {
+    border-right: none;
+}
+
+/* Sortable column headers */
+.trade-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.trade-table th.sortable:hover {
+    background: var(--bg-hover);
+}
+
+.trade-table th .sort-indicator {
+    margin-left: 0.25rem;
+    opacity: 0.5;
+}
+
+.trade-table th.sorted .sort-indicator {
+    opacity: 1;
+}
+
+.trade-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.trade-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.trade-table tbody tr:nth-child(even) {
+    background: var(--bg-stripe);
+}
+
+.trade-table tbody tr:nth-child(even):hover {
+    background: var(--bg-hover);
+}
+
+.trade-table td {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-secondary);
+    border-right: 1px solid var(--border-secondary);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.trade-table td:last-child {
+    border-right: none;
+}
+
+/* Trade type badges */
+.trade-type {
+    font-weight: 600;
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.6875rem;
+}
+
+.trade-type.long,
+.trade-type.buy {
+    color: var(--color-success);
+    background: var(--color-success-bg);
+}
+
+.trade-type.short,
+.trade-type.sell {
+    color: var(--color-danger);
+    background: var(--color-danger-bg);
+}
+
+/* P&L styling */
+.pnl-positive {
+    color: var(--color-success);
+    font-weight: 600;
+}
+
+.pnl-negative {
+    color: var(--color-danger);
+    font-weight: 600;
+}
+
+.pnl-zero {
+    color: var(--text-secondary);
+}
+
+/* Exit reason badges */
+.exit-reason {
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.exit-reason.stop-loss,
+.exit-reason.stop {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
+.exit-reason.take-profit,
+.exit-reason.target {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.exit-reason.signal {
+    background: var(--color-info-bg);
+    color: var(--color-info);
+}
+
+/* P&L Toggle */
+.pnl-toggle {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--bg-tertiary);
+    padding: 0.25rem;
+    border-radius: var(--radius-md);
+}
+
+.pnl-toggle-btn {
+    padding: 0.375rem 0.75rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pnl-toggle-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.pnl-toggle-btn.active {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+}
+
+/* Details button */
+.btn-details {
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.6875rem;
+    transition: all 0.15s ease;
+}
+
+.btn-details:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+}
+
+/* ===========================================
+   BAR SCORES CHART
+   =========================================== */
+
+.bar-scores-container {
+    height: 280px;
+    width: 100%;
+}
+
+.bar-scores-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    margin-top: 0.5rem;
+}
+
+.bar-scores-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.bar-scores-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+/* ===========================================
+   INDICATOR CHART TABS
+   =========================================== */
+
+.indicator-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.indicator-tab {
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.indicator-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.indicator-tab.active {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+}
+
+.indicator-tab-content {
+    display: none;
+}
+
+.indicator-tab-content.active {
+    display: block;
+}
+
+.indicator-chart-container {
+    height: 400px;
+    width: 100%;
+}
+
+/* ===========================================
+   CHART CONTROLS
+   =========================================== */
+
+.chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-btn {
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.chart-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.chart-btn.active {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+}
+
+.chart-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Timezone selector */
+.timezone-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1rem;
+    padding-left: 1rem;
+    border-left: 1px solid var(--border-secondary);
+}
+
+.timezone-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.timezone-select {
+    padding: 0.4rem 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.15s ease;
+}
+
+.timezone-select:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.timezone-select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-shadow);
+}
+
+/* ===========================================
+   MODAL DIALOGS
+   =========================================== */
+
+.chart-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.chart-modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.chart-modal {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-modal);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.95);
+    transition: transform 0.2s ease;
+}
+
+.chart-modal-overlay.visible .chart-modal {
+    transform: scale(1);
+}
+
+.chart-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.chart-modal-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.chart-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    line-height: 1;
+    transition: color 0.15s ease;
+}
+
+.chart-modal-close:hover {
+    color: var(--text-primary);
+}
+
+.chart-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.chart-modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-secondary);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* Trade Details Modal Specific */
+.trade-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.trade-detail-item {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-secondary);
+}
+
+.trade-detail-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.trade-detail-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+/* ===========================================
+   LOADING & EMPTY STATES
+   =========================================== */
+
+.chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.chart-loading::after {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-primary);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: chart-spin 1s linear infinite;
+    margin-left: 0.5rem;
+}
+
+@keyframes chart-spin {
+    to { transform: rotate(360deg); }
+}
+
+.chart-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 2rem;
+}
+
+.chart-empty-state-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.chart-empty-state-text {
+    font-size: 0.875rem;
+}
+
+/* ===========================================
+   SCROLLBAR STYLING
+   =========================================== */
+
+.trade-table-container::-webkit-scrollbar,
+.chart-modal-body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.trade-table-container::-webkit-scrollbar-track,
+.chart-modal-body::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+
+.trade-table-container::-webkit-scrollbar-thumb,
+.chart-modal-body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: var(--radius-sm);
+}
+
+.trade-table-container::-webkit-scrollbar-thumb:hover,
+.chart-modal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* ===========================================
+   RESPONSIVE DESIGN
+   =========================================== */
+
+@media (max-width: 768px) {
+    .chart-section {
+        padding: 1rem;
+    }
+
+    .chart-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .chart-controls {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .timezone-selector {
+        margin-left: 0;
+        padding-left: 0;
+        border-left: none;
+        margin-top: 0.5rem;
+        width: 100%;
+    }
+
+    .indicator-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .indicator-tab {
+        flex-shrink: 0;
+    }
+
+    .trade-table {
+        font-size: 0.6875rem;
+    }
+
+    .trade-table th,
+    .trade-table td {
+        padding: 0.5rem 0.375rem;
+    }
+
+    .pnl-toggle {
+        flex-wrap: wrap;
+    }
+
+    .chart-modal {
+        max-width: 95vw;
+        max-height: 95vh;
+    }
+
+    .trade-details-grid {
+        grid-template-columns: 1fr;
+    }
+}

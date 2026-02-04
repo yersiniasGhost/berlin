@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Replay Mode - Trading Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.6;
+        }
+
+        .replay-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            max-width: 600px;
+            width: 95%;
+        }
+
+        .header-section {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #f0f6fc;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        }
+
+        .header-subtitle {
+            font-size: 0.9rem;
+            color: #7d8590;
+        }
+
+        /* Source Selection */
+        .source-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        .source-toggle {
+            display: flex;
+            gap: 0.5rem;
+            background: #0d1117;
+            padding: 0.25rem;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+        }
+
+        .source-option {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #7d8590;
+            border: none;
+            background: transparent;
+        }
+
+        .source-option:hover {
+            color: #e6edf3;
+            background: #21262d;
+        }
+
+        .source-option.active {
+            background: #238636;
+            color: #ffffff;
+        }
+
+        /* Form Sections */
+        .config-section {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+        }
+
+        .config-section.hidden {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #7d8590;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 0.625rem 0.875rem;
+            font-size: 0.875rem;
+            color: #e6edf3;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: #1f6feb;
+            box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.2);
+        }
+
+        .form-select option {
+            background: #161b22;
+            color: #e6edf3;
+        }
+
+        /* File list for PIP mode */
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 0.625rem 0.875rem;
+            border-bottom: 1px solid #21262d;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-item:hover {
+            background: #21262d;
+        }
+
+        .file-item.selected {
+            background: rgba(35, 134, 54, 0.2);
+            border-color: #238636;
+        }
+
+        .file-item input[type="radio"] {
+            margin-right: 0.75rem;
+            accent-color: #238636;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-size: 0.875rem;
+            color: #e6edf3;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .file-meta {
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-top: 0.125rem;
+        }
+
+        .file-ticker {
+            display: inline-block;
+            background: #1f6feb;
+            color: #fff;
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        /* Date range info */
+        .date-range-info {
+            font-size: 0.75rem;
+            color: #7d8590;
+            margin-top: 0.375rem;
+        }
+
+        /* Speed selector */
+        .speed-section {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .speed-group {
+            flex: 1;
+        }
+
+        /* Buttons */
+        .button-section {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.875rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #238636;
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(35, 134, 54, 0.4);
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            color: #e6edf3;
+            border: 1px solid #30363d;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading and messages */
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #30363d;
+            border-top: 2px solid #238636;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(218, 54, 51, 0.1);
+            border: 1px solid rgba(218, 54, 51, 0.3);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: #ff7b72;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #7d8590;
+        }
+
+        /* Scrollbar styling */
+        .file-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .file-list::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        .file-list::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .file-list::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+    </style>
+</head>
+<body>
+    <div class="replay-container">
+        <div class="header-section">
+            <h1 class="header-title">Replay Mode</h1>
+            <p class="header-subtitle">Test strategies with historical data</p>
+        </div>
+
+        <!-- Source Selection -->
+        <div class="source-section">
+            <label class="section-label">Data Source</label>
+            <div class="source-toggle">
+                <button class="source-option active" data-source="pip" onclick="selectSource('pip')">
+                    PIP Files
+                </button>
+                <button class="source-option" data-source="mongodb" onclick="selectSource('mongodb')">
+                    MongoDB History
+                </button>
+            </div>
+        </div>
+
+        <!-- PIP File Selection -->
+        <div class="config-section" id="pipSection">
+            <div class="form-group">
+                <label class="form-label">Select PIP Data File</label>
+                <div class="file-list" id="pipFileList">
+                    <div class="empty-state">
+                        <div class="loading-spinner"></div>
+                        Loading files...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MongoDB Selection -->
+        <div class="config-section hidden" id="mongoSection">
+            <div class="form-group">
+                <label class="form-label">Ticker Symbol</label>
+                <select class="form-select" id="mongoTicker">
+                    <option value="">Loading tickers...</option>
+                </select>
+                <div class="date-range-info" id="tickerDateRange"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" class="form-input" id="mongoDate">
+            </div>
+        </div>
+
+        <!-- Monitor Config Selection -->
+        <div class="config-section">
+            <div class="form-group">
+                <label class="form-label">Monitor Configuration</label>
+                <select class="form-select" id="monitorConfig">
+                    <option value="">Loading configs...</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Playback Speed -->
+        <div class="config-section">
+            <div class="speed-section">
+                <div class="speed-group">
+                    <label class="form-label">Playback Speed</label>
+                    <select class="form-select" id="playbackSpeed">
+                        <option value="0.5">0.5x (Slow)</option>
+                        <option value="1" selected>1x (Real-time)</option>
+                        <option value="2">2x</option>
+                        <option value="5">5x</option>
+                        <option value="10">10x</option>
+                        <option value="20">20x</option>
+                        <option value="100">100x (Fast)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="button-section">
+            <button class="btn btn-secondary" onclick="window.location.href='/'">
+                Back
+            </button>
+            <button class="btn btn-primary" id="startReplayBtn" onclick="startReplay()" disabled>
+                Start Replay
+            </button>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <script>
+        // State
+        let currentSource = 'pip';
+        let selectedPipFile = null;
+        let pipFiles = [];
+        let tickers = [];
+        let monitorConfigs = [];
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPipFiles();
+            loadTickers();
+            loadMonitorConfigs();
+        });
+
+        function selectSource(source) {
+            currentSource = source;
+
+            // Update toggle buttons
+            document.querySelectorAll('.source-option').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.source === source);
+            });
+
+            // Show/hide sections
+            document.getElementById('pipSection').classList.toggle('hidden', source !== 'pip');
+            document.getElementById('mongoSection').classList.toggle('hidden', source !== 'mongodb');
+
+            validateForm();
+        }
+
+        async function loadPipFiles() {
+            try {
+                const response = await fetch('/replay/api/list_pip_files');
+                const result = await response.json();
+
+                if (result.success) {
+                    pipFiles = result.files;
+                    renderPipFiles();
+                } else {
+                    showPipError(result.error);
+                }
+            } catch (error) {
+                showPipError('Failed to load PIP files: ' + error.message);
+            }
+        }
+
+        function renderPipFiles() {
+            const container = document.getElementById('pipFileList');
+
+            if (pipFiles.length === 0) {
+                container.innerHTML = '<div class="empty-state">No PIP files found</div>';
+                return;
+            }
+
+            container.innerHTML = pipFiles.map((file, index) => `
+                <div class="file-item ${selectedPipFile === file.path ? 'selected' : ''}"
+                     onclick="selectPipFile('${file.path}', ${index})">
+                    <input type="radio" name="pipFile" ${selectedPipFile === file.path ? 'checked' : ''}>
+                    <div class="file-info">
+                        <div class="file-name">
+                            ${file.filename}
+                            <span class="file-ticker">${file.ticker}</span>
+                        </div>
+                        <div class="file-meta">${file.size_formatted} - ${file.modified}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectPipFile(path, index) {
+            selectedPipFile = path;
+            renderPipFiles();
+            validateForm();
+        }
+
+        function showPipError(message) {
+            document.getElementById('pipFileList').innerHTML =
+                `<div class="empty-state" style="color: #ff7b72;">${message}</div>`;
+        }
+
+        async function loadTickers() {
+            try {
+                const response = await fetch('/replay/api/get_available_tickers');
+                const result = await response.json();
+
+                if (result.success) {
+                    tickers = result.tickers;
+                    renderTickers(result.default_ticker);
+                }
+            } catch (error) {
+                console.error('Failed to load tickers:', error);
+            }
+        }
+
+        function renderTickers(defaultTicker) {
+            const select = document.getElementById('mongoTicker');
+
+            const tickersWithData = tickers.filter(t => t.has_data);
+            const tickersWithoutData = tickers.filter(t => !t.has_data);
+
+            let options = '';
+
+            if (tickersWithData.length > 0) {
+                options += '<optgroup label="Available Data">';
+                tickersWithData.forEach(t => {
+                    const selected = t.ticker === defaultTicker ? 'selected' : '';
+                    options += `<option value="${t.ticker}"
+                                        data-start="${t.start_date}"
+                                        data-end="${t.end_date}"
+                                        ${selected}>${t.ticker}</option>`;
+                });
+                options += '</optgroup>';
+            }
+
+            if (tickersWithoutData.length > 0) {
+                options += '<optgroup label="No Data">';
+                tickersWithoutData.forEach(t => {
+                    options += `<option value="${t.ticker}" disabled>${t.ticker}</option>`;
+                });
+                options += '</optgroup>';
+            }
+
+            select.innerHTML = options;
+            updateTickerDateRange();
+
+            select.addEventListener('change', () => {
+                updateTickerDateRange();
+                validateForm();
+            });
+        }
+
+        function updateTickerDateRange() {
+            const select = document.getElementById('mongoTicker');
+            const dateRangeEl = document.getElementById('tickerDateRange');
+            const dateInput = document.getElementById('mongoDate');
+            const selectedOption = select.options[select.selectedIndex];
+
+            if (selectedOption && selectedOption.dataset.start) {
+                const start = selectedOption.dataset.start;
+                const end = selectedOption.dataset.end;
+                dateRangeEl.textContent = `Available: ${start} to ${end}`;
+
+                // Set date input constraints
+                dateInput.min = start;
+                dateInput.max = end;
+
+                // Default to most recent date
+                if (!dateInput.value) {
+                    dateInput.value = end;
+                }
+            } else {
+                dateRangeEl.textContent = 'No data available';
+            }
+        }
+
+        async function loadMonitorConfigs() {
+            try {
+                const response = await fetch('/replay/api/list_monitor_configs');
+                const result = await response.json();
+
+                if (result.success) {
+                    monitorConfigs = result.configs;
+                    renderMonitorConfigs();
+                }
+            } catch (error) {
+                console.error('Failed to load monitor configs:', error);
+            }
+        }
+
+        function renderMonitorConfigs() {
+            const select = document.getElementById('monitorConfig');
+
+            if (monitorConfigs.length === 0) {
+                select.innerHTML = '<option value="">No configs found</option>';
+                return;
+            }
+
+            select.innerHTML = monitorConfigs.map(config =>
+                `<option value="${config.path}">${config.filename}</option>`
+            ).join('');
+
+            validateForm();
+        }
+
+        function validateForm() {
+            const startBtn = document.getElementById('startReplayBtn');
+            const monitorConfig = document.getElementById('monitorConfig').value;
+
+            let isValid = !!monitorConfig;
+
+            if (currentSource === 'pip') {
+                isValid = isValid && !!selectedPipFile;
+            } else {
+                const ticker = document.getElementById('mongoTicker').value;
+                const date = document.getElementById('mongoDate').value;
+                isValid = isValid && !!ticker && !!date;
+            }
+
+            startBtn.disabled = !isValid;
+        }
+
+        // Add validation listeners
+        document.getElementById('mongoDate').addEventListener('change', validateForm);
+        document.getElementById('monitorConfig').addEventListener('change', validateForm);
+
+        async function startReplay() {
+            const startBtn = document.getElementById('startReplayBtn');
+            const errorDiv = document.getElementById('errorMessage');
+
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<span class="loading-spinner"></span> Starting...';
+            errorDiv.style.display = 'none';
+
+            try {
+                const payload = {
+                    source_type: currentSource,
+                    monitor_config: document.getElementById('monitorConfig').value,
+                    playback_speed: parseFloat(document.getElementById('playbackSpeed').value)
+                };
+
+                if (currentSource === 'pip') {
+                    payload.pip_file = selectedPipFile;
+                    // Get ticker from selected file
+                    const file = pipFiles.find(f => f.path === selectedPipFile);
+                    payload.ticker = file ? file.ticker : 'UNKNOWN';
+                } else {
+                    payload.ticker = document.getElementById('mongoTicker').value;
+                    payload.date = document.getElementById('mongoDate').value;
+                }
+
+                const response = await fetch('/replay/api/start_replay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    window.location.href = result.redirect;
+                } else {
+                    showError(result.error);
+                }
+            } catch (error) {
+                showError('Failed to start replay: ' + error.message);
+            } finally {
+                startBtn.disabled = false;
+                startBtn.textContent = 'Start Replay';
+                validateForm();
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

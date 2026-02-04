@@ -1,0 +1,178 @@
+{#
+    Candlestick Chart Section Component
+
+    A reusable candlestick chart with trade bands and market hours shading.
+    Used by both Card Details (stock_analysis_ui) and Replay (visualization_apps).
+
+    Usage:
+        {% include 'shared/components/_candlestick_chart.html' %}
+
+    Required JavaScript:
+        - IndicatorCharts module from indicator-charts.js
+        - Highcharts Stock library
+
+    Optional Jinja2 variables:
+        - container_id: ID for the chart container (default: "candlestickChart")
+        - section_id: ID for the outer section (default: "candlestickSection")
+        - height: Chart height in pixels (default: 500)
+        - title: Section title (default: "Price Chart")
+        - show_controls: Show chart controls (default: true)
+        - show_timeframe: Show timeframe buttons (default: true)
+        - show_timezone: Show timezone selector (default: true)
+        - theme: Theme name for styling (default: "dark")
+#}
+
+{% set container_id = container_id | default("candlestickChart") %}
+{% set section_id = section_id | default("candlestickSection") %}
+{% set height = height | default(500) %}
+{% set title = title | default("Price Chart") %}
+{% set show_controls = show_controls | default(true) %}
+{% set show_timeframe = show_timeframe | default(true) %}
+{% set show_timezone = show_timezone | default(true) %}
+{% set theme = theme | default("dark") %}
+
+<div class="chart-section" id="{{ section_id }}">
+    <div class="chart-section-header">
+        <div>
+            <h3 class="chart-section-title" id="{{ container_id }}Title">{{ title }}</h3>
+            <p class="chart-section-subtitle">Candlestick chart with trade markers</p>
+        </div>
+
+        {% if show_controls %}
+        <div class="chart-controls">
+            {% if show_timeframe %}
+            <button class="chart-btn active" onclick="loadCandlestickData('1m')" data-timeframe="1m">1M</button>
+            <button class="chart-btn" onclick="loadCandlestickData('5m')" data-timeframe="5m">5M</button>
+            <button class="chart-btn" onclick="loadCandlestickData('15m')" data-timeframe="15m">15M</button>
+            <button class="chart-btn" onclick="loadCandlestickData('1h')" data-timeframe="1h">1H</button>
+            {% endif %}
+
+            {% if show_timezone %}
+            <div class="timezone-selector">
+                <span class="timezone-label">TZ</span>
+                <select id="candlestickTimezoneSelect" class="timezone-select" onchange="handleTimezoneChange(this.value)">
+                    <option value="America/New_York">ET</option>
+                    <option value="America/Los_Angeles">PT</option>
+                    <option value="UTC">UTC</option>
+                </select>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="chart-container" id="{{ container_id }}" style="height: {{ height }}px;">
+        <div class="chart-loading">Loading candlestick chart...</div>
+    </div>
+</div>
+
+{# Chart initialization helpers #}
+<script>
+(function() {
+    // Store chart reference
+    window.candlestickChart = null;
+    window.candlestickData = [];
+    window.currentTimeframe = '1m';
+
+    // Function to initialize/update the candlestick chart
+    window.initializeCandlestickChart = function(data, symbol, trades) {
+        const containerId = '{{ container_id }}';
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // Destroy existing chart
+        if (window.candlestickChart) {
+            window.candlestickChart.destroy();
+            window.candlestickChart = null;
+        }
+
+        // Store data
+        window.candlestickData = data || [];
+
+        // Use IndicatorCharts if available
+        if (typeof window.IndicatorCharts?.createCandlestickChart === 'function') {
+            const chartsRegistry = window.indicatorCharts || {};
+            window.candlestickChart = window.IndicatorCharts.createCandlestickChart(
+                data,
+                containerId,
+                symbol || 'Symbol',
+                chartsRegistry
+            );
+
+            // Register in charts registry
+            chartsRegistry.candlestick = window.candlestickChart;
+
+            // Add trade bands if trades provided
+            if (window.candlestickChart && trades && trades.length > 0) {
+                window.IndicatorCharts.addTradeBandsToChart(window.candlestickChart, trades);
+            }
+
+            // Add market hours bands
+            if (window.candlestickChart && data && data.length > 0) {
+                window.IndicatorCharts.addMarketHoursBandsToChart(window.candlestickChart, data);
+            }
+
+            // Enable synchronization
+            if (typeof window.IndicatorCharts.enableChartSynchronization === 'function') {
+                window.IndicatorCharts.enableChartSynchronization(window.candlestickChart, chartsRegistry);
+            }
+
+            console.log(`Candlestick chart initialized with ${data.length} candles`);
+        } else {
+            console.warn('IndicatorCharts module not available');
+            container.innerHTML = '<div class="chart-empty-state"><div class="chart-empty-state-text">Chart module not loaded</div></div>';
+        }
+
+        return window.candlestickChart;
+    };
+
+    // Update chart title with symbol
+    window.updateCandlestickTitle = function(symbol, timeframe) {
+        const titleEl = document.getElementById('{{ container_id }}Title');
+        if (titleEl && symbol) {
+            titleEl.textContent = `${symbol} - ${(timeframe || window.currentTimeframe).toUpperCase()} Chart`;
+        }
+    };
+
+    // Add new candle to chart
+    window.addCandleToChart = function(candle) {
+        if (window.candlestickChart && window.candlestickChart.series && window.candlestickChart.series[0]) {
+            const series = window.candlestickChart.series[0];
+            series.addPoint(candle, true, series.data.length > 200);
+        }
+    };
+
+    // Update current candle (for live updates)
+    window.updateCurrentCandle = function(ohlc, timestamp) {
+        if (!window.candlestickChart || !window.candlestickChart.series || !window.candlestickChart.series[0]) {
+            return;
+        }
+
+        const series = window.candlestickChart.series[0];
+        const data = series.data;
+        if (data.length === 0) return;
+
+        const lastCandle = data[data.length - 1];
+        const [open, high, low, close] = ohlc;
+
+        // Update the last candle with new high/low/close
+        lastCandle.update({
+            open: lastCandle.open,  // Keep original open
+            high: Math.max(lastCandle.high, close),
+            low: Math.min(lastCandle.low, close),
+            close: close
+        }, true);
+    };
+
+    // Sync timezone select with global setting
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedTimezone = localStorage.getItem('selectedTimezone');
+        if (savedTimezone) {
+            const select = document.getElementById('candlestickTimezoneSelect');
+            if (select) {
+                select.value = savedTimezone;
+            }
+        }
+    });
+})();
+</script>

@@ -1,0 +1,273 @@
+/**
+ * Light Theme Variables
+ *
+ * Clean light theme for chart components.
+ * Used by visualization_apps (Replay tool).
+ *
+ * Color palette based on Bootstrap/standard light UI conventions.
+ */
+
+:root {
+    /* ===========================================
+       TYPOGRAPHY
+       =========================================== */
+    --font-sans: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace;
+
+    /* ===========================================
+       SPACING & RADIUS
+       =========================================== */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 12px;
+
+    /* ===========================================
+       BACKGROUND COLORS
+       =========================================== */
+    --bg-primary: #ffffff;       /* Main card/section background */
+    --bg-secondary: #f8f9fa;     /* Nested elements, inputs */
+    --bg-tertiary: #e9ecef;      /* Headers, hover states */
+    --bg-hover: #dee2e6;         /* Interactive hover */
+    --bg-stripe: rgba(0, 0, 0, 0.02);  /* Table row striping */
+    --bg-body: #f5f5f5;          /* Page background */
+
+    /* ===========================================
+       BORDER COLORS
+       =========================================== */
+    --border-primary: #dee2e6;    /* Main borders */
+    --border-secondary: #e9ecef;  /* Subtle borders */
+    --border-hover: #ced4da;      /* Border on hover */
+
+    /* ===========================================
+       TEXT COLORS
+       =========================================== */
+    --text-primary: #212529;      /* Primary text */
+    --text-secondary: #6c757d;    /* Secondary/muted text */
+    --text-tertiary: #adb5bd;     /* Disabled/very muted */
+    --text-inverse: #ffffff;      /* Text on accent backgrounds */
+
+    /* ===========================================
+       ACCENT & STATUS COLORS
+       =========================================== */
+    /* Primary accent (green for trading context) */
+    --color-accent: #28a745;
+    --color-accent-text: #ffffff;
+    --color-accent-shadow: rgba(40, 167, 69, 0.25);
+
+    /* Link color */
+    --color-link: #007bff;
+    --color-link-hover: #0056b3;
+
+    /* Success (green - profit) */
+    --color-success: #28a745;
+    --color-success-bg: rgba(40, 167, 69, 0.1);
+    --color-success-border: rgba(40, 167, 69, 0.4);
+
+    /* Danger (red - loss) */
+    --color-danger: #dc3545;
+    --color-danger-bg: rgba(220, 53, 69, 0.1);
+    --color-danger-border: rgba(220, 53, 69, 0.4);
+
+    /* Warning (yellow/orange) */
+    --color-warning: #ffc107;
+    --color-warning-bg: rgba(255, 193, 7, 0.1);
+    --color-warning-border: rgba(255, 193, 7, 0.4);
+
+    /* Info (blue) */
+    --color-info: #17a2b8;
+    --color-info-bg: rgba(23, 162, 184, 0.1);
+    --color-info-border: rgba(23, 162, 184, 0.4);
+
+    /* ===========================================
+       CHART-SPECIFIC COLORS
+       =========================================== */
+    /* Candlestick */
+    --chart-candle-up: #28a745;
+    --chart-candle-down: #dc3545;
+    --chart-candle-up-line: #28a745;
+    --chart-candle-down-line: #dc3545;
+
+    /* Grid and axes */
+    --chart-grid: #e6e6e6;
+    --chart-axis-line: #dee2e6;
+    --chart-axis-text: #6c757d;
+
+    /* Tooltip */
+    --chart-tooltip-bg: #ffffff;
+    --chart-tooltip-border: #dee2e6;
+    --chart-tooltip-text: #212529;
+
+    /* Navigator and scrollbar */
+    --chart-navigator-mask: rgba(0, 0, 0, 0.05);
+    --chart-navigator-outline: #dee2e6;
+
+    /* Trade bands */
+    --chart-trade-profit-bg: rgba(40, 167, 69, 0.1);
+    --chart-trade-loss-bg: rgba(220, 53, 69, 0.1);
+
+    /* Market hours bands */
+    --chart-premarket-bg: rgba(0, 123, 255, 0.03);
+    --chart-afterhours-bg: rgba(255, 193, 7, 0.03);
+
+    /* Bar scores - bull colors */
+    --bar-bull-1: #4CAF50;
+    --bar-bull-2: #8BC34A;
+    --bar-bull-3: #CDDC39;
+    --bar-bull-4: #00BCD4;
+
+    /* Bar scores - bear colors */
+    --bar-bear-1: #f44336;
+    --bar-bear-2: #E91E63;
+    --bar-bear-3: #FF5722;
+    --bar-bear-4: #FF9800;
+
+    /* Bar scores - default colors */
+    --bar-default-1: #2196F3;
+    --bar-default-2: #9C27B0;
+    --bar-default-3: #607D8B;
+    --bar-default-4: #795548;
+
+    /* Threshold lines */
+    --threshold-entry: #28a745;
+    --threshold-exit: #dc3545;
+
+    /* ===========================================
+       SHADOWS
+       =========================================== */
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-modal: 0 4px 24px rgba(0, 0, 0, 0.15);
+    --shadow-dropdown: 0 2px 12px rgba(0, 0, 0, 0.1);
+
+    /* ===========================================
+       OVERLAY
+       =========================================== */
+    --overlay-bg: rgba(0, 0, 0, 0.5);
+
+    /* ===========================================
+       SCROLLBAR
+       =========================================== */
+    --scrollbar-thumb: #ced4da;
+    --scrollbar-thumb-hover: #adb5bd;
+    --scrollbar-track: #f8f9fa;
+
+    /* ===========================================
+       HIGHCHARTS SPECIFIC OVERRIDES
+       =========================================== */
+    --highcharts-background: #ffffff;
+    --highcharts-title: #212529;
+    --highcharts-subtitle: #6c757d;
+    --highcharts-legend-item: #212529;
+    --highcharts-legend-item-hover: #000000;
+    --highcharts-button: #f8f9fa;
+    --highcharts-button-hover: #e9ecef;
+    --highcharts-button-select: #28a745;
+    --highcharts-input-bg: #ffffff;
+    --highcharts-input-text: #212529;
+}
+
+/* ===========================================
+   HIGHCHARTS LIGHT THEME OVERRIDES
+   =========================================== */
+
+/* Chart container backgrounds */
+.highcharts-container {
+    background: var(--highcharts-background) !important;
+}
+
+.highcharts-background {
+    fill: var(--highcharts-background);
+}
+
+/* Title and subtitle */
+.highcharts-title,
+.highcharts-subtitle {
+    fill: var(--highcharts-title) !important;
+}
+
+/* Axis labels and titles */
+.highcharts-axis-labels text,
+.highcharts-axis-title {
+    fill: var(--chart-axis-text) !important;
+}
+
+/* Grid lines */
+.highcharts-grid-line {
+    stroke: var(--chart-grid) !important;
+}
+
+.highcharts-axis-line {
+    stroke: var(--chart-axis-line) !important;
+}
+
+/* Legend */
+.highcharts-legend-item text {
+    fill: var(--highcharts-legend-item) !important;
+}
+
+.highcharts-legend-item:hover text {
+    fill: var(--highcharts-legend-item-hover) !important;
+}
+
+/* Tooltip */
+.highcharts-tooltip-box {
+    fill: var(--chart-tooltip-bg) !important;
+    stroke: var(--chart-tooltip-border) !important;
+}
+
+.highcharts-tooltip text {
+    fill: var(--chart-tooltip-text) !important;
+}
+
+/* Navigator */
+.highcharts-navigator-mask-inside {
+    fill: var(--chart-navigator-mask) !important;
+}
+
+.highcharts-navigator-outline {
+    stroke: var(--chart-navigator-outline) !important;
+}
+
+/* Scrollbar */
+.highcharts-scrollbar-track {
+    fill: var(--scrollbar-track) !important;
+    stroke: var(--scrollbar-track) !important;
+}
+
+.highcharts-scrollbar-thumb {
+    fill: var(--scrollbar-thumb) !important;
+    stroke: var(--scrollbar-thumb) !important;
+}
+
+/* Range selector buttons */
+.highcharts-button-box {
+    fill: var(--highcharts-button) !important;
+    stroke: var(--border-primary) !important;
+}
+
+.highcharts-button text {
+    fill: var(--text-primary) !important;
+}
+
+.highcharts-button:hover .highcharts-button-box {
+    fill: var(--highcharts-button-hover) !important;
+}
+
+.highcharts-button-pressed .highcharts-button-box,
+.highcharts-button-hover .highcharts-button-box {
+    fill: var(--highcharts-button-select) !important;
+}
+
+/* Range selector inputs */
+.highcharts-range-input text {
+    fill: var(--highcharts-input-text) !important;
+}
+
+/* Crosshair */
+.highcharts-crosshair {
+    stroke: var(--text-secondary) !important;
+}
+
+/* Credits */
+.highcharts-credits {
+    fill: var(--text-tertiary) !important;
+}

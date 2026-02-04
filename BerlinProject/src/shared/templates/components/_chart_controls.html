@@ -1,0 +1,95 @@
+{#
+    Chart Controls Component
+
+    A reusable set of chart controls including timezone selector and timeframe buttons.
+    Used by both Card Details (stock_analysis_ui) and Replay (visualization_apps).
+
+    Usage:
+        {% include 'shared/components/_chart_controls.html' %}
+
+    Required JavaScript:
+        - TimezoneUtils from timezone-utils.js (for timezone handling)
+
+    Optional Jinja2 variables:
+        - show_timeframe: Show timeframe buttons (default: true)
+        - show_timezone: Show timezone selector (default: true)
+        - timeframes: List of timeframe options (default: ['1m', '5m', '15m', '1h'])
+        - default_timeframe: Initially active timeframe (default: '1m')
+        - default_timezone: Initially selected timezone (default: 'America/New_York')
+        - timezone_options: List of timezone options (default: ET, PT, UTC)
+        - on_timeframe_change: JavaScript function name for timeframe changes (default: 'onTimeframeChange')
+        - on_timezone_change: JavaScript function name for timezone changes (default: 'handleTimezoneChange')
+        - controls_id: ID for the controls container (default: 'chartControls')
+#}
+
+{% set show_timeframe = show_timeframe | default(true) %}
+{% set show_timezone = show_timezone | default(true) %}
+{% set timeframes = timeframes | default(['1m', '5m', '15m', '1h']) %}
+{% set default_timeframe = default_timeframe | default('1m') %}
+{% set default_timezone = default_timezone | default('America/New_York') %}
+{% set on_timeframe_change = on_timeframe_change | default('onTimeframeChange') %}
+{% set on_timezone_change = on_timezone_change | default('handleTimezoneChange') %}
+{% set controls_id = controls_id | default('chartControls') %}
+
+<div class="chart-controls" id="{{ controls_id }}">
+    {% if show_timeframe %}
+    <div class="timeframe-buttons">
+        {% for tf in timeframes %}
+        <button class="chart-btn{% if tf == default_timeframe %} active{% endif %}"
+                onclick="{{ on_timeframe_change }}('{{ tf }}')"
+                data-timeframe="{{ tf }}">
+            {{ tf | upper }}
+        </button>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if show_timezone %}
+    <div class="timezone-selector">
+        <span class="timezone-label">TZ</span>
+        <select id="timezoneSelect" class="timezone-select" onchange="{{ on_timezone_change }}(this.value)">
+            <option value="America/New_York"{% if default_timezone == 'America/New_York' %} selected{% endif %}>ET</option>
+            <option value="America/Chicago"{% if default_timezone == 'America/Chicago' %} selected{% endif %}>CT</option>
+            <option value="America/Denver"{% if default_timezone == 'America/Denver' %} selected{% endif %}>MT</option>
+            <option value="America/Los_Angeles"{% if default_timezone == 'America/Los_Angeles' %} selected{% endif %}>PT</option>
+            <option value="UTC"{% if default_timezone == 'UTC' %} selected{% endif %}>UTC</option>
+        </select>
+    </div>
+    {% endif %}
+</div>
+
+{# Control functions #}
+<script>
+(function() {
+    // Default timeframe change handler (can be overridden)
+    if (typeof window.{{ on_timeframe_change }} === 'undefined') {
+        window.{{ on_timeframe_change }} = function(timeframe) {
+            console.log('Timeframe changed to:', timeframe);
+
+            // Update active button state
+            document.querySelectorAll('.timeframe-buttons .chart-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.timeframe === timeframe) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Dispatch custom event for other components to listen to
+            document.dispatchEvent(new CustomEvent('timeframeChange', {
+                detail: { timeframe: timeframe }
+            }));
+        };
+    }
+
+    // Initialize timezone from localStorage if available
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedTimezone = localStorage.getItem('selectedTimezone');
+        if (savedTimezone) {
+            const select = document.getElementById('timezoneSelect');
+            if (select) {
+                select.value = savedTimezone;
+            }
+        }
+    });
+})();
+</script>

@@ -1,0 +1,55 @@
+{#
+    Bar Scores Chart Component
+
+    A reusable bar scores visualization showing weighted indicator trigger combinations.
+    Used by both Card Details (stock_analysis_ui) and Replay (visualization_apps).
+
+    Usage:
+        {% include 'shared/components/_bar_scores_chart.html' %}
+
+    Required JavaScript:
+        - BarScoresChart class from bar-scores-chart.js
+        - Highcharts library
+
+    Optional Jinja2 variables:
+        - container_id: ID for the chart container (default: "barScoresChart")
+        - section_id: ID for the outer section (default: "barScoresSection")
+        - height: Chart height in pixels (default: 280)
+        - title: Section title (default: "Bar Scores Analysis")
+        - subtitle: Section subtitle (default: "Weighted indicator trigger combinations")
+        - show_legend: Show legend below chart (default: false)
+        - theme: Theme name for styling (default: "dark")
+#}
+
+{% set container_id = container_id | default("barScoresChart") %}
+{% set section_id = section_id | default("barScoresSection") %}
+{% set height = height | default(280) %}
+{% set title = title | default("Bar Scores Analysis") %}
+{% set subtitle = subtitle | default("Weighted indicator trigger combinations") %}
+{% set show_legend = show_legend | default(false) %}
+{% set theme = theme | default("dark") %}
+
+<div class="chart-section" id="{{ section_id }}">
+    <div class="chart-section-header">
+        <div>
+            <h3 class="chart-section-title">{{ title }}</h3>
+            <p class="chart-section-subtitle">{{ subtitle }}</p>
+        </div>
+    </div>
+
+    <div class="bar-scores-container" id="{{ container_id }}" style="height: {{ height }}px;">
+        <div class="chart-loading">Loading bar scores chart...</div>
+    </div>
+
+    {% if show_legend %}
+    <div class="bar-scores-legend" id="{{ container_id }}Legend">
+        {# Legend items will be dynamically populated by JavaScript #}
+    </div>
+    {% endif %}
+</div>
+
+{#
+    Note: Initialization is handled by ChartDashboard or the page controller.
+    This template only provides the container structure.
+    The old auto-initialization has been removed to prevent conflicts.
+#}
