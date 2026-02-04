@@ -112,7 +112,8 @@ class UIExternalTool(ExternalTool):
                      indicators: Dict[str, float], raw_indicators: Dict[str, float],
                      bar_scores: Dict[str, float], portfolio_metrics: Optional[Dict[str, Any]] = None,
                      component_data: Optional[Dict[str, float]] = None,
-                     data_status: Optional[Dict[str, Any]] = None) -> None:
+                     data_status: Optional[Dict[str, Any]] = None,
+                     thresholds: Optional[Dict[str, Any]] = None) -> None:
         """
         Process real-time tick data and send updates to browser (session-specific) - Enhanced for candlestick support
         """
@@ -152,6 +153,10 @@ class UIExternalTool(ExternalTool):
             # Add data status for insufficient data warnings
             if data_status:
                 update_data['data_status'] = data_status
+
+            # Add thresholds for sound notifications
+            if thresholds:
+                update_data['thresholds'] = thresholds
 
             # Get session ID from app_service if available
             session_id = self.get_session_id_from_app_service()

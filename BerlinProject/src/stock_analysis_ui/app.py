@@ -292,18 +292,34 @@ Examples:
 
 def register_routes() -> None:
     """Register all route blueprints"""
+    from flask import send_from_directory
     from routes.dashboard_routes import dashboard_bp
     from routes.api_routes import api_bp
     from routes.file_routes import file_bp
+    from routes.replay_routes import replay_bp
     from routes.websocket_routes import register_websocket_events
+
+    # Register shared Blueprint for reusable components
+    from shared import shared_bp, configure_shared_templates
+    app.register_blueprint(shared_bp)
+    configure_shared_templates(app)
 
     # Register blueprints
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(file_bp, url_prefix='/api/files')
+    app.register_blueprint(replay_bp)
 
     # Register WebSocket events
     register_websocket_events(socketio, app_service)
+
+    # Static route for assets folder (sound files, etc.)
+    project_root = os.path.dirname(os.path.dirname(current_dir))  # BerlinProject root
+    assets_dir = os.path.join(project_root, 'assets')
+
+    @app.route('/assets/<path:filename>')
+    def serve_assets(filename):
+        return send_from_directory(assets_dir, filename)
 
 
 def create_app():

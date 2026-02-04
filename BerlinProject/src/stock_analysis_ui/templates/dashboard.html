@@ -1117,6 +1117,13 @@
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="status-item sound-toggle">
+                        <span class="toggle-label">🔊 Sounds:</span>
+                        <label class="toggle-switch" title="Play sound when bar scores cross thresholds">
+                            <input type="checkbox" id="soundToggle" onchange="toggleSoundNotifications()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                     <div class="status-item">
                         <span style="margin-right: 0.5rem; color: #7d8590;">Card Size:</span>
                         <div class="size-controls" id="globalSizeControls">
@@ -1263,6 +1270,16 @@
 
             const cardId = data.card_id;
             if (cardId) {
+                // Update threshold map if thresholds are present
+                if (data.thresholds) {
+                    updateCardThresholds(cardId, data.thresholds);
+                }
+
+                // Check for threshold crossings BEFORE updating card (to compare old vs new)
+                if (data.bar_scores) {
+                    checkThresholdCrossings(cardId, data.bar_scores);
+                }
+
                 updateOrCreateCard(cardId, data);
 
                 // Check for new trades and handle pause-on-trade
@@ -1297,6 +1314,121 @@
                 });
             }
         });
+
+        // ============================================
+        // Sound Notification System
+        // ============================================
+        let soundEnabled = false;
+        let bullSound = null;
+        let bearSound = null;
+        const previousBarScores = {};  // {cardId: {barName: score}}
+        const cardThresholds = {};     // {cardId: {barName: {value, type: 'entry'|'exit'}}}
+
+        // Initialize sound system
+        function initSoundSystem() {
+            // Restore saved preference
+            const savedPref = localStorage.getItem('soundNotificationsEnabled');
+            soundEnabled = savedPref === 'true';
+
+            const toggle = document.getElementById('soundToggle');
+            if (toggle) {
+                toggle.checked = soundEnabled;
+            }
+
+            // Pre-load audio elements
+            bullSound = new Audio('/assets/BuyMartin.m4a');
+            bearSound = new Audio('/assets/SellMartin.m4a');
+
+            // Pre-load the sounds for responsive playback
+            bullSound.load();
+            bearSound.load();
+
+            console.log('Sound notification system initialized, enabled:', soundEnabled);
+        }
+
+        // Toggle sound notifications
+        function toggleSoundNotifications() {
+            const toggle = document.getElementById('soundToggle');
+            soundEnabled = toggle ? toggle.checked : false;
+            localStorage.setItem('soundNotificationsEnabled', soundEnabled);
+            console.log('Sound notifications:', soundEnabled ? 'enabled' : 'disabled');
+        }
+
+        // Build threshold map from card_update data
+        function updateCardThresholds(cardId, thresholds) {
+            if (!thresholds) return;
+
+            // Only build the map once per card (thresholds don't change)
+            if (cardThresholds[cardId]) return;
+
+            cardThresholds[cardId] = {};
+
+            // Map entry thresholds (bull signals)
+            if (thresholds.enter_long && Array.isArray(thresholds.enter_long)) {
+                thresholds.enter_long.forEach(condition => {
+                    if (condition.name && condition.threshold !== undefined) {
+                        cardThresholds[cardId][condition.name] = {
+                            value: condition.threshold,
+                            type: 'entry'
+                        };
+                    }
+                });
+            }
+
+            // Map exit thresholds (bear signals)
+            if (thresholds.exit_long && Array.isArray(thresholds.exit_long)) {
+                thresholds.exit_long.forEach(condition => {
+                    if (condition.name && condition.threshold !== undefined) {
+                        cardThresholds[cardId][condition.name] = {
+                            value: condition.threshold,
+                            type: 'exit'
+                        };
+                    }
+                });
+            }
+
+            console.log(`Threshold map built for ${cardId}:`, cardThresholds[cardId]);
+        }
+
+        // Check for threshold crossings and play appropriate sound
+        function checkThresholdCrossings(cardId, barScores) {
+            if (!soundEnabled || !barScores) return;
+
+            const thresholdMap = cardThresholds[cardId];
+            if (!thresholdMap || Object.keys(thresholdMap).length === 0) return;
+
+            const prev = previousBarScores[cardId] || {};
+
+            for (const [barName, currentScore] of Object.entries(barScores)) {
+                const thresh = thresholdMap[barName];
+                if (!thresh) continue;
+
+                const prevScore = prev[barName];
+
+                // Only detect upward crossings (from below to at/above threshold)
+                // Skip if we don't have a previous score (first update)
+                if (prevScore !== undefined && prevScore < thresh.value && currentScore >= thresh.value) {
+                    console.log(`🔔 Threshold crossed for ${cardId}/${barName}: ${prevScore.toFixed(3)} → ${currentScore.toFixed(3)} (threshold: ${thresh.value}, type: ${thresh.type})`);
+                    playSignalSound(thresh.type, cardId, barName);
+                }
+            }
+
+            // Store current scores for next comparison
+            previousBarScores[cardId] = {...barScores};
+        }
+
+        // Play the appropriate sound based on signal type
+        function playSignalSound(signalType, cardId, barName) {
+            const sound = (signalType === 'entry') ? bullSound : bearSound;
+            const soundName = (signalType === 'entry') ? 'Bull' : 'Bear';
+
+            if (sound) {
+                sound.currentTime = 0;
+                sound.play()
+                    .then(() => console.log(`🔊 ${soundName} sound played for ${cardId}/${barName}`))
+                    .catch(e => console.log('Audio play failed (user interaction may be required):', e));
+            }
+        }
 
         // Pip Saver Functions
         async function togglePipSaver() {
@@ -1917,6 +2049,9 @@
 
             // Initialize pause-on-trade toggle
             initPauseOnTrade();
+
+            // Initialize sound notification system
+            initSoundSystem();
 
             // Fetch initial pip saver status
             fetchPipSaverStatus();

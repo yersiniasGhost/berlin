@@ -85,6 +85,12 @@ class DataStreamer:
         # Get data status for UI warnings
         data_status = self.indicator_processor.get_data_status()
 
+        # Extract thresholds from monitor config for UI sound notifications
+        thresholds = {
+            'enter_long': self.monitor_config.enter_long,
+            'exit_long': self.monitor_config.exit_long
+        }
+
         # Send data to external tools (including component data and data status)
         for tool in self.external_tools:
             tool.process_tick(
@@ -96,7 +102,8 @@ class DataStreamer:
                 bar_scores=self.bar_scores,
                 portfolio_metrics=portfolio_metrics,
                 component_data=self.indicator_processor.component_data,
-                data_status=data_status
+                data_status=data_status,
+                thresholds=thresholds
             )
 
     def _create_aggregator(self, agg_type: str, symbol: str, timeframe: str) -> CandleAggregator:
@@ -265,6 +272,8 @@ class DataStreamer:
         """
         Calculate indicators based on historical data loaded into aggregators.
         This is called after load_historical_data to initialize indicator state.
+
+        Also seeds the indicator/bar/component histories for chart visualization.
         """
         try:
             # Log aggregator state before calculating
@@ -273,7 +282,11 @@ class DataStreamer:
                 has_current = aggregator.get_current_candle() is not None
                 logger.info(f"Aggregator {agg_key}: history={history_count}, has_current={has_current}")
 
-            # Calculate indicators from current aggregator state
+            # IMPORTANT: Seed histories from historical data for chart visualization
+            # This uses IndicatorProcessorHistoricalNew to calculate all historical values
+            self.indicator_processor.seed_history_from_aggregators(self.aggregators)
+
+            # Calculate current indicators from current aggregator state
             self.indicators, self.raw_indicators, self.bar_scores = (
                 self.indicator_processor.calculate_indicators_new(self.aggregators))
 
@@ -283,6 +296,11 @@ class DataStreamer:
                 logger.info(f"Indicator values: {self.indicators}")
             if self.bar_scores:
                 logger.info(f"Bar scores: {self.bar_scores}")
+
+            # Log history status
+            history_data = self.indicator_processor.get_history_data()
+            logger.info(f"History seeded: {history_data['periods']} periods, "
+                       f"{len(history_data['components'])} component series")
 
         except Exception as e:
             logger.error(f"Error calculating initial indicators: {e}")
@@ -335,6 +353,12 @@ class DataStreamer:
                        f"data_status={data_status.get('has_sufficient_data', 'N/A')}, "
                        f"tools={len(self.external_tools)}")
 
+            # Extract thresholds from monitor config for UI sound notifications
+            thresholds = {
+                'enter_long': self.monitor_config.enter_long,
+                'exit_long': self.monitor_config.exit_long
+            }
+
             # Send to all external tools
             for tool in self.external_tools:
                 tool.process_tick(
@@ -346,7 +370,8 @@ class DataStreamer:
                     bar_scores=self.bar_scores,
                     portfolio_metrics=portfolio_metrics,
                     component_data=self.indicator_processor.component_data,
-                    data_status=data_status
+                    data_status=data_status,
+                    thresholds=thresholds
                 )
 
             logger.info(f"Emitted current state for {self.symbol}: {len(self.indicators)} indicators")
