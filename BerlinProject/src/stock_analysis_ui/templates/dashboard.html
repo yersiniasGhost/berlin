@@ -814,14 +814,6 @@
             margin-top: 0.25rem;
         }
 
-        .card-id {
-            font-size: 0.75rem;
-            color: #7d8590;
-            background: #21262d;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-        }
-
         .card-close {
             background: none;
             border: none;
@@ -1424,17 +1416,15 @@
                 }
             });
 
-            // MODIFIED: Include monitor name in the card title
+            // Card title: TICKER on top, Monitor name below in smaller text
             const displayTitle = data.symbol || 'Unknown';
-            const monitorName = data.monitor_config_name || data.test_name;
-            const fullTitle = monitorName ? `${displayTitle} - ${monitorName}` : displayTitle;
+            const monitorName = data.monitor_config_name || data.test_name || '';
 
             card.innerHTML = `
                 <div class="card-header">
                     <div>
-                        <div class="card-title">${fullTitle}</div>
-                        <div class="card-subtitle">Trading Signals - Click for details</div>
-                        <div class="card-id">${cardId}</div>
+                        <div class="card-title">${displayTitle}</div>
+                        ${monitorName ? `<div class="card-subtitle">${monitorName}</div>` : ''}
                     </div>
                     <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
                 </div>
