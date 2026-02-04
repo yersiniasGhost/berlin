@@ -737,15 +737,7 @@
             border-color: #1f6feb;
         }
 
-        /* Hide elements based on card size */
-        .trading-card.size-small .price-display {
-            display: none;
-        }
-
-        .trading-card.size-small .price-display.expanded {
-            display: block;
-        }
-
+        /* Hide elements based on card size - portfolio only (price always visible) */
         .trading-card.size-small .portfolio-section {
             display: none;
         }
@@ -1429,9 +1421,6 @@
                     <button class="card-close" onclick="removeCard('${cardId}')">&times;</button>
                 </div>
                 <div class="data-warning" style="display: none;"></div>
-                <div class="collapsible-header" data-target="price-display">
-                    Price <span class="toggle-icon">⌄</span>
-                </div>
                 <div class="price-display">$0.00</div>
                 <div class="price-timestamp">Last updated: Never</div>
                 <div class="collapsible-header" data-target="portfolio-section">
