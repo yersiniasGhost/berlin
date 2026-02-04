@@ -15,8 +15,10 @@ from flask import Blueprint, request, jsonify, current_app, session
 # Import the services we need
 from stock_analysis_ui.services.app_service import AppService
 from stock_analysis_ui.services.schwab_auth import SchwabAuthManager
+from shared.utils.chart_data_service import ChartDataService
 from mlf_utils.log_manager import LogManager
 from mlf_utils.timezone_utils import now_utc, isoformat_et
+from stock_analysis_ui.services.ui_external_tool import sanitize_for_json
 
 logger = LogManager().get_logger("APIRoutes")
 api_bp = Blueprint('api', __name__)
@@ -73,6 +75,10 @@ def authenticate():
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
         session['authenticated'] = True
+
+        # Clear any replay mode data - this is live mode
+        session.pop('replay_mode', None)
+        session.pop('replay_config', None)
 
         logger.info(f"Creating new session: {session_id}")
 
@@ -362,7 +368,8 @@ def get_card_details(card_id: str):
             'portfolio_data': portfolio_data
         }
 
-        return jsonify(response_data)
+        # Sanitize NaN/Infinity values that break JSON serialization
+        return jsonify(sanitize_for_json(response_data))
 
     except Exception as e:
         logger.error(f"Error getting card details for {card_id}: {e}")
@@ -445,7 +452,7 @@ def get_candlestick_data(card_id: str):
             'message': f'Loaded {len(candlestick_data)} candles from aggregator history'
         }
 
-        return jsonify({
+        response_data = {
             'success': True,
             'candlestick_data': candlestick_data,
             'symbol': symbol,
@@ -453,7 +460,9 @@ def get_candlestick_data(card_id: str):
             'total_candles': len(candlestick_data),
             'aggregator_key': aggregator_key,
             'debug': debug_info
-        })
+        }
+        # Sanitize NaN/Infinity values that break JSON serialization
+        return jsonify(sanitize_for_json(response_data))
 
     except Exception as e:
         logger.error(f"Error getting candlestick data for {card_id}: {e}")
@@ -764,7 +773,16 @@ def websocket_health():
 def get_chart_data(card_id: str):
     """
     Get comprehensive chart data for card details visualization.
-    Returns data compatible with replay visualization charts (indicator charts, trigger charts, P&L).
+
+    Uses the shared ChartDataService for consistent data formatting
+    across both live dashboard and replay tool.
+
+    Returns data compatible with:
+    - Candlestick charts
+    - Trade history table
+    - Bar scores chart
+    - Indicator analysis charts
+    - Trade details modal
     """
     try:
         app_service = get_session_app_service()
@@ -779,246 +797,23 @@ def get_chart_data(card_id: str):
         data_streamer = combination['data_streamer']
         test_name = combination.get('test_name', monitor_config.name)
 
-        # Get all candle data from all aggregators
-        all_candle_data = data_streamer._get_all_candle_data()
+        # Use shared ChartDataService for unified data extraction
+        chart_data = ChartDataService.get_unified_chart_data(
+            data_streamer=data_streamer,
+            monitor_config=monitor_config,
+            card_id=card_id,
+            symbol=symbol,
+            test_name=test_name
+        )
 
-        # Build per-aggregator candlestick data (same format as replay tool)
-        per_aggregator_candles = {}
-        for agg_key, candles in all_candle_data.items():
-            candlestick_series = []
-            for candle in candles:
-                timestamp_ms = int(candle.timestamp.timestamp() * 1000)
-                candlestick_series.append([
-                    timestamp_ms,
-                    float(candle.open),
-                    float(candle.high),
-                    float(candle.low),
-                    float(candle.close)
-                ])
-            per_aggregator_candles[agg_key] = candlestick_series
-            logger.debug(f"Prepared {len(candlestick_series)} candles for {agg_key}")
-
-        # Get primary candlestick data (first available aggregator for trade overlay)
-        candlestick_data = []
-        primary_agg_key = list(all_candle_data.keys())[0] if all_candle_data else None
-        if primary_agg_key:
-            candlestick_data = per_aggregator_candles.get(primary_agg_key, [])
-
-        # Get indicator processor data
-        indicator_processor = data_streamer.indicator_processor
-
-        # Build indicator history in chart-compatible format [[timestamp_ms, value], ...]
-        indicator_history_formatted = {}
-        raw_indicator_history_formatted = {}
-        component_history_formatted = {}
-
-        # Get timestamps from aggregators for each indicator
-        indicator_agg_mapping = {}
-        for indicator_def in monitor_config.indicators:
-            timeframe = indicator_def.get_timeframe()
-            agg_type = indicator_def.get_aggregator_type()
-            agg_key = f"{timeframe}-{agg_type}"
-            indicator_agg_mapping[indicator_def.name] = agg_key
-
-        # Build indicator history from processor's trigger history
-        for ind_name, history in indicator_processor.indicator_trigger_history.items():
-            # Extract actual indicator name from internal key (e.g., "1m-heiken_macd5m" -> "macd5m")
-            actual_name = ind_name.split('_', 1)[-1] if '_' in ind_name else ind_name
-
-            # Get aggregator key for timestamps
-            agg_key = indicator_agg_mapping.get(actual_name)
-            if not agg_key and '_' in ind_name:
-                agg_key = ind_name.rsplit('_', 1)[0]
-
-            # Get timestamps from aggregator
-            timestamps = []
-            if agg_key and agg_key in all_candle_data:
-                candles = all_candle_data[agg_key]
-                # Use last N timestamps to match history length
-                timestamps = [int(c.timestamp.timestamp() * 1000) for c in candles[-len(history):]]
-
-            # Pad timestamps if needed
-            while len(timestamps) < len(history):
-                # Generate synthetic timestamps
-                base_ts = timestamps[0] if timestamps else int(now_utc().timestamp() * 1000)
-                timestamps.insert(0, base_ts - (len(history) - len(timestamps)) * 60000)
-
-            # Format raw indicator values (trigger values 0/1)
-            series = []
-            for i, value in enumerate(history):
-                if i < len(timestamps) and value is not None:
-                    series.append([timestamps[i], float(value)])
-            if series:
-                raw_indicator_history_formatted[actual_name] = series
-
-        # Build time-decayed indicator history
-        for ind_name, value in indicator_processor.indicators.items():
-            # For live data, we only have current values, not full history
-            # Create a single-point "history" for current state
-            agg_key = indicator_agg_mapping.get(ind_name)
-            if agg_key and agg_key in all_candle_data:
-                candles = all_candle_data[agg_key]
-                if candles:
-                    timestamp = int(candles[-1].timestamp.timestamp() * 1000)
-                    indicator_history_formatted[ind_name] = [[timestamp, float(value)]]
-
-        # Build component history from processor's component data
-        for comp_name, comp_value in indicator_processor.component_data.items():
-            # Extract indicator name from component (e.g., "macd5m_macd" -> "macd5m")
-            indicator_name = comp_name.rsplit('_', 1)[0] if '_' in comp_name else comp_name
-            agg_key = indicator_agg_mapping.get(indicator_name)
-
-            if agg_key and agg_key in all_candle_data:
-                candles = all_candle_data[agg_key]
-                if candles:
-                    timestamp = int(candles[-1].timestamp.timestamp() * 1000)
-                    component_history_formatted[comp_name] = [[timestamp, float(comp_value)]]
-
-        # Build class_to_layout mapping (indicator class -> layout type)
-        class_to_layout = {}
-        try:
-            import indicator_triggers.refactored_indicators
-            from indicator_triggers.indicator_base import IndicatorRegistry
-            registry = IndicatorRegistry()
-
-            for indicator_def in monitor_config.indicators:
-                indicator_class_name = indicator_def.indicator_class
-                if indicator_class_name and indicator_class_name not in class_to_layout:
-                    try:
-                        indicator_cls = registry.get_indicator_class(indicator_class_name)
-                        layout_type = indicator_cls.get_layout_type()
-                        class_to_layout[indicator_class_name] = layout_type
-                    except (ValueError, AttributeError):
-                        # Default based on name
-                        layout_type = 'stacked' if 'macd' in indicator_class_name.lower() else 'overlay'
-                        class_to_layout[indicator_class_name] = layout_type
-        except Exception as e:
-            logger.warning(f"Could not build class_to_layout mapping: {e}")
-
-        # Get trade details from trade executor
-        trade_details = {}
-        trades_with_pnl = []
-        pnl_data = []
-
-        trade_executor = data_streamer.trade_executor
-        if hasattr(trade_executor, 'trade_details_history'):
-            trade_details = trade_executor.trade_details_history
-
-        # Get portfolio trade history
-        portfolio = trade_executor.portfolio
-        if hasattr(portfolio, 'trade_history'):
-            cumulative_pnl = 0
-            for trade in portfolio.trade_history:
-                trade_entry = {
-                    'timestamp': trade.get('timestamp', 0),
-                    'action': trade.get('action', ''),
-                    'price': trade.get('price', 0),
-                    'quantity': trade.get('quantity', 0),
-                    'pnl': trade.get('pnl', 0)
-                }
-                trades_with_pnl.append(trade_entry)
-
-                # Build cumulative P&L data
-                if trade.get('pnl'):
-                    cumulative_pnl += trade['pnl']
-                    pnl_data.append([trade['timestamp'], cumulative_pnl])
-
-        # Get portfolio metrics
-        portfolio_metrics = {}
-        if hasattr(data_streamer, 'get_portfolio_metrics'):
-            portfolio_metrics = data_streamer.get_portfolio_metrics()
-
-        # Build indicators list for frontend
-        indicators_list = []
-        for indicator_def in monitor_config.indicators:
-            indicators_list.append({
-                'name': indicator_def.name,
-                'indicator_class': indicator_def.indicator_class,
-                'type': indicator_def.type,
-                'agg_config': {
-                    'timeframe': indicator_def.get_timeframe(),
-                    'aggregator_type': indicator_def.get_aggregator_type()
-                },
-                'parameters': indicator_def.parameters
-            })
-
-        # Get threshold config for bar charts
-        threshold_config = {
-            'enter_long': monitor_config.enter_long,
-            'exit_long': monitor_config.exit_long
-        }
-
-        # Build bar score history
-        bar_score_history = {}
-        if hasattr(indicator_processor, 'bar_history'):
-            bar_score_history = indicator_processor.bar_history
-
-        chart_data = {
-            'success': True,
-            'ticker': symbol,
-            'test_name': test_name,
-            'card_id': card_id,
-            'candlestick_data': candlestick_data,
-            'per_aggregator_candles': per_aggregator_candles,
-            'indicator_agg_mapping': indicator_agg_mapping,
-            'indicator_history': indicator_history_formatted,
-            'raw_indicator_history': raw_indicator_history_formatted,
-            'component_history': component_history_formatted,
-            'class_to_layout': class_to_layout,
-            'indicators': indicators_list,
-            'trades': trades_with_pnl,
-            'trade_details': trade_details,
-            'pnl_data': pnl_data,
-            'pnl_history': pnl_data,  # Alias for compatibility
-            'portfolio_metrics': portfolio_metrics,
-            'bar_score_history': bar_score_history,
-            'threshold_config': threshold_config,
-            'current_values': {
-                'indicators': indicator_processor.indicators,
-                'raw_indicators': indicator_processor.raw_indicators,
-                'bar_scores': data_streamer.bar_scores
-            },
-            'total_candles': len(candlestick_data),
-            'total_trades': len(trades_with_pnl),
-            'data_status': indicator_processor.get_data_status()
-        }
-
-        # Sanitize NaN values for JSON compatibility
-        chart_data = _sanitize_chart_data(chart_data)
-
-        logger.info(f"Chart data for {card_id}: {len(candlestick_data)} candles, "
-                    f"{len(indicators_list)} indicators, {len(trades_with_pnl)} trades")
-
-        return jsonify(chart_data)
+        # Sanitize NaN/Infinity values that break JSON serialization
+        return jsonify(sanitize_for_json(chart_data))
 
     except Exception as e:
         logger.error(f"Error getting chart data for {card_id}: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _sanitize_chart_data(data):
-    """Recursively sanitize data for JSON serialization (handle NaN, Infinity)"""
-    import math
-
-    if isinstance(data, dict):
-        return {k: _sanitize_chart_data(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [_sanitize_chart_data(item) for item in data]
-    elif isinstance(data, float):
-        if math.isnan(data) or math.isinf(data):
-            return None
-        return data
-    elif isinstance(data, np.floating):
-        if np.isnan(data) or np.isinf(data):
-            return None
-        return float(data)
-    elif isinstance(data, np.integer):
-        return int(data)
-    elif isinstance(data, np.ndarray):
-        return _sanitize_chart_data(data.tolist())
-    return data
 
 
 # PIP SAVER ENDPOINTS
@@ -1083,3 +878,40 @@ def disable_pip_saver():
     except Exception as e:
         logger.error(f"Error disabling pip saver: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/replay_status', methods=['GET'])
+def get_replay_status():
+    """Get current replay mode status"""
+    try:
+        replay_config = session.get('replay_config')
+        is_replay_mode = session.get('replay_mode', False)
+
+        if not is_replay_mode or not replay_config:
+            return jsonify({
+                'success': True,
+                'is_replay_mode': False
+            })
+
+        # Get status from app_service if available
+        app_service = get_session_app_service()
+        data_link_status = {}
+
+        if app_service and hasattr(app_service, 'data_link') and app_service.data_link:
+            if hasattr(app_service.data_link, 'get_status'):
+                data_link_status = app_service.data_link.get_status()
+
+        return jsonify({
+            'success': True,
+            'is_replay_mode': True,
+            'source_type': replay_config.get('source_type'),
+            'ticker': replay_config.get('ticker'),
+            'date': replay_config.get('date'),
+            'playback_speed': replay_config.get('playback_speed', 1.0),
+            'monitor_config': replay_config.get('monitor_config'),
+            'status': data_link_status
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting replay status: {e}")
+        return jsonify({'success': False, 'error': str(e)})
