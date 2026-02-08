@@ -456,10 +456,10 @@ class SchwabDataLink(DataLink):
 
     def load_historical_data(self, symbol: str, timeframe: str = "1m") -> List[TickData]:
         """
-        Load historical data for the current trading session only.
+        Load historical data for the current trading session including extended hours.
 
-        For intraday trading, we only need today's data from market open (9:30 AM ET)
-        to now. Previous day data is not relevant when starting a new card mid-session.
+        Fetches 1-minute candles with extended hours data (pre-market 4:00 AM to
+        after-hours 8:00 PM ET) to capture the full trading session.
 
         Args:
             symbol: Stock symbol
@@ -481,19 +481,19 @@ class SchwabDataLink(DataLink):
                 logger.info(f"Weekend - no intraday history to load for {symbol}")
                 return []
 
-            # Calculate today's market open (9:30 AM ET)
-            market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-            market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+            # Extended hours: pre-market starts 4:00 AM ET, after-hours ends 8:00 PM ET
+            extended_open = now_et.replace(hour=4, minute=0, second=0, microsecond=0)
+            extended_close = now_et.replace(hour=20, minute=0, second=0, microsecond=0)
 
-            # Determine time range for current session
-            if now_et < market_open:
-                # Before market open - no data yet for today
-                logger.info(f"Before market open - no intraday history to load for {symbol}")
+            # Determine time range for current session (including extended hours)
+            if now_et < extended_open:
+                # Before pre-market open - no data yet for today
+                logger.info(f"Before pre-market open - no intraday history to load for {symbol}")
                 return []
 
-            # Start from market open, end at current time (or market close if after hours)
-            start_time = market_open
-            end_time = min(now_et, market_close)
+            # Start from pre-market open, end at current time (or extended close)
+            start_time = extended_open
+            end_time = min(now_et, extended_close)
 
             # Convert to milliseconds for Schwab API
             start_ms = int(start_time.timestamp() * 1000)
@@ -528,7 +528,7 @@ class SchwabDataLink(DataLink):
                 'frequency': frequency,
                 'startDate': start_ms,
                 'endDate': end_ms,
-                'needExtendedHoursData': False
+                'needExtendedHoursData': True
             }
 
             logger.info(f"API params: {params}")
