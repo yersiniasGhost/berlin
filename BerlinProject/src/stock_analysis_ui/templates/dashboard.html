@@ -1308,10 +1308,11 @@
                     </div>
 
                     <div class="form-section">
-                        <h3>Stock Symbol</h3>
+                        <h3>Stock Symbol(s)</h3>
                         <div class="form-group">
-                            <label for="modalSymbolInput">Enter stock symbol</label>
-                            <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="10">
+                            <label for="modalSymbolInput">Enter one or more stock symbols (comma-separated)</label>
+                            <input type="text" id="modalSymbolInput" placeholder="e.g., AAPL, MSFT, NVDA" maxlength="200">
+                            <div id="symbolCount" style="font-size: 0.8rem; color: #7d8590; margin-top: 0.25rem;"></div>
                         </div>
                     </div>
 
@@ -1333,7 +1334,7 @@
 
                     <div class="modal-actions">
                         <button class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
-                        <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>Add Card</button>
+                        <button class="btn btn-primary" id="modalAddButton" onclick="addCombinationFromModal()" disabled>Add Card(s)</button>
                     </div>
                 </div>
             </div>
@@ -2170,18 +2171,38 @@
             updateModalAddButton();
         }
 
-        function updateModalAddButton() {
-            const symbol = document.getElementById('modalSymbolInput').value.trim();
-            const button = document.getElementById('modalAddButton');
+        function parseSymbols(input) {
+            return input.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
+        }
 
-            const isValid = symbol.length > 0 && modalSelectedFile;
+        function updateModalAddButton() {
+            const raw = document.getElementById('modalSymbolInput').value.trim();
+            const button = document.getElementById('modalAddButton');
+            const countDiv = document.getElementById('symbolCount');
+
+            const symbols = parseSymbols(raw);
+            const isValid = symbols.length > 0 && modalSelectedFile;
             button.disabled = !isValid;
+
+            // Update symbol count hint
+            if (symbols.length > 1) {
+                countDiv.textContent = `${symbols.length} symbols: ${symbols.join(', ')}`;
+                countDiv.style.color = '#56d364';
+                button.textContent = `Add ${symbols.length} Cards`;
+            } else if (symbols.length === 1) {
+                countDiv.textContent = '';
+                button.textContent = 'Add Card';
+            } else {
+                countDiv.textContent = '';
+                button.textContent = 'Add Card(s)';
+            }
         }
 
         async function addCombinationFromModal() {
-            const symbol = document.getElementById('modalSymbolInput').value.trim().toUpperCase();
+            const raw = document.getElementById('modalSymbolInput').value.trim();
+            const symbols = parseSymbols(raw);
 
-            if (!symbol || !modalSelectedFile) {
+            if (symbols.length === 0 || !modalSelectedFile) {
                 showMessage('Please enter a symbol and select a configuration file', 'error');
                 return;
             }
@@ -2190,33 +2211,48 @@
                 const configContent = await readFileAsText(modalSelectedFile);
                 const configName = modalSelectedFile.name;
 
-                const response = await fetch('/api/combinations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        symbol: symbol,
-                        config_content: configContent,
-                        config_name: configName
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    // Store config content for session saving
-                    const cardId = result.card_id;
-                    if (cardId) {
-                        pendingCardConfigs[cardId] = {
-                            config_content: configContent,
-                            config_name: configName
-                        };
+                if (symbols.length === 1) {
+                    // Single symbol - use original endpoint
+                    const response = await fetch('/api/combinations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ symbol: symbols[0], config_content: configContent, config_name: configName })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        if (result.card_id) {
+                            pendingCardConfigs[result.card_id] = { config_content: configContent, config_name: configName };
+                        }
+                        showMessage(`Added ${symbols[0]} successfully!`, 'success');
+                        closeAddCardModal();
+                    } else {
+                        showMessage(`Error: ${result.error}`, 'error');
                     }
-                    showMessage(`Added ${symbol} successfully!`, 'success');
-                    closeAddCardModal();
                 } else {
-                    showMessage(`Error: ${result.error}`, 'error');
+                    // Multiple symbols - use bulk endpoint
+                    const response = await fetch('/api/combinations/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ symbols: symbols, config_content: configContent, config_name: configName })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        // Store config for each successfully added card
+                        (result.results || []).forEach(r => {
+                            if (r.success && r.card_id) {
+                                pendingCardConfigs[r.card_id] = { config_content: configContent, config_name: configName };
+                            }
+                        });
+                        let msg = `Added ${result.added} card(s)`;
+                        if (result.failed > 0) {
+                            const failedSymbols = (result.results || []).filter(r => !r.success).map(r => r.symbol);
+                            msg += ` | Failed: ${failedSymbols.join(', ')}`;
+                        }
+                        showMessage(msg, result.failed > 0 ? 'warning' : 'success');
+                        closeAddCardModal();
+                    } else {
+                        showMessage(`Error: ${result.error}`, 'error');
+                    }
                 }
             } catch (error) {
                 showMessage(`Error adding combination: ${error.message}`, 'error');

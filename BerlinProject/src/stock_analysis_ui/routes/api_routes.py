@@ -253,6 +253,67 @@ def add_combination():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@api_bp.route('/combinations/bulk', methods=['POST'])
+@require_session_auth
+def add_combinations_bulk():
+    """Add multiple combinations at once - one card per symbol, same config"""
+    try:
+        data = request.json
+        app_service = get_session_app_service()
+
+        symbols_raw = data.get('symbols', [])
+        config_content = data.get('config_content', '')
+        config_name = data.get('config_name', '')
+
+        if not symbols_raw:
+            return jsonify({'success': False, 'error': 'Symbols list is required'}), 400
+        if not config_content:
+            return jsonify({'success': False, 'error': 'Config content is required'}), 400
+
+        # Validate JSON content once
+        try:
+            json.loads(config_content)
+        except json.JSONDecodeError as e:
+            return jsonify({'success': False, 'error': f'Invalid JSON: {str(e)}'}), 400
+
+        import tempfile
+        import os
+
+        # Create temp file once, reuse for all symbols
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+            temp_file.write(config_content)
+            temp_file_path = temp_file.name
+
+        try:
+            results = []
+            for symbol in symbols_raw:
+                symbol = symbol.strip().upper()
+                if not symbol:
+                    continue
+                result = app_service.add_combination(symbol, temp_file_path)
+                results.append({'symbol': symbol, **result})
+
+            succeeded = [r for r in results if r.get('success')]
+            failed = [r for r in results if not r.get('success')]
+
+            return jsonify({
+                'success': len(succeeded) > 0,
+                'results': results,
+                'added': len(succeeded),
+                'failed': len(failed),
+                'message': f'Added {len(succeeded)} card(s)' + (f', {len(failed)} failed' if failed else '')
+            })
+        finally:
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+
+    except Exception as e:
+        logger.error(f"Error adding bulk combinations: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/combinations/<card_id>', methods=['DELETE'])
 @require_session_auth
 def remove_combination(card_id: str):
