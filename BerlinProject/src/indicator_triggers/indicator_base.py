@@ -179,6 +179,24 @@ class BaseIndicator(ABC):
     def calculate(self, tick_data: List[TickData]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Calculate indicator values for given tick data."""
         pass
+
+    def calculate_levels(self, tick_data: List[TickData], signals: np.ndarray,
+                         component_data: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        """Calculate target price and stop loss levels for signals.
+
+        Override in subclasses to provide indicator-specific levels.
+        Default implementation returns empty dict (no levels).
+
+        Args:
+            tick_data: The candle data used for calculation
+            signals: Signal array from calculate()
+            component_data: Component data dict from calculate()
+
+        Returns:
+            Dict with optional 'target' and 'stop_loss' np.ndarray keys.
+            Values are NaN where no level applies.
+        """
+        return {}
     
     def _create_default_config(self) -> IndicatorConfiguration:
         """Create default configuration with default parameter values."""

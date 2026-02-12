@@ -13,6 +13,7 @@ from indicator_triggers.bollinger_bands_indicator import BollingerBandsLowerBand
 from indicator_triggers.support_resistance_indicator import SupportResistanceIndicator
 from indicator_triggers.cdl_pattern_indicator import CDLPatternIndicator
 from indicator_triggers.rsi_indicator import RSIIndicator
+from indicator_triggers.manipulation_candle_indicator import ManipulationCandleIndicator
 
 __all__ = [
     "SMAIndicator",
@@ -22,4 +23,5 @@ __all__ = [
     "SupportResistanceIndicator",
     "CDLPatternIndicator",
     "RSIIndicator",
+    "ManipulationCandleIndicator",
 ]
