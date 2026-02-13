@@ -307,6 +307,11 @@ function generateTrendIndicatorRowHtml(indName, weight, mode, generateOptionsFun
  * @param {HTMLElement} button - The "Add Trend Indicator" button
  */
 function addTrendIndicator(button) {
+    // Ensure indicator list is fresh from DOM before generating dropdown
+    if (typeof updateCurrentConfigIndicators === 'function') {
+        updateCurrentConfigIndicators();
+    }
+
     const barCard = button.closest('.bar-card');
     const container = barCard.querySelector('.trend-indicators-container');
 

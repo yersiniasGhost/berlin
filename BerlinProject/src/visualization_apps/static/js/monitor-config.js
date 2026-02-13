@@ -63,6 +63,14 @@ function setupEventListeners() {
     // Add bar button
     document.getElementById('addBarBtn').addEventListener('click', addBar);
 
+    // Refresh bar indicator dropdowns when switching to Bars tab
+    const barsTab = document.getElementById('bars-tab');
+    if (barsTab) {
+        barsTab.addEventListener('shown.bs.tab', function() {
+            refreshBarIndicatorDropdowns();
+        });
+    }
+
     // Send to Replay button
     document.getElementById('sendToReplayBtn').addEventListener('click', sendToReplay);
 
@@ -381,7 +389,7 @@ function createIndicatorCard(indicator, index, indicatorType = 'all') {
                 <div class="col-md-4">
                     <label class="form-label">Indicator Class</label>
                     <select class="form-select" data-indicator-field="indicator_class"
-                            onchange="updateIndicatorParams(${index}, this.value)">
+                            onchange="updateIndicatorParams(${index}, this.value); refreshBarIndicatorDropdowns()">
                         ${generateIndicatorClassOptions(indicatorClass, indicatorType)}
                     </select>
                 </div>
@@ -869,6 +877,9 @@ function updateCurrentConfigBars() {
 }
 
 function addBarIndicator(button) {
+    // Ensure indicator list is fresh from DOM before generating dropdown
+    updateCurrentConfigIndicators();
+
     const barCard = button.closest('.bar-card');
     const container = barCard.querySelector('.bar-indicators-container');
 
