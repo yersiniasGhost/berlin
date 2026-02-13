@@ -10,7 +10,7 @@ from routes.optimization_state import OptimizationState
 from routes.replay_routes import replay_bp
 from routes.optimizer_routes import optimizer_bp
 from routes.indicator_routes import indicator_bp
-from routes.indicator_route import indicator_api
+from indicator_triggers.indicator_api import indicator_api
 from routes.monitor_config_routes import monitor_config_bp
 
 # Import shared module for common static files and templates

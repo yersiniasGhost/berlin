@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, request
 import json
 from pathlib import Path
 
-from indicator_triggers.indicator_base import IndicatorConfiguration, IndicatorRegistry
+from indicator_triggers.indicator_base import BaseIndicator, IndicatorConfiguration, IndicatorRegistry
 from indicator_triggers.refactored_indicators import *  # Import to register indicators
 
 
