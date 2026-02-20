@@ -11,7 +11,7 @@ ATR sourcing (in priority order):
   - Single-day fallback: compute ATR from available intraday candles
 """
 
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 from typing import List, Tuple, Dict, Any, Optional
 import numpy as np
 import talib as ta
@@ -86,6 +86,14 @@ class ManipulationCandleIndicator(BaseIndicator):
                 ui_group="Signal Settings"
             ),
             ParameterSpec(
+                name="signal_mode", display_name="Signal Mode",
+                parameter_type=ParameterType.CHOICE,
+                default_value="bull",
+                choices=["bull", "bear"],
+                description="Only generate signals in this direction (bull = bullish reversals, bear = bearish reversals)",
+                ui_group="Signal Settings"
+            ),
+            ParameterSpec(
                 name="lookback", display_name="Lookback Period",
                 parameter_type=ParameterType.INTEGER,
                 default_value=2, min_value=1, max_value=20, step=1,
@@ -130,6 +138,7 @@ class ManipulationCandleIndicator(BaseIndicator):
         daily_atr_override = self.get_parameter("daily_atr_value")
         atr_threshold = self.get_parameter("atr_threshold_pct")
         max_setup_min = self.get_parameter("max_setup_minutes")
+        signal_mode = self.get_parameter("signal_mode")  # "bull" or "bear"
 
         n = len(tick_data)
         signals = np.zeros(n)
@@ -189,15 +198,29 @@ class ManipulationCandleIndicator(BaseIndicator):
             # Direction: red (bearish) candle -> expect bullish reversal
             is_red = tick_data[or_indices[-1]].close < tick_data[or_indices[0]].open
 
-            # Paint the box for visualisation
+            # Skip this day if the candle direction doesn't match the requested mode
+            if signal_mode == "bull" and not is_red:
+                continue  # Bull mode needs a red manipulation candle
+            if signal_mode == "bear" and is_red:
+                continue  # Bear mode needs a green manipulation candle
+
+            # Wall-clock cutoff: no signal or box past MARKET_OPEN + max_setup_minutes
+            cutoff_time = (datetime.combine(datetime.min, self.MARKET_OPEN)
+                           + timedelta(minutes=max_setup_min)).time()
+
+            # Paint the box for visualisation (stop at cutoff)
             vis_end = min(len(mkt_indices), candles_per_or + max_candles)
             for idx in mkt_indices[:vis_end]:
+                if self._parse_timestamp(tick_data[idx].timestamp).time() > cutoff_time:
+                    break
                 box_high_arr[idx] = or_high
                 box_low_arr[idx] = or_low
 
             # --- Step 3: Find reversal entry outside the box ---
             for mi in range(candles_per_or, vis_end):
                 idx = mkt_indices[mi]
+                if self._parse_timestamp(tick_data[idx].timestamp).time() > cutoff_time:
+                    break  # Past setup window by wall-clock time
                 if is_red:
                     # Bullish: candle must wick below the box
                     if tick_data[idx].low >= or_low:
