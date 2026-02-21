@@ -37,89 +37,17 @@
             line-height: 1.6;
         }
 
-        /* Layout with sidebar */
+        /* Layout */
         .app-container {
-            display: flex;
             min-height: 100vh;
-        }
-
-        /* Sidebar Styles */
-        .sidebar {
-            width: 250px;
-            background: var(--bg-primary);
-            border-right: 1px solid var(--border-primary);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            z-index: 100;
-        }
-
-        .sidebar-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border-primary);
-        }
-
-        .sidebar-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .sidebar-subtitle {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .sidebar-nav {
-            padding: 1rem 0;
-        }
-
-        .nav-item {
-            margin-bottom: 0.5rem;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.875rem 1.5rem;
-            color: var(--text-primary);
-            text-decoration: none;
-            border-radius: 0 6px 6px 0;
-            margin-right: 0.75rem;
-            transition: all 0.2s ease;
-            position: relative;
-        }
-
-        .nav-link:hover {
-            background: var(--bg-tertiary);
-            color: var(--color-link);
-        }
-
-        .nav-link.active {
-            background: var(--bg-tertiary);
-            color: var(--color-link);
-            border-right: 3px solid var(--color-link);
-        }
-
-        .nav-icon {
-            font-size: 1.125rem;
-            width: 20px;
-            text-align: center;
         }
 
         /* Main content area */
         .main-content {
-            margin-left: 250px;
             flex: 1;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-        }
-
-        .mobile-menu-toggle {
-            display: none;
         }
 
         /* Header Bar */
@@ -386,34 +314,6 @@
 
         /* Responsive Design */
         @media (max-width: 768px) {
-            .sidebar {
-                left: -250px;
-                transition: left 0.3s ease;
-            }
-
-            .sidebar.open {
-                left: 0;
-            }
-
-            .main-content {
-                margin-left: 0;
-            }
-
-            .mobile-menu-toggle {
-                display: block;
-                position: fixed;
-                top: 1rem;
-                left: 1rem;
-                z-index: 200;
-                background: var(--bg-primary);
-                border: 1px solid var(--border-primary);
-                color: var(--text-primary);
-                padding: 0.5rem;
-                border-radius: var(--radius-md);
-                font-size: 1.25rem;
-                cursor: pointer;
-            }
-
             .two-column-layout {
                 grid-template-columns: 1fr;
                 gap: 1rem;
@@ -441,31 +341,8 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar -->
-        <nav class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">Trading Dashboard</div>
-                <div class="sidebar-subtitle">Real-time Analysis</div>
-            </div>
-            <div class="sidebar-nav">
-                <div class="nav-item">
-                    <a href="/dashboard" class="nav-link">
-                        <span class="nav-icon">📊</span>
-                        <span>Dashboard</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="#" class="nav-link active">
-                        <span class="nav-icon">📈</span>
-                        <span>Card Details</span>
-                    </a>
-                </div>
-            </div>
-        </nav>
-
         <!-- Main Content -->
         <main class="main-content">
-            <button class="mobile-menu-toggle" onclick="toggleSidebar()">☰</button>
 
             <!-- Header Bar -->
             <div class="header-bar">
@@ -837,10 +714,6 @@
         // ========================================
         // Event Handlers
         // ========================================
-
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
-        }
 
         // Timeframe change handler for candlestick chart
         async function loadCandlestickData(timeframe) {

@@ -569,9 +569,9 @@ class SchwabClient:
         if endDate is not None:
             params['endDate'] = endDate
         if needExtendedHoursData:
-            params['needExtendedHoursData'] = needExtendedHoursData
+            params['needExtendedHoursData'] = 'true'
         if needPreviousClose:
-            params['needPreviousClose'] = needPreviousClose
+            params['needPreviousClose'] = 'true'
 
         headers = {
             'Authorization': f'Bearer {self.access_token}'

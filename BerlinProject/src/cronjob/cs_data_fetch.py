@@ -322,7 +322,7 @@ class StandaloneSchwabFetcher:
                 'period': period,
                 'frequencyType': frequency_type,
                 'frequency': frequency,
-                'needExtendedHoursData': True  # Include pre/post market
+                'needExtendedHoursData': 'true'  # Include pre/post market
             }
 
             logger.info(f"Requesting {period} days of data for {symbol} (calculated from {period_days} day range)")

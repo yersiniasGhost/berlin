@@ -528,7 +528,7 @@ class SchwabDataLink(DataLink):
                 'frequency': frequency,
                 'startDate': start_ms,
                 'endDate': end_ms,
-                'needExtendedHoursData': True
+                'needExtendedHoursData': 'true'
             }
 
             logger.info(f"API params: {params}")
