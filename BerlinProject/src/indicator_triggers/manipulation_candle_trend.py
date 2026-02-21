@@ -89,13 +89,6 @@ class ManipulationCandleTrend(BaseIndicator):
                 ui_group="Timeframe Settings"
             ),
             ParameterSpec(
-                name="candle_minutes", display_name="Input Candle Resolution (min)",
-                parameter_type=ParameterType.INTEGER,
-                default_value=5, min_value=1, max_value=15, step=1,
-                description="Resolution of input candles (should match agg_config)",
-                ui_group="Timeframe Settings"
-            ),
-            ParameterSpec(
                 name="trend_duration_minutes", display_name="Trend Duration (min)",
                 parameter_type=ParameterType.INTEGER,
                 default_value=90, min_value=30, max_value=240, step=15,
@@ -144,7 +137,6 @@ class ManipulationCandleTrend(BaseIndicator):
             - components: Dict with box_high/box_low for chart overlay
         """
         first_chart_min = self.get_parameter("first_chart_minutes")
-        candle_min = self.get_parameter("candle_minutes")
         trend_dur = self.get_parameter("trend_duration_minutes")
         atr_period = self.get_parameter("atr_period")
         daily_atr_override = self.get_parameter("daily_atr_value")
@@ -159,6 +151,9 @@ class ManipulationCandleTrend(BaseIndicator):
 
         if n < 2:
             return result, empty
+
+        # Get candle resolution from the agg_config (e.g. "5m-normal" -> 5)
+        candle_min = self._get_candle_minutes()
 
         # Pre-compute OHLC arrays
         highs = np.array([t.high for t in tick_data])
@@ -273,6 +268,13 @@ class ManipulationCandleTrend(BaseIndicator):
         if current_indices:
             days.append((current_date, current_indices))
         return days
+
+    def _get_candle_minutes(self) -> int:
+        """Get candle resolution in minutes from agg_config (e.g. '5m-normal' -> 5)."""
+        timeframe_map = {'1m': 1, '5m': 5, '15m': 15, '30m': 30, '1h': 60}
+        if hasattr(self.config, 'get_timeframe'):
+            return timeframe_map.get(self.config.get_timeframe(), 5)
+        return 5  # Default fallback
 
     def _get_market_open_indices(self, tick_data: List[TickData], day_indices: List[int]) -> List[int]:
         """Return indices of candles at or after market open for a given day."""
