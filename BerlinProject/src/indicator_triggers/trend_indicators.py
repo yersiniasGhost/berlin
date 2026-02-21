@@ -776,3 +776,6 @@ IndicatorRegistry().register(ADXTrendIndicator)
 IndicatorRegistry().register(EMASlopeTrendIndicator)
 IndicatorRegistry().register(SuperTrendIndicator)
 IndicatorRegistry().register(AROONTrendIndicator)
+
+# Import trend indicators from separate files so they self-register
+import indicator_triggers.manipulation_candle_trend  # noqa: E402, F401
