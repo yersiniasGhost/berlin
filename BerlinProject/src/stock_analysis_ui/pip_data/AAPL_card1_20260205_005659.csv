@@ -1,0 +1,2 @@
+timestamp,open,high,low,close,volume,ind_MACD 1,ind_MACD 5,ind_MACD 5 Bear,ind_SuperTrend,raw_MACD 1,raw_MACD 5,raw_MACD 5 Bear,raw_SuperTrend,bar_Bear,bar_Bull
+2026-02-05T00:57:05.400369+00:00,274.7415,274.7415,274.7415,274.7415,90544813,1.0,1.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0,0.0
